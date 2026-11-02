@@ -44,7 +44,8 @@ export default function SelectDropdown({
   return (
     <div>
       {label && (
-        <label htmlFor={fieldId}
+        <label
+          htmlFor={fieldId}
           style={{
             display: "block",
             marginBottom: "0.35rem",
@@ -56,21 +57,19 @@ export default function SelectDropdown({
           {label}
         </label>
       )}
-      <select id={fieldId} aria-label={label || placeholder}
+      <select
+        id={fieldId}
+        aria-label={label || placeholder}
         className={useThemeStyle ? undefined : className}
         style={useThemeStyle ? { ...dropdownStyles.base, width: "100%" } : undefined}
         value={value?.[optionValueKey] || ""}
         onChange={(e) => {
-          const selected = options.find(
-            (opt) => String(opt[optionValueKey]) === e.target.value
-          );
+          const selected = options.find((opt) => String(opt[optionValueKey]) === e.target.value);
           onChange(selected || null);
         }}
         disabled={loading || !!error}
       >
-        <option value="">
-          {loading ? "Loading..." : placeholder}
-        </option>
+        <option value="">{loading ? "Loading..." : placeholder}</option>
         {options.map((opt) => (
           <option key={opt[optionValueKey]} value={opt[optionValueKey]}>
             {opt[optionLabelKey]}
@@ -78,9 +77,7 @@ export default function SelectDropdown({
         ))}
       </select>
       {error && (
-        <div style={{ color: "#dc3545", fontSize: "0.78rem", marginTop: "0.25rem" }}>
-          {error}
-        </div>
+        <div style={{ color: "#dc3545", fontSize: "0.78rem", marginTop: "0.25rem" }}>{error}</div>
       )}
     </div>
   );

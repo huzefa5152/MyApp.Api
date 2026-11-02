@@ -62,13 +62,17 @@ export function createStyledContainer(css, bodyHtml) {
     renderDocument.open();
     // The body arrives through innerHTML below; the CSP keeps an inline
     // handler in it (an <img onerror>) from running in this same-origin frame.
-    renderDocument.write(`<!DOCTYPE html><html><head><meta charset="utf-8">${PRINT_CSP_META}</head><body></body></html>`);
+    renderDocument.write(
+      `<!DOCTYPE html><html><head><meta charset="utf-8">${PRINT_CSP_META}</head><body></body></html>`,
+    );
     renderDocument.close();
     let scopedCss = unwrapPrintMedia(css).replace(/\bbody\b/g, ".pdf-content");
     scopedCss = scopedCss.replace(/min-height\s*:\s*100vh\s*;?/g, "");
     const style = renderDocument.createElement("style");
-    style.textContent = "html,body{margin:0;padding:0;}\n" + scopedCss
-      + "\n.pdf-content{box-sizing:border-box;width:796px;}";
+    style.textContent =
+      "html,body{margin:0;padding:0;}\n" +
+      scopedCss +
+      "\n.pdf-content{box-sizing:border-box;width:796px;}";
     renderDocument.head.appendChild(style);
     const content = renderDocument.createElement("div");
     content.className = "pdf-content";
@@ -131,8 +135,10 @@ export function collectAtomicBands(root, pxRatio, maxBandPx) {
 
     if (!atomic) {
       const borders = [
-        cs.borderTopWidth, cs.borderRightWidth,
-        cs.borderBottomWidth, cs.borderLeftWidth,
+        cs.borderTopWidth,
+        cs.borderRightWidth,
+        cs.borderBottomWidth,
+        cs.borderLeftWidth,
       ];
       const hasBorder = borders.some((w) => parseFloat(w) > 0);
       const bg = cs.backgroundColor;
@@ -184,20 +190,30 @@ function tableHeaderBands(root, pxRatio, pageHeightPx) {
     const rect = head.getBoundingClientRect();
     if (rect.height <= 0) return [];
     const height = Math.ceil(rect.height * pxRatio);
-    if (height >= pageHeightPx || rows.some((row) => row.getBoundingClientRect().height * pxRatio > pageHeightPx - height)) {
-      throw new Error("A table heading or item row is taller than a PDF page. Shorten the row or adjust the template before exporting.");
+    if (
+      height >= pageHeightPx ||
+      rows.some((row) => row.getBoundingClientRect().height * pxRatio > pageHeightPx - height)
+    ) {
+      throw new Error(
+        "A table heading or item row is taller than a PDF page. Shorten the row or adjust the template before exporting.",
+      );
     }
-    return [{
-      start: Math.floor((rect.top - origin.top) * pxRatio),
-      end: (rect.bottom - origin.top) * pxRatio,
-      left: Math.max(0, Math.floor((rect.left - origin.left) * pxRatio)),
-      width: Math.ceil(rect.width * pxRatio),
-      height,
-      rows: rows.map((row) => {
-        const bounds = row.getBoundingClientRect();
-        return { start: (bounds.top - origin.top) * pxRatio, end: (bounds.bottom - origin.top) * pxRatio };
-      }),
-    }];
+    return [
+      {
+        start: Math.floor((rect.top - origin.top) * pxRatio),
+        end: (rect.bottom - origin.top) * pxRatio,
+        left: Math.max(0, Math.floor((rect.left - origin.left) * pxRatio)),
+        width: Math.ceil(rect.width * pxRatio),
+        height,
+        rows: rows.map((row) => {
+          const bounds = row.getBoundingClientRect();
+          return {
+            start: (bounds.top - origin.top) * pxRatio,
+            end: (bounds.bottom - origin.top) * pxRatio,
+          };
+        }),
+      },
+    ];
   });
 }
 
@@ -223,7 +239,9 @@ export async function exportToPdf(html, filename, opts = {}) {
   try {
     if (content.querySelector("[data-print-letterhead-top]")) {
       await content.ownerDocument.fonts.ready;
-      await Promise.all(Array.from(content.querySelectorAll("img")).map(image => image.decode().catch(() => {})));
+      await Promise.all(
+        Array.from(content.querySelectorAll("img")).map((image) => image.decode().catch(() => {})),
+      );
     }
     const canvas = await html2canvas(content, {
       scale: 2,
@@ -253,19 +271,32 @@ export async function exportToPdf(html, filename, opts = {}) {
  */
 function paginateOntoPdf(pdf, canvas, content, onPage) {
   const stationery = content.querySelector("[data-print-letterhead-top]");
-  const margins = stationery ? {
-    top: Number(stationery.getAttribute("data-print-letterhead-top")),
-    bottom: Number(stationery.getAttribute("data-print-letterhead-bottom")),
-  } : null;
-  if (margins && (!Number.isFinite(margins.top) || !Number.isFinite(margins.bottom)
-      || margins.top < 0 || margins.bottom < 0 || margins.top + margins.bottom > 247
-      || !stationery.hasAttribute("data-print-letterhead-bottom")))
+  const margins = stationery
+    ? {
+        top: Number(stationery.getAttribute("data-print-letterhead-top")),
+        bottom: Number(stationery.getAttribute("data-print-letterhead-bottom")),
+      }
+    : null;
+  if (
+    margins &&
+    (!Number.isFinite(margins.top) ||
+      !Number.isFinite(margins.bottom) ||
+      margins.top < 0 ||
+      margins.bottom < 0 ||
+      margins.top + margins.bottom > 247 ||
+      !stationery.hasAttribute("data-print-letterhead-bottom"))
+  )
     throw new Error("Letterhead margins must leave at least 50 mm for document content.");
-  const imgH = (canvas.height * PAGE_W_MM) / canvas.width;   // natural height in mm
+  const imgH = (canvas.height * PAGE_W_MM) / canvas.width; // natural height in mm
   const oneFitScale = PAGE_H_MM / imgH;
   const layout = {
-    mode: "", pages: 1, scale: 1, cuts: [],
-    heightPx: canvas.height, heightMm: imgH, oneFitScale,
+    mode: "",
+    pages: 1,
+    scale: 1,
+    cuts: [],
+    heightPx: canvas.height,
+    heightMm: imgH,
+    oneFitScale,
     // Width is fixed and unrounded. offsetHeight rounds fractional CSS pixels,
     // which otherwise accumulates a cut-position error on very long documents.
     pxRatio: canvas.width / content.getBoundingClientRect().width,
@@ -283,8 +314,12 @@ function paginateOntoPdf(pdf, canvas, content, onPage) {
       // fragment — and a fragment of the FBR box at that — onto page 2.
       const drawW = PAGE_W_MM * oneFitScale;
       pdf.addImage(
-        canvas.toDataURL("image/jpeg", 0.98), "JPEG",
-        (PAGE_W_MM - drawW) / 2, 0, drawW, PAGE_H_MM,
+        canvas.toDataURL("image/jpeg", 0.98),
+        "JPEG",
+        (PAGE_W_MM - drawW) / 2,
+        0,
+        drawW,
+        PAGE_H_MM,
       );
       layout.mode = "shrink";
       layout.scale = oneFitScale;
@@ -314,10 +349,13 @@ function paginateOntoPdf(pdf, canvas, content, onPage) {
       const finalBlock = margins && content.querySelector("[data-print-final-block]");
       const finalRect = finalBlock?.getBoundingClientRect();
       const rootRect = content.getBoundingClientRect();
-      const finalBand = finalRect && finalRect.height > 0 ? {
-        start: (finalRect.top - rootRect.top) * pxRatio,
-        end: (finalRect.bottom - rootRect.top) * pxRatio,
-      } : null;
+      const finalBand =
+        finalRect && finalRect.height > 0
+          ? {
+              start: (finalRect.top - rootRect.top) * pxRatio,
+              end: (finalRect.bottom - rootRect.top) * pxRatio,
+            }
+          : null;
       if (finalBand) {
         if (finalBand.end - finalBand.start > maxSlicePx)
           throw new Error("The signature block is taller than the available letterhead area.");
@@ -328,12 +366,16 @@ function paginateOntoPdf(pdf, canvas, content, onPage) {
       let pageNum = 0;
       while (y < canvas.height) {
         if (pageNum > 0) pdf.addPage();
-        const header = headers.find((head) => head.end <= y + 1 && head.rows.some((row) => row.end > y + 1));
+        const header = headers.find(
+          (head) => head.end <= y + 1 && head.rows.some((row) => row.end > y + 1),
+        );
         const headerHeight = header?.height || 0;
         const proposed = Math.min(y + maxSlicePx - headerHeight, canvas.height);
         const end = proposed >= canvas.height ? canvas.height : safeCut(bands, y, proposed);
         if (end <= y || bands.some((band) => band.start < end - 1 && band.end > end + 1)) {
-          throw new Error("PDF content cannot fit intact on a page. Shorten the content or adjust the template before exporting.");
+          throw new Error(
+            "PDF content cannot fit intact on a page. Shorten the content or adjust the template before exporting.",
+          );
         }
         const sliceH = end - y;
 
@@ -345,8 +387,17 @@ function paginateOntoPdf(pdf, canvas, content, onPage) {
         ctx.fillStyle = "#fff";
         ctx.fillRect(0, 0, page.width, page.height);
         if (header) {
-          ctx.drawImage(canvas, header.left, header.start, header.width, header.height,
-            header.left, 0, header.width, header.height);
+          ctx.drawImage(
+            canvas,
+            header.left,
+            header.start,
+            header.width,
+            header.height,
+            header.left,
+            0,
+            header.width,
+            header.height,
+          );
         }
         ctx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, headerHeight, canvas.width, sliceH);
 
@@ -354,22 +405,46 @@ function paginateOntoPdf(pdf, canvas, content, onPage) {
           const height = finalBand.end - finalBand.start;
           const oldTop = headerHeight + finalBand.start - y;
           const newTop = maxSlicePx - height;
-          if (newTop < oldTop - 1) throw new Error("The signature block needs more room on the final page.");
+          if (newTop < oldTop - 1)
+            throw new Error("The signature block needs more room on the final page.");
           ctx.fillStyle = "#fff";
           ctx.fillRect(0, oldTop, page.width, page.height - oldTop);
-          ctx.drawImage(canvas, 0, finalBand.start, canvas.width, height, 0, newTop, canvas.width, height);
+          ctx.drawImage(
+            canvas,
+            0,
+            finalBand.start,
+            canvas.width,
+            height,
+            0,
+            newTop,
+            canvas.width,
+            height,
+          );
         }
         pdf.addImage(
-          page.toDataURL("image/jpeg", 0.98), "JPEG",
-          0, topMargin, PAGE_W_MM, (page.height * PAGE_W_MM) / canvas.width,
+          page.toDataURL("image/jpeg", 0.98),
+          "JPEG",
+          0,
+          topMargin,
+          PAGE_W_MM,
+          (page.height * PAGE_W_MM) / canvas.width,
         );
         onPage?.(page, topMargin);
         y = end;
         pageNum++;
         layout.cuts.push(end);
-        layout.pageSlices.push({ start: y - sliceH, end, repeatedHeader: header ? {
-          start: header.start, left: header.left, width: header.width, height: header.height,
-        } : null });
+        layout.pageSlices.push({
+          start: y - sliceH,
+          end,
+          repeatedHeader: header
+            ? {
+                start: header.start,
+                left: header.left,
+                width: header.width,
+                height: header.height,
+              }
+            : null,
+        });
       }
       layout.mode = margins ? "letterhead" : "multipage";
       layout.pages = pageNum;
@@ -469,29 +544,43 @@ export async function printHtmlDocument(html) {
     const cleanup = () => {
       if (done) return;
       done = true;
-      try { document.body.removeChild(iframe); } catch { /* already gone */ }
+      try {
+        document.body.removeChild(iframe);
+      } catch {
+        /* already gone */
+      }
       resolve();
     };
 
     iframe.onload = async () => {
       const win = iframe.contentWindow;
-      if (!win) { cleanup(); return; }
+      if (!win) {
+        cleanup();
+        return;
+      }
       try {
         await Promise.all(
           Array.from(win.document.images).map((img) =>
             img.complete
               ? Promise.resolve(img.decode?.()).catch(() => {})
-              : new Promise((r) => { img.onload = r; img.onerror = r; })
-          )
+              : new Promise((r) => {
+                  img.onload = r;
+                  img.onerror = r;
+                }),
+          ),
         );
-      } catch { /* a broken image must not block the print */ }
+      } catch {
+        /* a broken image must not block the print */
+      }
 
       // Let layout settle after the images resolve.
       await new Promise((r) => setTimeout(r, 200));
       try {
         win.focus();
         win.print();
-      } catch { /* dialog blocked — fall through to cleanup */ }
+      } catch {
+        /* dialog blocked — fall through to cleanup */
+      }
       setTimeout(cleanup, 1500);
     };
 
@@ -520,7 +609,9 @@ export async function renderPdfBlob(html) {
   try {
     if (content.querySelector("[data-print-letterhead-top]")) {
       await content.ownerDocument.fonts.ready;
-      await Promise.all(Array.from(content.querySelectorAll("img")).map(image => image.decode().catch(() => {})));
+      await Promise.all(
+        Array.from(content.querySelectorAll("img")).map((image) => image.decode().catch(() => {})),
+      );
     }
     const canvas = await html2canvas(content, {
       scale: 2,
@@ -554,7 +645,9 @@ export async function exportToExcel(html, filename, sheetName) {
   try {
     if (content.querySelector("[data-print-letterhead-top]")) {
       await content.ownerDocument.fonts.ready;
-      await Promise.all(Array.from(content.querySelectorAll("img")).map(image => image.decode().catch(() => {})));
+      await Promise.all(
+        Array.from(content.querySelectorAll("img")).map((image) => image.decode().catch(() => {})),
+      );
     }
     const canvas = await html2canvas(content, {
       scale: 2,
@@ -573,9 +666,12 @@ export async function exportToExcel(html, filename, sheetName) {
         fitToHeight: 0,
         horizontalCentered: true,
         margins: {
-          left: 0.25, right: 0.25,
-          top: 0.25, bottom: 0.25,
-          header: 0, footer: 0,
+          left: 0.25,
+          right: 0.25,
+          top: 0.25,
+          bottom: 0.25,
+          header: 0,
+          footer: 0,
         },
       },
     });
@@ -638,22 +734,27 @@ export async function exportToExcel(html, filename, sheetName) {
 
     const buf = await wb.xlsx.writeBuffer();
     saveAs(
-      new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
-      `${filename}.xlsx`
+      new Blob([buf], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }),
+      `${filename}.xlsx`,
     );
   } finally {
     document.body.removeChild(wrapper);
   }
 }
 
-
 export async function prepareLetterheadPrint(html, singleDocument = false) {
   if (!/data-print-letterhead-top\s*=/i.test(html)) return html;
   if (!singleDocument) {
     const parsed = new DOMParser().parseFromString(html, "text/html");
-    const documents = Array.from(parsed.body.children).filter(node => node.classList.contains(MERGED_PAGE_CLASS));
+    const documents = Array.from(parsed.body.children).filter((node) =>
+      node.classList.contains(MERGED_PAGE_CLASS),
+    );
     if (documents.length) {
-      const styles = Array.from(parsed.querySelectorAll("style")).map(node => node.outerHTML).join("");
+      const styles = Array.from(parsed.querySelectorAll("style"))
+        .map((node) => node.outerHTML)
+        .join("");
       const prepared = [];
       for (const document of documents) {
         const source = `<html><head>${styles}<style>.${MERGED_PAGE_CLASS}{min-height:0;break-after:auto;page-break-after:auto}</style></head><body>${document.outerHTML}</body></html>`;
@@ -662,21 +763,38 @@ export async function prepareLetterheadPrint(html, singleDocument = false) {
       return buildMergedPrintDocument(prepared);
     }
   }
-  const [{ default: html2canvas }, { default: JsPDF }] = await Promise.all([import("html2canvas"), import("jspdf")]);
+  const [{ default: html2canvas }, { default: JsPDF }] = await Promise.all([
+    import("html2canvas"),
+    import("jspdf"),
+  ]);
   const { css, bodyHtml } = parseHtml(html);
   const { wrapper, content } = createStyledContainer(css, bodyHtml);
   try {
     await content.ownerDocument.fonts.ready;
-    await Promise.all(Array.from(content.querySelectorAll("img")).map(image => image.decode().catch(() => {})));
-    const canvas = await html2canvas(content, { scale: 2, useCORS: true, letterRendering: true, windowWidth: 796 });
+    await Promise.all(
+      Array.from(content.querySelectorAll("img")).map((image) => image.decode().catch(() => {})),
+    );
+    const canvas = await html2canvas(content, {
+      scale: 2,
+      useCORS: true,
+      letterRendering: true,
+      windowWidth: 796,
+    });
     const pages = [];
     paginateOntoPdf(new JsPDF({ unit: "mm", format: "a4" }), canvas, content, (slice, top) => {
       const page = document.createElement("canvas");
-      page.width = canvas.width; page.height = Math.ceil(canvas.width * PAGE_H_MM / PAGE_W_MM);
-      const ctx = page.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, page.width, page.height);
-      ctx.drawImage(slice, 0, top * canvas.width / PAGE_W_MM);
-      pages.push(`<section><img alt="Document page ${pages.length + 1}" src="${page.toDataURL("image/png")}"></section>`);
+      page.width = canvas.width;
+      page.height = Math.ceil((canvas.width * PAGE_H_MM) / PAGE_W_MM);
+      const ctx = page.getContext("2d");
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, page.width, page.height);
+      ctx.drawImage(slice, 0, (top * canvas.width) / PAGE_W_MM);
+      pages.push(
+        `<section><img alt="Document page ${pages.length + 1}" src="${page.toDataURL("image/png")}"></section>`,
+      );
     });
     return `<!doctype html><html><head><meta charset="utf-8">${PRINT_CSP_META}<style>@page{size:A4;margin:0}html,body{margin:0;padding:0}section{width:210mm;height:297mm;break-after:page;page-break-after:always}section:last-child{break-after:auto;page-break-after:auto}img{display:block;width:210mm;height:297mm}</style></head><body>${pages.join("")}</body></html>`;
-  } finally { wrapper.remove(); }
+  } finally {
+    wrapper.remove();
+  }
 }

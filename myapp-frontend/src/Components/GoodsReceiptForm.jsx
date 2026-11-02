@@ -2,7 +2,11 @@ import DocumentCopyPicker from "./DocumentCopyPicker";
 import { appendCopiedLines, copyLine } from "../utils/documentCopy";
 import { useState, useEffect, useRef } from "react";
 import { MdAdd, MdDelete } from "react-icons/md";
-import { createGoodsReceipt, updateGoodsReceipt, getGoodsReceiptById } from "../api/goodsReceiptApi";
+import {
+  createGoodsReceipt,
+  updateGoodsReceipt,
+  getGoodsReceiptById,
+} from "../api/goodsReceiptApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getPurchaseBillsByCompanyPaged } from "../api/purchaseBillApi";
@@ -29,10 +33,14 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
   const [supplierChallanNumber, setSupplierChallanNumber] = useState("");
   const [site, setSite] = useState("");
   const [notes, setNotes] = useState("");
-  const [items, setItems] = useState([{ id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" }]);
+  const [items, setItems] = useState([
+    { id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" },
+  ]);
   // Responsive: the line-item table side-scrolls on a phone, so below 760px
   // each line renders as a tap-friendly stacked card instead.
-  const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 760);
+  const [isNarrow, setIsNarrow] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < 760,
+  );
   useEffect(() => {
     const onResize = () => setIsNarrow(window.innerWidth < 760);
     window.addEventListener("resize", onResize);
@@ -58,7 +66,9 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
         setSuppliers(sRes.data || []);
         setItemTypes(tRes.data || []);
         setBills(bRes.data?.items || []);
-      } catch { setError("Failed to load reference data."); }
+      } catch {
+        setError("Failed to load reference data.");
+      }
     })();
   }, [companyId]);
 
@@ -75,16 +85,30 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
         setSupplierChallanNumber(data.supplierChallanNumber || "");
         setSite(data.site || "");
         setNotes(data.notes || "");
-        setItems((data.items || []).map(i => ({ id: i.id, itemTypeId: i.itemTypeId, description: i.description, quantity: i.quantity, unit: i.unit })));
-      } catch { setError("Failed to load receipt."); }
+        setItems(
+          (data.items || []).map((i) => ({
+            id: i.id,
+            itemTypeId: i.itemTypeId,
+            description: i.description,
+            quantity: i.quantity,
+            unit: i.unit,
+          })),
+        );
+      } catch {
+        setError("Failed to load receipt.");
+      }
     })();
   }, [receiptId, isEdit]);
 
-  const billsForSupplier = bills.filter(b => !supplierId || b.supplierId === parseInt(supplierId));
+  const billsForSupplier = bills.filter(
+    (b) => !supplierId || b.supplierId === parseInt(supplierId),
+  );
 
   const updateItem = (idx, field, value) => {
-    setItems(prev => {
-      const next = [...prev]; next[idx] = { ...next[idx], [field]: value }; return next;
+    setItems((prev) => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], [field]: value };
+      return next;
     });
   };
 
@@ -94,8 +118,10 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
     setError("");
     if (!supplierId) return setError("Select a supplier.");
     if (items.length === 0) return setError("Add at least one item.");
-    if (items.some(i => !i.description?.trim())) return setError("Every line needs a description.");
-    if (items.some(i => !(parseInt(i.quantity) > 0))) return setError("Quantity must be greater than zero.");
+    if (items.some((i) => !i.description?.trim()))
+      return setError("Every line needs a description.");
+    if (items.some((i) => !(parseInt(i.quantity) > 0)))
+      return setError("Quantity must be greater than zero.");
     setSaving(true);
     try {
       const payload = {
@@ -107,7 +133,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
         supplierChallanNumber: supplierChallanNumber || null,
         site: site || null,
         notes: notes.trim() || null,
-        items: items.map(i => ({
+        items: items.map((i) => ({
           id: i.id || 0,
           itemTypeId: i.itemTypeId || null,
           description: i.description?.trim(),
@@ -122,7 +148,13 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
       // Upload any files staged before the receipt had an id (no-op on edit /
       // when nothing was staged). Best-effort — the receipt is already saved.
       const savedId = res.data?.id ?? receiptId;
-      if (savedId) { try { await attachmentRef.current?.flush(savedId); } catch { /* attachments best-effort */ } }
+      if (savedId) {
+        try {
+          await attachmentRef.current?.flush(savedId);
+        } catch {
+          /* attachments best-effort */
+        }
+      }
       onSaved(res.data);
       onClose();
     } catch (err) {
@@ -137,53 +169,174 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: 1000, width: "94vw" }}>
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? "Edit Goods Receipt" : "New Goods Receipt"}</h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            &times;
+          </button>
         </div>
         <form onSubmit={handleSubmit}>
-          <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
-            <DocumentCopyPicker companyId={companyId} destination="GoodsReceipt" allowDetails={!isEdit} disabled={!!purchaseBillId}
-              onCopy={(source,lines,details) => {
-                setItems(prev => appendCopiedLines(details ? [] : prev, lines, () => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""})));
-                if(details) { setSupplierId(String(source.supplierId));setNotes(source.notes||"");setSite(source.site||"");setSupplierChallanNumber("");setPurchaseBillId(""); }
-              }} />
-            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
-            {<div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="goods-receipt" variant={isEdit ? "edit" : "create"} currentNumber={currentNumber} editRecordId={receiptId} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.75rem" }}>
+          <div
+            data-admin-body=""
+            style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}
+          >
+            <DocumentCopyPicker
+              companyId={companyId}
+              destination="GoodsReceipt"
+              allowDetails={!isEdit}
+              disabled={!!purchaseBillId}
+              onCopy={(source, lines, details) => {
+                setItems((prev) =>
+                  appendCopiedLines(details ? [] : prev, lines, () => ({
+                    id: 0,
+                    itemTypeId: null,
+                    description: "",
+                    quantity: 1,
+                    unit: "",
+                  })),
+                );
+                if (details) {
+                  setSupplierId(String(source.supplierId));
+                  setNotes(source.notes || "");
+                  setSite(source.site || "");
+                  setSupplierChallanNumber("");
+                  setPurchaseBillId("");
+                }
+              }}
+            />
+            {error && (
+              <div ref={errRef} style={formStyles.error}>
+                {error}
+              </div>
+            )}
+            {
+              <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}>
+                <BillNumberField
+                  companyId={companyId}
+                  documentType="goods-receipt"
+                  variant={isEdit ? "edit" : "create"}
+                  currentNumber={currentNumber}
+                  editRecordId={receiptId}
+                  mode={numberMode}
+                  onModeChange={setNumberMode}
+                  number={customNumber}
+                  onNumberChange={setCustomNumber}
+                  onValidityChange={setNumberValid}
+                  disabled={saving}
+                />
+              </div>
+            }
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))",
+                gap: "0.75rem",
+              }}
+            >
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Supplier *</label>
-                <select style={formStyles.input} value={supplierId} onChange={e => setSupplierId(e.target.value)}>
+                <select
+                  style={formStyles.input}
+                  value={supplierId}
+                  onChange={(e) => setSupplierId(e.target.value)}
+                >
                   <option value="">Select...</option>
-                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Receipt Date *</label>
-                <input type="date" style={formStyles.input} value={receiptDate} onChange={e => setReceiptDate(e.target.value)} />
+                <input
+                  type="date"
+                  style={formStyles.input}
+                  value={receiptDate}
+                  onChange={(e) => setReceiptDate(e.target.value)}
+                />
               </div>
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Linked Purchase Bill</label>
-                <select style={formStyles.input} value={purchaseBillId} onChange={e => setPurchaseBillId(e.target.value)}>
+                <select
+                  style={formStyles.input}
+                  value={purchaseBillId}
+                  onChange={(e) => setPurchaseBillId(e.target.value)}
+                >
                   <option value="">— optional —</option>
-                  {billsForSupplier.map(b => <option key={b.id} value={b.id}>PB #{b.purchaseBillNumber}</option>)}
+                  {billsForSupplier.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      PB #{b.purchaseBillNumber}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
+                gap: "0.75rem",
+              }}
+            >
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Supplier Challan #</label>
-                <input type="text" style={formStyles.input} value={supplierChallanNumber} onChange={e => setSupplierChallanNumber(e.target.value)} />
+                <input
+                  type="text"
+                  style={formStyles.input}
+                  value={supplierChallanNumber}
+                  onChange={(e) => setSupplierChallanNumber(e.target.value)}
+                />
               </div>
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Receiving Site</label>
-                <input type="text" style={formStyles.input} value={site} onChange={e => setSite(e.target.value)} />
+                <input
+                  type="text"
+                  style={formStyles.input}
+                  value={site}
+                  onChange={(e) => setSite(e.target.value)}
+                />
               </div>
             </div>
 
             <DocumentNotesEditor value={notes} onChange={setNotes} />
-            <div style={{ marginTop: "0.75rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #e8edf3", backgroundColor: "#f8f9fb" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+            <div
+              style={{
+                marginTop: "0.75rem",
+                padding: "0.75rem",
+                borderRadius: 10,
+                border: "1px solid #e8edf3",
+                backgroundColor: "#f8f9fb",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "0.5rem",
+                }}
+              >
                 <strong>Items ({items.length})</strong>
-                <button type="button" onClick={() => setItems([...items, { id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" }])} style={{ ...formStyles.button, padding: "0.3rem 0.65rem", fontSize: "0.8rem", display: "inline-flex", alignItems: "center", gap: "0.25rem", background: "#e3f2fd", color: "#0d47a1", border: "none" }}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setItems([
+                      ...items,
+                      { id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" },
+                    ])
+                  }
+                  style={{
+                    ...formStyles.button,
+                    padding: "0.3rem 0.65rem",
+                    fontSize: "0.8rem",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.25rem",
+                    background: "#e3f2fd",
+                    color: "#0d47a1",
+                    border: "none",
+                  }}
+                >
                   <MdAdd size={14} /> Add line
                 </button>
               </div>
@@ -199,7 +352,8 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                             onChange={(newId, picked) => {
                               updateItem(idx, "itemTypeId", newId ? parseInt(newId) : null);
                               if (picked) {
-                                if (!it.description?.trim()) updateItem(idx, "description", picked.name || "");
+                                if (!it.description?.trim())
+                                  updateItem(idx, "description", picked.name || "");
                                 if (picked.uom) updateItem(idx, "unit", picked.uom);
                               }
                             }}
@@ -207,85 +361,193 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                             style={{ padding: "0.4rem 0.55rem", fontSize: "0.82rem" }}
                           />
                         </div>
-                        <CopyLineButton onClick={() => setItems(prev => [...prev,copyLine(it,() => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""}))])} />
-                          {items.length > 1 && (
-                          <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#c62828", cursor: "pointer", padding: "0.4rem", minWidth: 44, minHeight: 44, flexShrink: 0 }}>
+                        <CopyLineButton
+                          onClick={() =>
+                            setItems((prev) => [
+                              ...prev,
+                              copyLine(it, () => ({
+                                id: 0,
+                                itemTypeId: null,
+                                description: "",
+                                quantity: 1,
+                                unit: "",
+                              })),
+                            ])
+                          }
+                        />
+                        {items.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setItems(items.filter((_, i) => i !== idx))}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "#c62828",
+                              cursor: "pointer",
+                              padding: "0.4rem",
+                              minWidth: 44,
+                              minHeight: 44,
+                              flexShrink: 0,
+                            }}
+                          >
                             <MdDelete size={18} />
                           </button>
                         )}
                       </div>
                       <div style={{ marginBottom: "0.4rem" }}>
                         <label style={mStyles.label}>Description *</label>
-                        <input type="text" style={cellInput} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} />
+                        <input
+                          type="text"
+                          style={cellInput}
+                          value={it.description}
+                          onChange={(e) => updateItem(idx, "description", e.target.value)}
+                        />
                       </div>
                       <div style={mStyles.grid2}>
                         <div>
                           <label style={mStyles.label}>Qty *</label>
-                          <input type="number" min={1} style={{ ...cellInput, textAlign: "right" }} value={it.quantity} onChange={e => updateItem(idx, "quantity", e.target.value)} />
+                          <input
+                            type="number"
+                            min={1}
+                            style={{ ...cellInput, textAlign: "right" }}
+                            value={it.quantity}
+                            onChange={(e) => updateItem(idx, "quantity", e.target.value)}
+                          />
                         </div>
                         <div>
                           <label style={mStyles.label}>UOM</label>
-                          <input type="text" style={cellInput} value={it.unit} onChange={e => updateItem(idx, "unit", e.target.value)} />
+                          <input
+                            type="text"
+                            style={cellInput}
+                            value={it.unit}
+                            onChange={(e) => updateItem(idx, "unit", e.target.value)}
+                          />
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-              <div data-admin-table-region=""><table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
-                <thead>
-                  <tr style={{ backgroundColor: "#f5f8fc" }}>
-                    <th style={th}>Item Type</th>
-                    <th style={th}>Description *</th>
-                    <th style={{ ...th, textAlign: "right", width: 80 }}>Qty *</th>
-                    <th style={{ ...th, width: 100 }}>UOM</th>
-                    <th style={{ ...th, width: 76 }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((it, idx) => (
-                    <tr key={idx}>
-                      <td style={td}>
-                        <SearchableItemTypeSelect
-                          items={itemTypes}
-                          value={it.itemTypeId || ""}
-                          onChange={(newId, picked) => {
-                            updateItem(idx, "itemTypeId", newId ? parseInt(newId) : null);
-                            if (picked) {
-                              if (!it.description?.trim()) updateItem(idx, "description", picked.name || "");
-                              if (picked.uom) updateItem(idx, "unit", picked.uom);
-                            }
-                          }}
-                          placeholder="— optional —"
-                          style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
-                        />
-                      </td>
-                      <td style={td}><input type="text" style={cellInput} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} /></td>
-                      <td style={td}><input type="number" min={1} style={{ ...cellInput, textAlign: "right" }} value={it.quantity} onChange={e => updateItem(idx, "quantity", e.target.value)} /></td>
-                      <td style={td}><input type="text" style={cellInput} value={it.unit} onChange={e => updateItem(idx, "unit", e.target.value)} /></td>
-                      <td style={{ ...td, whiteSpace: "nowrap" }}>
-                        <CopyLineButton style={{ marginRight: 6 }} onClick={() => setItems(prev => [...prev,copyLine(it,() => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""}))])} />
-                          {items.length > 1 && (
-                          <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#c62828", cursor: "pointer", padding: 0 }}>
-                            <MdDelete size={16} />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table></div>
+                <div data-admin-table-region="">
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+                    <thead>
+                      <tr style={{ backgroundColor: "#f5f8fc" }}>
+                        <th style={th}>Item Type</th>
+                        <th style={th}>Description *</th>
+                        <th style={{ ...th, textAlign: "right", width: 80 }}>Qty *</th>
+                        <th style={{ ...th, width: 100 }}>UOM</th>
+                        <th style={{ ...th, width: 76 }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((it, idx) => (
+                        <tr key={idx}>
+                          <td style={td}>
+                            <SearchableItemTypeSelect
+                              items={itemTypes}
+                              value={it.itemTypeId || ""}
+                              onChange={(newId, picked) => {
+                                updateItem(idx, "itemTypeId", newId ? parseInt(newId) : null);
+                                if (picked) {
+                                  if (!it.description?.trim())
+                                    updateItem(idx, "description", picked.name || "");
+                                  if (picked.uom) updateItem(idx, "unit", picked.uom);
+                                }
+                              }}
+                              placeholder="— optional —"
+                              style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                            />
+                          </td>
+                          <td style={td}>
+                            <input
+                              type="text"
+                              style={cellInput}
+                              value={it.description}
+                              onChange={(e) => updateItem(idx, "description", e.target.value)}
+                            />
+                          </td>
+                          <td style={td}>
+                            <input
+                              type="number"
+                              min={1}
+                              style={{ ...cellInput, textAlign: "right" }}
+                              value={it.quantity}
+                              onChange={(e) => updateItem(idx, "quantity", e.target.value)}
+                            />
+                          </td>
+                          <td style={td}>
+                            <input
+                              type="text"
+                              style={cellInput}
+                              value={it.unit}
+                              onChange={(e) => updateItem(idx, "unit", e.target.value)}
+                            />
+                          </td>
+                          <td style={{ ...td, whiteSpace: "nowrap" }}>
+                            <CopyLineButton
+                              style={{ marginRight: 6 }}
+                              onClick={() =>
+                                setItems((prev) => [
+                                  ...prev,
+                                  copyLine(it, () => ({
+                                    id: 0,
+                                    itemTypeId: null,
+                                    description: "",
+                                    quantity: 1,
+                                    unit: "",
+                                  })),
+                                ])
+                              }
+                            />
+                            {items.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => setItems(items.filter((_, i) => i !== idx))}
+                                style={{
+                                  background: "none",
+                                  border: "none",
+                                  color: "#c62828",
+                                  cursor: "pointer",
+                                  padding: 0,
+                                }}
+                              >
+                                <MdDelete size={16} />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
 
             <div style={{ marginTop: "1rem" }}>
-              <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="GoodsReceipt" entityId={receiptId ?? null} mode="edit" />
+              <AttachmentManager
+                ref={attachmentRef}
+                companyId={companyId}
+                entityType="GoodsReceipt"
+                entityId={receiptId ?? null}
+                mode="edit"
+              />
             </div>
           </div>
           <div data-admin-footer="" style={formStyles.footer}>
-            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
-            <button type="submit" disabled={saving || !numberValid} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}>
-              {saving ? "Saving..." : (isEdit ? "Update" : "Create")}
+            <button
+              data-admin-close=""
+              type="button"
+              style={{ ...formStyles.button, ...formStyles.cancel }}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !numberValid}
+              style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}
+            >
+              {saving ? "Saving..." : isEdit ? "Update" : "Create"}
             </button>
           </div>
         </form>
@@ -294,14 +556,45 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
   );
 }
 
-const th = { textAlign: "left", padding: "0.45rem 0.55rem", borderBottom: "1px solid #e8edf3", fontSize: "0.74rem", fontWeight: 700, color: "#5f6d7e", textTransform: "uppercase", letterSpacing: "0.04em" };
+const th = {
+  textAlign: "left",
+  padding: "0.45rem 0.55rem",
+  borderBottom: "1px solid #e8edf3",
+  fontSize: "0.74rem",
+  fontWeight: 700,
+  color: "#5f6d7e",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+};
 const td = { padding: "0.4rem 0.45rem", borderBottom: "1px solid #f3f5f9", verticalAlign: "top" };
-const cellInput = { width: "100%", padding: "0.3rem 0.5rem", fontSize: "0.8rem", border: "1px solid #d0d7e2", borderRadius: 6, backgroundColor: "#f8f9fb", color: "#1a2332", outline: "none" };
+const cellInput = {
+  width: "100%",
+  padding: "0.3rem 0.5rem",
+  fontSize: "0.8rem",
+  border: "1px solid #d0d7e2",
+  borderRadius: 6,
+  backgroundColor: "#f8f9fb",
+  color: "#1a2332",
+  outline: "none",
+};
 // Mobile stacked-card line items (rendered below 760px instead of the table).
 const mStyles = {
   cards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
-  card: { border: "1px solid #e8edf3", borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff" },
+  card: {
+    border: "1px solid #e8edf3",
+    borderRadius: 12,
+    padding: "0.7rem 0.75rem",
+    background: "#fff",
+  },
   head: { display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.5rem" },
-  label: { display: "block", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.03em", color: "#5f6d7e", fontWeight: 700, marginBottom: "0.2rem" },
+  label: {
+    display: "block",
+    fontSize: "0.68rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+    color: "#5f6d7e",
+    fontWeight: 700,
+    marginBottom: "0.2rem",
+  },
   grid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginTop: "0.4rem" },
 };

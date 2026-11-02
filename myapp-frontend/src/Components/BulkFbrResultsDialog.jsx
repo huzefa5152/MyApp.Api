@@ -115,15 +115,32 @@ export default function BulkFbrResultsDialog({ open, action, items, onClose }) {
             <tbody>
               {sortedItems.length === 0 && (
                 <tr>
-                  <td colSpan={3} style={{ ...styles.td, textAlign: "center", color: colors.textSecondary, padding: "1.5rem" }}>
+                  <td
+                    colSpan={3}
+                    style={{
+                      ...styles.td,
+                      textAlign: "center",
+                      color: colors.textSecondary,
+                      padding: "1.5rem",
+                    }}
+                  >
                     No bills processed.
                   </td>
                 </tr>
               )}
               {sortedItems.map((it, idx) => (
-                <tr key={(it.invoiceId ?? idx) + "-" + idx}
-                    style={{ backgroundColor: idx % 2 === 0 ? "#fff" : "#fafbfd" }}>
-                  <td style={{ ...styles.td, fontWeight: 600, color: colors.blue, whiteSpace: "nowrap" }}>
+                <tr
+                  key={(it.invoiceId ?? idx) + "-" + idx}
+                  style={{ backgroundColor: idx % 2 === 0 ? "#fff" : "#fafbfd" }}
+                >
+                  <td
+                    style={{
+                      ...styles.td,
+                      fontWeight: 600,
+                      color: colors.blue,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                     #{it.invoiceNumber}
                   </td>
                   <td style={{ ...styles.td, whiteSpace: "nowrap" }}>
@@ -131,11 +148,23 @@ export default function BulkFbrResultsDialog({ open, action, items, onClose }) {
                   </td>
                   <td style={styles.td}>
                     {it.status === "submitted" && it.irn ? (
-                      <span style={{ fontFamily: "monospace", fontSize: "0.78rem", color: colors.textSecondary, wordBreak: "break-all" }}>
+                      <span
+                        style={{
+                          fontFamily: "monospace",
+                          fontSize: "0.78rem",
+                          color: colors.textSecondary,
+                          wordBreak: "break-all",
+                        }}
+                      >
                         IRN: {it.irn}
                       </span>
                     ) : it.message ? (
-                      <span style={{ fontSize: "0.82rem", color: it.status === "failed" ? colors.failFg : colors.textPrimary }}>
+                      <span
+                        style={{
+                          fontSize: "0.82rem",
+                          color: it.status === "failed" ? colors.failFg : colors.textPrimary,
+                        }}
+                      >
                         {it.message}
                       </span>
                     ) : (
@@ -149,7 +178,9 @@ export default function BulkFbrResultsDialog({ open, action, items, onClose }) {
         </div>
 
         <div data-admin-footer="" style={styles.footer}>
-          <button data-admin-close="" style={styles.closeFooterBtn} onClick={onClose}>Close</button>
+          <button data-admin-close="" style={styles.closeFooterBtn} onClick={onClose}>
+            Close
+          </button>
         </div>
       </div>
     </div>
@@ -158,11 +189,19 @@ export default function BulkFbrResultsDialog({ open, action, items, onClose }) {
 
 function Pill({ color, bg, icon, children }) {
   return (
-    <span style={{
-      display: "inline-flex", alignItems: "center", gap: "0.3rem",
-      padding: "0.25rem 0.65rem", borderRadius: 999,
-      backgroundColor: bg, color, fontSize: "0.78rem", fontWeight: 700,
-    }}>
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "0.3rem",
+        padding: "0.25rem 0.65rem",
+        borderRadius: 999,
+        backgroundColor: bg,
+        color,
+        fontSize: "0.78rem",
+        fontWeight: 700,
+      }}
+    >
       {icon}
       {children}
     </span>
@@ -171,19 +210,48 @@ function Pill({ color, bg, icon, children }) {
 
 function StatusBadge({ status }) {
   const cfg = {
-    passed:    { fg: colors.successFg, bg: colors.successBg, label: "Passed",          icon: <MdCheckCircle size={13} /> },
-    submitted: { fg: colors.successFg, bg: colors.successBg, label: "Submitted",       icon: <MdCheckCircle size={13} /> },
-    already:   { fg: colors.skipFg,    bg: colors.skipBg,    label: "Already valid",   icon: <MdInfo size={13} /> },
-    failed:    { fg: colors.failFg,    bg: colors.failBg,    label: "Failed",          icon: <MdError size={13} /> },
-    skipped:   { fg: colors.warnFg,    bg: colors.warnBg,    label: "Not attempted",   icon: <MdBlock size={13} /> },
+    passed: {
+      fg: colors.successFg,
+      bg: colors.successBg,
+      label: "Passed",
+      icon: <MdCheckCircle size={13} />,
+    },
+    submitted: {
+      fg: colors.successFg,
+      bg: colors.successBg,
+      label: "Submitted",
+      icon: <MdCheckCircle size={13} />,
+    },
+    already: {
+      fg: colors.skipFg,
+      bg: colors.skipBg,
+      label: "Already valid",
+      icon: <MdInfo size={13} />,
+    },
+    failed: { fg: colors.failFg, bg: colors.failBg, label: "Failed", icon: <MdError size={13} /> },
+    skipped: {
+      fg: colors.warnFg,
+      bg: colors.warnBg,
+      label: "Not attempted",
+      icon: <MdBlock size={13} />,
+    },
   }[status] || { fg: colors.textSecondary, bg: "#f0f0f0", label: status || "—", icon: null };
   return (
-    <span style={{
-      display: "inline-flex", alignItems: "center", gap: "0.3rem",
-      padding: "0.2rem 0.55rem", borderRadius: 6,
-      backgroundColor: cfg.bg, color: cfg.fg,
-      fontSize: "0.74rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em",
-    }}>
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "0.3rem",
+        padding: "0.2rem 0.55rem",
+        borderRadius: 6,
+        backgroundColor: cfg.bg,
+        color: cfg.fg,
+        fontSize: "0.74rem",
+        fontWeight: 700,
+        textTransform: "uppercase",
+        letterSpacing: "0.04em",
+      }}
+    >
       {cfg.icon}
       {cfg.label}
     </span>
@@ -201,51 +269,93 @@ const styles = {
   header: {
     background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
     padding: "0.95rem 1.4rem",
-    display: "flex", justifyContent: "space-between", alignItems: "center",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
     flexShrink: 0,
   },
   title: { margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "#fff" },
   closeBtn: {
-    background: "rgba(255,255,255,0.2)", border: "none", color: "#fff",
-    cursor: "pointer", width: 44, height: 44, minWidth: 32, padding: 0,
-    borderRadius: 8, boxShadow: "none",
-    display: "inline-flex", alignItems: "center", justifyContent: "center",
+    background: "rgba(255,255,255,0.2)",
+    border: "none",
+    color: "#fff",
+    cursor: "pointer",
+    width: 44,
+    height: 44,
+    minWidth: 32,
+    padding: 0,
+    borderRadius: 8,
+    boxShadow: "none",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
   summaryBar: {
-    display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap",
-    padding: "0.75rem 1.25rem", borderBottom: `1px solid ${colors.cardBorder}`,
+    display: "flex",
+    alignItems: "center",
+    gap: "0.75rem",
+    flexWrap: "wrap",
+    padding: "0.75rem 1.25rem",
+    borderBottom: `1px solid ${colors.cardBorder}`,
     backgroundColor: "#f8faff",
   },
   summaryItem: { display: "flex", alignItems: "center", gap: "0.4rem" },
-  summaryLabel: { fontSize: "0.78rem", color: colors.textSecondary, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" },
+  summaryLabel: {
+    fontSize: "0.78rem",
+    color: colors.textSecondary,
+    fontWeight: 600,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  },
   summaryValue: { fontSize: "1rem", fontWeight: 800, color: colors.textPrimary },
   // overflowX:auto added so the 3-col results table can scroll
   // horizontally on phones (Bill # / Status / Details columns get
   // squashed at sub-360px viewports otherwise).
-  tableWrap: { overflowX: "auto", overflowY: "auto", flex: "1 1 auto", minHeight: 0, maxHeight: "calc(92vh - 200px)", WebkitOverflowScrolling: "touch" },
+  tableWrap: {
+    overflowX: "auto",
+    overflowY: "auto",
+    flex: "1 1 auto",
+    minHeight: 0,
+    maxHeight: "calc(92vh - 200px)",
+    WebkitOverflowScrolling: "touch",
+  },
   table: { width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" },
   th: {
-    textAlign: "left", padding: "0.6rem 0.95rem",
-    backgroundColor: "#f5f8fc", borderBottom: `1px solid ${colors.cardBorder}`,
-    fontSize: "0.76rem", fontWeight: 700, color: colors.textSecondary,
-    textTransform: "uppercase", letterSpacing: "0.04em",
-    position: "sticky", top: 0, zIndex: 1,
+    textAlign: "left",
+    padding: "0.6rem 0.95rem",
+    backgroundColor: "#f5f8fc",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+    fontSize: "0.76rem",
+    fontWeight: 700,
+    color: colors.textSecondary,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    position: "sticky",
+    top: 0,
+    zIndex: 1,
   },
   td: {
     padding: "0.6rem 0.95rem",
     borderBottom: `1px solid ${colors.cardBorder}`,
-    color: colors.textPrimary, verticalAlign: "top",
+    color: colors.textPrimary,
+    verticalAlign: "top",
   },
   footer: {
     padding: "0.75rem 1.25rem",
     borderTop: `1px solid ${colors.cardBorder}`,
-    display: "flex", justifyContent: "flex-end",
+    display: "flex",
+    justifyContent: "flex-end",
     flexShrink: 0,
   },
   closeFooterBtn: {
-    padding: "0.5rem 1.25rem", borderRadius: 8,
-    border: "none", backgroundColor: colors.blue, color: "#fff",
-    fontSize: "0.86rem", fontWeight: 600, cursor: "pointer",
+    padding: "0.5rem 1.25rem",
+    borderRadius: 8,
+    border: "none",
+    backgroundColor: colors.blue,
+    color: "#fff",
+    fontSize: "0.86rem",
+    fontWeight: 600,
+    cursor: "pointer",
     boxShadow: "none",
   },
 };

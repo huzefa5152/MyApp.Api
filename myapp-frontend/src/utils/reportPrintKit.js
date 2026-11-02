@@ -34,7 +34,8 @@ export async function printReport(envelope, company) {
 
 export async function pdfReport(envelope, company, fileName) {
   await exportToPdf(await brandedReportHtml(envelope, company), fileName, {
-    marginMm: 12, repeatTableHeader: ".accounting-table",
+    marginMm: 12,
+    repeatTableHeader: ".accounting-table",
     orientation: (envelope.columns || []).length > 6 ? "landscape" : "portrait",
   });
 }

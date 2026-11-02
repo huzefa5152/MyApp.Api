@@ -53,7 +53,6 @@ const colors = {
   warnLight: "#fff4e0",
 };
 
-
 /**
  * The permission tree, cut down to the keys `myKeys` actually holds.
  *
@@ -68,7 +67,11 @@ function grantableTree(tree, myKeys, isSeedAdmin) {
       pages: (mod.pages || [])
         .map((pg) => ({
           ...pg,
-          permissions: (pg.permissions || []).filter((p) => !p.key.startsWith("mcp.") && (isSeedAdmin || !myKeys || myKeys.size === 0 || myKeys.has(p.key))),
+          permissions: (pg.permissions || []).filter(
+            (p) =>
+              !p.key.startsWith("mcp.") &&
+              (isSeedAdmin || !myKeys || myKeys.size === 0 || myKeys.has(p.key)),
+          ),
         }))
         .filter((pg) => pg.permissions.length > 0),
     }))
@@ -105,7 +108,11 @@ export default function RolesPage() {
     setLoading(true);
     try {
       const [rolesRes, treeRes] = await Promise.all([getRoles(), getPermissionTree()]);
-      setRoles(rolesRes.data.filter((role) => !(role.isSystemRole && ["MCP Access", "MCP Write"].includes(role.name))));
+      setRoles(
+        rolesRes.data.filter(
+          (role) => !(role.isSystemRole && ["MCP Access", "MCP Write"].includes(role.name)),
+        ),
+      );
       if (isSeedAdmin && canCreate) setTenants((await getRoleTenants()).data);
       // Show only what THIS operator could actually hand out. The server
       // enforces it either way -- a role may not grant a key its author does
@@ -122,7 +129,9 @@ export default function RolesPage() {
   };
 
   // Re-filter once the caller's own permission set has loaded.
-  useEffect(() => { fetchAll(); }, [isSeedAdmin, myKeys]);
+  useEffect(() => {
+    fetchAll();
+  }, [isSeedAdmin, myKeys]);
 
   // ── Modal helpers ────────────────────────────────────────────────────────
   // Start with EVERY module collapsed so the operator sees a tidy stack of
@@ -198,7 +207,7 @@ export default function RolesPage() {
         pg.permissions.forEach((p) => {
           if (allSelected) next.delete(p.key);
           else next.add(p.key);
-        })
+        }),
       );
       return { ...f, permissionKeys: next };
     });
@@ -231,8 +240,8 @@ export default function RolesPage() {
           pg.permissions.forEach((p) => {
             if (allSelected) next.delete(p.key);
             else next.add(p.key);
-          })
-        )
+          }),
+        ),
       );
       return { ...f, permissionKeys: next };
     });
@@ -256,13 +265,19 @@ export default function RolesPage() {
 
       if (copySource) {
         if (copyTargets.size === 0) throw new Error("Select at least one tenant administrator");
-        await copyRole(copySource.id, { name: payload.name, tenantAdminUserIds: Array.from(copyTargets) });
+        await copyRole(copySource.id, {
+          name: payload.name,
+          tenantAdminUserIds: Array.from(copyTargets),
+        });
         setMsg({ type: "success", text: "Independent tenant roles created" });
       } else if (editRole) {
         await updateRole(editRole.id, payload);
         setMsg({ type: "success", text: "Role updated" });
       } else {
-        await createRole({ ...payload, ...(isSeedAdmin ? { tenantAdminUserId: Number(tenantId) } : {}) });
+        await createRole({
+          ...payload,
+          ...(isSeedAdmin ? { tenantAdminUserId: Number(tenantId) } : {}),
+        });
         setMsg({ type: "success", text: "Role created" });
       }
       await fetchAll();
@@ -292,17 +307,17 @@ export default function RolesPage() {
     const q = search.trim().toLowerCase();
     if (!q) return roles;
     return roles.filter(
-      (r) =>
-        r.name.toLowerCase().includes(q) ||
-        (r.description || "").toLowerCase().includes(q)
+      (r) => r.name.toLowerCase().includes(q) || (r.description || "").toLowerCase().includes(q),
     );
   }, [roles, search]);
 
   const totalCatalogKeys = useMemo(
     () => tree.reduce((n, m) => n + m.pages.reduce((pn, pg) => pn + pg.permissions.length, 0), 0),
-    [tree]
+    [tree],
   );
-  const visibleSelectedKeys = tree.flatMap((module) => module.pages.flatMap((page) => page.permissions)).filter((permission) => form.permissionKeys.has(permission.key)).length;
+  const visibleSelectedKeys = tree
+    .flatMap((module) => module.pages.flatMap((page) => page.permissions))
+    .filter((permission) => form.permissionKeys.has(permission.key)).length;
 
   // Re-bucket the API tree (which is module → page → permission) into
   // section → module → page → permission so the Roles editor mirrors the
@@ -359,69 +374,94 @@ export default function RolesPage() {
       </div>
 
       {/* List */}
-      <RecordsViewport label="Roles records">{loading ? (
-        <p style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>
-          Loading roles...
-        </p>
-      ) : filtered.length === 0 ? (
-        <p style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>
-          {search ? "No roles match your search" : "No roles defined yet"}
-        </p>
-      ) : (
-        <div className="role-cards-grid" style={styles.grid}>
-          {filtered.map((role) => (
-            <div key={role.id} style={styles.card}>
-              <div style={styles.cardHeader}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap" }}>
-                  <h3 style={styles.cardTitle}>{role.name}</h3>
-                  {role.isSystemRole && <span style={styles.systemBadge}>System</span>}
-                </div>
-                {!role.isSystemRole && role.canEdit && (canUpdate || canDelete) && (
-                  <div style={{ display: "flex", gap: "0.4rem" }}>
-                    {canUpdate && (
-                      <button
-                        style={styles.iconBtn}
-                        onClick={() => openEdit(role)}
-                        title="Edit role"
-                      >
-                        <MdEdit style={{ fontSize: "1rem" }} />
-                      </button>
-                    )}
-                    {canDelete && (
-                      <button
-                        style={styles.iconBtnDanger}
-                        onClick={() => setDeleteConfirm(role)}
-                        title="Delete role"
-                      >
-                        <MdDelete style={{ fontSize: "1rem" }} />
-                      </button>
-                    )}
+      <RecordsViewport label="Roles records">
+        {loading ? (
+          <p style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>
+            Loading roles...
+          </p>
+        ) : filtered.length === 0 ? (
+          <p style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>
+            {search ? "No roles match your search" : "No roles defined yet"}
+          </p>
+        ) : (
+          <div className="role-cards-grid" style={styles.grid}>
+            {filtered.map((role) => (
+              <div key={role.id} style={styles.card}>
+                <div style={styles.cardHeader}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.65rem",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <h3 style={styles.cardTitle}>{role.name}</h3>
+                    {role.isSystemRole && <span style={styles.systemBadge}>System</span>}
                   </div>
+                  {!role.isSystemRole && role.canEdit && (canUpdate || canDelete) && (
+                    <div style={{ display: "flex", gap: "0.4rem" }}>
+                      {canUpdate && (
+                        <button
+                          style={styles.iconBtn}
+                          onClick={() => openEdit(role)}
+                          title="Edit role"
+                        >
+                          <MdEdit style={{ fontSize: "1rem" }} />
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          style={styles.iconBtnDanger}
+                          onClick={() => setDeleteConfirm(role)}
+                          title="Delete role"
+                        >
+                          <MdDelete style={{ fontSize: "1rem" }} />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {isSeedAdmin && !role.isSystemRole && (
+                  <p style={styles.cardDescription}>
+                    Tenant:{" "}
+                    {tenants.find((t) => t.userId === role.tenantAdminUserId)?.username ||
+                      `Administrator #${role.tenantAdminUserId}`}
+                  </p>
                 )}
+                {isSeedAdmin && canCreate && !role.isSystemRole && (
+                  <button
+                    style={styles.smallLinkBtn}
+                    onClick={() => {
+                      openCreate();
+                      setCopySource(role);
+                      setForm({
+                        name: role.name,
+                        description: role.description || "",
+                        permissionKeys: new Set(role.permissionKeys),
+                      });
+                    }}
+                  >
+                    Copy to tenants
+                  </button>
+                )}
+                {role.description && <p style={styles.cardDescription}>{role.description}</p>}
+                <div style={styles.cardMeta}>
+                  <span style={styles.metaChip}>
+                    <MdAdminPanelSettings style={{ fontSize: "0.95rem" }} />
+                    {role.permissionKeys.filter((key) => !key.startsWith("mcp.")).length}{" "}
+                    permissions
+                  </span>
+                  <span style={styles.metaChip}>
+                    <MdPeople style={{ fontSize: "0.95rem" }} />
+                    {role.userCount} user{role.userCount !== 1 ? "s" : ""}
+                  </span>
+                </div>
               </div>
-              {isSeedAdmin && !role.isSystemRole && <p style={styles.cardDescription}>
-                Tenant: {tenants.find(t => t.userId === role.tenantAdminUserId)?.username || `Administrator #${role.tenantAdminUserId}`}
-              </p>}
-              {isSeedAdmin && canCreate && !role.isSystemRole && <button style={styles.smallLinkBtn} onClick={() => {
-                openCreate(); setCopySource(role); setForm({ name: role.name, description: role.description || "", permissionKeys: new Set(role.permissionKeys) });
-              }}>Copy to tenants</button>}
-              {role.description && (
-                <p style={styles.cardDescription}>{role.description}</p>
-              )}
-              <div style={styles.cardMeta}>
-                <span style={styles.metaChip}>
-                  <MdAdminPanelSettings style={{ fontSize: "0.95rem" }} />
-                  {role.permissionKeys.filter((key) => !key.startsWith("mcp.")).length} permissions
-                </span>
-                <span style={styles.metaChip}>
-                  <MdPeople style={{ fontSize: "0.95rem" }} />
-                  {role.userCount} user{role.userCount !== 1 ? "s" : ""}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}</RecordsViewport>
+            ))}
+          </div>
+        )}
+      </RecordsViewport>
 
       {/* ── Create/Edit Modal ── */}
       {modalOpen && (
@@ -431,9 +471,14 @@ export default function RolesPage() {
           <div data-admin-dialog="" style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div data-admin-header="" style={styles.modalHeader}>
               <h3 style={formStyles.title}>
-                {copySource ? "Copy role to tenants" : editRole ? `Edit role — ${editRole.name}` : "Create new role"}
+                {copySource
+                  ? "Copy role to tenants"
+                  : editRole
+                    ? `Edit role — ${editRole.name}`
+                    : "Create new role"}
               </h3>
-              <button data-admin-close=""
+              <button
+                data-admin-close=""
                 type="button"
                 style={styles.modalClose}
                 onClick={closeModal}
@@ -451,22 +496,65 @@ export default function RolesPage() {
                 </div>
               )}
 
-              {isSeedAdmin && !editRole && !copySource && <>
-                <label style={styles.label} htmlFor="role-tenant">Tenant administrator</label>
-                <select id="role-tenant" style={styles.input} value={tenantId} disabled={saving} onChange={e => setTenantId(e.target.value)}>
-                  <option value="">Select tenant administrator</option>
-                  {tenants.map(t => <option key={t.userId} value={t.userId}>{t.fullName || t.username} ({t.username}) - {t.companies.join(", ") || "No assigned companies"}</option>)}
-                </select>
-              </>}
-              {copySource && <>
-                <label style={styles.label}>Destination tenant administrators</label>
-                {tenants.map(t => <label key={t.userId} style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 44, overflowWrap: "anywhere" }}>
-                  <input type="checkbox" checked={copyTargets.has(t.userId)} disabled={saving} onChange={e => setCopyTargets(prev => {
-                    const next = new Set(prev); if (e.target.checked) next.add(t.userId); else next.delete(t.userId); return next;
-                  })} />{t.fullName || t.username} ({t.username}) - {t.companies.join(", ") || "No assigned companies"}
-                </label>)}
-                <p style={styles.cardDescription}>Each copy has its own permissions and no user assignments. Later edits do not affect the original.</p>
-              </>}
+              {isSeedAdmin && !editRole && !copySource && (
+                <>
+                  <label style={styles.label} htmlFor="role-tenant">
+                    Tenant administrator
+                  </label>
+                  <select
+                    id="role-tenant"
+                    style={styles.input}
+                    value={tenantId}
+                    disabled={saving}
+                    onChange={(e) => setTenantId(e.target.value)}
+                  >
+                    <option value="">Select tenant administrator</option>
+                    {tenants.map((t) => (
+                      <option key={t.userId} value={t.userId}>
+                        {t.fullName || t.username} ({t.username}) -{" "}
+                        {t.companies.join(", ") || "No assigned companies"}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
+              {copySource && (
+                <>
+                  <label style={styles.label}>Destination tenant administrators</label>
+                  {tenants.map((t) => (
+                    <label
+                      key={t.userId}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        minHeight: 44,
+                        overflowWrap: "anywhere",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={copyTargets.has(t.userId)}
+                        disabled={saving}
+                        onChange={(e) =>
+                          setCopyTargets((prev) => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(t.userId);
+                            else next.delete(t.userId);
+                            return next;
+                          })
+                        }
+                      />
+                      {t.fullName || t.username} ({t.username}) -{" "}
+                      {t.companies.join(", ") || "No assigned companies"}
+                    </label>
+                  ))}
+                  <p style={styles.cardDescription}>
+                    Each copy has its own permissions and no user assignments. Later edits do not
+                    affect the original.
+                  </p>
+                </>
+              )}
               <label style={styles.label}>Role name</label>
               <input
                 style={styles.input}
@@ -487,181 +575,255 @@ export default function RolesPage() {
                 disabled={saving || Boolean(copySource)}
               />
 
-              {!copySource && <>
-              <div style={styles.permHeader}>
-                <label style={{ ...styles.label, marginTop: 0 }}>Permissions</label>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                  {/* Collapse All / Expand All — quality-of-life when the
+              {!copySource && (
+                <>
+                  <div style={styles.permHeader}>
+                    <label style={{ ...styles.label, marginTop: 0 }}>Permissions</label>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      {/* Collapse All / Expand All — quality-of-life when the
                       catalog has 15+ modules. Sets/clears every module
                       name in the collapsedModules Set in one shot. */}
-                  <button
-                    type="button"
-                    style={styles.smallLinkBtn}
-                    onClick={() => {
-                      setCollapsedSections(new Set(groupedSections.map((s) => s.section)));
-                      setCollapsedModules(new Set(tree.map((m) => m.module)));
-                    }}
-                    title="Collapse every section and module"
-                  >
-                    Collapse all
-                  </button>
-                  <span style={{ color: colors.cardBorder }}>|</span>
-                  <button
-                    type="button"
-                    style={styles.smallLinkBtn}
-                    onClick={() => {
-                      setCollapsedSections(new Set());
-                      setCollapsedModules(new Set());
-                    }}
-                    title="Expand every section and module"
-                  >
-                    Expand all
-                  </button>
-                  <span style={{ color: colors.textSecondary, fontSize: "0.82rem", marginLeft: "0.5rem" }}>
-                    {visibleSelectedKeys} / {totalCatalogKeys} selected
-                  </span>
-                </div>
-              </div>
+                      <button
+                        type="button"
+                        style={styles.smallLinkBtn}
+                        onClick={() => {
+                          setCollapsedSections(new Set(groupedSections.map((s) => s.section)));
+                          setCollapsedModules(new Set(tree.map((m) => m.module)));
+                        }}
+                        title="Collapse every section and module"
+                      >
+                        Collapse all
+                      </button>
+                      <span style={{ color: colors.cardBorder }}>|</span>
+                      <button
+                        type="button"
+                        style={styles.smallLinkBtn}
+                        onClick={() => {
+                          setCollapsedSections(new Set());
+                          setCollapsedModules(new Set());
+                        }}
+                        title="Expand every section and module"
+                      >
+                        Expand all
+                      </button>
+                      <span
+                        style={{
+                          color: colors.textSecondary,
+                          fontSize: "0.82rem",
+                          marginLeft: "0.5rem",
+                        }}
+                      >
+                        {visibleSelectedKeys} / {totalCatalogKeys} selected
+                      </span>
+                    </div>
+                  </div>
 
-              <div style={styles.permTree}>
-                {groupedSections.map((sec) => {
-                  const secKeys = sec.modules.flatMap((m) =>
-                    m.pages.flatMap((pg) => pg.permissions.map((p) => p.key))
-                  );
-                  const secSelected = secKeys.filter((k) => form.permissionKeys.has(k)).length;
-                  const secAll = secSelected === secKeys.length;
-                  const secSome = secSelected > 0 && secSelected < secKeys.length;
-                  const secCollapsed = collapsedSections.has(sec.section);
+                  <div style={styles.permTree}>
+                    {groupedSections.map((sec) => {
+                      const secKeys = sec.modules.flatMap((m) =>
+                        m.pages.flatMap((pg) => pg.permissions.map((p) => p.key)),
+                      );
+                      const secSelected = secKeys.filter((k) => form.permissionKeys.has(k)).length;
+                      const secAll = secSelected === secKeys.length;
+                      const secSome = secSelected > 0 && secSelected < secKeys.length;
+                      const secCollapsed = collapsedSections.has(sec.section);
 
-                  return (
-                    <div key={sec.section} style={styles.sectionBlock}>
-                      <div style={styles.sectionHeader}>
-                        <button
-                          type="button"
-                          style={styles.sectionToggle}
-                          onClick={() => toggleSectionCollapsed(sec.section)}
-                          aria-expanded={!secCollapsed}
-                        >
-                          {secCollapsed ? <MdExpandMore /> : <MdExpandLess />}
-                        </button>
-                        <button
-                          type="button"
-                          style={styles.sectionCheckBtn}
-                          onClick={() => toggleSection(sec, secAll)}
-                          title={secAll ? "Clear section" : "Select all in section"}
-                        >
-                          {secAll ? (
-                            <MdCheckBox style={{ color: "#fff", fontSize: "1.2rem" }} />
-                          ) : secSome ? (
-                            <MdIndeterminateCheckBox style={{ color: "#fff", fontSize: "1.2rem" }} />
-                          ) : (
-                            <MdCheckBoxOutlineBlank style={{ color: "rgba(255,255,255,0.85)", fontSize: "1.2rem" }} />
-                          )}
-                          <span style={styles.sectionName}>{sec.section}</span>
-                          <span style={styles.sectionCount}>
-                            {secSelected}/{secKeys.length}
-                          </span>
-                        </button>
-                      </div>
-
-                      {!secCollapsed && sec.modules.map((mod) => {
-                  const modKeys = mod.pages.flatMap((pg) => pg.permissions.map((p) => p.key));
-                  const modSelected = modKeys.filter((k) => form.permissionKeys.has(k)).length;
-                  const modAll = modSelected === modKeys.length;
-                  const modSome = modSelected > 0 && modSelected < modKeys.length;
-                  const collapsed = collapsedModules.has(mod.module);
-
-                  return (
-                    <div key={mod.module} style={styles.moduleBlock}>
-                      <div style={styles.moduleHeader}>
-                        <button
-                          type="button"
-                          style={styles.moduleToggle}
-                          onClick={() => toggleModuleCollapsed(mod.module)}
-                          aria-expanded={!collapsed}
-                        >
-                          {collapsed ? <MdExpandMore /> : <MdExpandLess />}
-                        </button>
-                        <button
-                          type="button"
-                          style={styles.moduleCheckBtn}
-                          onClick={() => toggleModule(mod, modAll)}
-                          title={modAll ? "Clear module" : "Select all in module"}
-                        >
-                          {modAll ? (
-                            <MdCheckBox style={{ color: colors.blue, fontSize: "1.15rem" }} />
-                          ) : modSome ? (
-                            <MdIndeterminateCheckBox style={{ color: colors.blue, fontSize: "1.15rem" }} />
-                          ) : (
-                            <MdCheckBoxOutlineBlank style={{ color: colors.textSecondary, fontSize: "1.15rem" }} />
-                          )}
-                          <span style={styles.moduleName}>{getModuleLabel(mod.module)}</span>
-                          <span style={styles.moduleCount}>
-                            {modSelected}/{modKeys.length}
-                          </span>
-                        </button>
-                      </div>
-
-                      {!collapsed && mod.pages.map((pg) => {
-                        const pgSelected = pg.permissions.filter((p) => form.permissionKeys.has(p.key)).length;
-                        const pgAll = pgSelected === pg.permissions.length;
-                        const pgSome = pgSelected > 0 && pgSelected < pg.permissions.length;
-                        return (
-                          <div key={`${mod.module}/${pg.page}`} style={styles.pageBlock}>
+                      return (
+                        <div key={sec.section} style={styles.sectionBlock}>
+                          <div style={styles.sectionHeader}>
                             <button
                               type="button"
-                              style={styles.pageCheckBtn}
-                              onClick={() => togglePage(pg.permissions, pgAll)}
-                              title={pgAll ? "Clear page" : "Select all in page"}
+                              style={styles.sectionToggle}
+                              onClick={() => toggleSectionCollapsed(sec.section)}
+                              aria-expanded={!secCollapsed}
                             >
-                              {pgAll ? (
-                                <MdCheckBox style={{ color: colors.teal, fontSize: "1.05rem" }} />
-                              ) : pgSome ? (
-                                <MdIndeterminateCheckBox style={{ color: colors.teal, fontSize: "1.05rem" }} />
-                              ) : (
-                                <MdCheckBoxOutlineBlank style={{ color: colors.textSecondary, fontSize: "1.05rem" }} />
-                              )}
-                              <span style={styles.pageName}>{pg.page}</span>
+                              {secCollapsed ? <MdExpandMore /> : <MdExpandLess />}
                             </button>
-
-                            <div style={styles.actionList}>
-                              {pg.permissions.map((p) => {
-                                const checked = form.permissionKeys.has(p.key);
-                                return (
-                                  <label key={p.key} style={styles.actionRow} title={p.description || ""}>
-                                    <input
-                                      type="checkbox"
-                                      checked={checked}
-                                      disabled={Boolean(copySource)}
-                                      onChange={() => togglePermission(p.key)}
-                                      style={styles.checkbox}
-                                    />
-                                    <span style={styles.actionName}>{p.action}</span>
-                                    <span style={styles.actionKey}>{p.key}</span>
-                                  </label>
-                                );
-                              })}
-                            </div>
+                            <button
+                              type="button"
+                              style={styles.sectionCheckBtn}
+                              onClick={() => toggleSection(sec, secAll)}
+                              title={secAll ? "Clear section" : "Select all in section"}
+                            >
+                              {secAll ? (
+                                <MdCheckBox style={{ color: "#fff", fontSize: "1.2rem" }} />
+                              ) : secSome ? (
+                                <MdIndeterminateCheckBox
+                                  style={{ color: "#fff", fontSize: "1.2rem" }}
+                                />
+                              ) : (
+                                <MdCheckBoxOutlineBlank
+                                  style={{ color: "rgba(255,255,255,0.85)", fontSize: "1.2rem" }}
+                                />
+                              )}
+                              <span style={styles.sectionName}>{sec.section}</span>
+                              <span style={styles.sectionCount}>
+                                {secSelected}/{secKeys.length}
+                              </span>
+                            </button>
                           </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-                    </div>
-                  );
-                })}
-              </div>
-              </>}
+
+                          {!secCollapsed &&
+                            sec.modules.map((mod) => {
+                              const modKeys = mod.pages.flatMap((pg) =>
+                                pg.permissions.map((p) => p.key),
+                              );
+                              const modSelected = modKeys.filter((k) =>
+                                form.permissionKeys.has(k),
+                              ).length;
+                              const modAll = modSelected === modKeys.length;
+                              const modSome = modSelected > 0 && modSelected < modKeys.length;
+                              const collapsed = collapsedModules.has(mod.module);
+
+                              return (
+                                <div key={mod.module} style={styles.moduleBlock}>
+                                  <div style={styles.moduleHeader}>
+                                    <button
+                                      type="button"
+                                      style={styles.moduleToggle}
+                                      onClick={() => toggleModuleCollapsed(mod.module)}
+                                      aria-expanded={!collapsed}
+                                    >
+                                      {collapsed ? <MdExpandMore /> : <MdExpandLess />}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      style={styles.moduleCheckBtn}
+                                      onClick={() => toggleModule(mod, modAll)}
+                                      title={modAll ? "Clear module" : "Select all in module"}
+                                    >
+                                      {modAll ? (
+                                        <MdCheckBox
+                                          style={{ color: colors.blue, fontSize: "1.15rem" }}
+                                        />
+                                      ) : modSome ? (
+                                        <MdIndeterminateCheckBox
+                                          style={{ color: colors.blue, fontSize: "1.15rem" }}
+                                        />
+                                      ) : (
+                                        <MdCheckBoxOutlineBlank
+                                          style={{
+                                            color: colors.textSecondary,
+                                            fontSize: "1.15rem",
+                                          }}
+                                        />
+                                      )}
+                                      <span style={styles.moduleName}>
+                                        {getModuleLabel(mod.module)}
+                                      </span>
+                                      <span style={styles.moduleCount}>
+                                        {modSelected}/{modKeys.length}
+                                      </span>
+                                    </button>
+                                  </div>
+
+                                  {!collapsed &&
+                                    mod.pages.map((pg) => {
+                                      const pgSelected = pg.permissions.filter((p) =>
+                                        form.permissionKeys.has(p.key),
+                                      ).length;
+                                      const pgAll = pgSelected === pg.permissions.length;
+                                      const pgSome =
+                                        pgSelected > 0 && pgSelected < pg.permissions.length;
+                                      return (
+                                        <div
+                                          key={`${mod.module}/${pg.page}`}
+                                          style={styles.pageBlock}
+                                        >
+                                          <button
+                                            type="button"
+                                            style={styles.pageCheckBtn}
+                                            onClick={() => togglePage(pg.permissions, pgAll)}
+                                            title={pgAll ? "Clear page" : "Select all in page"}
+                                          >
+                                            {pgAll ? (
+                                              <MdCheckBox
+                                                style={{ color: colors.teal, fontSize: "1.05rem" }}
+                                              />
+                                            ) : pgSome ? (
+                                              <MdIndeterminateCheckBox
+                                                style={{ color: colors.teal, fontSize: "1.05rem" }}
+                                              />
+                                            ) : (
+                                              <MdCheckBoxOutlineBlank
+                                                style={{
+                                                  color: colors.textSecondary,
+                                                  fontSize: "1.05rem",
+                                                }}
+                                              />
+                                            )}
+                                            <span style={styles.pageName}>{pg.page}</span>
+                                          </button>
+
+                                          <div style={styles.actionList}>
+                                            {pg.permissions.map((p) => {
+                                              const checked = form.permissionKeys.has(p.key);
+                                              return (
+                                                <label
+                                                  key={p.key}
+                                                  style={styles.actionRow}
+                                                  title={p.description || ""}
+                                                >
+                                                  <input
+                                                    type="checkbox"
+                                                    checked={checked}
+                                                    disabled={Boolean(copySource)}
+                                                    onChange={() => togglePermission(p.key)}
+                                                    style={styles.checkbox}
+                                                  />
+                                                  <span style={styles.actionName}>{p.action}</span>
+                                                  <span style={styles.actionKey}>{p.key}</span>
+                                                </label>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                </div>
+                              );
+                            })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
 
             <div data-admin-footer="" style={styles.modalFooter}>
-              <button data-admin-close="" style={styles.cancelBtn} onClick={closeModal} disabled={saving}>
+              <button
+                data-admin-close=""
+                style={styles.cancelBtn}
+                onClick={closeModal}
+                disabled={saving}
+              >
                 Cancel
               </button>
-              <button style={styles.saveBtn} onClick={handleSave} disabled={saving || (!editRole && !copySource && isSeedAdmin && !tenantId) || (copySource && copyTargets.size === 0)}>
+              <button
+                style={styles.saveBtn}
+                onClick={handleSave}
+                disabled={
+                  saving ||
+                  (!editRole && !copySource && isSeedAdmin && !tenantId) ||
+                  (copySource && copyTargets.size === 0)
+                }
+              >
                 <MdSave style={{ fontSize: "1.1rem" }} />
-                {saving ? "Saving..." : copySource ? "Copy role" : editRole ? "Update role" : "Create role"}
+                {saving
+                  ? "Saving..."
+                  : copySource
+                    ? "Copy role"
+                    : editRole
+                      ? "Update role"
+                      : "Create role"}
               </button>
             </div>
           </div>
@@ -688,7 +850,11 @@ export default function RolesPage() {
               )}
             </p>
             <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.5rem" }}>
-              <button data-admin-close="" style={styles.cancelBtn} onClick={() => setDeleteConfirm(null)}>
+              <button
+                data-admin-close=""
+                style={styles.cancelBtn}
+                onClick={() => setDeleteConfirm(null)}
+              >
                 Cancel
               </button>
               <button
@@ -726,7 +892,8 @@ const styles = {
   },
   headerTitle: { margin: 0, fontSize: "1.4rem", fontWeight: 700, color: colors.textPrimary },
   headerSub: { margin: "0.2rem 0 0", fontSize: "0.88rem", color: colors.textSecondary },
-  addBtn: { minHeight: 44,
+  addBtn: {
+    minHeight: 44,
     display: "flex",
     alignItems: "center",
     gap: "0.4rem",

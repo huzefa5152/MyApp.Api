@@ -6,8 +6,26 @@ import BillChallansEditor from "./BillChallansEditor";
 import { defaultFurtherTaxRate } from "../utils/furtherTax";
 import { Fragment, useState, useEffect, useMemo, useRef } from "react";
 import { toLocalYmd, todayYmd } from "../utils/dateInput";
-import { MdInfo, MdAdd, MdCheckCircle, MdWarning, MdInventory2, MdLightbulb, MdRefresh, MdError, MdExpandMore, MdExpandLess, MdAutoAwesome } from "react-icons/md";
-import { getInvoiceById, updateInvoice, updateInvoiceItemTypes, updateInvoiceItemTypesAndQty, setTaxInvoiceLayout } from "../api/invoiceApi";
+import {
+  MdInfo,
+  MdAdd,
+  MdCheckCircle,
+  MdWarning,
+  MdInventory2,
+  MdLightbulb,
+  MdRefresh,
+  MdError,
+  MdExpandMore,
+  MdExpandLess,
+  MdAutoAwesome,
+} from "react-icons/md";
+import {
+  getInvoiceById,
+  updateInvoice,
+  updateInvoiceItemTypes,
+  updateInvoiceItemTypesAndQty,
+  setTaxInvoiceLayout,
+} from "../api/invoiceApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getAllUnits } from "../api/unitsApi";
@@ -63,11 +81,22 @@ const colors = {
  * matching the delivery challan form — picks existing values, creates new ones if needed.
  */
 export default function EditBillForm(props) {
-  return props.forceItemTypeAndQty && !props.billsMode
-    ? <TaxFilingRowsEditor {...props} /> : <CommercialBillEditor {...props} />;
+  return props.forceItemTypeAndQty && !props.billsMode ? (
+    <TaxFilingRowsEditor {...props} />
+  ) : (
+    <CommercialBillEditor {...props} />
+  );
 }
 
-function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, readOnly = false, billsMode = false, forceItemTypeAndQty = false }) {
+function CommercialBillEditor({
+  invoiceId,
+  onClose,
+  onSaved,
+  onLayoutSaved,
+  readOnly = false,
+  billsMode = false,
+  forceItemTypeAndQty = false,
+}) {
   const confirm = useConfirm();
   // billsMode: true when this form is mounted from the Bills tab. Hides
   // the Item Type column + picker and the bulk-apply toolbar (item-type
@@ -98,23 +127,25 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
   // but shouldn't touch commercial values. When the user has only a narrow
   // permission, every input on this form outside its scope becomes
   // read-only and Save POSTs to the matching narrow PATCH endpoint.
-  const canFullEdit          = has("bills.manage.update");
+  const canFullEdit = has("bills.manage.update");
   const canEditItemTypeAndQty = has("invoices.manage.update.itemtype.qty");
-  const canEditItemType       = has("invoices.manage.update.itemtype");
+  const canEditItemType = has("invoices.manage.update.itemtype");
   // Inline "+ New Item Type" availability — same gate the create-bill
   // forms use. Hidden in Bills mode (item-type management is the
   // Invoices tab's responsibility).
-  const canCreateItemType    = has("itemtypes.manage.create");
+  const canCreateItemType = has("itemtypes.manage.create");
   // Mode flags — exactly one of these is true at a time (in priority order).
   // canFullEdit takes precedence: a full-editor doesn't need the narrow modes.
   // forceItemTypeAndQty (caller override, set when launched from Invoices tab)
   // wins over the permission-derived flags so the form locks down to
   // ItemType + Qty editing regardless of how broad the user's perms are.
-  const itemTypeOnlyMode     = !forceItemTypeAndQty && (!canFullEdit && !canEditItemTypeAndQty && canEditItemType);
-  const itemTypeAndQtyMode   = forceItemTypeAndQty || (!canFullEdit && canEditItemTypeAndQty);
+  const itemTypeOnlyMode =
+    !forceItemTypeAndQty && !canFullEdit && !canEditItemTypeAndQty && canEditItemType;
+  const itemTypeAndQtyMode = forceItemTypeAndQty || (!canFullEdit && canEditItemTypeAndQty);
 
   // Effective read-only: caller-forced OR no edit permission at all.
-  const effectiveReadOnly = readOnly || (!canFullEdit && !canEditItemTypeAndQty && !canEditItemType);
+  const effectiveReadOnly =
+    readOnly || (!canFullEdit && !canEditItemTypeAndQty && !canEditItemType);
 
   const [invoice, setInvoice] = useState(null);
   const [showChallanEditor, setShowChallanEditor] = useState(false);
@@ -138,7 +169,9 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
   // Responsive: the wide FBR line-item table side-scrolls on a phone, so below
   // 760px the individual-lines view renders as tap-friendly stacked cards
   // instead (grouped view keeps the table — it's a summary lens).
-  const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 760);
+  const [isNarrow, setIsNarrow] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < 760,
+  );
   useEffect(() => {
     const onResize = () => setIsNarrow(window.innerWidth < 760);
     window.addEventListener("resize", onResize);
@@ -246,7 +279,10 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
         ]);
         setInvoice(data);
         // A company that prints its original bill lines never groups: the adjust screen opens on separate lines.
-        setGroupedView(!data.taxInvoiceUseOriginalBillLines && (forceItemTypeAndQty || !!data.groupTaxInvoiceByItemType));
+        setGroupedView(
+          !data.taxInvoiceUseOriginalBillLines &&
+            (forceItemTypeAndQty || !!data.groupTaxInvoiceByItemType),
+        );
         setAnyOverlay((data.items || []).some((it) => it.adjustment));
         // Bill-mode source-of-truth: every InvoiceItem field as the
         // bill carries it. Used to seed both `items[]` (when no
@@ -281,15 +317,15 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
           // it stays valid across a bill qty/price tweak, so they don't
           // have to re-pick it.
           if (adj.adjustedItemTypeId != null) {
-            next.itemTypeId   = adj.adjustedItemTypeId;
+            next.itemTypeId = adj.adjustedItemTypeId;
             next.itemTypeName = adj.adjustedItemTypeName || "";
-            next.hsCode       = adj.adjustedHSCode || "";
-            next.saleType     = adj.adjustedSaleType || "";
-            if (adj.adjustedUOM != null)      next.uom = adj.adjustedUOM;
+            next.hsCode = adj.adjustedHSCode || "";
+            next.saleType = adj.adjustedSaleType || "";
+            if (adj.adjustedUOM != null) next.uom = adj.adjustedUOM;
             if (adj.adjustedFbrUOMId != null) next.fbrUOMId = adj.adjustedFbrUOMId;
           }
           // The live bill values (drift reference target).
-          next._billQty       = bi.quantity;
+          next._billQty = bi.quantity;
           next._billUnitPrice = bi.unitPrice;
           next._billLineTotal = bi.lineTotal;
           // A line is "numerically adjusted" only when the consultant changed
@@ -298,20 +334,30 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
           // that decomposition; keep it internally consistent (qty × price).
           const numericallyAdjusted = adj.adjustedQuantity != null || adj.adjustedUnitPrice != null;
           if (numericallyAdjusted) {
-            const q  = adj.adjustedQuantity != null ? adj.adjustedQuantity : bi.quantity;
-            const lt = adj.adjustedLineTotal != null ? adj.adjustedLineTotal : Math.round(q * bi.unitPrice * 100) / 100;
-            next.quantity  = q;
+            const q = adj.adjustedQuantity != null ? adj.adjustedQuantity : bi.quantity;
+            const lt =
+              adj.adjustedLineTotal != null
+                ? adj.adjustedLineTotal
+                : Math.round(q * bi.unitPrice * 100) / 100;
+            next.quantity = q;
             next.lineTotal = lt;
-            next.unitPrice = adj.adjustedUnitPrice != null
-              ? adj.adjustedUnitPrice
-              : (q ? Math.round((lt / q) * 100) / 100 : bi.unitPrice);
+            next.unitPrice =
+              adj.adjustedUnitPrice != null
+                ? adj.adjustedUnitPrice
+                : q
+                  ? Math.round((lt / q) * 100) / 100
+                  : bi.unitPrice;
           }
           // else: item-type-only — leave bi.quantity / unitPrice / lineTotal.
           return next;
         });
-        setItems(forceItemTypeAndQty
-          ? editableItems.map((row) => withTaxUom(row, typesRes.data || [], !!data.fbrIRN || !!data.fbrSubmittedAt))
-          : editableItems);
+        setItems(
+          forceItemTypeAndQty
+            ? editableItems.map((row) =>
+                withTaxUom(row, typesRes.data || [], !!data.fbrIRN || !!data.fbrSubmittedAt),
+              )
+            : editableItems,
+        );
         // originalItemsRef ALWAYS holds the raw bill values — the
         // overlay is never the source of truth.
         originalItemsRef.current = billItems.map((it) => ({ ...it }));
@@ -323,7 +369,10 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
         setFurtherTaxRate(data.furtherTaxRate ?? null);
         setWithholdingTaxRate(data.withholdingTaxRate ?? null);
         setWithholdingTaxAmount(
-          data.withholdingTaxRate == null && data.withholdingTaxAmount > 0 ? data.withholdingTaxAmount : null);
+          data.withholdingTaxRate == null && data.withholdingTaxAmount > 0
+            ? data.withholdingTaxAmount
+            : null,
+        );
         // Date arrives as ISO string; the <input type="date"> control wants
         // YYYY-MM-DD in LOCAL time. Pre-fix (.toISOString().slice(0,10))
         // converted to UTC first, which rolled the calendar day forward in
@@ -343,7 +392,10 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
 
         // Auto-detect scenario from paymentTerms tag.
         const tag = pt.match(/\[\s*(SN\d{3})\s*\]/i);
-        if (tag) { hadScenarioTagRef.current = true; setScenarioCode(tag[1].toUpperCase()); }
+        if (tag) {
+          hadScenarioTagRef.current = true;
+          setScenarioCode(tag[1].toUpperCase());
+        }
 
         // Lazy-load applicable scenarios for the bill's company.
         if (data.companyId) {
@@ -356,7 +408,6 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
           getClientsByCompany(data.companyId)
             .then((res) => setClients(res.data || []))
             .catch(() => setClients([]));
-
         }
       } catch {
         setError("Failed to load bill.");
@@ -382,8 +433,9 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
     const isRegistered = (client.registrationType || "").toLowerCase() === "registered";
     const preferred = isRegistered ? "SN001" : "SN002";
     const wantBuyer = isRegistered ? "registered" : "unregistered";
-    const pick = scenarios.find((s) => s.code === preferred)
-      || scenarios.find((s) => (s.buyerRegistrationType || "").toLowerCase() === wantBuyer);
+    const pick =
+      scenarios.find((s) => s.code === preferred) ||
+      scenarios.find((s) => (s.buyerRegistrationType || "").toLowerCase() === wantBuyer);
     if (pick) setScenarioCode(pick.code);
   }, [scenarios, clients, clientId, scenarioCode]);
 
@@ -407,9 +459,7 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
     const withHs = itemTypes.filter(hasHs);
     if (!chosenScenario) return withHs;
     const target = (chosenScenario.saleType || "").trim().toLowerCase();
-    return withHs.filter(
-      (it) => (it.saleType || "").trim().toLowerCase() === target,
-    );
+    return withHs.filter((it) => (it.saleType || "").trim().toLowerCase() === target);
   }, [itemTypes, chosenScenario, billsMode]);
 
   // The Invoice-mode picker lists only HS-coded types, but a line's CURRENT
@@ -447,8 +497,7 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
       const hs = (it.hsCode || "").trim();
       if (!hs) continue;
       const qty = parseFloat(it.quantity) || 0;
-      const lineTotal = parseFloat(it.lineTotal)
-        || (qty * (parseFloat(it.unitPrice) || 0));
+      const lineTotal = parseFloat(it.lineTotal) || qty * (parseFloat(it.unitPrice) || 0);
       const existing = map.get(hs) || {
         hsCode: hs,
         name: it.itemTypeName || "",
@@ -498,10 +547,13 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
   }, [billHsAggregate.length, claimAutoOpened]);
 
   useEffect(() => {
-    if (!SHOW_TAX_CLAIM_PANEL) return;   // panel hidden → skip the per-edit fetch
+    if (!SHOW_TAX_CLAIM_PANEL) return; // panel hidden → skip the per-edit fetch
     if (!forceItemTypeAndQty) return;
     if (!invoice?.companyId) return;
-    if (billHsAggregate.length === 0) { setClaimSummary(null); return; }
+    if (billHsAggregate.length === 0) {
+      setClaimSummary(null);
+      return;
+    }
     let cancelled = false;
     // 250ms debounce — typing "100" in qty fires 3 state updates
     // back-to-back; without this the server sees 3 requests and the
@@ -530,7 +582,10 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
         if (!cancelled) setClaimLoading(false);
       }
     }, 250);
-    return () => { cancelled = true; clearTimeout(timer); };
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forceItemTypeAndQty, invoice?.companyId, claimRequestKey, claimRefreshTick]);
 
@@ -551,7 +606,9 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
     // the per-company on-hand sort applied on initial load.
     getItemTypes(invoice?.companyId)
       .then((r) => setItemTypes(r.data || []))
-      .catch(() => { /* silent */ });
+      .catch(() => {
+        /* silent */
+      });
     setShowAddItemType(false);
   };
 
@@ -577,7 +634,11 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
   // 2026-05-11: added. Triggered by the Tax Claim panel's "Reset to
   // original bill values" button (panel header).
   const resetItemsToOriginal = () => {
-    setItems(originalItemsRef.current.map((it) => forceItemTypeAndQty ? withTaxUom(it, itemTypes) : ({ ...it })));
+    setItems(
+      originalItemsRef.current.map((it) =>
+        forceItemTypeAndQty ? withTaxUom(it, itemTypes) : { ...it },
+      ),
+    );
   };
 
   // Apply a tax-claim optimization suggestion to the bill row(s) for a
@@ -694,7 +755,8 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
       if (isLast) {
         target = Math.max(1, remainingQty);
       } else {
-        const ideal = totalValue > 0 ? totalQty * (row.lineTotal / totalValue) : totalQty / contributing.length;
+        const ideal =
+          totalValue > 0 ? totalQty * (row.lineTotal / totalValue) : totalQty / contributing.length;
         target = Math.max(1, Math.round(ideal));
         // Leave at least 1 qty available per remaining row.
         const minLeft = contributing.length - i - 1;
@@ -739,10 +801,19 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
       }
       let chosenQty;
       let chosenInBand = false;
-      if (bestTier1 > 0)        { chosenQty = bestTier1; chosenInBand = true; }
-      else if (bestTier2 > 0)   { chosenQty = bestTier2; chosenInBand = false; }
-      else if (bestTier3 > 0)   { chosenQty = bestTier3; chosenInBand = false; }
-      else                      { chosenQty = target;   chosenInBand = false; }
+      if (bestTier1 > 0) {
+        chosenQty = bestTier1;
+        chosenInBand = true;
+      } else if (bestTier2 > 0) {
+        chosenQty = bestTier2;
+        chosenInBand = false;
+      } else if (bestTier3 > 0) {
+        chosenQty = bestTier3;
+        chosenInBand = false;
+      } else {
+        chosenQty = target;
+        chosenInBand = false;
+      }
       const unitPrice = chosenQty > 0 ? Math.round(cents / chosenQty) / 100 : 0;
       const recomposed = Math.round(chosenQty * unitPrice * 100) / 100;
 
@@ -857,28 +928,30 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
   // Passing newId=null + pickedType=null clears ItemType + UoM + HS Code
   // + Sale Type on every row (the dedicated "Clear from all" button).
   const applyItemTypeToAll = (newId, pickedType, mode = "all") => {
-    setItems((prev) => prev.map((row, idx) => {
-      // mode === "empty" → only fill rows that don't have an Item Type yet
-      if (mode === "empty" && row.itemTypeId) return row;
-      const oldHs = (row.hsCode || "").trim();
-      const newHs = (pickedType?.hsCode || "").trim();
-      const hsChanged = oldHs !== newHs;
-      let nextRow = _applyItemTypeToRow(row, newId, pickedType);
-      // Same invoice-mode reset rule as updateItemType — applied per
-      // row when the bulk apply actually changed the HS code on it.
-      if (!billsMode && hsChanged) {
-        const orig = originalItemsRef.current[idx];
-        if (orig) {
-          nextRow = {
-            ...nextRow,
-            quantity: orig.quantity,
-            unitPrice: orig.unitPrice,
-            lineTotal: orig.lineTotal,
-          };
+    setItems((prev) =>
+      prev.map((row, idx) => {
+        // mode === "empty" → only fill rows that don't have an Item Type yet
+        if (mode === "empty" && row.itemTypeId) return row;
+        const oldHs = (row.hsCode || "").trim();
+        const newHs = (pickedType?.hsCode || "").trim();
+        const hsChanged = oldHs !== newHs;
+        let nextRow = _applyItemTypeToRow(row, newId, pickedType);
+        // Same invoice-mode reset rule as updateItemType — applied per
+        // row when the bulk apply actually changed the HS code on it.
+        if (!billsMode && hsChanged) {
+          const orig = originalItemsRef.current[idx];
+          if (orig) {
+            nextRow = {
+              ...nextRow,
+              quantity: orig.quantity,
+              unitPrice: orig.unitPrice,
+              lineTotal: orig.lineTotal,
+            };
+          }
         }
-      }
-      return nextRow;
-    }));
+        return nextRow;
+      }),
+    );
   };
 
   // "Send back for re-adjustment" (Invoice mode): revert the FBR overlay so
@@ -905,8 +978,9 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
       onSaved();
     } catch (e) {
       setError(
-        e?.response?.data?.error || e?.response?.data?.message ||
-        "Failed to send back for re-adjustment. Please try again."
+        e?.response?.data?.error ||
+          e?.response?.data?.message ||
+          "Failed to send back for re-adjustment. Please try again.",
       );
       setSaving(false);
     }
@@ -953,9 +1027,10 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
   // line and a Nos line, and the answer belongs to the unit rather than to the
   // group, so it is asked per line and the split honours it (2026-09-23).
   const consultantAdjustment = forceItemTypeAndQty && !billsMode;
-  const splitTaxQuantity = (total, weights, group) => consultantAdjustment
-    ? splitConsultantQuantity(total, weights)
-    : splitGroupQuantity(total, weights, { decimalOk: groupDecimalOk(group) });
+  const splitTaxQuantity = (total, weights, group) =>
+    consultantAdjustment
+      ? splitConsultantQuantity(total, weights)
+      : splitGroupQuantity(total, weights, { decimalOk: groupDecimalOk(group) });
   const groupDecimalOk = (group) =>
     group.lineIndices.map((i) => isDecimalUnit(items[i]?.uom || group.uom, units));
   const groupAllowsDecimal = (group) => groupDecimalOk(group).some(Boolean);
@@ -1077,13 +1152,14 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
         billValue: 0,
       };
       const qty = parseFloat(it.quantity) || 0;
-      const val = it.lineTotal != null ? Number(it.lineTotal) : qty * (parseFloat(it.unitPrice) || 0);
+      const val =
+        it.lineTotal != null ? Number(it.lineTotal) : qty * (parseFloat(it.unitPrice) || 0);
       g.lineIndices.push(idx);
       g.totalQty += qty;
       g.totalValue += val;
       // Current-bill totals for the drift reference.
-      g.billQty   += (it._billQty       != null ? Number(it._billQty)       : qty);
-      g.billValue += (it._billLineTotal != null ? Number(it._billLineTotal) : val);
+      g.billQty += it._billQty != null ? Number(it._billQty) : qty;
+      g.billValue += it._billLineTotal != null ? Number(it._billLineTotal) : val;
       // Prefer the most complete catalog-derived labels across the group's
       // lines (they should all match, but be defensive against blanks).
       if (it.itemTypeName) g.itemTypeName = it.itemTypeName;
@@ -1193,10 +1269,12 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
     const g = bad[0];
     const n = g.lineIndices.length;
     const name = g.itemTypeName || g.description || "This item";
-    return consultantAdjustment ? `This tax group needs a positive quantity at the supported precision.` : n > 1
-      ? `“${name}” is grouped from ${n} lines, so its quantity must be at least ${n} — one whole unit per line — ` +
-        `and it is ${g.totalQty.toLocaleString("en-PK")}. Enter a larger quantity, or switch to Individual lines to change lines one by one.`
-      : `“${name}” needs a quantity greater than 0.`;
+    return consultantAdjustment
+      ? `This tax group needs a positive quantity at the supported precision.`
+      : n > 1
+        ? `“${name}” is grouped from ${n} lines, so its quantity must be at least ${n} — one whole unit per line — ` +
+          `and it is ${g.totalQty.toLocaleString("en-PK")}. Enter a larger quantity, or switch to Individual lines to change lines one by one.`
+        : `“${name}” needs a quantity greater than 0.`;
   };
 
   // Reclassify an entire group to a different Item Type — applies to every
@@ -1214,7 +1292,12 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
         if (!billsMode && hsChanged) {
           const orig = originalItemsRef.current[i];
           if (orig) {
-            next[i] = { ...next[i], quantity: orig.quantity, unitPrice: orig.unitPrice, lineTotal: orig.lineTotal };
+            next[i] = {
+              ...next[i],
+              quantity: orig.quantity,
+              unitPrice: orig.unitPrice,
+              lineTotal: orig.lineTotal,
+            };
           }
         }
       });
@@ -1249,11 +1332,12 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
   }, [items]);
 
   const subtotal = items.reduce((s, i) => s + (parseFloat(i.lineTotal) || 0), 0);
-  const gstAmount = Math.round(subtotal * (parseFloat(gstRate) || 0) / 100 * 100) / 100;
+  const gstAmount = Math.round(((subtotal * (parseFloat(gstRate) || 0)) / 100) * 100) / 100;
   // Preview only — the server re-derives further tax from its own subtotal.
-  const furtherTaxAmount = furtherTaxRate === null || furtherTaxRate === ""
-    ? 0
-    : Math.round(subtotal * (Number(furtherTaxRate) || 0) / 100 * 100) / 100;
+  const furtherTaxAmount =
+    furtherTaxRate === null || furtherTaxRate === ""
+      ? 0
+      : Math.round(((subtotal * (Number(furtherTaxRate) || 0)) / 100) * 100) / 100;
   const grandTotal = subtotal + gstAmount + furtherTaxAmount;
 
   // Field-level gating booleans, derived once for clarity:
@@ -1270,9 +1354,9 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
   //     to alter the bill amount.
   //   • lockItemType — locks the Item Type picker (full read-only).
   const lockNonItemType = readOnly || itemTypeOnlyMode || itemTypeAndQtyMode;
-  const lockQty         = readOnly || itemTypeOnlyMode;
-  const lockPrice       = readOnly || itemTypeOnlyMode;
-  const lockItemType    = readOnly;
+  const lockQty = readOnly || itemTypeOnlyMode;
+  const lockPrice = readOnly || itemTypeOnlyMode;
+  const lockItemType = readOnly;
 
   // ── Total preservation (narrow-edit guard) ───────────────────────
   // When the operator can edit qty/price (itemTypeAndQtyMode), the
@@ -1337,7 +1421,10 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
           return sum + (parseFloat(o?.quantity) || 0) * (parseFloat(o?.unitPrice) || 0);
         }, 0);
         const target = Math.round((billValue > 0 ? billValue : g.totalValue || 0) * 100) / 100;
-        if (target > 0) { next[g.key] = target.toFixed(2); changed = true; }
+        if (target > 0) {
+          next[g.key] = target.toFixed(2);
+          changed = true;
+        }
       }
       return changed ? next : prev;
     });
@@ -1347,7 +1434,7 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
   // would diverge from their challan if the buyer changed, so the
   // backend rejects the change and we lock it client-side.
   const isChallanLinked = !!(invoice?.challanNumbers && invoice.challanNumbers.length > 0);
-  const lockClient      = lockNonItemType || isChallanLinked;
+  const lockClient = lockNonItemType || isChallanLinked;
   // Renumbering is gated TIGHTER than editing. A bill whose submit is in
   // flight ("Submitting"), whose outcome is unknown ("Uncertain"), or that FBR
   // accepted (an IRN, or "Submitted") was filed under its current number, so
@@ -1357,10 +1444,12 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
     if (readOnly) return "Read-only.";
     if (lockNonItemType) return "Not editable in this mode.";
     const st = invoice?.fbrStatus;
-    if (invoice?.fbrIRN) return `Filed with FBR (IRN ${invoice.fbrIRN}) — the number cannot change.`;
+    if (invoice?.fbrIRN)
+      return `Filed with FBR (IRN ${invoice.fbrIRN}) — the number cannot change.`;
     if (st === "Submitted") return "Submitted to FBR — the number cannot change.";
     if (st === "Submitting") return "A submission is in flight — the number cannot change.";
-    if (st === "Uncertain") return "FBR may already hold this bill — reset its submission before renumbering.";
+    if (st === "Uncertain")
+      return "FBR may already hold this bill — reset its submission before renumbering.";
     return "";
   })();
 
@@ -1387,7 +1476,12 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
     const bump = (id, field, qty) => {
       if (!id || !tracked(id)) return;
       const it = byId.get(id);
-      const cur = map.get(id) || { name: it.name, onHandNow: Number(it.availableQty) || 0, posted: 0, planned: 0 };
+      const cur = map.get(id) || {
+        name: it.name,
+        onHandNow: Number(it.availableQty) || 0,
+        posted: 0,
+        planned: 0,
+      };
       cur[field] += qty;
       map.set(id, cur);
     };
@@ -1401,28 +1495,36 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
       bump(it.itemTypeId, "planned", parseFloat(it.quantity) || 0);
     }
     for (const w of map.values()) {
-      w.onHand = w.onHandNow + w.posted;   // on-hand as if this invoice did not exist
-      w.projected = w.onHand - w.planned;  // on-hand after this save
+      w.onHand = w.onHandNow + w.posted; // on-hand as if this invoice did not exist
+      w.projected = w.onHand - w.planned; // on-hand after this save
     }
     return map;
   }, [items, itemTypes, billsMode]);
   const stockNegatives = useMemo(
     () => Array.from(stockProjection.values()).filter((w) => w.projected < 0),
-    [stockProjection]);
+    [stockProjection],
+  );
   const fmtQty = (n) => Number(n).toLocaleString("en-PK", { maximumFractionDigits: 4 });
   const stockWarnFor = (itemTypeId) => {
     if (effectiveReadOnly) return null;
     const w = stockProjection.get(itemTypeId);
     if (!w || w.projected >= 0) return null;
     return (
-      <div style={styles.stockHint} title="This item type is HS-coded, so this quantity leaves stock. The figure is on-hand after this save.">
+      <div
+        style={styles.stockHint}
+        title="This item type is HS-coded, so this quantity leaves stock. The figure is on-hand after this save."
+      >
         <MdWarning size={11} style={{ verticalAlign: "-1px", marginRight: 3 }} />
-        Out of stock for {w.name}: on-hand {fmtQty(w.onHand)}, this bill takes {fmtQty(w.planned)}, leaves {fmtQty(w.projected)}
+        Out of stock for {w.name}: on-hand {fmtQty(w.onHand)}, this bill takes {fmtQty(w.planned)},
+        leaves {fmtQty(w.projected)}
       </div>
     );
   };
 
-  const handleSave = async (e, completeReview = !!(invoice?.fbrReviewRequired && forceItemTypeAndQty && !billsMode)) => {
+  const handleSave = async (
+    e,
+    completeReview = !!(invoice?.fbrReviewRequired && forceItemTypeAndQty && !billsMode),
+  ) => {
     e.preventDefault();
     setError("");
     if (items.length === 0) return setError("No items to save.");
@@ -1430,10 +1532,14 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
     // Item Type is required on every line so the invoice can always group
     // by it (Bills + Invoices tabs alike). Guard every save path.
     const unclassified = items.filter((i) => !i.itemTypeId).length;
-    if (unclassified > 0 && !billsMode && !(itemTypeAndQtyMode && forceItemTypeAndQty && !billsMode && !completeReview)) {
+    if (
+      unclassified > 0 &&
+      !billsMode &&
+      !(itemTypeAndQtyMode && forceItemTypeAndQty && !billsMode && !completeReview)
+    ) {
       return setError(
         `Select an Item Type for every line — ${unclassified} line${unclassified === 1 ? "" : "s"} still missing one. ` +
-        `Use "Apply same Item Type to all" to classify in bulk.`
+          `Use "Apply same Item Type to all" to classify in bulk.`,
       );
     }
 
@@ -1442,7 +1548,10 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
     // server regardless of this answer.)
     if (!billsMode && stockNegatives.length > 0) {
       const lines = stockNegatives
-        .map((w) => `${w.name}: on-hand ${fmtQty(w.onHand)}, this bill takes ${fmtQty(w.planned)}, leaves ${fmtQty(w.projected)}`)
+        .map(
+          (w) =>
+            `${w.name}: on-hand ${fmtQty(w.onHand)}, this bill takes ${fmtQty(w.planned)}, leaves ${fmtQty(w.projected)}`,
+        )
         .join("\n");
       const ok = await confirm({
         title: "You are out of this inventory",
@@ -1474,7 +1583,9 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
         if (items.some((i) => (parseFloat(i.quantity) || 0) <= 0)) {
           // In the grouped view the offending line is not on screen; name the
           // group and the smallest total that works instead.
-          return setError((renderGrouped && zeroQtyGroupMessage(items)) || "Quantity must be greater than 0.");
+          return setError(
+            (renderGrouped && zeroQtyGroupMessage(items)) || "Quantity must be greater than 0.",
+          );
         }
         if (items.some((i) => (parseFloat(i.unitPrice) || 0) <= 0)) {
           return setError("Unit price must be greater than 0.");
@@ -1482,9 +1593,9 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
         if (!totalsMatch) {
           return setError(
             `Bill total mismatch: original Rs. ${originalSubtotal.toLocaleString("en-PK", { maximumFractionDigits: 2 })} ` +
-            `vs current Rs. ${currentSubtotal.toLocaleString("en-PK", { maximumFractionDigits: 2 })} ` +
-            `(diff Rs. ${subtotalDiff.toLocaleString("en-PK", { maximumFractionDigits: 2 })}). ` +
-            `Adjust qty / unit price so totals match within Rs. ${NARROW_EDIT_TOLERANCE_PKR}, or use full-edit access to change the bill amount.`
+              `vs current Rs. ${currentSubtotal.toLocaleString("en-PK", { maximumFractionDigits: 2 })} ` +
+              `(diff Rs. ${subtotalDiff.toLocaleString("en-PK", { maximumFractionDigits: 2 })}). ` +
+              `Adjust qty / unit price so totals match within Rs. ${NARROW_EDIT_TOLERANCE_PKR}, or use full-edit access to change the bill amount.`,
           );
         }
         // writeMode (2026-05-11): Invoice-mode saves go through the
@@ -1511,11 +1622,15 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
         );
       } else {
         // Full edit path — same validation as before.
-        if (items.some((i) => !i.description?.trim())) return setError("All items must have a description.");
+        if (items.some((i) => !i.description?.trim()))
+          return setError("All items must have a description.");
         if (items.some((i) => (parseFloat(i.quantity) || 0) <= 0)) {
-          return setError((renderGrouped && zeroQtyGroupMessage(items)) || "Quantity must be greater than 0.");
+          return setError(
+            (renderGrouped && zeroQtyGroupMessage(items)) || "Quantity must be greater than 0.",
+          );
         }
-        if (items.some((i) => (parseFloat(i.unitPrice) || 0) < 0)) return setError("Unit price cannot be negative.");
+        if (items.some((i) => (parseFloat(i.unitPrice) || 0) < 0))
+          return setError("Unit price cannot be negative.");
 
         // Re-write paymentTerms to keep the [SNxxx] tag in sync with the
         // operator's scenario choice — same convention as the create form
@@ -1523,16 +1638,23 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
         const cleaned = (paymentTerms || "").replace(/^\s*\[\s*SN\d{3}\s*\]\s*/i, "").trim();
         const ptToSave = scenarioCode
           ? `[${scenarioCode}] ${cleaned || chosenScenario?.description || ""}`.trim()
-          : (cleaned || null);
+          : cleaned || null;
 
         await updateInvoice(invoiceId, {
           date: billDate || null,
           gstRate: parseFloat(gstRate),
           taxTreatment,
           // null, not 0 — only null clears the tax.
-          furtherTaxRate: furtherTaxRate === null || furtherTaxRate === "" ? null : parseFloat(furtherTaxRate),
-          withholdingTaxRate: withholdingTaxRate === null || withholdingTaxRate === "" ? null : parseFloat(withholdingTaxRate),
-          withholdingTaxAmount: withholdingTaxAmount === null || withholdingTaxAmount === "" ? null : parseFloat(withholdingTaxAmount),
+          furtherTaxRate:
+            furtherTaxRate === null || furtherTaxRate === "" ? null : parseFloat(furtherTaxRate),
+          withholdingTaxRate:
+            withholdingTaxRate === null || withholdingTaxRate === ""
+              ? null
+              : parseFloat(withholdingTaxRate),
+          withholdingTaxAmount:
+            withholdingTaxAmount === null || withholdingTaxAmount === ""
+              ? null
+              : parseFloat(withholdingTaxAmount),
           groupTaxInvoiceByItemType: invoice.groupTaxInvoiceByItemType,
           paymentTerms: ptToSave,
           manualChallanNumber: isChallanLinked ? undefined : manualChallanNumber.trim(),
@@ -1572,8 +1694,17 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
       }
       // Uploads on this edit form attach immediately (the bill already has an
       // id), so flush is a harmless no-op — kept for pattern consistency.
-      if (invoiceId) { try { await attachmentRef.current?.flush(invoiceId); } catch { /* attachments best-effort */ } }
-      onSaved({ reviewCompleted: completeReview, reviewPending: invoice.fbrReviewRequired && !completeReview });
+      if (invoiceId) {
+        try {
+          await attachmentRef.current?.flush(invoiceId);
+        } catch {
+          /* attachments best-effort */
+        }
+      }
+      onSaved({
+        reviewCompleted: completeReview,
+        reviewPending: invoice.fbrReviewRequired && !completeReview,
+      });
     } catch (err) {
       setError(err.response?.data?.error || "Failed to save bill.");
     } finally {
@@ -1585,17 +1716,35 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
   // via the X in the header or the Cancel button.
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>
-            {readOnly ? (billsMode ? "View Bill" : "View Invoice") : (billsMode ? "Edit Bill" : "Edit Invoice")} {invoice?.fbrInvoiceNumber || `#${invoice?.invoiceNumber || ""}`}
+            {readOnly
+              ? billsMode
+                ? "View Bill"
+                : "View Invoice"
+              : billsMode
+                ? "Edit Bill"
+                : "Edit Invoice"}{" "}
+            {invoice?.fbrInvoiceNumber || `#${invoice?.invoiceNumber || ""}`}
           </h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            &times;
+          </button>
         </div>
         <form onSubmit={handleSave}>
-          <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
+          <div
+            data-admin-body=""
+            style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}
+          >
             {loading ? (
-              <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>Loading...</div>
+              <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>
+                Loading...
+              </div>
             ) : !invoice ? (
               <div style={styles.errorAlert}>Bill not found.</div>
             ) : !invoice.isEditable && !readOnly ? (
@@ -1604,28 +1753,65 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
               </div>
             ) : (
               <>
-                {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
-
-                {!effectiveReadOnly && billsMode && canFullEdit && !itemTypeOnlyMode && !itemTypeAndQtyMode
-                  && invoice.isEditable && invoice.documentType === 4 && !invoice.isDemo && !invoice.supplementsInvoiceId && (
-                  <div style={{ ...styles.infoBox, flexWrap: "wrap", alignItems: "center" }}>
-                    <span>Add or remove whole challans on this bill. Save other bill edits first.</span>
-                    <button type="button" disabled={saving} style={{ minHeight: 44, padding: "0.5rem 0.8rem", marginLeft: "auto" }}
-                      onClick={async () => {
-                        if (await confirm({ title: "Manage bill challans", message: "This works from the saved bill. Any unsaved edits in this form will be discarded after you save challans. Continue?", variant: "info", confirmText: "Manage challans" })) {
-                          setShowChallanEditor(true);
-                        }
-                      }}>Manage challans</button>
+                {error && (
+                  <div ref={errRef} style={styles.errorAlert}>
+                    {error}
                   </div>
                 )}
 
-                {invoice.fbrReviewRequired && <div role="status" style={{ ...styles.infoBox, display: "block", overflowWrap: "anywhere" }}>
-                  <strong>Needs consultant review — bill changed</strong>
-                  <p>The commercial bill is saved. Existing adjustments are preserved, but FBR validation and submission are blocked.</p>
-                  <p>{forceItemTypeAndQty && !billsMode
-                    ? "Review every current item, classify new items and reconcile the adjusted total to the bill. Save progress to continue later, or Complete review when all items are checked."
-                    : "Next: a tax consultant must open this bill in Invoices, check all current items and choose Complete review. Saving bill changes does not complete the review."}</p>
-                </div>}
+                {!effectiveReadOnly &&
+                  billsMode &&
+                  canFullEdit &&
+                  !itemTypeOnlyMode &&
+                  !itemTypeAndQtyMode &&
+                  invoice.isEditable &&
+                  invoice.documentType === 4 &&
+                  !invoice.isDemo &&
+                  !invoice.supplementsInvoiceId && (
+                    <div style={{ ...styles.infoBox, flexWrap: "wrap", alignItems: "center" }}>
+                      <span>
+                        Add or remove whole challans on this bill. Save other bill edits first.
+                      </span>
+                      <button
+                        type="button"
+                        disabled={saving}
+                        style={{ minHeight: 44, padding: "0.5rem 0.8rem", marginLeft: "auto" }}
+                        onClick={async () => {
+                          if (
+                            await confirm({
+                              title: "Manage bill challans",
+                              message:
+                                "This works from the saved bill. Any unsaved edits in this form will be discarded after you save challans. Continue?",
+                              variant: "info",
+                              confirmText: "Manage challans",
+                            })
+                          ) {
+                            setShowChallanEditor(true);
+                          }
+                        }}
+                      >
+                        Manage challans
+                      </button>
+                    </div>
+                  )}
+
+                {invoice.fbrReviewRequired && (
+                  <div
+                    role="status"
+                    style={{ ...styles.infoBox, display: "block", overflowWrap: "anywhere" }}
+                  >
+                    <strong>Needs consultant review — bill changed</strong>
+                    <p>
+                      The commercial bill is saved. Existing adjustments are preserved, but FBR
+                      validation and submission are blocked.
+                    </p>
+                    <p>
+                      {forceItemTypeAndQty && !billsMode
+                        ? "Review every current item, classify new items and reconcile the adjusted total to the bill. Save progress to continue later, or Complete review when all items are checked."
+                        : "Next: a tax consultant must open this bill in Invoices, check all current items and choose Complete review. Saving bill changes does not complete the review."}
+                    </p>
+                  </div>
+                )}
 
                 {/* Dual-book "adjustment out of date" banner (2026-07-15).
                     Shows on the Invoices tab when the delivery bill was edited
@@ -1633,22 +1819,64 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                     total no longer matches the bill. Validate/Submit are
                     blocked server-side until the consultant re-adjusts here. */}
                 {forceItemTypeAndQty && invoice.fbrAdjustmentStale && (
-                  <div style={{
-                    display: "flex", gap: "0.6rem", alignItems: "flex-start",
-                    padding: "0.8rem 1rem", marginBottom: "0.85rem", borderRadius: 8,
-                    background: "#fff4e0", border: "1px solid #ffcc80",
-                    borderLeft: "4px solid #e65100",
-                  }}>
-                    <MdWarning size={20} style={{ color: "#e65100", flexShrink: 0, marginTop: 2 }} />
-                    <div style={{ fontSize: "0.85rem", color: colors.textPrimary, lineHeight: 1.55 }}>
-                      <strong style={{ color: "#e65100" }}>Bill changed since this invoice was adjusted — re-adjustment needed.</strong>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "0.6rem",
+                      alignItems: "flex-start",
+                      padding: "0.8rem 1rem",
+                      marginBottom: "0.85rem",
+                      borderRadius: 8,
+                      background: "#fff4e0",
+                      border: "1px solid #ffcc80",
+                      borderLeft: "4px solid #e65100",
+                    }}
+                  >
+                    <MdWarning
+                      size={20}
+                      style={{ color: "#e65100", flexShrink: 0, marginTop: 2 }}
+                    />
+                    <div
+                      style={{ fontSize: "0.85rem", color: colors.textPrimary, lineHeight: 1.55 }}
+                    >
+                      <strong style={{ color: "#e65100" }}>
+                        Bill changed since this invoice was adjusted — re-adjustment needed.
+                      </strong>
                       <div style={{ marginTop: 4 }}>
                         You last filed{" "}
-                        <strong>Rs. {Number(invoice.fbrAdjustedSubtotal ?? invoice.subtotal).toLocaleString("en-PK", { maximumFractionDigits: 2 })}</strong> for FBR, but the delivery bill is now{" "}
-                        <strong>Rs. {Number(invoice.subtotal).toLocaleString("en-PK", { maximumFractionDigits: 2 })}</strong>.
+                        <strong>
+                          Rs.{" "}
+                          {Number(invoice.fbrAdjustedSubtotal ?? invoice.subtotal).toLocaleString(
+                            "en-PK",
+                            { maximumFractionDigits: 2 },
+                          )}
+                        </strong>{" "}
+                        for FBR, but the delivery bill is now{" "}
+                        <strong>
+                          Rs.{" "}
+                          {Number(invoice.subtotal).toLocaleString("en-PK", {
+                            maximumFractionDigits: 2,
+                          })}
+                        </strong>
+                        .
                       </div>
                       <div style={{ marginTop: 4 }}>
-                        The rows below show <strong>your last adjusted</strong> quantities &amp; unit prices; each <span style={{ color: "#e65100" }}>“bill: …”</span> note shows what the bill now says. Re-adjust the grouped Qty / Unit Price so the total matches the bill total (<strong>Rs. {Number(invoice.subtotal).toLocaleString("en-PK", { maximumFractionDigits: 2 })}</strong> — see the guard below), then <strong>{invoice.fbrReviewRequired ? "Complete review" : "Save Adjustments"}</strong>. FBR <strong>Validate</strong> &amp; <strong>Submit</strong> stay blocked until you do.
+                        The rows below show <strong>your last adjusted</strong> quantities &amp;
+                        unit prices; each <span style={{ color: "#e65100" }}>“bill: …”</span> note
+                        shows what the bill now says. Re-adjust the grouped Qty / Unit Price so the
+                        total matches the bill total (
+                        <strong>
+                          Rs.{" "}
+                          {Number(invoice.subtotal).toLocaleString("en-PK", {
+                            maximumFractionDigits: 2,
+                          })}
+                        </strong>{" "}
+                        — see the guard below), then{" "}
+                        <strong>
+                          {invoice.fbrReviewRequired ? "Complete review" : "Save Adjustments"}
+                        </strong>
+                        . FBR <strong>Validate</strong> &amp; <strong>Submit</strong> stay blocked
+                        until you do.
                       </div>
                     </div>
                   </div>
@@ -1658,7 +1886,8 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                   <div style={styles.infoBox}>
                     <MdInfo size={16} style={{ color: colors.blue, flexShrink: 0, marginTop: 2 }} />
                     <div>
-                      To add, remove or replace challans, ask an administrator to open Bills → Edit → Manage challans. Review the resulting bill here before FBR submission.
+                      To add, remove or replace challans, ask an administrator to open Bills → Edit
+                      → Manage challans. Review the resulting bill here before FBR submission.
                     </div>
                   </div>
                 )}
@@ -1667,17 +1896,48 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                   <div style={styles.infoBox}>
                     <MdInfo size={16} style={{ color: colors.blue, flexShrink: 0, marginTop: 2 }} />
                     <div>
-                      <b>Client:</b> {invoice.clientName} · <b>Date:</b> {invoice.date ? new Date(invoice.date).toLocaleDateString() : "—"}
-                      {invoice.challanNumbers?.length > 0 && <> · <b>DC#{invoice.challanNumbers.join(", #")}</b></>}
+                      <b>Client:</b> {invoice.clientName} · <b>Date:</b>{" "}
+                      {invoice.date ? new Date(invoice.date).toLocaleDateString() : "—"}
+                      {invoice.challanNumbers?.length > 0 && (
+                        <>
+                          {" "}
+                          · <b>DC#{invoice.challanNumbers.join(", #")}</b>
+                        </>
+                      )}
                       {/* PO Number / Indent / Site rolled up from linked
                           challans — same fields the bill list card now
                           shows, so the read-only view matches the card
                           and Edit form one-for-one. */}
-                      {invoice.poNumber && <> · <b>PO:</b> {invoice.poNumber}</>}
-                      {invoice.indentNo && <> · <b>Indent:</b> {invoice.indentNo}</>}
-                      {invoice.site && <> · <b>Site:</b> {invoice.site}</>}
-                      {invoice.fbrStatus && <> · <b>FBR:</b> {invoice.fbrStatus}</>}
-                      {invoice.fbrIRN && <> · <b>IRN:</b> {invoice.fbrIRN}</>}
+                      {invoice.poNumber && (
+                        <>
+                          {" "}
+                          · <b>PO:</b> {invoice.poNumber}
+                        </>
+                      )}
+                      {invoice.indentNo && (
+                        <>
+                          {" "}
+                          · <b>Indent:</b> {invoice.indentNo}
+                        </>
+                      )}
+                      {invoice.site && (
+                        <>
+                          {" "}
+                          · <b>Site:</b> {invoice.site}
+                        </>
+                      )}
+                      {invoice.fbrStatus && (
+                        <>
+                          {" "}
+                          · <b>FBR:</b> {invoice.fbrStatus}
+                        </>
+                      )}
+                      {invoice.fbrIRN && (
+                        <>
+                          {" "}
+                          · <b>IRN:</b> {invoice.fbrIRN}
+                        </>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1689,9 +1949,9 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                   <div style={styles.narrowPermissionBanner}>
                     <MdInfo size={16} style={{ color: colors.warn, flexShrink: 0, marginTop: 2 }} />
                     <div>
-                      <b>Item Type only</b> — your role lets you re-classify lines by picking
-                      a different Item Type. Quantities, prices, dates, and other fields are
-                      read-only here. Ask an administrator to make commercial bill changes on the Bills page.
+                      <b>Item Type only</b> — your role lets you re-classify lines by picking a
+                      different Item Type. Quantities, prices, dates, and other fields are read-only
+                      here. Ask an administrator to make commercial bill changes on the Bills page.
                     </div>
                   </div>
                 )}
@@ -1699,7 +1959,9 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                   <div style={styles.narrowPermissionBanner}>
                     <MdInfo size={16} style={{ color: colors.warn, flexShrink: 0, marginTop: 2 }} />
                     <div>
-                      <b>Consultant adjustment</b> — classify items and adjust quantities and unit prices while keeping the total equal to the commercial bill. Dates, payment terms and commercial bill details are edited by an administrator on Bills.
+                      <b>Consultant adjustment</b> — classify items and adjust quantities and unit
+                      prices while keeping the total equal to the commercial bill. Dates, payment
+                      terms and commercial bill details are edited by an administrator on Bills.
                     </div>
                   </div>
                 )}
@@ -1716,7 +1978,16 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                   <div data-admin-form-row="" style={styles.row}>
                     <div style={{ flex: 1, minWidth: 280 }}>
                       <label style={styles.label}>
-                        FBR Scenario <span style={{ fontWeight: 400, color: colors.textSecondary, fontSize: "0.7rem" }}>filters items below</span>
+                        FBR Scenario{" "}
+                        <span
+                          style={{
+                            fontWeight: 400,
+                            color: colors.textSecondary,
+                            fontSize: "0.7rem",
+                          }}
+                        >
+                          filters items below
+                        </span>
                       </label>
                       <select
                         style={{ ...styles.input, ...(lockItemType ? styles.readOnlyInput : {}) }}
@@ -1725,7 +1996,9 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                           setScenarioCode(e.target.value);
                           const buyer = clients.find((c) => String(c.id) === String(clientId));
                           if (!lockNonItemType)
-                            setFurtherTaxRate(defaultFurtherTaxRate(e.target.value, buyer?.registrationType));
+                            setFurtherTaxRate(
+                              defaultFurtherTaxRate(e.target.value, buyer?.registrationType),
+                            );
                         }}
                         disabled={lockItemType}
                       >
@@ -1739,9 +2012,16 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                         ))}
                       </select>
                       {chosenScenario && (
-                        <div style={{ fontSize: "0.7rem", color: colors.textSecondary, marginTop: "0.25rem" }}>
-                          <b>{chosenScenario.code}</b> — {chosenScenario.description || chosenScenario.saleType}.
-                          {" "}Showing only item types with sale type "{chosenScenario.saleType}".
+                        <div
+                          style={{
+                            fontSize: "0.7rem",
+                            color: colors.textSecondary,
+                            marginTop: "0.25rem",
+                          }}
+                        >
+                          <b>{chosenScenario.code}</b> —{" "}
+                          {chosenScenario.description || chosenScenario.saleType}. Showing only item
+                          types with sale type "{chosenScenario.saleType}".
                         </div>
                       )}
                     </div>
@@ -1749,8 +2029,19 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                 )}
 
                 {/* Bill-level fields */}
-                <BillTaxTreatmentField enabled={!!invoice?.allowNonFbrBills} value={taxTreatment} rate={gstRate} onRateChange={setGstRate} disabled={readOnly || !canFullEdit} onChange={value => { setTaxTreatment(value); setGstRate(value === "SRB" ? 15 : value === "NoTax" ? 0 : 18); setFurtherTaxRate(null); }} />
-<div data-admin-form-row="" style={styles.row}>
+                <BillTaxTreatmentField
+                  enabled={!!invoice?.allowNonFbrBills}
+                  value={taxTreatment}
+                  rate={gstRate}
+                  onRateChange={setGstRate}
+                  disabled={readOnly || !canFullEdit}
+                  onChange={(value) => {
+                    setTaxTreatment(value);
+                    setGstRate(value === "SRB" ? 15 : value === "NoTax" ? 0 : 18);
+                    setFurtherTaxRate(null);
+                  }}
+                />
+                <div data-admin-form-row="" style={styles.row}>
                   <div style={{ flex: 1, minWidth: 180 }}>
                     <BillNumberField
                       companyId={invoice?.companyId}
@@ -1767,7 +2058,14 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                     <label style={styles.label}>
                       Buyer
                       {isChallanLinked && (
-                        <span style={{ fontWeight: 400, color: colors.textSecondary, fontSize: "0.7rem", marginLeft: "0.4rem" }}>
+                        <span
+                          style={{
+                            fontWeight: 400,
+                            color: colors.textSecondary,
+                            fontSize: "0.7rem",
+                            marginLeft: "0.4rem",
+                          }}
+                        >
                           locked — set by linked challan
                         </span>
                       )}
@@ -1778,7 +2076,9 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                       onChange={(e) => {
                         setClientId(e.target.value);
                         const buyer = clients.find((c) => String(c.id) === String(e.target.value));
-                        setFurtherTaxRate(defaultFurtherTaxRate(scenarioCode, buyer?.registrationType));
+                        setFurtherTaxRate(
+                          defaultFurtherTaxRate(scenarioCode, buyer?.registrationType),
+                        );
                       }}
                       disabled={lockClient}
                     >
@@ -1791,7 +2091,8 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                       )}
                       {clients.map((c) => (
                         <option key={c.id} value={c.id}>
-                          {c.name} ({c.registrationType || "—"}{c.ntn ? ` · NTN ${c.ntn}` : c.cnic ? ` · CNIC ${c.cnic}` : ""})
+                          {c.name} ({c.registrationType || "—"}
+                          {c.ntn ? ` · NTN ${c.ntn}` : c.cnic ? ` · CNIC ${c.cnic}` : ""})
                         </option>
                       ))}
                     </select>
@@ -1807,7 +2108,13 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                       readOnly={lockNonItemType}
                     />
                   </div>
-                  <div style={{ display: taxTreatment !== "FBR" ? "none" : undefined, flex: 1, minWidth: 120 }}>
+                  <div
+                    style={{
+                      display: taxTreatment !== "FBR" ? "none" : undefined,
+                      flex: 1,
+                      minWidth: 120,
+                    }}
+                  >
                     <label style={styles.label}>GST Rate (%)</label>
                     <input
                       type="number"
@@ -1862,21 +2169,31 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                   </div>
                 </div>
 
-                {!billsMode && originalLinesOnly && <div style={{ fontSize: "0.82rem", color: "#526174", marginBottom: 12 }}>
-                  The tax invoice prints your original bill lines, one row per line. Item types and codes you set here are what is filed.
-                </div>}
-                {!billsMode && !originalLinesOnly && <div style={{ fontSize: "0.82rem", color: "#526174", marginBottom: 12 }}>
-                  Consultant groups use the item type’s tax unit. Bill and challan units stay unchanged.
-                  {invoice.groupTaxInvoiceByItemType
-                    ? " Tax invoice printing uses grouped, adjusted items."
-                    : " Tax invoice printing uses individual commercial lines and units."}
-                  {" Saving adjustments keeps this print preference."}
-                </div>}
+                {!billsMode && originalLinesOnly && (
+                  <div style={{ fontSize: "0.82rem", color: "#526174", marginBottom: 12 }}>
+                    The tax invoice prints your original bill lines, one row per line. Item types
+                    and codes you set here are what is filed.
+                  </div>
+                )}
+                {!billsMode && !originalLinesOnly && (
+                  <div style={{ fontSize: "0.82rem", color: "#526174", marginBottom: 12 }}>
+                    Consultant groups use the item type’s tax unit. Bill and challan units stay
+                    unchanged.
+                    {invoice.groupTaxInvoiceByItemType
+                      ? " Tax invoice printing uses grouped, adjusted items."
+                      : " Tax invoice printing uses individual commercial lines and units."}
+                    {" Saving adjustments keeps this print preference."}
+                  </div>
+                )}
 
                 {/* Items table — no add/remove; only field edits */}
                 <div style={styles.sectionHeadingRow}>
                   <h6 style={{ ...styles.sectionHeading, margin: 0 }}>
-                    Items ({renderGrouped ? `${itemGroups.length} item ${itemGroups.length === 1 ? "type" : "types"} · ${items.length} lines` : items.length})
+                    Items (
+                    {renderGrouped
+                      ? `${itemGroups.length} item ${itemGroups.length === 1 ? "type" : "types"} · ${items.length} lines`
+                      : items.length}
+                    )
                   </h6>
                   {/* Grouped ⇄ Individual lines toggle. Grouped view sums qty
                       + value per Item Type — the same shape FBR receives —
@@ -1888,7 +2205,10 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                       <button
                         type="button"
                         onClick={() => setGroupedView(true)}
-                        style={{ ...styles.viewToggleBtn, ...(groupedView ? styles.viewToggleBtnActive : {}) }}
+                        style={{
+                          ...styles.viewToggleBtn,
+                          ...(groupedView ? styles.viewToggleBtnActive : {}),
+                        }}
                         aria-pressed={groupedView}
                         title="Group the consultant editor by Item Type; saving adjustments preserves the print layout"
                       >
@@ -1897,26 +2217,42 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                       <button
                         type="button"
                         onClick={() => setGroupedView(false)}
-                        style={{ ...styles.viewToggleBtn, ...(!groupedView ? styles.viewToggleBtnActive : {}) }}
+                        style={{
+                          ...styles.viewToggleBtn,
+                          ...(!groupedView ? styles.viewToggleBtnActive : {}),
+                        }}
                         aria-pressed={!groupedView}
                         title="Show every bill line individually"
                       >
                         Individual lines
                       </button>
-                      {(canFullEdit || canEditItemTypeAndQty || canEditItemType) && groupedView !== !!invoice?.groupTaxInvoiceByItemType && (
-                        <button type="button" style={styles.viewToggleBtn} disabled={saving}
-                          onClick={async () => {
-                            setSaving(true);
-                            try {
-                              await setTaxInvoiceLayout(invoiceId, groupedView);
-                              setInvoice((prev) => ({ ...prev, groupTaxInvoiceByItemType: groupedView }));
-                              onLayoutSaved?.();
-                            } catch (err) { setError(err.response?.data?.error || "Could not save invoice layout."); }
-                            finally { setSaving(false); }
-                          }}>
-                          Save print layout
-                        </button>
-                      )}
+                      {(canFullEdit || canEditItemTypeAndQty || canEditItemType) &&
+                        groupedView !== !!invoice?.groupTaxInvoiceByItemType && (
+                          <button
+                            type="button"
+                            style={styles.viewToggleBtn}
+                            disabled={saving}
+                            onClick={async () => {
+                              setSaving(true);
+                              try {
+                                await setTaxInvoiceLayout(invoiceId, groupedView);
+                                setInvoice((prev) => ({
+                                  ...prev,
+                                  groupTaxInvoiceByItemType: groupedView,
+                                }));
+                                onLayoutSaved?.();
+                              } catch (err) {
+                                setError(
+                                  err.response?.data?.error || "Could not save invoice layout.",
+                                );
+                              } finally {
+                                setSaving(false);
+                              }
+                            }}
+                          >
+                            Save print layout
+                          </button>
+                        )}
                     </div>
                   )}
                   {/* "+ New Item Type" fallback — single-item bills don't
@@ -1938,17 +2274,21 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
 
                 {!readOnly && !renderGrouped && (
                   <p style={styles.gridHint}>
-                    Pick an <b>Item Type</b> — UOM, HS Code &amp; Sale Type auto-fill from the catalog and
-                    <b> cannot be edited inline</b>. To change them, pick a different Item Type or edit the Item Type row on the catalog page.
+                    Pick an <b>Item Type</b> — UOM, HS Code &amp; Sale Type auto-fill from the
+                    catalog and
+                    <b> cannot be edited inline</b>. To change them, pick a different Item Type or
+                    edit the Item Type row on the catalog page.
                   </p>
                 )}
                 {!readOnly && renderGrouped && (
                   <p style={styles.gridHint}>
-                    Showing one row per <b>Item Type</b> — quantity and value are summed across all its lines
-                    (the same grouping sent to FBR). Editing <b>Qty</b> spreads the new total across the group's
-                    lines; editing <b>Unit Price</b> sets one price for the whole group. Switch to
+                    Showing one row per <b>Item Type</b> — quantity and value are summed across all
+                    its lines (the same grouping sent to FBR). Editing <b>Qty</b> spreads the new
+                    total across the group's lines; editing <b>Unit Price</b> sets one price for the
+                    whole group. Switch to
                     <b> Individual lines</b> to re-classify or fine-tune a single line.
-                    {consultantAdjustment && " The tax group quantity can be smaller than the number of commercial lines. Fractional shares allocate the group internally; the bill and challans keep their original quantities."}
+                    {consultantAdjustment &&
+                      " The tax group quantity can be smaller than the number of commercial lines. Fractional shares allocate the group internally; the bill and challans keep their original quantities."}
                   </p>
                 )}
 
@@ -1985,9 +2325,7 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                     carry their own per-Item-Type picker). */}
                 {!lockItemType && items.length > 1 && !renderGrouped && (
                   <div style={styles.bulkApplyBar}>
-                    <span style={styles.bulkApplyLabel}>
-                      Apply same Item Type to:
-                    </span>
+                    <span style={styles.bulkApplyLabel}>Apply same Item Type to:</span>
                     <select
                       value={bulkApplyMode}
                       onChange={(e) => setBulkApplyMode(e.target.value)}
@@ -2015,9 +2353,11 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                           }
                           applyItemTypeToAll(parseInt(newId), picked, bulkApplyMode);
                         }}
-                        placeholder={bulkApplyMode === "all"
-                          ? "— pick to apply to all —"
-                          : "— pick to fill empty rows —"}
+                        placeholder={
+                          bulkApplyMode === "all"
+                            ? "— pick to apply to all —"
+                            : "— pick to fill empty rows —"
+                        }
                         style={styles.tableInput}
                       />
                     </div>
@@ -2078,19 +2418,24 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                             <span style={styles.mnum}>{idx + 1}</span>
                             <div style={{ flex: 1 }}>
                               {lockItemType ? (
-                                <div style={styles.readOnlyText}>{item.itemTypeName || <span style={styles.muted}>—</span>}</div>
+                                <div style={styles.readOnlyText}>
+                                  {item.itemTypeName || <span style={styles.muted}>—</span>}
+                                </div>
                               ) : (
                                 <>
                                   <SearchableItemTypeSelect
                                     items={pickerItemsWithCurrent(item.itemTypeId)}
                                     value={item.itemTypeId || ""}
-                                    onChange={(newId, picked) => updateItemType(idx, newId ? parseInt(newId) : null, picked)}
+                                    onChange={(newId, picked) =>
+                                      updateItemType(idx, newId ? parseInt(newId) : null, picked)
+                                    }
                                     placeholder="Pick item…"
-                                    style={{ ...styles.tableInput, ...(hasItemType ? {} : { borderColor: colors.warn }) }}
+                                    style={{
+                                      ...styles.tableInput,
+                                      ...(hasItemType ? {} : { borderColor: colors.warn }),
+                                    }}
                                   />
-                                  {!hasItemType && (
-                                    <div style={styles.requiredHint}>Required</div>
-                                  )}
+                                  {!hasItemType && <div style={styles.requiredHint}>Required</div>}
                                   {stockWarnFor(item.itemTypeId)}
                                 </>
                               )}
@@ -2099,9 +2444,12 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                           <div style={{ marginBottom: "0.4rem" }}>
                             <label style={styles.mlabel}>Description</label>
                             {lockNonItemType ? (
-                              <div style={styles.readOnlyText}>{item.description || <span style={styles.muted}>—</span>}</div>
+                              <div style={styles.readOnlyText}>
+                                {item.description || <span style={styles.muted}>—</span>}
+                              </div>
                             ) : (
-                              <LookupAutocomplete companyId={invoice?.companyId}
+                              <LookupAutocomplete
+                                companyId={invoice?.companyId}
                                 label="Description"
                                 endpoint="/lookup/items"
                                 value={item.description || ""}
@@ -2121,18 +2469,28 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                                 units={units}
                                 disabled={lockQty}
                                 readOnly={lockQty}
-                                style={{ ...styles.tableInput, ...(lockQty ? styles.readOnlyInput : {}), textAlign: "right" }}
+                                style={{
+                                  ...styles.tableInput,
+                                  ...(lockQty ? styles.readOnlyInput : {}),
+                                  textAlign: "right",
+                                }}
                               />
                             </div>
                             <div>
                               <label style={styles.mlabel}>UOM</label>
-                              <div style={{ ...styles.readOnlyText }} title="Comes from Item Type">{item.uom || <span style={styles.muted}>—</span>}</div>
+                              <div style={{ ...styles.readOnlyText }} title="Comes from Item Type">
+                                {item.uom || <span style={styles.muted}>—</span>}
+                              </div>
                             </div>
                             <div>
                               <label style={styles.mlabel}>Unit Price</label>
                               <input
                                 type="number"
-                                style={{ ...styles.tableInput, ...(lockPrice ? styles.readOnlyInput : {}), textAlign: "right" }}
+                                style={{
+                                  ...styles.tableInput,
+                                  ...(lockPrice ? styles.readOnlyInput : {}),
+                                  textAlign: "right",
+                                }}
                                 value={item.unitPrice ?? 0}
                                 onChange={(e) => updateItem(idx, "unitPrice", e.target.value)}
                                 min={0}
@@ -2144,355 +2502,592 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                           {!billsMode && (
                             <div style={styles.mkv}>
                               <span style={styles.mlabel}>HS Code</span>
-                              <span style={{ fontFamily: "monospace", fontSize: "0.82rem" }} title="Comes from Item Type">{item.hsCode || <span style={styles.muted}>—</span>}</span>
+                              <span
+                                style={{ fontFamily: "monospace", fontSize: "0.82rem" }}
+                                title="Comes from Item Type"
+                              >
+                                {item.hsCode || <span style={styles.muted}>—</span>}
+                              </span>
                             </div>
                           )}
                           <div style={styles.mkv}>
                             <span style={styles.mlabel}>Sale Type</span>
-                            <span style={{ fontSize: "0.75rem" }} title="Comes from Item Type">{item.saleType || <span style={styles.muted}>—</span>}</span>
+                            <span style={{ fontSize: "0.75rem" }} title="Comes from Item Type">
+                              {item.saleType || <span style={styles.muted}>—</span>}
+                            </span>
                           </div>
-                          <div style={styles.mamt}><span>Line Total</span><b>Rs. {(parseFloat(item.lineTotal) || 0).toLocaleString()}</b></div>
+                          <div style={styles.mamt}>
+                            <span>Line Total</span>
+                            <b>Rs. {(parseFloat(item.lineTotal) || 0).toLocaleString()}</b>
+                          </div>
                         </div>
                       );
                     })}
                   </div>
                 ) : (
-                <div data-admin-table-region="" style={styles.tableWrap}>
-                  <table style={styles.table}>
-                    <thead>
-                      <tr style={styles.thead}>
-                        {/* Item Type is now required on every bill (both
+                  <div data-admin-table-region="" style={styles.tableWrap}>
+                    <table style={styles.table}>
+                      <thead>
+                        <tr style={styles.thead}>
+                          {/* Item Type is now required on every bill (both
                             tabs) so the invoice can always group by it —
                             shown in Bills mode too, not just Invoices. */}
-                        <th style={{ ...styles.th, width: 180, minWidth: 180 }}>Item Type (FBR)</th>
-                        <th style={{ ...styles.th, minWidth: 140 }}>Description</th>
-                        <th style={{ ...styles.th, width: 120, minWidth: 120 }}>Qty</th>
-                        <th style={{ ...styles.th, width: 110, minWidth: 110 }}>UOM</th>
-                        <th style={{ ...styles.th, width: 190, minWidth: 190 }}>Unit Price</th>
-                        <th style={{ ...styles.th, width: 100, minWidth: 100 }}>Line Total</th>
-                        {/* HS Code is FBR data — only relevant on the Invoices
+                          <th style={{ ...styles.th, width: 180, minWidth: 180 }}>
+                            Item Type (FBR)
+                          </th>
+                          <th style={{ ...styles.th, minWidth: 140 }}>Description</th>
+                          <th style={{ ...styles.th, width: 120, minWidth: 120 }}>Qty</th>
+                          <th style={{ ...styles.th, width: 110, minWidth: 110 }}>UOM</th>
+                          <th style={{ ...styles.th, width: 190, minWidth: 190 }}>Unit Price</th>
+                          <th style={{ ...styles.th, width: 100, minWidth: 100 }}>Line Total</th>
+                          {/* HS Code is FBR data — only relevant on the Invoices
                             tab. Bills mode is pre-FBR data entry, so hide it. */}
-                        {!billsMode && (
-                          <th style={{ ...styles.th, width: 90, minWidth: 90 }}>HS Code</th>
-                        )}
-                        <th style={{ ...styles.th, minWidth: 140 }}>Sale Type</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {/* Grouped rows — one per Item Type, qty + value
+                          {!billsMode && (
+                            <th style={{ ...styles.th, width: 90, minWidth: 90 }}>HS Code</th>
+                          )}
+                          <th style={{ ...styles.th, minWidth: 140 }}>Sale Type</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {/* Grouped rows — one per Item Type, qty + value
                           summed across its lines. Mirrors the FBR payload.
                           Editing qty/price distributes back into the
                           underlying items[] (see setGroupQty /
                           setGroupUnitPrice); Save reads items[] as always. */}
-                      {renderGrouped && itemGroups.map((group) => {
-                        const multi = group.lineIndices.length > 1;
-                        const exactRaw    = exactTotals[group.key];
-                        const exactActive = exactRaw != null;
-                        const exactNum    = Number(exactRaw);
-                        const exactValid  = exactActive && Number.isFinite(exactNum) && exactNum > 0;
-                        const wholeQty    = Math.round(group.totalQty || 0);
-                        return (
-                          <Fragment key={group.key}>
-                          <tr style={multi ? styles.groupedRow : undefined}>
-                            <td style={styles.td}>
-                              {lockItemType ? (
-                                <div style={styles.readOnlyText}>{group.itemTypeName || <span style={styles.muted}>—</span>}</div>
-                              ) : (
-                                <SearchableItemTypeSelect
-                                  items={pickerItemsWithCurrent(group.itemTypeId)}
-                                  value={group.itemTypeId || ""}
-                                  onChange={(newId, picked) => updateGroupItemType(group, newId ? parseInt(newId) : null, picked)}
-                                  placeholder="Pick item…"
-                                  style={styles.tableInput}
-                                />
-                              )}
-                              {stockWarnFor(group.itemTypeId)}
-                            </td>
-                            <td style={styles.td}>
-                              <div style={styles.readOnlyText}>{group.itemTypeName || group.description || <span style={styles.muted}>—</span>}</div>
-                              {multi && (
-                                <div style={styles.groupMeta}>grouped from {group.lineIndices.length} lines</div>
-                              )}
-                            </td>
-                            <td style={styles.td}>
-                              {/* Summed quantity for the whole Item Type.
+                        {renderGrouped &&
+                          itemGroups.map((group) => {
+                            const multi = group.lineIndices.length > 1;
+                            const exactRaw = exactTotals[group.key];
+                            const exactActive = exactRaw != null;
+                            const exactNum = Number(exactRaw);
+                            const exactValid =
+                              exactActive && Number.isFinite(exactNum) && exactNum > 0;
+                            const wholeQty = Math.round(group.totalQty || 0);
+                            return (
+                              <Fragment key={group.key}>
+                                <tr style={multi ? styles.groupedRow : undefined}>
+                                  <td style={styles.td}>
+                                    {lockItemType ? (
+                                      <div style={styles.readOnlyText}>
+                                        {group.itemTypeName || <span style={styles.muted}>—</span>}
+                                      </div>
+                                    ) : (
+                                      <SearchableItemTypeSelect
+                                        items={pickerItemsWithCurrent(group.itemTypeId)}
+                                        value={group.itemTypeId || ""}
+                                        onChange={(newId, picked) =>
+                                          updateGroupItemType(
+                                            group,
+                                            newId ? parseInt(newId) : null,
+                                            picked,
+                                          )
+                                        }
+                                        placeholder="Pick item…"
+                                        style={styles.tableInput}
+                                      />
+                                    )}
+                                    {stockWarnFor(group.itemTypeId)}
+                                  </td>
+                                  <td style={styles.td}>
+                                    <div style={styles.readOnlyText}>
+                                      {group.itemTypeName || group.description || (
+                                        <span style={styles.muted}>—</span>
+                                      )}
+                                    </div>
+                                    {multi && (
+                                      <div style={styles.groupMeta}>
+                                        grouped from {group.lineIndices.length} lines
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td style={styles.td}>
+                                    {/* Summed quantity for the whole Item Type.
                                   Editing redistributes across the group's
                                   lines (integer-aware) — see setGroupQty. */}
-                              <QuantityInput
-                                value={group.totalQty}
-                                onChange={(val) => (exactTotals[group.key] != null
-                                  ? setGroupExactQty(group, val)
-                                  : setGroupQty(group, val))}
-                                unit={group.uom}
-                                units={units}
-                                disabled={lockQty}
-                                readOnly={lockQty}
-                                integerOnly={!groupAllowsDecimal(group)}
-                                style={{ ...styles.tableInput, ...(lockQty ? styles.readOnlyInput : {}), textAlign: "right" }}
-                              />
-                              {invoice?.fbrAdjustmentStale && Math.abs(group.billQty - group.totalQty) > 0.0001 && (
-                                <div style={{ ...styles.groupMeta, color: "#e65100", textAlign: "right" }}
-                                     title="The bill changed after you adjusted this invoice. This field shows the qty you last filed; the bill now shows this qty. Re-adjust so the total matches the bill.">
-                                  bill: {group.billQty.toLocaleString()}
-                                </div>
-                              )}
-                              {/* Fewer units than lines: the spread has left a
+                                    <QuantityInput
+                                      value={group.totalQty}
+                                      onChange={(val) =>
+                                        exactTotals[group.key] != null
+                                          ? setGroupExactQty(group, val)
+                                          : setGroupQty(group, val)
+                                      }
+                                      unit={group.uom}
+                                      units={units}
+                                      disabled={lockQty}
+                                      readOnly={lockQty}
+                                      integerOnly={!groupAllowsDecimal(group)}
+                                      style={{
+                                        ...styles.tableInput,
+                                        ...(lockQty ? styles.readOnlyInput : {}),
+                                        textAlign: "right",
+                                      }}
+                                    />
+                                    {invoice?.fbrAdjustmentStale &&
+                                      Math.abs(group.billQty - group.totalQty) > 0.0001 && (
+                                        <div
+                                          style={{
+                                            ...styles.groupMeta,
+                                            color: "#e65100",
+                                            textAlign: "right",
+                                          }}
+                                          title="The bill changed after you adjusted this invoice. This field shows the qty you last filed; the bill now shows this qty. Re-adjust so the total matches the bill."
+                                        >
+                                          bill: {group.billQty.toLocaleString()}
+                                        </div>
+                                      )}
+                                    {/* Fewer units than lines: the spread has left a
                                   line at zero, which Save (and the server)
                                   refuse. Say so here, next to the number that
                                   caused it, rather than only at Save. */}
-                              {!lockQty && multi && group.lineIndices.some((i) => (parseFloat(items[i]?.quantity) || 0) <= 0) && (
-                                <div style={{ ...styles.groupMeta, color: "#c62828", textAlign: "right" }}
-                                     title={consultantAdjustment ? "Enter a positive tax group quantity." : `This row is ${group.lineIndices.length} bill lines; every line needs at least one whole unit.`}>
-                                  {consultantAdjustment ? "Enter a positive group quantity" : `needs at least ${group.lineIndices.length} — one per line`}
-                                </div>
-                              )}
-                            </td>
-                            <td style={{ ...styles.td, ...styles.readOnlyCell }} title="Comes from Item Type">
-                              {group.uom || <span style={styles.muted}>—</span>}
-                            </td>
-                            <td style={styles.td}>
-                              {/* Weighted-average unit price. Editing sets a
+                                    {!lockQty &&
+                                      multi &&
+                                      group.lineIndices.some(
+                                        (i) => (parseFloat(items[i]?.quantity) || 0) <= 0,
+                                      ) && (
+                                        <div
+                                          style={{
+                                            ...styles.groupMeta,
+                                            color: "#c62828",
+                                            textAlign: "right",
+                                          }}
+                                          title={
+                                            consultantAdjustment
+                                              ? "Enter a positive tax group quantity."
+                                              : `This row is ${group.lineIndices.length} bill lines; every line needs at least one whole unit.`
+                                          }
+                                        >
+                                          {consultantAdjustment
+                                            ? "Enter a positive group quantity"
+                                            : `needs at least ${group.lineIndices.length} — one per line`}
+                                        </div>
+                                      )}
+                                  </td>
+                                  <td
+                                    style={{ ...styles.td, ...styles.readOnlyCell }}
+                                    title="Comes from Item Type"
+                                  >
+                                    {group.uom || <span style={styles.muted}>—</span>}
+                                  </td>
+                                  <td style={styles.td}>
+                                    {/* Weighted-average unit price. Editing sets a
                                   single price across every line in the group. */}
-                              <input
-                                type="number"
-                                style={{
-                                  ...styles.tableInput,
-                                  ...((lockPrice || exactTotals[group.key] != null) ? styles.readOnlyInput : {}),
-                                  textAlign: "right",
-                                  minWidth: 150,
-                                  fontVariantNumeric: "tabular-nums",
-                                }}
-                                value={group.unitPrice}
-                                onChange={(e) => setGroupUnitPrice(group, e.target.value)}
-                                min={0}
-                                // "any" rather than 0.01: the step attribute is a
-                                // validation constraint too, so 0.01 makes a
-                                // 12dp rate read as invalid in the browser.
-                                step="any"
-                                readOnly={lockPrice || exactTotals[group.key] != null}
-                                title={`${group.unitPrice} — up to 12 decimal places`}
-                              />
-                              {invoice?.fbrAdjustmentStale && Math.abs(group.billUnitPrice - group.unitPrice) > 0.005 && (
-                                <div style={{ ...styles.groupMeta, color: "#e65100", textAlign: "right" }}
-                                     title="Unit price on the current bill. The bill changed after you adjusted this invoice — re-adjust so the group total matches the bill.">
-                                  bill: {group.billUnitPrice.toLocaleString()}
-                                </div>
-                              )}
-                              {!lockPrice && (
-                                <div style={styles.priceMeta}
-                                     title="Weighted average across the grouped lines. Editing sets one price for the whole group. Up to 12 decimal places.">
-                                  {multi ? `avg · all ${group.lineIndices.length} · ` : ""}max 12 dp
-                                </div>
-                              )}
-                            </td>
-                            <td style={{ ...styles.td, fontWeight: 600, color: colors.textPrimary, textAlign: "right" }}>
-                              {(Math.round(group.totalValue * 100) / 100).toLocaleString()}
-                            </td>
-                            <td style={{ ...styles.td, ...styles.readOnlyCell, fontFamily: "monospace" }} title="Comes from Item Type">
-                              {group.hsCode || <span style={styles.muted}>—</span>}
-                            </td>
-                            <td style={{ ...styles.td, ...styles.readOnlyCell, fontSize: "0.72rem" }} title="Comes from Item Type">
-                              {group.saleType || <span style={styles.muted}>—</span>}
-                            </td>
-                          </tr>
-                          {/* Adjustment method — only where the operator may
+                                    <input
+                                      type="number"
+                                      style={{
+                                        ...styles.tableInput,
+                                        ...(lockPrice || exactTotals[group.key] != null
+                                          ? styles.readOnlyInput
+                                          : {}),
+                                        textAlign: "right",
+                                        minWidth: 150,
+                                        fontVariantNumeric: "tabular-nums",
+                                      }}
+                                      value={group.unitPrice}
+                                      onChange={(e) => setGroupUnitPrice(group, e.target.value)}
+                                      min={0}
+                                      // "any" rather than 0.01: the step attribute is a
+                                      // validation constraint too, so 0.01 makes a
+                                      // 12dp rate read as invalid in the browser.
+                                      step="any"
+                                      readOnly={lockPrice || exactTotals[group.key] != null}
+                                      title={`${group.unitPrice} — up to 12 decimal places`}
+                                    />
+                                    {invoice?.fbrAdjustmentStale &&
+                                      Math.abs(group.billUnitPrice - group.unitPrice) > 0.005 && (
+                                        <div
+                                          style={{
+                                            ...styles.groupMeta,
+                                            color: "#e65100",
+                                            textAlign: "right",
+                                          }}
+                                          title="Unit price on the current bill. The bill changed after you adjusted this invoice — re-adjust so the group total matches the bill."
+                                        >
+                                          bill: {group.billUnitPrice.toLocaleString()}
+                                        </div>
+                                      )}
+                                    {!lockPrice && (
+                                      <div
+                                        style={styles.priceMeta}
+                                        title="Weighted average across the grouped lines. Editing sets one price for the whole group. Up to 12 decimal places."
+                                      >
+                                        {multi ? `avg · all ${group.lineIndices.length} · ` : ""}max
+                                        12 dp
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td
+                                    style={{
+                                      ...styles.td,
+                                      fontWeight: 600,
+                                      color: colors.textPrimary,
+                                      textAlign: "right",
+                                    }}
+                                  >
+                                    {(Math.round(group.totalValue * 100) / 100).toLocaleString()}
+                                  </td>
+                                  <td
+                                    style={{
+                                      ...styles.td,
+                                      ...styles.readOnlyCell,
+                                      fontFamily: "monospace",
+                                    }}
+                                    title="Comes from Item Type"
+                                  >
+                                    {group.hsCode || <span style={styles.muted}>—</span>}
+                                  </td>
+                                  <td
+                                    style={{
+                                      ...styles.td,
+                                      ...styles.readOnlyCell,
+                                      fontSize: "0.72rem",
+                                    }}
+                                    title="Comes from Item Type"
+                                  >
+                                    {group.saleType || <span style={styles.muted}>—</span>}
+                                  </td>
+                                </tr>
+                                {/* Adjustment method — only where the operator may
                               actually edit qty/price (the Invoices-tab narrow
                               edit). Read-only views render nothing extra. */}
-                          {showTotalsGuard && !lockQty && (
-                            <tr style={styles.adjustRow}>
-                              <td colSpan={8} style={styles.adjustCell}>
-                                <div style={styles.adjustWrap}>
-                                  <span style={styles.adjustLabel}>Adjustment method</span>
-                                  <div style={styles.segmented} role="group" aria-label="Adjustment method">
-                                    <button
-                                      type="button"
-                                      onClick={() => clearGroupExactTotal(group)}
-                                      aria-pressed={!exactActive}
-                                      style={{ ...styles.segBtn, ...(!exactActive ? styles.segBtnOn : {}) }}
-                                    >
-                                      Qty &amp; Unit Price
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setGroupExactTotal(group, String(Number(group.totalValue || 0).toFixed(2)))}
-                                      aria-pressed={exactActive}
-                                      style={{ ...styles.segBtn, ...(exactActive ? styles.segBtnOn : {}) }}
-                                    >
-                                      Exact Line Total
-                                    </button>
-                                  </div>
+                                {showTotalsGuard && !lockQty && (
+                                  <tr style={styles.adjustRow}>
+                                    <td colSpan={8} style={styles.adjustCell}>
+                                      <div style={styles.adjustWrap}>
+                                        <span style={styles.adjustLabel}>Adjustment method</span>
+                                        <div
+                                          style={styles.segmented}
+                                          role="group"
+                                          aria-label="Adjustment method"
+                                        >
+                                          <button
+                                            type="button"
+                                            onClick={() => clearGroupExactTotal(group)}
+                                            aria-pressed={!exactActive}
+                                            style={{
+                                              ...styles.segBtn,
+                                              ...(!exactActive ? styles.segBtnOn : {}),
+                                            }}
+                                          >
+                                            Qty &amp; Unit Price
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setGroupExactTotal(
+                                                group,
+                                                String(Number(group.totalValue || 0).toFixed(2)),
+                                              )
+                                            }
+                                            aria-pressed={exactActive}
+                                            style={{
+                                              ...styles.segBtn,
+                                              ...(exactActive ? styles.segBtnOn : {}),
+                                            }}
+                                          >
+                                            Exact Line Total
+                                          </button>
+                                        </div>
 
-                                  {exactActive && (
-                                    <div style={styles.exactBox}>
-                                      <label style={styles.exactLabel} htmlFor={`exact-${group.key}`}>
-                                        Exact Line Total (before GST)
-                                      </label>
-                                      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
-                                        <span style={styles.muted}>Rs.</span>
-                                        <input
-                                          id={`exact-${group.key}`}
-                                          type="number"
-                                          min={0}
-                                          step="0.01"
-                                          value={exactRaw}
-                                          onChange={(e) => setGroupExactTotal(group, e.target.value)}
-                                          style={{ ...styles.tableInput, minWidth: 170, textAlign: "right", fontVariantNumeric: "tabular-nums" }}
-                                        />
-                                        <button type="button" onClick={() => clearGroupExactTotal(group)} style={styles.clearExactBtn}>
-                                          Clear Exact Total
-                                        </button>
-                                      </div>
-                                      <div style={styles.groupMeta}>
-                                        Enter the exact subtotal this grouped item must equal, and the Qty above.
-                                        The unit price is calculated automatically.
-                                      </div>
-                                      {exactValid && wholeQty > 0 && (
-                                        <div style={styles.exactDerived}>
-                                          Qty {wholeQty.toLocaleString("en-PK")} → calculated unit price{" "}
-                                          <strong style={{ fontFamily: "monospace" }}>
-                                            {Number((exactNum / wholeQty).toFixed(12))}
-                                          </strong>
-                                          <div style={styles.groupMeta}>
-                                            Enter the total and the quantity; the unit price is calculated and locked
-                                            {multi && `, and the total is split across the group's ${group.lineIndices.length} lines so they re-sum to it exactly`}.
+                                        {exactActive && (
+                                          <div style={styles.exactBox}>
+                                            <label
+                                              style={styles.exactLabel}
+                                              htmlFor={`exact-${group.key}`}
+                                            >
+                                              Exact Line Total (before GST)
+                                            </label>
+                                            <div
+                                              style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: "0.4rem",
+                                                flexWrap: "wrap",
+                                              }}
+                                            >
+                                              <span style={styles.muted}>Rs.</span>
+                                              <input
+                                                id={`exact-${group.key}`}
+                                                type="number"
+                                                min={0}
+                                                step="0.01"
+                                                value={exactRaw}
+                                                onChange={(e) =>
+                                                  setGroupExactTotal(group, e.target.value)
+                                                }
+                                                style={{
+                                                  ...styles.tableInput,
+                                                  minWidth: 170,
+                                                  textAlign: "right",
+                                                  fontVariantNumeric: "tabular-nums",
+                                                }}
+                                              />
+                                              <button
+                                                type="button"
+                                                onClick={() => clearGroupExactTotal(group)}
+                                                style={styles.clearExactBtn}
+                                              >
+                                                Clear Exact Total
+                                              </button>
+                                            </div>
+                                            <div style={styles.groupMeta}>
+                                              Enter the exact subtotal this grouped item must equal,
+                                              and the Qty above. The unit price is calculated
+                                              automatically.
+                                            </div>
+                                            {exactValid && wholeQty > 0 && (
+                                              <div style={styles.exactDerived}>
+                                                Qty {wholeQty.toLocaleString("en-PK")} → calculated
+                                                unit price{" "}
+                                                <strong style={{ fontFamily: "monospace" }}>
+                                                  {Number((exactNum / wholeQty).toFixed(12))}
+                                                </strong>
+                                                <div style={styles.groupMeta}>
+                                                  Enter the total and the quantity; the unit price
+                                                  is calculated and locked
+                                                  {multi &&
+                                                    `, and the total is split across the group's ${group.lineIndices.length} lines so they re-sum to it exactly`}
+                                                  .
+                                                </div>
+                                              </div>
+                                            )}
+                                            {exactActive && !exactValid && (
+                                              <div
+                                                style={{ ...styles.groupMeta, color: "#c62828" }}
+                                              >
+                                                ✗ Enter an amount greater than zero.
+                                              </div>
+                                            )}
                                           </div>
-                                        </div>
-                                      )}
-                                      {exactActive && !exactValid && (
-                                        <div style={{ ...styles.groupMeta, color: "#c62828" }}>
-                                          ✗ Enter an amount greater than zero.
-                                        </div>
-                                      )}
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            );
+                          })}
+                        {!renderGrouped &&
+                          items.map((item, idx) => {
+                            const hasItemType = !!item.itemTypeId;
+                            return (
+                              <tr key={item.id || `new-${idx}`}>
+                                <td style={styles.td}>
+                                  {lockItemType ? (
+                                    <div style={styles.readOnlyText}>
+                                      {item.itemTypeName || <span style={styles.muted}>—</span>}
                                     </div>
+                                  ) : (
+                                    <>
+                                      <SearchableItemTypeSelect
+                                        items={pickerItemsWithCurrent(item.itemTypeId)}
+                                        value={item.itemTypeId || ""}
+                                        onChange={(newId, picked) =>
+                                          updateItemType(
+                                            idx,
+                                            newId ? parseInt(newId) : null,
+                                            picked,
+                                          )
+                                        }
+                                        placeholder="Pick item…"
+                                        style={{
+                                          ...styles.tableInput,
+                                          ...(hasItemType ? {} : { borderColor: colors.warn }),
+                                        }}
+                                      />
+                                      {!hasItemType && (
+                                        <div style={styles.requiredHint}>Required</div>
+                                      )}
+                                      {stockWarnFor(item.itemTypeId)}
+                                    </>
                                   )}
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                          </Fragment>
-                        );
-                      })}
-                      {!renderGrouped && items.map((item, idx) => {
-                        const hasItemType = !!item.itemTypeId;
-                        return (
-                          <tr key={item.id || `new-${idx}`}>
-                            <td style={styles.td}>
-                              {lockItemType ? (
-                                <div style={styles.readOnlyText}>{item.itemTypeName || <span style={styles.muted}>—</span>}</div>
-                              ) : (
-                                <>
-                                  <SearchableItemTypeSelect
-                                    items={pickerItemsWithCurrent(item.itemTypeId)}
-                                    value={item.itemTypeId || ""}
-                                    onChange={(newId, picked) => updateItemType(idx, newId ? parseInt(newId) : null, picked)}
-                                    placeholder="Pick item…"
-                                    style={{ ...styles.tableInput, ...(hasItemType ? {} : { borderColor: colors.warn }) }}
-                                  />
-                                  {!hasItemType && (
-                                    <div style={styles.requiredHint}>Required</div>
+                                </td>
+                                <td style={styles.td}>
+                                  {lockNonItemType ? (
+                                    <div style={styles.readOnlyText}>
+                                      {item.description || <span style={styles.muted}>—</span>}
+                                    </div>
+                                  ) : (
+                                    <LookupAutocomplete
+                                      companyId={invoice?.companyId}
+                                      label="Description"
+                                      endpoint="/lookup/items"
+                                      value={item.description || ""}
+                                      onChange={(v) => updateItem(idx, "description", v)}
+                                      inputClassName=""
+                                      inputStyle={styles.tableInput}
+                                    />
                                   )}
-                                  {stockWarnFor(item.itemTypeId)}
-                                </>
-                              )}
-                            </td>
-                            <td style={styles.td}>
-                              {lockNonItemType ? (
-                                <div style={styles.readOnlyText}>{item.description || <span style={styles.muted}>—</span>}</div>
-                              ) : (
-                                <LookupAutocomplete companyId={invoice?.companyId}
-                                  label="Description"
-                                  endpoint="/lookup/items"
-                                  value={item.description || ""}
-                                  onChange={(v) => updateItem(idx, "description", v)}
-                                  inputClassName=""
-                                  inputStyle={styles.tableInput}
-                                />
-                              )}
-                            </td>
-                            <td style={styles.td}>
-                              {/* Uses lockQty (not lockNonItemType) so the
+                                </td>
+                                <td style={styles.td}>
+                                  {/* Uses lockQty (not lockNonItemType) so the
                                   ItemType+Qty narrow mode keeps this cell
                                   editable while everything else stays locked. */}
-                              <QuantityInput
-                                value={item.quantity ?? 0}
-                                onChange={(val) => updateItem(idx, "quantity", val)}
-                                unit={item.uom}
-                                units={units}
-                                disabled={lockQty}
-                                readOnly={lockQty}
-                                style={{ ...styles.tableInput, ...(lockQty ? styles.readOnlyInput : {}), textAlign: "right" }}
-                              />
-                            </td>
-                            <td style={{ ...styles.td, ...styles.readOnlyCell }} title="Comes from Item Type">
-                              {item.uom || <span style={styles.muted}>—</span>}
-                            </td>
-                            <td style={styles.td}>
-                              <input
-                                type="number"
-                                style={{ ...styles.tableInput, ...(lockPrice ? styles.readOnlyInput : {}), textAlign: "right" }}
-                                value={item.unitPrice ?? 0}
-                                onChange={(e) => updateItem(idx, "unitPrice", e.target.value)}
-                                min={0}
-                                step={0.01}
-                                readOnly={lockPrice}
-                              />
-                            </td>
-                            <td style={{ ...styles.td, fontWeight: 600, color: colors.textPrimary, textAlign: "right" }}>
-                              {(parseFloat(item.lineTotal) || 0).toLocaleString()}
-                            </td>
-                            {!billsMode && (
-                              <td style={{ ...styles.td, ...styles.readOnlyCell, fontFamily: "monospace" }} title="Comes from Item Type">
-                                {item.hsCode || <span style={styles.muted}>—</span>}
-                              </td>
-                            )}
-                            <td style={{ ...styles.td, ...styles.readOnlyCell, fontSize: "0.72rem" }} title="Comes from Item Type">
-                              {item.saleType || <span style={styles.muted}>—</span>}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                                  <QuantityInput
+                                    value={item.quantity ?? 0}
+                                    onChange={(val) => updateItem(idx, "quantity", val)}
+                                    unit={item.uom}
+                                    units={units}
+                                    disabled={lockQty}
+                                    readOnly={lockQty}
+                                    style={{
+                                      ...styles.tableInput,
+                                      ...(lockQty ? styles.readOnlyInput : {}),
+                                      textAlign: "right",
+                                    }}
+                                  />
+                                </td>
+                                <td
+                                  style={{ ...styles.td, ...styles.readOnlyCell }}
+                                  title="Comes from Item Type"
+                                >
+                                  {item.uom || <span style={styles.muted}>—</span>}
+                                </td>
+                                <td style={styles.td}>
+                                  <input
+                                    type="number"
+                                    style={{
+                                      ...styles.tableInput,
+                                      ...(lockPrice ? styles.readOnlyInput : {}),
+                                      textAlign: "right",
+                                    }}
+                                    value={item.unitPrice ?? 0}
+                                    onChange={(e) => updateItem(idx, "unitPrice", e.target.value)}
+                                    min={0}
+                                    step={0.01}
+                                    readOnly={lockPrice}
+                                  />
+                                </td>
+                                <td
+                                  style={{
+                                    ...styles.td,
+                                    fontWeight: 600,
+                                    color: colors.textPrimary,
+                                    textAlign: "right",
+                                  }}
+                                >
+                                  {(parseFloat(item.lineTotal) || 0).toLocaleString()}
+                                </td>
+                                {!billsMode && (
+                                  <td
+                                    style={{
+                                      ...styles.td,
+                                      ...styles.readOnlyCell,
+                                      fontFamily: "monospace",
+                                    }}
+                                    title="Comes from Item Type"
+                                  >
+                                    {item.hsCode || <span style={styles.muted}>—</span>}
+                                  </td>
+                                )}
+                                <td
+                                  style={{
+                                    ...styles.td,
+                                    ...styles.readOnlyCell,
+                                    fontSize: "0.72rem",
+                                  }}
+                                  title="Comes from Item Type"
+                                >
+                                  {item.saleType || <span style={styles.muted}>—</span>}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
 
                 {!effectiveReadOnly && showTotalsGuard && (
-                  <div style={{
-                    ...styles.totalsBox,
-                    background: totalsMatch ? "#e8f5e9" : "#fff4e0",
-                    borderColor: totalsMatch ? "#a5d6a7" : "#ffcc80",
-                    borderLeft: `4px solid ${totalsMatch ? "#2e7d32" : "#e65100"}`,
-                    marginTop: "0.6rem",
-                  }}>
-                    <div style={{ fontSize: "0.78rem", color: colors.textSecondary, marginBottom: "0.4rem", fontWeight: 600 }}>
+                  <div
+                    style={{
+                      ...styles.totalsBox,
+                      background: totalsMatch ? "#e8f5e9" : "#fff4e0",
+                      borderColor: totalsMatch ? "#a5d6a7" : "#ffcc80",
+                      borderLeft: `4px solid ${totalsMatch ? "#2e7d32" : "#e65100"}`,
+                      marginTop: "0.6rem",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "0.78rem",
+                        color: colors.textSecondary,
+                        marginBottom: "0.4rem",
+                        fontWeight: 600,
+                      }}
+                    >
                       Total-preservation guard
-                      <span style={{ color: colors.textSecondary, fontWeight: 400, marginLeft: "0.4rem" }}>
-                        — qty / price edits must keep the bill total within ±Rs. {NARROW_EDIT_TOLERANCE_PKR} of the original
+                      <span
+                        style={{
+                          color: colors.textSecondary,
+                          fontWeight: 400,
+                          marginLeft: "0.4rem",
+                        }}
+                      >
+                        — qty / price edits must keep the bill total within ±Rs.{" "}
+                        {NARROW_EDIT_TOLERANCE_PKR} of the original
                       </span>
                     </div>
                     <div style={styles.totalsRow}>
-                      <span>Original Bill Total <span style={styles.muted}>(before GST)</span>:</span>
-                      <strong>Rs. {originalSubtotal.toLocaleString("en-PK", { maximumFractionDigits: 2 })}</strong>
+                      <span>
+                        Original Bill Total <span style={styles.muted}>(before GST)</span>:
+                      </span>
+                      <strong>
+                        Rs. {originalSubtotal.toLocaleString("en-PK", { maximumFractionDigits: 2 })}
+                      </strong>
                     </div>
                     <div style={styles.totalsRow}>
-                      <span>Adjusted Invoice Total <span style={styles.muted}>(before GST)</span>:</span>
-                      <strong>Rs. {currentSubtotal.toLocaleString("en-PK", { maximumFractionDigits: 2 })}</strong>
+                      <span>
+                        Adjusted Invoice Total <span style={styles.muted}>(before GST)</span>:
+                      </span>
+                      <strong>
+                        Rs. {currentSubtotal.toLocaleString("en-PK", { maximumFractionDigits: 2 })}
+                      </strong>
                     </div>
                     {/* Spelled out because "Line Total" and "Invoice Total" are
                         different numbers, and entering a GST-inclusive figure
                         into a before-GST field would tax it a second time. */}
-                    <div style={{ ...styles.totalsRow, fontSize: "0.74rem", color: colors.textSecondary }}>
-                      <span>with {taxTreatment === "SRB" ? "SRB sales tax" : taxTreatment === "NoTax" ? "Tax" : "GST"} ({gstRate}%) this bill comes to:</span>
-                      <span>Rs. {(currentSubtotal + Math.round(currentSubtotal * (Number(gstRate) || 0)) / 100).toLocaleString("en-PK", { maximumFractionDigits: 2 })}</span>
+                    <div
+                      style={{
+                        ...styles.totalsRow,
+                        fontSize: "0.74rem",
+                        color: colors.textSecondary,
+                      }}
+                    >
+                      <span>
+                        with{" "}
+                        {taxTreatment === "SRB"
+                          ? "SRB sales tax"
+                          : taxTreatment === "NoTax"
+                            ? "Tax"
+                            : "GST"}{" "}
+                        ({gstRate}%) this bill comes to:
+                      </span>
+                      <span>
+                        Rs.{" "}
+                        {(
+                          currentSubtotal +
+                          Math.round(currentSubtotal * (Number(gstRate) || 0)) / 100
+                        ).toLocaleString("en-PK", { maximumFractionDigits: 2 })}
+                      </span>
                     </div>
-                    <div style={{ ...styles.totalsRow, borderTop: `1px dashed ${colors.cardBorder}`, paddingTop: "0.4rem", marginTop: "0.4rem" }}>
+                    <div
+                      style={{
+                        ...styles.totalsRow,
+                        borderTop: `1px dashed ${colors.cardBorder}`,
+                        paddingTop: "0.4rem",
+                        marginTop: "0.4rem",
+                      }}
+                    >
                       <span style={{ fontWeight: 700 }}>Difference:</span>
-                      <strong style={{
-                        fontSize: "1rem",
-                        color: totalsMatch ? "#2e7d32" : "#c62828",
-                      }}>
+                      <strong
+                        style={{
+                          fontSize: "1rem",
+                          color: totalsMatch ? "#2e7d32" : "#c62828",
+                        }}
+                      >
                         {totalsMatch ? "✓ " : "✗ "}
-                        Rs. {Math.abs(subtotalDiff) < 0.005
+                        Rs.{" "}
+                        {Math.abs(subtotalDiff) < 0.005
                           ? "0.00"
                           : subtotalDiff.toLocaleString("en-PK", { maximumFractionDigits: 2 })}
                         {totalsExact
@@ -2505,8 +3100,20 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                   </div>
                 )}
 
-                {billsMode && !isChallanLinked && <ManualChallanNumberField value={manualChallanNumber} onChange={setManualChallanNumber} readOnly={lockNonItemType || !invoice?.isEditable} />}
-                {billsMode && <FreightChargesField value={freightCharges} onChange={setFreightCharges} disabled={lockNonItemType || !invoice?.isEditable} />}
+                {billsMode && !isChallanLinked && (
+                  <ManualChallanNumberField
+                    value={manualChallanNumber}
+                    onChange={setManualChallanNumber}
+                    readOnly={lockNonItemType || !invoice?.isEditable}
+                  />
+                )}
+                {billsMode && (
+                  <FreightChargesField
+                    value={freightCharges}
+                    onChange={setFreightCharges}
+                    disabled={lockNonItemType || !invoice?.isEditable}
+                  />
+                )}
 
                 {/* Totals */}
                 <div style={styles.totalsBox}>
@@ -2515,13 +3122,26 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                     <strong>Rs. {subtotal.toLocaleString()}</strong>
                   </div>
                   <div style={styles.totalsRow}>
-                    <span>{taxTreatment === "SRB" ? "SRB sales tax" : taxTreatment === "NoTax" ? "Tax" : "GST"} ({gstRate}%):</span>
+                    <span>
+                      {taxTreatment === "SRB"
+                        ? "SRB sales tax"
+                        : taxTreatment === "NoTax"
+                          ? "Tax"
+                          : "GST"}{" "}
+                      ({gstRate}%):
+                    </span>
                     <strong>Rs. {gstAmount.toLocaleString()}</strong>
                   </div>
                   {billsMode && Number(freightCharges) > 0 && (
                     <div style={styles.totalsRow}>
                       <span>Freight / cartage:</span>
-                      <strong>Rs. {Number(freightCharges).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                      <strong>
+                        Rs.{" "}
+                        {Number(freightCharges).toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </strong>
                     </div>
                   )}
                   {furtherTaxAmount > 0 && (
@@ -2530,32 +3150,75 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                       <strong>Rs. {furtherTaxAmount.toLocaleString()}</strong>
                     </div>
                   )}
-                  <div style={{ ...styles.totalsRow, borderTop: `1px solid ${colors.cardBorder}`, paddingTop: "0.5rem", marginTop: "0.5rem" }}>
+                  <div
+                    style={{
+                      ...styles.totalsRow,
+                      borderTop: `1px solid ${colors.cardBorder}`,
+                      paddingTop: "0.5rem",
+                      marginTop: "0.5rem",
+                    }}
+                  >
                     <span style={{ fontWeight: 700 }}>Grand Total:</span>
-                    <strong style={{ fontSize: "1.1rem", color: colors.blue }}>Rs. {(grandTotal + (billsMode ? Number(freightCharges || 0) : 0)).toLocaleString()}</strong>
+                    <strong style={{ fontSize: "1.1rem", color: colors.blue }}>
+                      Rs.{" "}
+                      {(
+                        grandTotal + (billsMode ? Number(freightCharges || 0) : 0)
+                      ).toLocaleString()}
+                    </strong>
                   </div>
-                  {(!billsMode || lockNonItemType || effectiveReadOnly) && Number(invoice?.withholdingTaxAmount) > 0 && (
-                    <>
-                      <div style={styles.totalsRow}>
-                        <span>Less withholding tax{invoice.withholdingTaxRate != null ? ` (${invoice.withholdingTaxRate}%)` : " (fixed amount)"}:</span>
-                        <strong>− Rs. {Number(invoice.withholdingTaxAmount).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
-                      </div>
-                      <div style={styles.totalsRow}>
-                        <span>Collectible:</span>
-                        <strong>Rs. {Number(invoice.collectible).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
-                      </div>
-                      {Number(invoice.amountPaid) > 0 && (
+                  {(!billsMode || lockNonItemType || effectiveReadOnly) &&
+                    Number(invoice?.withholdingTaxAmount) > 0 && (
+                      <>
                         <div style={styles.totalsRow}>
-                          <span>Paid:</span>
-                          <strong>Rs. {Number(invoice.amountPaid).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                          <span>
+                            Less withholding tax
+                            {invoice.withholdingTaxRate != null
+                              ? ` (${invoice.withholdingTaxRate}%)`
+                              : " (fixed amount)"}
+                            :
+                          </span>
+                          <strong>
+                            − Rs.{" "}
+                            {Number(invoice.withholdingTaxAmount).toLocaleString("en-PK", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </strong>
                         </div>
-                      )}
-                      <div style={{ ...styles.totalsRow, fontWeight: 700, color: colors.blue }}>
-                        <span>Balance due:</span>
-                        <strong>Rs. {Number(invoice.balanceDue).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
-                      </div>
-                    </>
-                  )}
+                        <div style={styles.totalsRow}>
+                          <span>Collectible:</span>
+                          <strong>
+                            Rs.{" "}
+                            {Number(invoice.collectible).toLocaleString("en-PK", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </strong>
+                        </div>
+                        {Number(invoice.amountPaid) > 0 && (
+                          <div style={styles.totalsRow}>
+                            <span>Paid:</span>
+                            <strong>
+                              Rs.{" "}
+                              {Number(invoice.amountPaid).toLocaleString("en-PK", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </strong>
+                          </div>
+                        )}
+                        <div style={{ ...styles.totalsRow, fontWeight: 700, color: colors.blue }}>
+                          <span>Balance due:</span>
+                          <strong>
+                            Rs.{" "}
+                            {Number(invoice.balanceDue).toLocaleString("en-PK", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </strong>
+                        </div>
+                      </>
+                    )}
                 </div>
 
                 {/* Only in the full bill edit. The Invoices-tab narrow edit
@@ -2583,14 +3246,26 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                     whether their qty/price edits balance back to the
                     original subtotal. Save is blocked until they do. */}
                 {!effectiveReadOnly && !billsMode && stockNegatives.length > 0 && (
-                  <div style={{
-                    ...styles.totalsBox,
-                    background: "#fff4e0",
-                    borderColor: "#ffcc80",
-                    borderLeft: "4px solid #e65100",
-                    marginTop: "0.6rem",
-                  }}>
-                    <div style={{ fontSize: "0.78rem", color: "#c62828", marginBottom: "0.4rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                  <div
+                    style={{
+                      ...styles.totalsBox,
+                      background: "#fff4e0",
+                      borderColor: "#ffcc80",
+                      borderLeft: "4px solid #e65100",
+                      marginTop: "0.6rem",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "0.78rem",
+                        color: "#c62828",
+                        marginBottom: "0.4rem",
+                        fontWeight: 700,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.35rem",
+                      }}
+                    >
                       <MdWarning size={16} /> Stock warning — this save takes inventory below zero
                     </div>
                     {stockNegatives.map((w) => (
@@ -2601,20 +3276,31 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                         </strong>
                       </div>
                     ))}
-                    <div style={{ fontSize: "0.74rem", color: colors.textSecondary, marginTop: "0.35rem" }}>
-                      You will be asked to confirm on Save. Companies with the hard stock guard on cannot save this at all.
+                    <div
+                      style={{
+                        fontSize: "0.74rem",
+                        color: colors.textSecondary,
+                        marginTop: "0.35rem",
+                      }}
+                    >
+                      You will be asked to confirm on Save. Companies with the hard stock guard on
+                      cannot save this at all.
                     </div>
                   </div>
                 )}
 
-
                 {!effectiveReadOnly && invoice?.fbrStatus === "Validated" && (
                   <div style={styles.warnNote}>
-                    ⓘ Editing this bill will clear its FBR validation status. You'll need to re-validate before submitting to FBR.
+                    ⓘ Editing this bill will clear its FBR validation status. You'll need to
+                    re-validate before submitting to FBR.
                   </div>
                 )}
 
-                <DocumentNotesEditor value={notes} onChange={setNotes} readOnly={effectiveReadOnly} />
+                <DocumentNotesEditor
+                  value={notes}
+                  onChange={setNotes}
+                  readOnly={effectiveReadOnly}
+                />
                 <div style={{ marginTop: "1rem" }}>
                   <AttachmentManager
                     ref={attachmentRef}
@@ -2628,7 +3314,12 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
             )}
           </div>
           <div data-admin-footer="" style={formStyles.footer}>
-            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>
+            <button
+              data-admin-close=""
+              type="button"
+              style={{ ...formStyles.button, ...formStyles.cancel }}
+              onClick={onClose}
+            >
               {readOnly ? "Close" : "Cancel"}
             </button>
             {/* Send back for re-adjustment — Invoice tab only, only while the
@@ -2636,62 +3327,108 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
                 submitted to FBR). Reverts the FBR overlay + stock so the bill
                 returns to the Tax Sheet worklist. Two-step inline confirm
                 because it removes classification and moves inventory. */}
-            {!readOnly && forceItemTypeAndQty && anyOverlay && canEditItemTypeAndQty
-              && invoice?.fbrStatus !== "Submitted" && invoice?.fbrStatus !== "Submitting"
-              && invoice?.fbrStatus !== "Uncertain" && (
-              confirmingSendBack ? (
-                <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+            {!readOnly &&
+              forceItemTypeAndQty &&
+              anyOverlay &&
+              canEditItemTypeAndQty &&
+              invoice?.fbrStatus !== "Submitted" &&
+              invoice?.fbrStatus !== "Submitting" &&
+              invoice?.fbrStatus !== "Uncertain" &&
+              (confirmingSendBack ? (
+                <span
+                  style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}
+                >
                   <span style={{ fontSize: "0.78rem", color: "#e65100", fontWeight: 600 }}>
                     Remove FBR classification &amp; revert stock?
                   </span>
-                  <button type="button" disabled={saving} onClick={handleSendBackForReadjustment}
-                    style={{ ...formStyles.button, backgroundColor: "#e65100", color: "#fff", opacity: saving ? 0.5 : 1 }}>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={handleSendBackForReadjustment}
+                    style={{
+                      ...formStyles.button,
+                      backgroundColor: "#e65100",
+                      color: "#fff",
+                      opacity: saving ? 0.5 : 1,
+                    }}
+                  >
                     {saving ? "Sending…" : "Confirm"}
                   </button>
-                  <button type="button" disabled={saving} onClick={() => setConfirmingSendBack(false)}
-                    style={{ ...formStyles.button, ...formStyles.cancel }}>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => setConfirmingSendBack(false)}
+                    style={{ ...formStyles.button, ...formStyles.cancel }}
+                  >
                     No
                   </button>
                 </span>
               ) : (
-                <button type="button" disabled={saving} onClick={() => setConfirmingSendBack(true)}
-                  style={{ ...formStyles.button, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
-                  title="Remove the FBR classification (item type / HS) and revert its stock, sending this bill back to the Tax Sheet so the consultant can re-adjust it.">
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => setConfirmingSendBack(true)}
+                  style={{
+                    ...formStyles.button,
+                    backgroundColor: "#fff3e0",
+                    color: "#e65100",
+                    border: "1px solid #ffcc80",
+                  }}
+                  title="Remove the FBR classification (item type / HS) and revert its stock, sending this bill back to the Tax Sheet so the consultant can re-adjust it."
+                >
                   ↩ Send back for re-adjustment
                 </button>
-              )
-            )}
-            {!readOnly && invoice?.isEditable && (canFullEdit || canEditItemTypeAndQty || canEditItemType) && (() => {
-              // In itemType+qty(+price) mode, block save when totals
-              // drift past the tolerance. Tooltip explains the gap.
-              const blockedByTotals = showTotalsGuard && !totalsMatch;
-              const disabled = saving || blockedByTotals || !billNumberOk;
-              return (
-                <>
-                {invoice.fbrReviewRequired && forceItemTypeAndQty && !billsMode && <button type="button"
-                  disabled={saving || blockedByTotals} style={{ ...formStyles.button, ...formStyles.cancel }}
-                  onClick={e => handleSave(e, false)}>Save progress</button>}
-                <button
-                  type="submit"
-                  style={{ ...formStyles.button, ...formStyles.submit, opacity: disabled ? 0.5 : 1, cursor: disabled ? "not-allowed" : "pointer" }}
-                  disabled={disabled}
-                  title={!billNumberOk
-                    ? "Enter a bill number that isn't already in use."
-                    : blockedByTotals
-                      ? `Bill total mismatch: Rs. ${Math.abs(subtotalDiff).toLocaleString("en-PK", { maximumFractionDigits: 2 })} off (tolerance Rs. ${NARROW_EDIT_TOLERANCE_PKR}). Adjust qty / unit price to balance.`
-                      : ""}
-                >
-                  {saving
-                    ? "Saving..."
-                    : itemTypeOnlyMode
-                      ? "Save Item Types"
-                      : itemTypeAndQtyMode
-                        ? (invoice.fbrReviewRequired && !billsMode ? "Complete review" : "Save Adjustments")
-                        : "Save Changes"}
-                </button>
-                </>
-              );
-            })()}
+              ))}
+            {!readOnly &&
+              invoice?.isEditable &&
+              (canFullEdit || canEditItemTypeAndQty || canEditItemType) &&
+              (() => {
+                // In itemType+qty(+price) mode, block save when totals
+                // drift past the tolerance. Tooltip explains the gap.
+                const blockedByTotals = showTotalsGuard && !totalsMatch;
+                const disabled = saving || blockedByTotals || !billNumberOk;
+                return (
+                  <>
+                    {invoice.fbrReviewRequired && forceItemTypeAndQty && !billsMode && (
+                      <button
+                        type="button"
+                        disabled={saving || blockedByTotals}
+                        style={{ ...formStyles.button, ...formStyles.cancel }}
+                        onClick={(e) => handleSave(e, false)}
+                      >
+                        Save progress
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      style={{
+                        ...formStyles.button,
+                        ...formStyles.submit,
+                        opacity: disabled ? 0.5 : 1,
+                        cursor: disabled ? "not-allowed" : "pointer",
+                      }}
+                      disabled={disabled}
+                      title={
+                        !billNumberOk
+                          ? "Enter a bill number that isn't already in use."
+                          : blockedByTotals
+                            ? `Bill total mismatch: Rs. ${Math.abs(subtotalDiff).toLocaleString("en-PK", { maximumFractionDigits: 2 })} off (tolerance Rs. ${NARROW_EDIT_TOLERANCE_PKR}). Adjust qty / unit price to balance.`
+                            : ""
+                      }
+                    >
+                      {saving
+                        ? "Saving..."
+                        : itemTypeOnlyMode
+                          ? "Save Item Types"
+                          : itemTypeAndQtyMode
+                            ? invoice.fbrReviewRequired && !billsMode
+                              ? "Complete review"
+                              : "Save Adjustments"
+                            : "Save Changes"}
+                    </button>
+                  </>
+                );
+              })()}
           </div>
         </form>
       </div>
@@ -2710,15 +3447,21 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
           onSaved={(created) => onItemTypeCreated(created)}
         />
       )}
-      {showChallanEditor && <BillChallansEditor canAttachToOrder={has("challans.manage.update")} invoice={invoice} onClose={() => setShowChallanEditor(false)}
-        onSaved={(updated) => {
-          setShowChallanEditor(false);
-          setLoading(true);
-          setExactTotals({});
-          clearedExactKeys.current.clear();
-          setReloadVersion(v => v + 1);
-          onLayoutSaved?.(updated);
-        }} />}
+      {showChallanEditor && (
+        <BillChallansEditor
+          canAttachToOrder={has("challans.manage.update")}
+          invoice={invoice}
+          onClose={() => setShowChallanEditor(false)}
+          onSaved={(updated) => {
+            setShowChallanEditor(false);
+            setLoading(true);
+            setExactTotals({});
+            clearedExactKeys.current.clear();
+            setReloadVersion((v) => v + 1);
+            onLayoutSaved?.(updated);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -2742,13 +3485,23 @@ function CommercialBillEditor({ invoiceId, onClose, onSaved, onLayoutSaved, read
 // Strictly informational. The form's Save buttons don't depend on
 // this state — operators can save with shortfalls / no purchases and
 // reconcile later.
-function TaxClaimPanel({ summary, loading, period, onPeriodChange, onRefresh, open, onToggle, onApplyOptimization, onResetToOriginal }) {
+function TaxClaimPanel({
+  summary,
+  loading,
+  period,
+  onPeriodChange,
+  onRefresh,
+  open,
+  onToggle,
+  onApplyOptimization,
+  onResetToOriginal,
+}) {
   const fmtMoney = (v) =>
-    v == null || isNaN(v) ? "—" :
-    `Rs. ${Number(v).toLocaleString("en-PK", { maximumFractionDigits: 0 })}`;
+    v == null || isNaN(v)
+      ? "—"
+      : `Rs. ${Number(v).toLocaleString("en-PK", { maximumFractionDigits: 0 })}`;
   const fmtQty = (v) =>
-    v == null || isNaN(v) ? "—" :
-    Number(v).toLocaleString("en-PK", { maximumFractionDigits: 4 });
+    v == null || isNaN(v) ? "—" : Number(v).toLocaleString("en-PK", { maximumFractionDigits: 4 });
 
   const totals = summary?.totals;
   const rows = summary?.rows || [];
@@ -2861,34 +3614,70 @@ function TaxClaimPanel({ summary, loading, period, onPeriodChange, onRefresh, op
           aria-expanded={open}
           title={open ? "Click to collapse" : "Click to expand and review claim details"}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap", flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.45rem",
+              flexWrap: "wrap",
+              flex: 1,
+              minWidth: 0,
+            }}
+          >
             <MdInventory2 size={16} color={colors.teal} />
             <strong style={{ fontSize: "0.88rem", color: colors.textPrimary }}>
               Tax Claim Snapshot
             </strong>
-            {loading && <span style={{ fontSize: "0.72rem", color: colors.textSecondary, fontStyle: "italic" }}>updating…</span>}
+            {loading && (
+              <span
+                style={{ fontSize: "0.72rem", color: colors.textSecondary, fontStyle: "italic" }}
+              >
+                updating…
+              </span>
+            )}
             {/* Collapsed-state quick-glance chip — shows the punchline
                 even when the body is hidden. */}
             {!open && summary && (
               <span style={styles.taxCollapsedSummary}>
-                <span>Claimable: <strong>{fmtMoney(collapsedSummary.claimable)}</strong></span>
+                <span>
+                  Claimable: <strong>{fmtMoney(collapsedSummary.claimable)}</strong>
+                </span>
                 <span style={{ color: colors.textSecondary }}>·</span>
-                <span>Net tax: <strong>{fmtMoney(collapsedSummary.net)}</strong></span>
+                <span>
+                  Net tax: <strong>{fmtMoney(collapsedSummary.net)}</strong>
+                </span>
                 {collapsedSummary.warnCount > 0 && (
                   <span style={styles.taxCollapsedWarnPill}>
-                    ⚠ {collapsedSummary.warnCount} warning{collapsedSummary.warnCount !== 1 ? "s" : ""}
+                    ⚠ {collapsedSummary.warnCount} warning
+                    {collapsedSummary.warnCount !== 1 ? "s" : ""}
                   </span>
                 )}
               </span>
             )}
           </div>
-          <span style={{ display: "inline-flex", alignItems: "center", color: colors.blue, flexShrink: 0 }}>
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              color: colors.blue,
+              flexShrink: 0,
+            }}
+          >
             {open ? <MdExpandLess size={20} /> : <MdExpandMore size={20} />}
           </span>
         </button>
         {open && (
           <>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "0.4rem", flexWrap: "wrap", marginTop: "0.4rem" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                gap: "0.4rem",
+                flexWrap: "wrap",
+                marginTop: "0.4rem",
+              }}
+            >
               {onRefresh && (
                 <button
                   type="button"
@@ -2924,167 +3713,222 @@ function TaxClaimPanel({ summary, loading, period, onPeriodChange, onRefresh, op
               </select>
             </div>
             <div style={{ fontSize: "0.78rem", color: colors.textSecondary, marginTop: "0.4rem" }}>
-              Per-sale match at weighted-avg cost · §8A {cfg?.agingMonths ?? 6}-month aging · §8B {cfg?.section8BCapPercent ?? 90}% cap · IRIS reconciliation gate · informational only — operator can save freely.
+              Per-sale match at weighted-avg cost · §8A {cfg?.agingMonths ?? 6}-month aging · §8B{" "}
+              {cfg?.section8BCapPercent ?? 90}% cap · IRIS reconciliation gate · informational only
+              — operator can save freely.
             </div>
           </>
         )}
       </header>
 
-      {!open && (
+      {!open &&
         // Collapsed: stop here. Body, headline, warnings, footer all hidden.
-        null
-      )}
-      {open && (<>
-
-
-      {/* Headline strip — the punchline. 6 numbers on desktop, stacks
+        null}
+      {open && (
+        <>
+          {/* Headline strip — the punchline. 6 numbers on desktop, stacks
           on mobile via auto-fit. Operator's eye lands here first. */}
-      <div style={styles.taxPanelHeadline}>
-        <HeadlineCell label="This bill — output tax" value={fmtMoney(totals?.billOutputTax)} />
-        <HeadlineCell label="Matched input" value={fmtMoney(totals?.matchedInputTax)} />
-        <HeadlineCell
-          label={`§8B cap (${cfg?.section8BCapPercent ?? 90}%)`}
-          value={fmtMoney(totals?.section8BCap)}
-          flag={totals?.section8BCapApplied ? "engaged" : null}
-        />
-        <HeadlineCell
-          label="Claimable this bill"
-          value={fmtMoney(totals?.claimableThisBill)}
-          tone={(totals?.claimableThisBill ?? 0) > 0 ? "good" : "muted"}
-        />
-        <HeadlineCell label="Carry-fwd from prior" value={fmtMoney(totals?.carryForwardFromPrior)} />
-        <HeadlineCell
-          label="Net new tax"
-          value={fmtMoney(totals?.netNewTax)}
-          tone="strong"
-        />
-      </div>
+          <div style={styles.taxPanelHeadline}>
+            <HeadlineCell label="This bill — output tax" value={fmtMoney(totals?.billOutputTax)} />
+            <HeadlineCell label="Matched input" value={fmtMoney(totals?.matchedInputTax)} />
+            <HeadlineCell
+              label={`§8B cap (${cfg?.section8BCapPercent ?? 90}%)`}
+              value={fmtMoney(totals?.section8BCap)}
+              flag={totals?.section8BCapApplied ? "engaged" : null}
+            />
+            <HeadlineCell
+              label="Claimable this bill"
+              value={fmtMoney(totals?.claimableThisBill)}
+              tone={(totals?.claimableThisBill ?? 0) > 0 ? "good" : "muted"}
+            />
+            <HeadlineCell
+              label="Carry-fwd from prior"
+              value={fmtMoney(totals?.carryForwardFromPrior)}
+            />
+            <HeadlineCell label="Net new tax" value={fmtMoney(totals?.netNewTax)} tone="strong" />
+          </div>
 
-      <div style={styles.taxPanelGrid}>
-        {rows.map((row) => {
-          const bill = row.bill || {};
-          const bank = row.bank || {};
-          const pending = row.pending || {};
-          const manualOnly = row.manualOnly || {};
-          const disputed = row.disputed || {};
-          const match = row.match || {};
-          const status = row.status || "good";
+          <div style={styles.taxPanelGrid}>
+            {rows.map((row) => {
+              const bill = row.bill || {};
+              const bank = row.bank || {};
+              const pending = row.pending || {};
+              const manualOnly = row.manualOnly || {};
+              const disputed = row.disputed || {};
+              const match = row.match || {};
+              const status = row.status || "good";
 
-          // Status → colour band + icon + headline copy
-          const cfgByStatus = {
-            "good":           { kind: "good",   icon: MdCheckCircle, text: "Within input bank" },
-            "headroom":       { kind: "good",   icon: MdCheckCircle, text: "Headroom available" },
-            "shortfall":      { kind: "warn",   icon: MdWarning,     text: "Selling more than matched" },
-            "no-purchase":    { kind: "danger", icon: MdWarning,     text: "No purchases on record" },
-            "pending-only":   { kind: "warn",   icon: MdInfo,        text: "Pending IRIS reconciliation" },
-            "manual-only":    { kind: "warn",   icon: MdInfo,        text: "Inventory exists, IRN missing" },
-            "disputed-only":  { kind: "danger", icon: MdError,       text: "Disputed by IRIS" },
-          };
-          const sc = cfgByStatus[status] || cfgByStatus["good"];
-          const StatusIcon = sc.icon;
-          const styleKind = sc.kind === "good" ? styles.taxRowGood
-            : sc.kind === "warn" ? styles.taxRowWarn
-            : styles.taxRowDanger;
+              // Status → colour band + icon + headline copy
+              const cfgByStatus = {
+                good: { kind: "good", icon: MdCheckCircle, text: "Within input bank" },
+                headroom: { kind: "good", icon: MdCheckCircle, text: "Headroom available" },
+                shortfall: { kind: "warn", icon: MdWarning, text: "Selling more than matched" },
+                "no-purchase": { kind: "danger", icon: MdWarning, text: "No purchases on record" },
+                "pending-only": { kind: "warn", icon: MdInfo, text: "Pending IRIS reconciliation" },
+                "manual-only": {
+                  kind: "warn",
+                  icon: MdInfo,
+                  text: "Inventory exists, IRN missing",
+                },
+                "disputed-only": { kind: "danger", icon: MdError, text: "Disputed by IRIS" },
+              };
+              const sc = cfgByStatus[status] || cfgByStatus["good"];
+              const StatusIcon = sc.icon;
+              const styleKind =
+                sc.kind === "good"
+                  ? styles.taxRowGood
+                  : sc.kind === "warn"
+                    ? styles.taxRowWarn
+                    : styles.taxRowDanger;
 
-          // Row hint copy — situation-specific, references actual
-          // numbers from the response.
-          let hint = "";
-          if (status === "no-purchase") {
-            hint = "No eligible purchases for this HS code in the period. Output tax has no input backing — record the supplier bill (or import Annexure-A) and re-open this bill to refresh. You can still save now.";
-          } else if (status === "disputed-only") {
-            hint = `Found ${disputed.billCount} purchase bill${disputed.billCount !== 1 ? "s" : ""} (${fmtQty(disputed.qty)} qty, ${fmtMoney(disputed.value)} value) with status Disputed — IRIS rejected the supplier match. Until you re-issue the bill or contact the supplier to refile, this won't back any input-tax claim.`;
-          } else if (status === "manual-only") {
-            hint = `Found ${manualOnly.billCount} purchase bill${manualOnly.billCount !== 1 ? "s" : ""} (${fmtQty(manualOnly.qty)} qty, ${fmtMoney(manualOnly.value)} value) entered manually without an IRN. The Stock Dashboard counts this as inventory but FBR won't accept the input-tax claim — backfill the SupplierIRN on the Purchase Bill to unlock ${fmtMoney(manualOnly.tax)} of claimable input tax.`;
-          } else if (status === "pending-only") {
-            hint = `Found ${pending.billCount} purchase bill${pending.billCount !== 1 ? "s" : ""} (${fmtMoney(pending.tax)} input tax) but they're not yet IRIS-reconciled. Claimable as soon as the supplier files in IRIS.`;
-          } else if (status === "shortfall") {
-            hint = `${fmtQty(match.unmatchedQty)} qty has no matching purchase — output tax on that portion is pure cost (~${fmtMoney(match.unmatchedQty * (bill.value > 0 ? bill.value / bill.qty : 0) * (totals?.billOutputTax && totals.matchedInputTax >= 0 ? (totals.section8BCap > 0 ? cfg?.section8BCapPercent / 100 : 0) : 0))}). Either record more supplier purchases for this HS or move qty onto a different HS where you have headroom.`;
-          } else if (status === "headroom") {
-            const extraQty = Math.max(0, bank.availableQty - bill.qty);
-            const extraValue = Math.max(0, bank.availableValue - bill.value);
-            hint = `${fmtQty(extraQty)} qty / ${fmtMoney(extraValue)} still available under this HS. Tagging more lines here would consume more of the input-tax bank.`;
-          } else {
-            hint = "Bill qty fully matches available bank — input claim aligned.";
-          }
+              // Row hint copy — situation-specific, references actual
+              // numbers from the response.
+              let hint = "";
+              if (status === "no-purchase") {
+                hint =
+                  "No eligible purchases for this HS code in the period. Output tax has no input backing — record the supplier bill (or import Annexure-A) and re-open this bill to refresh. You can still save now.";
+              } else if (status === "disputed-only") {
+                hint = `Found ${disputed.billCount} purchase bill${disputed.billCount !== 1 ? "s" : ""} (${fmtQty(disputed.qty)} qty, ${fmtMoney(disputed.value)} value) with status Disputed — IRIS rejected the supplier match. Until you re-issue the bill or contact the supplier to refile, this won't back any input-tax claim.`;
+              } else if (status === "manual-only") {
+                hint = `Found ${manualOnly.billCount} purchase bill${manualOnly.billCount !== 1 ? "s" : ""} (${fmtQty(manualOnly.qty)} qty, ${fmtMoney(manualOnly.value)} value) entered manually without an IRN. The Stock Dashboard counts this as inventory but FBR won't accept the input-tax claim — backfill the SupplierIRN on the Purchase Bill to unlock ${fmtMoney(manualOnly.tax)} of claimable input tax.`;
+              } else if (status === "pending-only") {
+                hint = `Found ${pending.billCount} purchase bill${pending.billCount !== 1 ? "s" : ""} (${fmtMoney(pending.tax)} input tax) but they're not yet IRIS-reconciled. Claimable as soon as the supplier files in IRIS.`;
+              } else if (status === "shortfall") {
+                hint = `${fmtQty(match.unmatchedQty)} qty has no matching purchase — output tax on that portion is pure cost (~${fmtMoney(match.unmatchedQty * (bill.value > 0 ? bill.value / bill.qty : 0) * (totals?.billOutputTax && totals.matchedInputTax >= 0 ? (totals.section8BCap > 0 ? cfg?.section8BCapPercent / 100 : 0) : 0))}). Either record more supplier purchases for this HS or move qty onto a different HS where you have headroom.`;
+              } else if (status === "headroom") {
+                const extraQty = Math.max(0, bank.availableQty - bill.qty);
+                const extraValue = Math.max(0, bank.availableValue - bill.value);
+                hint = `${fmtQty(extraQty)} qty / ${fmtMoney(extraValue)} still available under this HS. Tagging more lines here would consume more of the input-tax bank.`;
+              } else {
+                hint = "Bill qty fully matches available bank — input claim aligned.";
+              }
 
-          return (
-            <div key={row.hsCode} style={{ ...styles.taxRowCard, ...styleKind }}>
-              <div style={styles.taxRowHeader}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap", minWidth: 0 }}>
-                  <span style={styles.taxRowHs}>{row.hsCode}</span>
-                  {row.itemTypeName && <span style={styles.taxRowName}>{row.itemTypeName}</span>}
-                </div>
-                <span style={{
-                  display: "inline-flex", alignItems: "center", gap: "0.25rem",
-                  fontSize: "0.74rem", fontWeight: 700,
-                  color: sc.kind === "good" ? "#2e7d32" : sc.kind === "warn" ? "#8a4b00" : "#b71c1c",
-                  flexShrink: 0,
-                }}>
-                  <StatusIcon size={14} />
-                  {sc.text}
-                </span>
-              </div>
+              return (
+                <div key={row.hsCode} style={{ ...styles.taxRowCard, ...styleKind }}>
+                  <div style={styles.taxRowHeader}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        flexWrap: "wrap",
+                        minWidth: 0,
+                      }}
+                    >
+                      <span style={styles.taxRowHs}>{row.hsCode}</span>
+                      {row.itemTypeName && (
+                        <span style={styles.taxRowName}>{row.itemTypeName}</span>
+                      )}
+                    </div>
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.25rem",
+                        fontSize: "0.74rem",
+                        fontWeight: 700,
+                        color:
+                          sc.kind === "good"
+                            ? "#2e7d32"
+                            : sc.kind === "warn"
+                              ? "#8a4b00"
+                              : "#b71c1c",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <StatusIcon size={14} />
+                      {sc.text}
+                    </span>
+                  </div>
 
-              {/* Stats — bill / matched / available / sold (period) */}
-              <div style={styles.taxRowStats}>
-                <RowStat label="This bill" qty={bill.qty} value={bill.value} fmtMoney={fmtMoney} fmtQty={fmtQty} />
-                <RowStat
-                  label="Matched (claim)"
-                  qty={match.matchedQty}
-                  value={null}
-                  extra={match.matchedInputTax > 0 ? `Rs. ${Number(match.matchedInputTax).toLocaleString("en-PK", { maximumFractionDigits: 0 })} input tax` : null}
-                  fmtMoney={fmtMoney} fmtQty={fmtQty}
-                  highlight
-                />
-                <RowStat
-                  label="Available bank"
-                  qty={bank.availableQty}
-                  value={bank.availableValue}
-                  extra={bank.availableTax > 0 ? `Rs. ${Number(bank.availableTax).toLocaleString("en-PK", { maximumFractionDigits: 0 })} input` : null}
-                  fmtMoney={fmtMoney} fmtQty={fmtQty}
-                />
-                <RowStat
-                  label={`Sold (${periodLabel.toLowerCase()})`}
-                  qty={bank.soldQty}
-                  value={bank.soldValue}
-                  fmtMoney={fmtMoney} fmtQty={fmtQty}
-                />
-              </div>
+                  {/* Stats — bill / matched / available / sold (period) */}
+                  <div style={styles.taxRowStats}>
+                    <RowStat
+                      label="This bill"
+                      qty={bill.qty}
+                      value={bill.value}
+                      fmtMoney={fmtMoney}
+                      fmtQty={fmtQty}
+                    />
+                    <RowStat
+                      label="Matched (claim)"
+                      qty={match.matchedQty}
+                      value={null}
+                      extra={
+                        match.matchedInputTax > 0
+                          ? `Rs. ${Number(match.matchedInputTax).toLocaleString("en-PK", { maximumFractionDigits: 0 })} input tax`
+                          : null
+                      }
+                      fmtMoney={fmtMoney}
+                      fmtQty={fmtQty}
+                      highlight
+                    />
+                    <RowStat
+                      label="Available bank"
+                      qty={bank.availableQty}
+                      value={bank.availableValue}
+                      extra={
+                        bank.availableTax > 0
+                          ? `Rs. ${Number(bank.availableTax).toLocaleString("en-PK", { maximumFractionDigits: 0 })} input`
+                          : null
+                      }
+                      fmtMoney={fmtMoney}
+                      fmtQty={fmtQty}
+                    />
+                    <RowStat
+                      label={`Sold (${periodLabel.toLowerCase()})`}
+                      qty={bank.soldQty}
+                      value={bank.soldValue}
+                      fmtMoney={fmtMoney}
+                      fmtQty={fmtQty}
+                    />
+                  </div>
 
-              {/* Aging + pending + manual-only + disputed sub-line.
+                  {/* Aging + pending + manual-only + disputed sub-line.
                   Shows whichever signals apply. Each is non-intrusive
                   but visible enough to act on. */}
-              {(bank.expiringWithin30Days || pending.billCount > 0 || manualOnly.billCount > 0 || disputed.billCount > 0) && (
-                <div style={styles.taxRowSubMeta}>
-                  {bank.expiringWithin30Days && (
-                    <span style={styles.taxRowAging}>
-                      ⏰ Oldest purchase ages out within 30 days
-                    </span>
+                  {(bank.expiringWithin30Days ||
+                    pending.billCount > 0 ||
+                    manualOnly.billCount > 0 ||
+                    disputed.billCount > 0) && (
+                    <div style={styles.taxRowSubMeta}>
+                      {bank.expiringWithin30Days && (
+                        <span style={styles.taxRowAging}>
+                          ⏰ Oldest purchase ages out within 30 days
+                        </span>
+                      )}
+                      {pending.billCount > 0 && (
+                        <span style={styles.taxRowPending}>
+                          ℹ {pending.billCount} bill{pending.billCount !== 1 ? "s" : ""} pending
+                          IRIS · {fmtMoney(pending.tax)}
+                        </span>
+                      )}
+                      {manualOnly.billCount > 0 && (
+                        <span style={styles.taxRowManualOnly}>
+                          ⚠ {manualOnly.billCount} bill{manualOnly.billCount !== 1 ? "s" : ""} no
+                          IRN · {fmtQty(manualOnly.qty)} qty · would unlock{" "}
+                          {fmtMoney(manualOnly.tax)} input tax
+                        </span>
+                      )}
+                      {disputed.billCount > 0 && (
+                        <span style={styles.taxRowDisputed}>
+                          ✗ {disputed.billCount} bill{disputed.billCount !== 1 ? "s" : ""} disputed
+                          by IRIS · {fmtMoney(disputed.tax)} input tax blocked
+                        </span>
+                      )}
+                    </div>
                   )}
-                  {pending.billCount > 0 && (
-                    <span style={styles.taxRowPending}>
-                      ℹ {pending.billCount} bill{pending.billCount !== 1 ? "s" : ""} pending IRIS · {fmtMoney(pending.tax)}
-                    </span>
-                  )}
-                  {manualOnly.billCount > 0 && (
-                    <span style={styles.taxRowManualOnly}>
-                      ⚠ {manualOnly.billCount} bill{manualOnly.billCount !== 1 ? "s" : ""} no IRN · {fmtQty(manualOnly.qty)} qty · would unlock {fmtMoney(manualOnly.tax)} input tax
-                    </span>
-                  )}
-                  {disputed.billCount > 0 && (
-                    <span style={styles.taxRowDisputed}>
-                      ✗ {disputed.billCount} bill{disputed.billCount !== 1 ? "s" : ""} disputed by IRIS · {fmtMoney(disputed.tax)} input tax blocked
-                    </span>
-                  )}
-                </div>
-              )}
 
-              <div style={styles.taxRowHint}>
-                <MdLightbulb size={13} color="#5f6d7e" style={{ flexShrink: 0, marginTop: 1 }} />
-                <span>{hint}</span>
-              </div>
+                  <div style={styles.taxRowHint}>
+                    <MdLightbulb
+                      size={13}
+                      color="#5f6d7e"
+                      style={{ flexShrink: 0, marginTop: 1 }}
+                    />
+                    <span>{hint}</span>
+                  </div>
 
-              {/* Optimization suggestion — 2026-05-09 (audit-anchored
+                  {/* Optimization suggestion — 2026-05-09 (audit-anchored
                   2026-05-11). We render a FROZEN snapshot of the first
                   meaningful suggestion seen for this HS, not the live
                   row.optimization. That way the target qty + unit_price
@@ -3093,291 +3937,408 @@ function TaxClaimPanel({ summary, loading, period, onPeriodChange, onRefresh, op
                   re-anchors to the current state. The "Apply" button
                   writes qty + unit_price directly into the matching
                   bill row (when there's exactly one). */}
-              {(() => {
-                const frozenOpt = frozenOptByHs[row.hsCode];
-                const liveOpt = row.optimization;
-                // Show the snapshot if we have one; otherwise fall back
-                // to the live one for the first render before useEffect
-                // captures it.
-                const opt = frozenOpt || (liveOpt?.hasSuggestion ? liveOpt : null);
-                if (!opt) return null;
-                const isFrozen = !!frozenOpt;
-                // Stale detection (#4 — 2026-05-12): trip the hint when
-                // EITHER the live suggestion drifts from the snapshot
-                // (qty / unit_price), OR the underlying purchase bank
-                // shifts in a way that invalidates the snapshot's audit
-                // anchor (band edges or available-qty changed beyond
-                // rounding noise). The second case catches an Annexure-A
-                // import in another tab — the visible qty hasn't moved
-                // but the band the operator is being shown is now stale.
-                const numericDrift = liveOpt?.hasSuggestion && (
-                  Number(frozenOpt?.suggestedQty) !== Number(liveOpt.suggestedQty)
-                  || Number(frozenOpt?.suggestedUnitPrice) !== Number(liveOpt.suggestedUnitPrice)
-                );
-                const bankDrift = liveOpt && frozenOpt && (
-                  Math.abs(Number(frozenOpt.realisticBandLow || 0)  - Number(liveOpt.realisticBandLow || 0))  > 0.01
-                  || Math.abs(Number(frozenOpt.realisticBandHigh || 0) - Number(liveOpt.realisticBandHigh || 0)) > 0.01
-                  || Math.abs(Number(frozenOpt.avgPurchaseUnitCost || 0) - Number(liveOpt.avgPurchaseUnitCost || 0)) > 0.01
-                );
-                const isStale = isFrozen && (numericDrift || bankDrift);
-                const applyRes = applyResultByHs[row.hsCode];
-                const whyOpen = !!whyOpenByHs[row.hsCode];
+                  {(() => {
+                    const frozenOpt = frozenOptByHs[row.hsCode];
+                    const liveOpt = row.optimization;
+                    // Show the snapshot if we have one; otherwise fall back
+                    // to the live one for the first render before useEffect
+                    // captures it.
+                    const opt = frozenOpt || (liveOpt?.hasSuggestion ? liveOpt : null);
+                    if (!opt) return null;
+                    const isFrozen = !!frozenOpt;
+                    // Stale detection (#4 — 2026-05-12): trip the hint when
+                    // EITHER the live suggestion drifts from the snapshot
+                    // (qty / unit_price), OR the underlying purchase bank
+                    // shifts in a way that invalidates the snapshot's audit
+                    // anchor (band edges or available-qty changed beyond
+                    // rounding noise). The second case catches an Annexure-A
+                    // import in another tab — the visible qty hasn't moved
+                    // but the band the operator is being shown is now stale.
+                    const numericDrift =
+                      liveOpt?.hasSuggestion &&
+                      (Number(frozenOpt?.suggestedQty) !== Number(liveOpt.suggestedQty) ||
+                        Number(frozenOpt?.suggestedUnitPrice) !==
+                          Number(liveOpt.suggestedUnitPrice));
+                    const bankDrift =
+                      liveOpt &&
+                      frozenOpt &&
+                      (Math.abs(
+                        Number(frozenOpt.realisticBandLow || 0) -
+                          Number(liveOpt.realisticBandLow || 0),
+                      ) > 0.01 ||
+                        Math.abs(
+                          Number(frozenOpt.realisticBandHigh || 0) -
+                            Number(liveOpt.realisticBandHigh || 0),
+                        ) > 0.01 ||
+                        Math.abs(
+                          Number(frozenOpt.avgPurchaseUnitCost || 0) -
+                            Number(liveOpt.avgPurchaseUnitCost || 0),
+                        ) > 0.01);
+                    const isStale = isFrozen && (numericDrift || bankDrift);
+                    const applyRes = applyResultByHs[row.hsCode];
+                    const whyOpen = !!whyOpenByHs[row.hsCode];
 
-                const riskCfg = opt.auditRiskLevel === "high"
-                  ? { style: styles.taxRowOptimizationRiskHigh, label: "High audit risk", icon: MdError }
-                  : opt.auditRiskLevel === "moderate"
-                  ? { style: styles.taxRowOptimizationRiskModerate, label: "Moderate audit risk", icon: MdWarning }
-                  : { style: styles.taxRowOptimizationRiskLow, label: "Audit-defensible", icon: MdCheckCircle };
-                const RiskIcon = riskCfg.icon;
-                const refBills = opt.referencePurchaseBills || [];
+                    const riskCfg =
+                      opt.auditRiskLevel === "high"
+                        ? {
+                            style: styles.taxRowOptimizationRiskHigh,
+                            label: "High audit risk",
+                            icon: MdError,
+                          }
+                        : opt.auditRiskLevel === "moderate"
+                          ? {
+                              style: styles.taxRowOptimizationRiskModerate,
+                              label: "Moderate audit risk",
+                              icon: MdWarning,
+                            }
+                          : {
+                              style: styles.taxRowOptimizationRiskLow,
+                              label: "Audit-defensible",
+                              icon: MdCheckCircle,
+                            };
+                    const RiskIcon = riskCfg.icon;
+                    const refBills = opt.referencePurchaseBills || [];
 
-                return (
-                <div style={styles.taxRowOptimization}>
-                  <div style={styles.taxRowOptimizationHeader}>
-                    <MdAutoAwesome size={14} color="#0d47a1" />
-                    <span style={styles.taxRowOptimizationTitle}>
-                      Maximum-claim suggestion for this HS
-                    </span>
-                    <span style={styles.taxRowOptimizationDelta}>
-                      +{fmtMoney(opt.additionalClaimableInputTax)} extra input tax
-                    </span>
-                  </div>
-                  <div style={styles.taxRowOptimizationGrid}>
-                    <div>
-                      <div style={styles.taxRowOptimizationLabel}>Suggested Qty</div>
-                      <div style={styles.taxRowOptimizationValue}>{fmtQty(opt.suggestedQty)}</div>
-                    </div>
-                    <div>
-                      <div style={styles.taxRowOptimizationLabel}>Suggested Unit Price</div>
-                      <div style={styles.taxRowOptimizationValue}>Rs. {Number(opt.suggestedUnitPrice).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                    </div>
-                    <div>
-                      <div style={styles.taxRowOptimizationLabel}>Current claim</div>
-                      <div style={styles.taxRowOptimizationValueMuted}>{fmtMoney(opt.currentMatchedInputTax)}</div>
-                    </div>
-                    <div>
-                      <div style={styles.taxRowOptimizationLabel}>Suggested claim</div>
-                      <div style={styles.taxRowOptimizationValueHighlight}>{fmtMoney(opt.suggestedMatchedInputTax)}</div>
-                    </div>
-                  </div>
-                  {/* Audit-risk pill — sits prominently right under the
+                    return (
+                      <div style={styles.taxRowOptimization}>
+                        <div style={styles.taxRowOptimizationHeader}>
+                          <MdAutoAwesome size={14} color="#0d47a1" />
+                          <span style={styles.taxRowOptimizationTitle}>
+                            Maximum-claim suggestion for this HS
+                          </span>
+                          <span style={styles.taxRowOptimizationDelta}>
+                            +{fmtMoney(opt.additionalClaimableInputTax)} extra input tax
+                          </span>
+                        </div>
+                        <div style={styles.taxRowOptimizationGrid}>
+                          <div>
+                            <div style={styles.taxRowOptimizationLabel}>Suggested Qty</div>
+                            <div style={styles.taxRowOptimizationValue}>
+                              {fmtQty(opt.suggestedQty)}
+                            </div>
+                          </div>
+                          <div>
+                            <div style={styles.taxRowOptimizationLabel}>Suggested Unit Price</div>
+                            <div style={styles.taxRowOptimizationValue}>
+                              Rs.{" "}
+                              {Number(opt.suggestedUnitPrice).toLocaleString("en-PK", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </div>
+                          </div>
+                          <div>
+                            <div style={styles.taxRowOptimizationLabel}>Current claim</div>
+                            <div style={styles.taxRowOptimizationValueMuted}>
+                              {fmtMoney(opt.currentMatchedInputTax)}
+                            </div>
+                          </div>
+                          <div>
+                            <div style={styles.taxRowOptimizationLabel}>Suggested claim</div>
+                            <div style={styles.taxRowOptimizationValueHighlight}>
+                              {fmtMoney(opt.suggestedMatchedInputTax)}
+                            </div>
+                          </div>
+                        </div>
+                        {/* Audit-risk pill — sits prominently right under the
                       headline numbers so the operator can't miss the
                       "is this safe?" signal. */}
-                  <div style={{ ...styles.taxRowOptimizationRiskPill, ...riskCfg.style }}>
-                    <RiskIcon size={13} />
-                    <strong>{riskCfg.label}</strong>
-                    <span style={{ fontWeight: 400 }}>· {opt.auditRiskNote}</span>
-                  </div>
-                  {/* Subtotal-preservation receipt — proves to the operator
+                        <div style={{ ...styles.taxRowOptimizationRiskPill, ...riskCfg.style }}>
+                          <RiskIcon size={13} />
+                          <strong>{riskCfg.label}</strong>
+                          <span style={{ fontWeight: 400 }}>· {opt.auditRiskNote}</span>
+                        </div>
+                        {/* Subtotal-preservation receipt — proves to the operator
                       that qty × unit_price recomposes to the same bill
                       amount. Green check when exact; amber when there's a
                       tiny rounding drift (rare prime-cents fallback). */}
-                  <div style={styles.taxRowOptimizationSubtotalProof}>
-                    <span style={{ color: colors.textSecondary }}>Recomposed subtotal:</span>{" "}
-                    <strong style={{ fontFamily: "ui-monospace, monospace" }}>
-                      {fmtQty(opt.suggestedQty)} × Rs. {Number(opt.suggestedUnitPrice).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} = {fmtMoney(opt.recomposedSubtotal)}
-                    </strong>{" "}
-                    <span style={{ color: colors.textSecondary }}>(original: {fmtMoney(row.bill.value)})</span>{" "}
-                    {opt.exactSubtotalPreserved ? (
-                      <span style={styles.taxRowOptimizationExactBadge}>
-                        <MdCheckCircle size={12} /> Exact match — no change to bill amount
-                      </span>
-                    ) : (
-                      <span style={styles.taxRowOptimizationDriftBadge}>
-                        <MdWarning size={12} /> Drift Rs. {fmtMoney(Math.abs((opt.recomposedSubtotal || 0) - (row.bill.value || 0))).replace("Rs. ", "")} — within narrow-edit tolerance
-                      </span>
-                    )}
-                  </div>
-                  <div style={styles.taxRowOptimizationRationale}>{opt.rationale}</div>
-
-                  {/* Apply + Recalculate controls */}
-                  <div style={styles.taxRowOptimizationActions}>
-                    <button
-                      type="button"
-                      style={styles.taxRowOptimizationApplyBtn}
-                      onClick={() => handleApply(row.hsCode, opt)}
-                      title="Set Qty + Unit Price on the matching bill row(s). When multiple lines share this HS, the qty is distributed across them proportionally to each line's subtotal, with per-row clean factorizations."
-                    >
-                      <MdCheckCircle size={13} /> Apply suggestion
-                    </button>
-                    <button
-                      type="button"
-                      style={styles.taxRowOptimizationRecalcBtn}
-                      onClick={() => handleRecalculate(row.hsCode)}
-                      title="Re-anchor the suggestion to the current bill state"
-                    >
-                      <MdRefresh size={13} /> Recalculate
-                    </button>
-                    <button
-                      type="button"
-                      style={styles.taxRowOptimizationWhyBtn}
-                      onClick={() => setWhyOpenByHs((p) => ({ ...p, [row.hsCode]: !p[row.hsCode] }))}
-                      aria-expanded={whyOpen}
-                    >
-                      {whyOpen ? <MdExpandLess size={13} /> : <MdExpandMore size={13} />}
-                      Why this price?
-                    </button>
-                    {isStale && (
-                      <span style={styles.taxRowOptimizationStaleHint}>
-                        {bankDrift
-                          ? "Purchase bank changed (likely an Annexure-A import) — click Recalculate for an up-to-date band."
-                          : "Underlying bill state changed — click Recalculate for a fresh anchor."}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Inline apply-result notice */}
-                  {applyRes?.status === "applied" && (
-                    <div style={styles.taxRowOptimizationApplyOk}>
-                      <MdCheckCircle size={13} /> Applied to the matching bill row. Subtotal preserved.
-                    </div>
-                  )}
-                  {applyRes?.status === "distributed" && (
-                    <div style={applyRes.anyOutOfBand
-                        ? styles.taxRowOptimizationApplyWarn
-                        : styles.taxRowOptimizationApplyOk}>
-                      {applyRes.anyOutOfBand
-                        ? <MdWarning size={13} style={{ flexShrink: 0, marginTop: 2 }} />
-                        : <MdCheckCircle size={13} style={{ flexShrink: 0, marginTop: 2 }} />}
-                      <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", flex: 1, minWidth: 0 }}>
-                        <span>
-                          <strong>Distributed across {applyRes.count} line items.</strong>{" "}
-                          Aggregate qty {applyRes.distributedTotalQty.toLocaleString("en-PK")}
-                          {applyRes.distributedTotalQty !== applyRes.suggestedTotalQty &&
-                            ` (suggestion was ${applyRes.suggestedTotalQty.toLocaleString("en-PK")} — rounded to clean per-row factorization)`}
-                          . Each row's subtotal preserved exactly.
-                          {applyRes.anyOutOfBand && " One or more rows landed outside the audit-defensible band — review before saving."}
-                        </span>
-                        <div style={styles.taxRowOptimizationDistTable}>
-                          {applyRes.distributions.map((d, di) => (
-                            <div key={d.idx} style={styles.taxRowOptimizationDistRow}>
-                              <span style={styles.taxRowOptimizationDistLabel}>Row {di + 1}</span>
-                              <span style={styles.taxRowOptimizationDistQty}>
-                                {Number(d.qty).toLocaleString("en-PK")} × Rs. {Number(d.unitPrice).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </span>
-                              <span style={styles.taxRowOptimizationDistTotal}>
-                                = Rs. {Number(d.lineTotal).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </span>
-                              <span style={d.inBand ? styles.taxRowOptimizationDistBadgeOk : styles.taxRowOptimizationDistBadgeWarn}>
-                                {d.inBand ? "in band" : "out of band"}
-                              </span>
-                            </div>
-                          ))}
+                        <div style={styles.taxRowOptimizationSubtotalProof}>
+                          <span style={{ color: colors.textSecondary }}>Recomposed subtotal:</span>{" "}
+                          <strong style={{ fontFamily: "ui-monospace, monospace" }}>
+                            {fmtQty(opt.suggestedQty)} × Rs.{" "}
+                            {Number(opt.suggestedUnitPrice).toLocaleString("en-PK", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}{" "}
+                            = {fmtMoney(opt.recomposedSubtotal)}
+                          </strong>{" "}
+                          <span style={{ color: colors.textSecondary }}>
+                            (original: {fmtMoney(row.bill.value)})
+                          </span>{" "}
+                          {opt.exactSubtotalPreserved ? (
+                            <span style={styles.taxRowOptimizationExactBadge}>
+                              <MdCheckCircle size={12} /> Exact match — no change to bill amount
+                            </span>
+                          ) : (
+                            <span style={styles.taxRowOptimizationDriftBadge}>
+                              <MdWarning size={12} /> Drift Rs.{" "}
+                              {fmtMoney(
+                                Math.abs((opt.recomposedSubtotal || 0) - (row.bill.value || 0)),
+                              ).replace("Rs. ", "")}{" "}
+                              — within narrow-edit tolerance
+                            </span>
+                          )}
                         </div>
-                      </div>
-                    </div>
-                  )}
-                  {applyRes?.status === "missing" && (
-                    <div style={styles.taxRowOptimizationApplyWarn}>
-                      <MdWarning size={13} />
-                      <span>No bill row found for this HS — open the relevant line and edit manually.</span>
-                    </div>
-                  )}
+                        <div style={styles.taxRowOptimizationRationale}>{opt.rationale}</div>
 
-                  {/* Why-this-price disclosure — collapsible.
+                        {/* Apply + Recalculate controls */}
+                        <div style={styles.taxRowOptimizationActions}>
+                          <button
+                            type="button"
+                            style={styles.taxRowOptimizationApplyBtn}
+                            onClick={() => handleApply(row.hsCode, opt)}
+                            title="Set Qty + Unit Price on the matching bill row(s). When multiple lines share this HS, the qty is distributed across them proportionally to each line's subtotal, with per-row clean factorizations."
+                          >
+                            <MdCheckCircle size={13} /> Apply suggestion
+                          </button>
+                          <button
+                            type="button"
+                            style={styles.taxRowOptimizationRecalcBtn}
+                            onClick={() => handleRecalculate(row.hsCode)}
+                            title="Re-anchor the suggestion to the current bill state"
+                          >
+                            <MdRefresh size={13} /> Recalculate
+                          </button>
+                          <button
+                            type="button"
+                            style={styles.taxRowOptimizationWhyBtn}
+                            onClick={() =>
+                              setWhyOpenByHs((p) => ({ ...p, [row.hsCode]: !p[row.hsCode] }))
+                            }
+                            aria-expanded={whyOpen}
+                          >
+                            {whyOpen ? <MdExpandLess size={13} /> : <MdExpandMore size={13} />}
+                            Why this price?
+                          </button>
+                          {isStale && (
+                            <span style={styles.taxRowOptimizationStaleHint}>
+                              {bankDrift
+                                ? "Purchase bank changed (likely an Annexure-A import) — click Recalculate for an up-to-date band."
+                                : "Underlying bill state changed — click Recalculate for a fresh anchor."}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Inline apply-result notice */}
+                        {applyRes?.status === "applied" && (
+                          <div style={styles.taxRowOptimizationApplyOk}>
+                            <MdCheckCircle size={13} /> Applied to the matching bill row. Subtotal
+                            preserved.
+                          </div>
+                        )}
+                        {applyRes?.status === "distributed" && (
+                          <div
+                            style={
+                              applyRes.anyOutOfBand
+                                ? styles.taxRowOptimizationApplyWarn
+                                : styles.taxRowOptimizationApplyOk
+                            }
+                          >
+                            {applyRes.anyOutOfBand ? (
+                              <MdWarning size={13} style={{ flexShrink: 0, marginTop: 2 }} />
+                            ) : (
+                              <MdCheckCircle size={13} style={{ flexShrink: 0, marginTop: 2 }} />
+                            )}
+                            <div
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "0.3rem",
+                                flex: 1,
+                                minWidth: 0,
+                              }}
+                            >
+                              <span>
+                                <strong>Distributed across {applyRes.count} line items.</strong>{" "}
+                                Aggregate qty {applyRes.distributedTotalQty.toLocaleString("en-PK")}
+                                {applyRes.distributedTotalQty !== applyRes.suggestedTotalQty &&
+                                  ` (suggestion was ${applyRes.suggestedTotalQty.toLocaleString("en-PK")} — rounded to clean per-row factorization)`}
+                                . Each row's subtotal preserved exactly.
+                                {applyRes.anyOutOfBand &&
+                                  " One or more rows landed outside the audit-defensible band — review before saving."}
+                              </span>
+                              <div style={styles.taxRowOptimizationDistTable}>
+                                {applyRes.distributions.map((d, di) => (
+                                  <div key={d.idx} style={styles.taxRowOptimizationDistRow}>
+                                    <span style={styles.taxRowOptimizationDistLabel}>
+                                      Row {di + 1}
+                                    </span>
+                                    <span style={styles.taxRowOptimizationDistQty}>
+                                      {Number(d.qty).toLocaleString("en-PK")} × Rs.{" "}
+                                      {Number(d.unitPrice).toLocaleString("en-PK", {
+                                        minimumFractionDigits: 2,
+                                        maximumFractionDigits: 2,
+                                      })}
+                                    </span>
+                                    <span style={styles.taxRowOptimizationDistTotal}>
+                                      = Rs.{" "}
+                                      {Number(d.lineTotal).toLocaleString("en-PK", {
+                                        minimumFractionDigits: 2,
+                                        maximumFractionDigits: 2,
+                                      })}
+                                    </span>
+                                    <span
+                                      style={
+                                        d.inBand
+                                          ? styles.taxRowOptimizationDistBadgeOk
+                                          : styles.taxRowOptimizationDistBadgeWarn
+                                      }
+                                    >
+                                      {d.inBand ? "in band" : "out of band"}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {applyRes?.status === "missing" && (
+                          <div style={styles.taxRowOptimizationApplyWarn}>
+                            <MdWarning size={13} />
+                            <span>
+                              No bill row found for this HS — open the relevant line and edit
+                              manually.
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Why-this-price disclosure — collapsible.
                       Renders the realistic band, math optimum, and the
                       top reference purchase bills that JUSTIFY the
                       suggested unit price. Without this the operator
                       can't defend the number in an audit. */}
-                  {whyOpen && (
-                    <div style={styles.taxRowOptimizationWhy}>
-                      <div style={styles.taxRowOptimizationWhyHeader}>Audit anchor</div>
-                      <div style={styles.taxRowOptimizationWhyGrid}>
-                        <div>
-                          <div style={styles.taxRowOptimizationLabel}>Math optimum</div>
-                          <div style={styles.taxRowOptimizationWhyValueMuted}>
-                            Rs. {Number(opt.mathOptimalUnitPrice || 0).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/unit
-                          </div>
-                          <div style={styles.taxRowOptimizationWhyHint}>
-                            Price that would fully bind the §8B cap. Ignored if outside the realistic band.
-                          </div>
-                        </div>
-                        <div>
-                          <div style={styles.taxRowOptimizationLabel}>Realistic band</div>
-                          <div style={styles.taxRowOptimizationWhyValue}>
-                            Rs. {Number(opt.realisticBandLow || 0).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            {" – "}
-                            Rs. {Number(opt.realisticBandHigh || 0).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/unit
-                          </div>
-                          <div style={styles.taxRowOptimizationWhyHint}>
-                            Min actual purchase price → 1.5× weighted-avg cost.
-                          </div>
-                        </div>
-                        <div>
-                          <div style={styles.taxRowOptimizationLabel}>Weighted-avg cost</div>
-                          <div style={styles.taxRowOptimizationWhyValue}>
-                            Rs. {Number(opt.avgPurchaseUnitCost || 0).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/unit
-                          </div>
-                          <div style={styles.taxRowOptimizationWhyHint}>
-                            Across {bank.purchaseBillCount || refBills.length} purchase bill{(bank.purchaseBillCount || refBills.length) === 1 ? "" : "s"}.
-                          </div>
-                        </div>
-                      </div>
-                      {refBills.length > 0 && (
-                        <>
-                          <div style={styles.taxRowOptimizationWhySubheader}>
-                            Reference purchase bills (audit cross-check)
-                          </div>
-                          <div style={styles.taxRowOptimizationRefBills}>
-                            {refBills.map((rb) => (
-                              <div key={rb.purchaseBillId} style={styles.taxRowOptimizationRefBill}>
-                                <div style={styles.taxRowOptimizationRefBillNum}>{rb.billNumber}</div>
-                                <div style={styles.taxRowOptimizationRefBillMeta}>
-                                  {new Date(rb.date).toLocaleDateString("en-PK")} ·{" "}
-                                  {fmtQty(rb.qty)} qty · {fmtMoney(rb.value)}
+                        {whyOpen && (
+                          <div style={styles.taxRowOptimizationWhy}>
+                            <div style={styles.taxRowOptimizationWhyHeader}>Audit anchor</div>
+                            <div style={styles.taxRowOptimizationWhyGrid}>
+                              <div>
+                                <div style={styles.taxRowOptimizationLabel}>Math optimum</div>
+                                <div style={styles.taxRowOptimizationWhyValueMuted}>
+                                  Rs.{" "}
+                                  {Number(opt.mathOptimalUnitPrice || 0).toLocaleString("en-PK", {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}
+                                  /unit
                                 </div>
-                                <div style={styles.taxRowOptimizationRefBillPrice}>
-                                  Rs. {Number(rb.unitPrice || 0).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/unit
+                                <div style={styles.taxRowOptimizationWhyHint}>
+                                  Price that would fully bind the §8B cap. Ignored if outside the
+                                  realistic band.
                                 </div>
                               </div>
-                            ))}
+                              <div>
+                                <div style={styles.taxRowOptimizationLabel}>Realistic band</div>
+                                <div style={styles.taxRowOptimizationWhyValue}>
+                                  Rs.{" "}
+                                  {Number(opt.realisticBandLow || 0).toLocaleString("en-PK", {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}
+                                  {" – "}
+                                  Rs.{" "}
+                                  {Number(opt.realisticBandHigh || 0).toLocaleString("en-PK", {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}
+                                  /unit
+                                </div>
+                                <div style={styles.taxRowOptimizationWhyHint}>
+                                  Min actual purchase price → 1.5× weighted-avg cost.
+                                </div>
+                              </div>
+                              <div>
+                                <div style={styles.taxRowOptimizationLabel}>Weighted-avg cost</div>
+                                <div style={styles.taxRowOptimizationWhyValue}>
+                                  Rs.{" "}
+                                  {Number(opt.avgPurchaseUnitCost || 0).toLocaleString("en-PK", {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}
+                                  /unit
+                                </div>
+                                <div style={styles.taxRowOptimizationWhyHint}>
+                                  Across {bank.purchaseBillCount || refBills.length} purchase bill
+                                  {(bank.purchaseBillCount || refBills.length) === 1 ? "" : "s"}.
+                                </div>
+                              </div>
+                            </div>
+                            {refBills.length > 0 && (
+                              <>
+                                <div style={styles.taxRowOptimizationWhySubheader}>
+                                  Reference purchase bills (audit cross-check)
+                                </div>
+                                <div style={styles.taxRowOptimizationRefBills}>
+                                  {refBills.map((rb) => (
+                                    <div
+                                      key={rb.purchaseBillId}
+                                      style={styles.taxRowOptimizationRefBill}
+                                    >
+                                      <div style={styles.taxRowOptimizationRefBillNum}>
+                                        {rb.billNumber}
+                                      </div>
+                                      <div style={styles.taxRowOptimizationRefBillMeta}>
+                                        {new Date(rb.date).toLocaleDateString("en-PK")} ·{" "}
+                                        {fmtQty(rb.qty)} qty · {fmtMoney(rb.value)}
+                                      </div>
+                                      <div style={styles.taxRowOptimizationRefBillPrice}>
+                                        Rs.{" "}
+                                        {Number(rb.unitPrice || 0).toLocaleString("en-PK", {
+                                          minimumFractionDigits: 2,
+                                          maximumFractionDigits: 2,
+                                        })}
+                                        /unit
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </>
+                            )}
                           </div>
-                        </>
-                      )}
-                    </div>
-                  )}
+                        )}
 
-                  <div style={styles.taxRowOptimizationWarning}>
-                    <MdWarning size={12} style={{ flexShrink: 0, marginTop: 1 }} />
-                    <span>
-                      <strong>Only apply this if it reflects the real sale.</strong>{" "}
-                      Use it when invoice granularity should match purchase granularity
-                      (kit-priced item bought per-piece, bundled accessories, bulk
-                      consumables, etc.). Fabricating qty / under-pricing to harvest
-                      input tax is an FBR §3A violation — auditors cross-check qty
-                      against delivery challans, stock movements, and the buyer's
-                      Annexure-A. Bill-wide §8B cap still applies on save.
-                    </span>
-                  </div>
+                        <div style={styles.taxRowOptimizationWarning}>
+                          <MdWarning size={12} style={{ flexShrink: 0, marginTop: 1 }} />
+                          <span>
+                            <strong>Only apply this if it reflects the real sale.</strong> Use it
+                            when invoice granularity should match purchase granularity (kit-priced
+                            item bought per-piece, bundled accessories, bulk consumables, etc.).
+                            Fabricating qty / under-pricing to harvest input tax is an FBR §3A
+                            violation — auditors cross-check qty against delivery challans, stock
+                            movements, and the buyer's Annexure-A. Bill-wide §8B cap still applies
+                            on save.
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
-                );
-              })()}
-            </div>
-          );
-        })}
-      </div>
+              );
+            })}
+          </div>
 
-      {/* Warnings list — surfaces §8B engaged, IRIS-pending,
+          {/* Warnings list — surfaces §8B engaged, IRIS-pending,
           no-purchase situations once at the bottom. Concise, scannable. */}
-      {warnings.length > 0 && (
-        <div style={styles.taxWarnings}>
-          {warnings.map((w, i) => (
-            <div key={i} style={styles.taxWarningRow}>
-              <MdInfo size={13} color="#8a4b00" style={{ flexShrink: 0, marginTop: 2 }} />
-              <span>{w}</span>
+          {warnings.length > 0 && (
+            <div style={styles.taxWarnings}>
+              {warnings.map((w, i) => (
+                <div key={i} style={styles.taxWarningRow}>
+                  <MdInfo size={13} color="#8a4b00" style={{ flexShrink: 0, marginTop: 2 }} />
+                  <span>{w}</span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      )}
+          )}
 
-      {/* Compliance footer — operators can audit which rules fired */}
-      {cfg && (
-        <div style={styles.taxComplianceFooter}>
-          Computed under §8A {cfg.agingMonths}-month aging · §8B {cfg.section8BCapPercent}% cap · IRIS allow-list:&nbsp;
-          {(cfg.claimableReconciliationStatuses || []).join(", ")}
-        </div>
+          {/* Compliance footer — operators can audit which rules fired */}
+          {cfg && (
+            <div style={styles.taxComplianceFooter}>
+              Computed under §8A {cfg.agingMonths}-month aging · §8B {cfg.section8BCapPercent}% cap
+              · IRIS allow-list:&nbsp;
+              {(cfg.claimableReconciliationStatuses || []).join(", ")}
+            </div>
+          )}
+        </>
       )}
-      </>)}
     </section>
   );
 }
@@ -3391,9 +4352,7 @@ function HeadlineCell({ label, value, flag, tone }) {
     <div>
       <div style={styles.taxPanelHeadlineLabel}>
         {label}
-        {flag === "engaged" && (
-          <span style={styles.taxFlagPill}>engaged</span>
-        )}
+        {flag === "engaged" && <span style={styles.taxFlagPill}>engaged</span>}
       </div>
       <div style={{ ...styles.taxPanelHeadlineValue, color: valueColor }}>{value}</div>
     </div>
@@ -3404,7 +4363,9 @@ function RowStat({ label, qty, value, extra, fmtMoney, fmtQty, highlight = false
   return (
     <div style={{ minWidth: 0, ...(highlight ? styles.taxStatHighlight : {}) }}>
       <div style={styles.taxStatLabel}>{label}</div>
-      <div style={styles.taxStatQty}>{fmtQty(qty)} <span style={styles.taxStatUnit}>qty</span></div>
+      <div style={styles.taxStatQty}>
+        {fmtQty(qty)} <span style={styles.taxStatUnit}>qty</span>
+      </div>
       {value != null && <div style={styles.taxStatValue}>{fmtMoney(value)}</div>}
       {extra && <div style={styles.taxStatExtra}>{extra}</div>}
     </div>
@@ -3414,25 +4375,107 @@ function RowStat({ label, qty, value, extra, fmtMoney, fmtQty, highlight = false
 const styles = {
   // Mobile stacked-card line items (individual view, rendered below 760px).
   mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
-  mcard: { border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff" },
+  mcard: {
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 12,
+    padding: "0.7rem 0.75rem",
+    background: "#fff",
+  },
   mcardHead: { display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.5rem" },
-  mnum: { flex: "0 0 auto", width: 24, height: 24, borderRadius: 7, background: "#f0f3f8", color: colors.textSecondary, display: "grid", placeItems: "center", fontSize: "0.78rem", fontWeight: 700 },
-  mlabel: { display: "block", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.03em", color: colors.textSecondary, fontWeight: 700, marginBottom: "0.2rem" },
-  mgrid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem", marginTop: "0.4rem" },
-  mkv: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.5rem" },
-  mamt: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.55rem", paddingTop: "0.45rem", borderTop: `1px dashed ${colors.cardBorder}`, fontSize: "0.85rem", color: colors.textSecondary },
-  errorAlert: { padding: "0.7rem 1rem", backgroundColor: colors.dangerLight, color: colors.danger, borderRadius: 6, marginBottom: "1rem", fontSize: "0.85rem" },
-  warnNote: { padding: "0.7rem 1rem", backgroundColor: colors.warnBg, color: colors.warn, borderRadius: 6, marginTop: "1rem", fontSize: "0.82rem", border: `1px solid ${colors.warnBorder}` },
+  mnum: {
+    flex: "0 0 auto",
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    background: "#f0f3f8",
+    color: colors.textSecondary,
+    display: "grid",
+    placeItems: "center",
+    fontSize: "0.78rem",
+    fontWeight: 700,
+  },
+  mlabel: {
+    display: "block",
+    fontSize: "0.68rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+    color: colors.textSecondary,
+    fontWeight: 700,
+    marginBottom: "0.2rem",
+  },
+  mgrid3: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr",
+    gap: "0.5rem",
+    marginTop: "0.4rem",
+  },
+  mkv: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: "0.5rem",
+  },
+  mamt: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: "0.55rem",
+    paddingTop: "0.45rem",
+    borderTop: `1px dashed ${colors.cardBorder}`,
+    fontSize: "0.85rem",
+    color: colors.textSecondary,
+  },
+  errorAlert: {
+    padding: "0.7rem 1rem",
+    backgroundColor: colors.dangerLight,
+    color: colors.danger,
+    borderRadius: 6,
+    marginBottom: "1rem",
+    fontSize: "0.85rem",
+  },
+  warnNote: {
+    padding: "0.7rem 1rem",
+    backgroundColor: colors.warnBg,
+    color: colors.warn,
+    borderRadius: 6,
+    marginTop: "1rem",
+    fontSize: "0.82rem",
+    border: `1px solid ${colors.warnBorder}`,
+  },
   infoBox: {
-    display: "flex", alignItems: "flex-start", gap: "0.5rem",
-    padding: "0.65rem 0.85rem", backgroundColor: colors.infoBg,
-    color: colors.textPrimary, borderRadius: 6, marginBottom: "1rem",
-    fontSize: "0.82rem", border: `1px solid ${colors.infoBorder}`,
+    display: "flex",
+    alignItems: "flex-start",
+    gap: "0.5rem",
+    padding: "0.65rem 0.85rem",
+    backgroundColor: colors.infoBg,
+    color: colors.textPrimary,
+    borderRadius: 6,
+    marginBottom: "1rem",
+    fontSize: "0.82rem",
+    border: `1px solid ${colors.infoBorder}`,
   },
   row: { display: "flex", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap" },
-  label: { display: "block", fontSize: "0.82rem", fontWeight: 600, color: colors.textPrimary, marginBottom: "0.3rem" },
-  input: { width: "100%", padding: "0.55rem 0.75rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 6, fontSize: "0.85rem", backgroundColor: colors.inputBg },
-  sectionHeading: { margin: "1rem 0 0.5rem", fontSize: "0.95rem", fontWeight: 700, color: colors.textPrimary },
+  label: {
+    display: "block",
+    fontSize: "0.82rem",
+    fontWeight: 600,
+    color: colors.textPrimary,
+    marginBottom: "0.3rem",
+  },
+  input: {
+    width: "100%",
+    padding: "0.55rem 0.75rem",
+    border: `1px solid ${colors.inputBorder}`,
+    borderRadius: 6,
+    fontSize: "0.85rem",
+    backgroundColor: colors.inputBg,
+  },
+  sectionHeading: {
+    margin: "1rem 0 0.5rem",
+    fontSize: "0.95rem",
+    fontWeight: 700,
+    color: colors.textPrimary,
+  },
   // Header row that pairs the section title with an inline action
   // (e.g. "+ New Item Type"). Wraps on phones via flex-wrap so the
   // button drops below the heading rather than crushing it.
@@ -3443,8 +4486,11 @@ const styles = {
     flexWrap: "wrap",
     margin: "1rem 0 0.5rem",
   },
-  inlineAddBtn: { minHeight: 44,
-    display: "inline-flex", alignItems: "center", gap: "0.3rem",
+  inlineAddBtn: {
+    minHeight: 44,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
     padding: "0.35rem 0.7rem",
     border: `1px solid ${colors.blue}`,
     borderRadius: 8,
@@ -3513,9 +4559,9 @@ const styles = {
     gap: "0.5rem",
     minWidth: 0,
   },
-  taxRowGood:    { borderColor: "#a5d6a7", borderLeftColor: "#2e7d32" },
-  taxRowWarn:    { borderColor: "#ffcc80", borderLeftColor: "#e65100" },
-  taxRowDanger:  { borderColor: "#ef9a9a", borderLeftColor: "#b71c1c" },
+  taxRowGood: { borderColor: "#a5d6a7", borderLeftColor: "#2e7d32" },
+  taxRowWarn: { borderColor: "#ffcc80", borderLeftColor: "#e65100" },
+  taxRowDanger: { borderColor: "#ef9a9a", borderLeftColor: "#b71c1c" },
   taxRowHeader: {
     display: "flex",
     alignItems: "center",
@@ -4102,42 +5148,124 @@ const styles = {
     borderTop: `1px dashed ${colors.cardBorder}`,
     textAlign: "center",
   },
-  tableWrap: { width: "100%", overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 8 },
+  tableWrap: {
+    width: "100%",
+    overflowX: "auto",
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 8,
+  },
   table: { width: "100%", borderCollapse: "collapse", minWidth: 1100, tableLayout: "fixed" },
   thead: { backgroundColor: "#f5f7fa" },
-  th: { padding: "0.6rem 0.5rem", textAlign: "left", fontSize: "0.75rem", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", borderBottom: `1px solid ${colors.cardBorder}` },
-  td: { padding: "0.4rem 0.5rem", fontSize: "0.82rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "middle" },
-  tableInput: { width: "100%", padding: "0.35rem 0.5rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 4, fontSize: "0.8rem", backgroundColor: "#fff" },
-  narrowPermissionBanner: {
-    display: "flex", alignItems: "flex-start", gap: "0.5rem",
-    padding: "0.65rem 0.85rem", backgroundColor: colors.warnBg,
-    color: colors.textPrimary, borderRadius: 6, marginBottom: "1rem",
-    fontSize: "0.82rem", border: `1px solid ${colors.warnBorder}`, lineHeight: 1.4,
+  th: {
+    padding: "0.6rem 0.5rem",
+    textAlign: "left",
+    fontSize: "0.75rem",
+    fontWeight: 700,
+    color: colors.textSecondary,
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+    borderBottom: `1px solid ${colors.cardBorder}`,
   },
-  readOnlyCell: { backgroundColor: "#f5f7fa", color: colors.textPrimary, fontSize: "0.78rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  td: {
+    padding: "0.4rem 0.5rem",
+    fontSize: "0.82rem",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+    verticalAlign: "middle",
+  },
+  tableInput: {
+    width: "100%",
+    padding: "0.35rem 0.5rem",
+    border: `1px solid ${colors.inputBorder}`,
+    borderRadius: 4,
+    fontSize: "0.8rem",
+    backgroundColor: "#fff",
+  },
+  narrowPermissionBanner: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: "0.5rem",
+    padding: "0.65rem 0.85rem",
+    backgroundColor: colors.warnBg,
+    color: colors.textPrimary,
+    borderRadius: 6,
+    marginBottom: "1rem",
+    fontSize: "0.82rem",
+    border: `1px solid ${colors.warnBorder}`,
+    lineHeight: 1.4,
+  },
+  readOnlyCell: {
+    backgroundColor: "#f5f7fa",
+    color: colors.textPrimary,
+    fontSize: "0.78rem",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
   readOnlyInput: { backgroundColor: "#f5f7fa", cursor: "not-allowed", pointerEvents: "none" },
-  readOnlyText: { padding: "0.35rem 0.5rem", fontSize: "0.8rem", color: colors.textPrimary, fontWeight: 600 },
+  readOnlyText: {
+    padding: "0.35rem 0.5rem",
+    fontSize: "0.8rem",
+    color: colors.textPrimary,
+    fontWeight: 600,
+  },
   muted: { color: "#9ca3af", fontStyle: "italic" },
-  gridHint: { margin: "0.5rem 0 0.6rem", fontSize: "0.75rem", color: colors.textSecondary, lineHeight: 1.4 },
+  gridHint: {
+    margin: "0.5rem 0 0.6rem",
+    fontSize: "0.75rem",
+    color: colors.textSecondary,
+    lineHeight: 1.4,
+  },
   bulkApplyBar: {
-    display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap",
-    padding: "0.55rem 0.85rem", marginBottom: "0.65rem",
-    borderRadius: 8, border: `1px solid ${colors.cardBorder}`,
+    display: "flex",
+    alignItems: "center",
+    gap: "0.65rem",
+    flexWrap: "wrap",
+    padding: "0.55rem 0.85rem",
+    marginBottom: "0.65rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.cardBorder}`,
     backgroundColor: "#f8faff",
   },
   bulkApplyLabel: { fontSize: "0.82rem", color: colors.textPrimary, fontWeight: 500 },
   // Grouped ⇄ Individual lines segmented toggle.
-  viewToggle: { display: "inline-flex", flexWrap: "wrap", maxWidth: "100%", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, overflow: "hidden", backgroundColor: "#fff" },
-  viewToggleBtn: { minHeight: 44, padding: "0.35rem 0.7rem", fontSize: "0.76rem", fontWeight: 600, color: colors.textSecondary, backgroundColor: "#fff", border: "none", cursor: "pointer", whiteSpace: "normal" },
+  viewToggle: {
+    display: "inline-flex",
+    flexWrap: "wrap",
+    maxWidth: "100%",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    overflow: "hidden",
+    backgroundColor: "#fff",
+  },
+  viewToggleBtn: {
+    minHeight: 44,
+    padding: "0.35rem 0.7rem",
+    fontSize: "0.76rem",
+    fontWeight: 600,
+    color: colors.textSecondary,
+    backgroundColor: "#fff",
+    border: "none",
+    cursor: "pointer",
+    whiteSpace: "normal",
+  },
   viewToggleBtnActive: { backgroundColor: colors.blue, color: "#fff" },
   // Grouped table affordances.
   groupedRow: { backgroundColor: "#fbfcfe" },
-  groupMeta: { marginTop: 2, fontSize: "0.68rem", color: colors.textSecondary, fontStyle: "italic" },
+  groupMeta: {
+    marginTop: 2,
+    fontSize: "0.68rem",
+    color: colors.textSecondary,
+    fontStyle: "italic",
+  },
   // Static helper copy, so nowrap is safe here — the "never nowrap" rule is
   // about user-supplied names, which collapse into look-alikes when truncated.
   priceMeta: {
-    marginTop: 2, fontSize: "0.68rem", color: colors.textSecondary,
-    fontStyle: "italic", whiteSpace: "nowrap", textAlign: "right",
+    marginTop: 2,
+    fontSize: "0.68rem",
+    color: colors.textSecondary,
+    fontStyle: "italic",
+    whiteSpace: "nowrap",
+    textAlign: "right",
   },
   adjustRow: { background: "#f7f9fc" },
   adjustCell: {
@@ -4147,25 +5275,74 @@ const styles = {
   },
   // auto-fit + min() so the controls stack on a phone with no media query
   adjustWrap: { display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "0.6rem" },
-  adjustLabel: { fontSize: "0.72rem", fontWeight: 600, color: colors.textSecondary, alignSelf: "center" },
-  segmented: { display: "inline-flex", border: `1px solid ${colors.inputBorder}`, borderRadius: 6, overflow: "hidden" },
+  adjustLabel: {
+    fontSize: "0.72rem",
+    fontWeight: 600,
+    color: colors.textSecondary,
+    alignSelf: "center",
+  },
+  segmented: {
+    display: "inline-flex",
+    border: `1px solid ${colors.inputBorder}`,
+    borderRadius: 6,
+    overflow: "hidden",
+  },
   segBtn: {
-    padding: "0.4rem 0.7rem", fontSize: "0.75rem", border: "none", background: "#fff",
-    color: colors.textSecondary, cursor: "pointer", minHeight: 36,
+    padding: "0.4rem 0.7rem",
+    fontSize: "0.75rem",
+    border: "none",
+    background: "#fff",
+    color: colors.textSecondary,
+    cursor: "pointer",
+    minHeight: 36,
   },
   segBtnOn: { background: colors.blue, color: "#fff", fontWeight: 600 },
   exactBox: {
-    flex: "1 1 min(320px, 100%)", background: "#fff", border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 6, padding: "0.5rem 0.6rem",
+    flex: "1 1 min(320px, 100%)",
+    background: "#fff",
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 6,
+    padding: "0.5rem 0.6rem",
   },
-  exactLabel: { display: "block", fontSize: "0.72rem", fontWeight: 600, color: colors.textPrimary, marginBottom: "0.3rem" },
+  exactLabel: {
+    display: "block",
+    fontSize: "0.72rem",
+    fontWeight: 600,
+    color: colors.textPrimary,
+    marginBottom: "0.3rem",
+  },
   exactDerived: { marginTop: "0.35rem", fontSize: "0.74rem", color: colors.textPrimary },
   clearExactBtn: {
-    padding: "0.35rem 0.6rem", fontSize: "0.72rem", borderRadius: 4, minHeight: 36,
-    border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.textSecondary, cursor: "pointer",
+    padding: "0.35rem 0.6rem",
+    fontSize: "0.72rem",
+    borderRadius: 4,
+    minHeight: 36,
+    border: `1px solid ${colors.inputBorder}`,
+    background: "#fff",
+    color: colors.textSecondary,
+    cursor: "pointer",
   },
   requiredHint: { marginTop: 2, fontSize: "0.66rem", color: colors.warn, fontWeight: 700 },
-  stockHint: { marginTop: 2, fontSize: "0.66rem", color: "#c62828", fontWeight: 700, lineHeight: 1.3 },
-  totalsBox: { marginTop: "1rem", padding: "0.75rem 1rem", backgroundColor: "#f5f7fa", borderRadius: 8, maxWidth: 360, marginLeft: "auto" },
-  totalsRow: { display: "flex", justifyContent: "space-between", fontSize: "0.88rem", color: colors.textPrimary, padding: "0.2rem 0" },
+  stockHint: {
+    marginTop: 2,
+    fontSize: "0.66rem",
+    color: "#c62828",
+    fontWeight: 700,
+    lineHeight: 1.3,
+  },
+  totalsBox: {
+    marginTop: "1rem",
+    padding: "0.75rem 1rem",
+    backgroundColor: "#f5f7fa",
+    borderRadius: 8,
+    maxWidth: 360,
+    marginLeft: "auto",
+  },
+  totalsRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    fontSize: "0.88rem",
+    color: colors.textPrimary,
+    padding: "0.2rem 0",
+  },
 };

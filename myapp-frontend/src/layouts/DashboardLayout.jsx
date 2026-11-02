@@ -8,7 +8,8 @@ import {
   MdSettings,
   MdBusiness,
   MdPeople,
-  MdCategory, MdUploadFile,
+  MdCategory,
+  MdUploadFile,
   MdDescription,
   MdReceipt,
   MdLogout,
@@ -73,7 +74,9 @@ function NavGroup({ id, icon: Icon, title, defaultOpen, count, isChildActive, ch
       const stored = localStorage.getItem(storageKey);
       if (stored === "0") return false;
       if (stored === "1") return true;
-    } catch { /* localStorage may be unavailable */ }
+    } catch {
+      /* localStorage may be unavailable */
+    }
     return defaultOpen;
   });
 
@@ -91,7 +94,11 @@ function NavGroup({ id, icon: Icon, title, defaultOpen, count, isChildActive, ch
   const toggle = useCallback(() => {
     setOpen((prev) => {
       const next = !prev;
-      try { localStorage.setItem(storageKey, next ? "1" : "0"); } catch { /* noop */ }
+      try {
+        localStorage.setItem(storageKey, next ? "1" : "0");
+      } catch {
+        /* noop */
+      }
       return next;
     });
   }, [storageKey]);
@@ -99,7 +106,9 @@ function NavGroup({ id, icon: Icon, title, defaultOpen, count, isChildActive, ch
   if (count === 0) return null;
 
   return (
-    <div className={`dl-group${open ? " dl-group--open" : ""}${isChildActive ? " dl-group--child-active" : ""}`}>
+    <div
+      className={`dl-group${open ? " dl-group--open" : ""}${isChildActive ? " dl-group--child-active" : ""}`}
+    >
       <button
         type="button"
         className="dl-group__header"
@@ -165,10 +174,14 @@ export default function DashboardLayout() {
       const nav = document.querySelector(".dl-nav");
       const link = nav?.querySelector(".dl-subitem--active, .dl-item--active");
       if (!nav || !link) return;
-      const n = nav.getBoundingClientRect(), l = link.getBoundingClientRect();
+      const n = nav.getBoundingClientRect(),
+        l = link.getBoundingClientRect();
       if (l.top < n.top || l.bottom > n.bottom) {
         const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-        nav.scrollBy({ top: l.bottom > n.bottom ? l.bottom - n.bottom + 12 : l.top - n.top - 12, behavior: reduce ? "auto" : "smooth" });
+        nav.scrollBy({
+          top: l.bottom > n.bottom ? l.bottom - n.bottom + 12 : l.top - n.top - 12,
+          behavior: reduce ? "auto" : "smooth",
+        });
       }
     }, 340);
     return () => clearTimeout(t);
@@ -185,11 +198,7 @@ export default function DashboardLayout() {
   // section stubs (which look broken when MANAGEMENT / SALES / PURCHASES
   // / ADMINISTRATION render with nothing under them).
   // Dashboards — the three overview pages, one nav group.
-  const dashboardsKeys = [
-    "dashboard.view",
-    "stock.dashboard.view",
-    "accounting.dashboard.view",
-  ];
+  const dashboardsKeys = ["dashboard.view", "stock.dashboard.view", "accounting.dashboard.view"];
   const configKeys = [
     "companies.manage.view",
     "clients.manage.view",
@@ -216,7 +225,8 @@ export default function DashboardLayout() {
     "salesorders.list.view",
   ];
   const purchasesKeys = [
-    "purchasebills.list.view", "purchasebills.payables.view",
+    "purchasebills.list.view",
+    "purchasebills.payables.view",
     "purchasedebitnotes.list.view",
     "goodsreceipts.list.view",
     "fbrimport.purchase.preview",
@@ -246,13 +256,13 @@ export default function DashboardLayout() {
     "tenantaccess.manage.view",
     "auditlogs.view",
   ];
-  const canSeeDashboards    = hasAny(dashboardsKeys);
+  const canSeeDashboards = hasAny(dashboardsKeys);
   const canSeeConfiguration = hasAny(configKeys);
-  const canSeeSales         = hasAny(salesKeys);
-  const canSeePurchases     = hasAny(purchasesKeys);
-  const canSeeAccounting    = hasAny(accountingKeys);
-  const canSeeReports       = hasAny(reportsKeys) || hasAny(lineViewKeys);
-  const canSeeAdmin         = hasAny(adminKeys) || !!user?.isSeedAdmin;
+  const canSeeSales = hasAny(salesKeys);
+  const canSeePurchases = hasAny(purchasesKeys);
+  const canSeeAccounting = hasAny(accountingKeys);
+  const canSeeReports = hasAny(reportsKeys) || hasAny(lineViewKeys);
+  const canSeeAdmin = hasAny(adminKeys) || !!user?.isSeedAdmin;
 
   // ── No Company Configured gate (2026-09-11) ──
   // When the signed-in account can reach no company at all — nothing
@@ -265,24 +275,26 @@ export default function DashboardLayout() {
   const { companies, loading: companiesLoading } = useCompany();
   const companyFreeRoute = useMemo(() => {
     const p = location.pathname.toLowerCase();
-    return p.startsWith("/profile")
-      || p.startsWith("/companies")
-      || p.startsWith("/users")
-      || p.startsWith("/roles")
-      || p.startsWith("/tenant-access")
-      || p.startsWith("/administrators")
-      || p.startsWith("/audit-logs");
+    return (
+      p.startsWith("/profile") ||
+      p.startsWith("/companies") ||
+      p.startsWith("/users") ||
+      p.startsWith("/roles") ||
+      p.startsWith("/tenant-access") ||
+      p.startsWith("/administrators") ||
+      p.startsWith("/audit-logs")
+    );
   }, [location.pathname]);
   const showNoCompany = !companiesLoading && companies.length === 0 && !companyFreeRoute;
 
   // Per-group counts (visible-child count for the section's "[N]" badge).
   // Computed from the same permission keys the section gating uses, so
   // the badge always matches what the user can actually see beneath it.
-  const dashboardsCount    = dashboardsKeys.filter(has).length;
-  const salesCount         = salesKeys.filter(has).length;
-  const purchasesCount     = purchasesKeys.filter(has).length;
-  const accountingCount    = accountingKeys.filter(has).length;
-  const reportsCount       = reportsKeys.filter(has).length + (hasAny(lineViewKeys) ? 1 : 0);
+  const dashboardsCount = dashboardsKeys.filter(has).length;
+  const salesCount = salesKeys.filter(has).length;
+  const purchasesCount = purchasesKeys.filter(has).length;
+  const accountingCount = accountingKeys.filter(has).length;
+  const reportsCount = reportsKeys.filter(has).length + (hasAny(lineViewKeys) ? 1 : 0);
   const configurationCount = configKeys.filter(has).length;
   const administrationCount = adminKeys.filter(has).length;
 
@@ -294,16 +306,66 @@ export default function DashboardLayout() {
     const p = location.pathname.toLowerCase();
     // The three dashboards. Checked first so /stock and /accounting/dashboard
     // open Dashboards, not Purchases or Accounting.
-    if (p === "/dashboard" || p.startsWith("/stock") || p.startsWith("/accounting/dashboard")) return "dashboards";
+    if (p === "/dashboard" || p.startsWith("/stock") || p.startsWith("/accounting/dashboard"))
+      return "dashboards";
     if (p === "/email-workspace") return "email-workspace";
-    if (p.startsWith("/challans") || p === "/bills" || p === "/invoices" || p === "/credit-notes" || p === "/debit-notes" || p === "/credit-debit-notes" || p === "/item-rate-history" || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders")) return "sales";
-    if (p.startsWith("/supplier-payables") || p.startsWith("/purchase-bills") || p.startsWith("/purchase-debit-notes") || p.startsWith("/goods-receipts") || p.startsWith("/fbr-import/purchase")) return "purchases";
-    if (p.startsWith("/withholding-tax-receipts") || p.startsWith("/receipts") || p.startsWith("/payments") || p.startsWith("/bank-cash-accounts") || p.startsWith("/transfers") || p.startsWith("/chart-of-accounts") || p.startsWith("/journal-entries") || p.startsWith("/accounting") || p.startsWith("/help/accounting")) return "accounting";
+    if (
+      p.startsWith("/challans") ||
+      p === "/bills" ||
+      p === "/invoices" ||
+      p === "/credit-notes" ||
+      p === "/debit-notes" ||
+      p === "/credit-debit-notes" ||
+      p === "/item-rate-history" ||
+      p.startsWith("/sales-quotes") ||
+      p.startsWith("/sales-orders")
+    )
+      return "sales";
+    if (
+      p.startsWith("/supplier-payables") ||
+      p.startsWith("/purchase-bills") ||
+      p.startsWith("/purchase-debit-notes") ||
+      p.startsWith("/goods-receipts") ||
+      p.startsWith("/fbr-import/purchase")
+    )
+      return "purchases";
+    if (
+      p.startsWith("/withholding-tax-receipts") ||
+      p.startsWith("/receipts") ||
+      p.startsWith("/payments") ||
+      p.startsWith("/bank-cash-accounts") ||
+      p.startsWith("/transfers") ||
+      p.startsWith("/chart-of-accounts") ||
+      p.startsWith("/journal-entries") ||
+      p.startsWith("/accounting") ||
+      p.startsWith("/help/accounting")
+    )
+      return "accounting";
     if (p.startsWith("/reports")) return "reports";
-    if (p.startsWith("/companies") || p.startsWith("/clients") || p.startsWith("/suppliers")
-      || p.startsWith("/item-types") || p.startsWith("/units") || p.startsWith("/po-formats")
-      || p.startsWith("/templates") || p.startsWith("/import-data") || p.startsWith("/configuration/navigation-menu") || p.startsWith("/fbr-settings") || p.startsWith("/fbr-sandbox") || p.startsWith("/fbr-monitor") || p.startsWith("/customer-portals")) return "configuration";
-    if (p.startsWith("/users") || p.startsWith("/roles") || p.startsWith("/tenant-access") || p.startsWith("/administrators") || p.startsWith("/audit-logs")) return "administration";
+    if (
+      p.startsWith("/companies") ||
+      p.startsWith("/clients") ||
+      p.startsWith("/suppliers") ||
+      p.startsWith("/item-types") ||
+      p.startsWith("/units") ||
+      p.startsWith("/po-formats") ||
+      p.startsWith("/templates") ||
+      p.startsWith("/import-data") ||
+      p.startsWith("/configuration/navigation-menu") ||
+      p.startsWith("/fbr-settings") ||
+      p.startsWith("/fbr-sandbox") ||
+      p.startsWith("/fbr-monitor") ||
+      p.startsWith("/customer-portals")
+    )
+      return "configuration";
+    if (
+      p.startsWith("/users") ||
+      p.startsWith("/roles") ||
+      p.startsWith("/tenant-access") ||
+      p.startsWith("/administrators") ||
+      p.startsWith("/audit-logs")
+    )
+      return "administration";
     return "main";
   }, [location.pathname]);
 
@@ -339,14 +401,31 @@ export default function DashboardLayout() {
     const previous = document.activeElement;
     const drawer = document.getElementById("admin-navigation");
     drawer?.querySelector('button[aria-label="Close menu"]')?.focus();
-    const keyboard = event => {
+    const keyboard = (event) => {
       if (window.innerWidth >= 992) return;
-      if (event.key === "Escape") { event.preventDefault(); setSidebarOpen(false); }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setSidebarOpen(false);
+      }
       if (event.key !== "Tab") return;
-      const targets = [...drawer.querySelectorAll('button:not(:disabled),a[href]')].filter(el => el.getClientRects().length && !el.closest('[inert]'));
-      const first = targets[0], last = targets[targets.length - 1];
-      if (event.shiftKey && (document.activeElement === first || !drawer.contains(document.activeElement))) { event.preventDefault(); last?.focus(); }
-      else if (!event.shiftKey && (document.activeElement === last || !drawer.contains(document.activeElement))) { event.preventDefault(); first?.focus(); }
+      const targets = [...drawer.querySelectorAll("button:not(:disabled),a[href]")].filter(
+        (el) => el.getClientRects().length && !el.closest("[inert]"),
+      );
+      const first = targets[0],
+        last = targets[targets.length - 1];
+      if (
+        event.shiftKey &&
+        (document.activeElement === first || !drawer.contains(document.activeElement))
+      ) {
+        event.preventDefault();
+        last?.focus();
+      } else if (
+        !event.shiftKey &&
+        (document.activeElement === last || !drawer.contains(document.activeElement))
+      ) {
+        event.preventDefault();
+        first?.focus();
+      }
     };
     document.addEventListener("keydown", keyboard);
     return () => {
@@ -360,13 +439,13 @@ export default function DashboardLayout() {
   const displayName = getDisplayName(user);
   const initials = getInitials(user);
   const avatarRelative = getAvatarUrl(user, avatarVersion);
-  const avatarUrl = avatarRelative
-    ? `${window.location.origin}${avatarRelative}`
-    : null;
+  const avatarUrl = avatarRelative ? `${window.location.origin}${avatarRelative}` : null;
 
   return (
     <div className="dl-shell">
-      <a className="admin-skip-link" href="#main-content">Skip to main content</a>
+      <a className="admin-skip-link" href="#main-content">
+        Skip to main content
+      </a>
       {/* ---- Mobile Overlay ---- */}
       <div
         className={`dl-overlay${sidebarOpen ? " dl-overlay--visible" : ""}`}
@@ -377,12 +456,18 @@ export default function DashboardLayout() {
       {/* ================================================================ */}
       {/*  SIDEBAR                                                         */}
       {/* ================================================================ */}
-      <aside id="admin-navigation" className={`dl-sidebar${sidebarOpen ? " dl-sidebar--open" : ""}`} aria-label="Main navigation">
+      <aside
+        id="admin-navigation"
+        className={`dl-sidebar${sidebarOpen ? " dl-sidebar--open" : ""}`}
+        aria-label="Main navigation"
+      >
         {/* Brand row — clean, single-line on mobile, with a close button
             inside the drawer so users don't have to reach for the topbar. */}
         <div className="dl-brand">
           <div className="dl-brand__row">
-            <span className="dl-brand__icon" aria-hidden="true">📄</span>
+            <span className="dl-brand__icon" aria-hidden="true">
+              📄
+            </span>
             <h1 className="dl-brand__name">FBR Digital ERP</h1>
             <button
               type="button"
@@ -407,19 +492,34 @@ export default function DashboardLayout() {
               isChildActive={activeSection === "dashboards"}
             >
               <Can permission="dashboard.view">
-                <NavLink to="/dashboard" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/dashboard"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdDashboard className="dl-subitem__icon" aria-hidden="true" />
                   <span>Overview</span>
                 </NavLink>
               </Can>
               <Can permission="stock.dashboard.view">
-                <NavLink to="/stock" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/stock"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdInventory className="dl-subitem__icon" aria-hidden="true" />
                   <span>Inventory</span>
                 </NavLink>
               </Can>
               <Can permission="accounting.dashboard.view">
-                <NavLink to="/accounting/dashboard" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/accounting/dashboard"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdInsights className="dl-subitem__icon" aria-hidden="true" />
                   <span>Accounting</span>
                 </NavLink>
@@ -428,10 +528,20 @@ export default function DashboardLayout() {
           )}
 
           {has("email.workspace.use") && has("email.inbox.view") && (
-            <NavGroup id="email-workspace" icon={MdEmail} title="Email Workspace" count={1}
-              defaultOpen={activeSection === "email-workspace"} isChildActive={activeSection === "email-workspace"}>
-              <NavLink to="/email-workspace" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
-                <MdEmail className="dl-subitem__icon" aria-hidden="true" /><span>Inbox &amp; Connections</span>
+            <NavGroup
+              id="email-workspace"
+              icon={MdEmail}
+              title="Email Workspace"
+              count={1}
+              defaultOpen={activeSection === "email-workspace"}
+              isChildActive={activeSection === "email-workspace"}
+            >
+              <NavLink
+                to="/email-workspace"
+                className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}
+              >
+                <MdEmail className="dl-subitem__icon" aria-hidden="true" />
+                <span>Inbox &amp; Connections</span>
               </NavLink>
             </NavGroup>
           )}
@@ -446,19 +556,34 @@ export default function DashboardLayout() {
               isChildActive={activeSection === "sales"}
             >
               <Can permission="salesquotes.list.view">
-                <NavLink to="/sales-quotes" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/sales-quotes"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdPointOfSale className="dl-subitem__icon" aria-hidden="true" />
                   <span>Sales Quotes</span>
                 </NavLink>
               </Can>
               <Can permission="salesorders.list.view">
-                <NavLink to="/sales-orders" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/sales-orders"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdShoppingCart className="dl-subitem__icon" aria-hidden="true" />
                   <span>Sales Orders</span>
                 </NavLink>
               </Can>
               <Can permission="challans.import.create">
-                <NavLink to="/challans/import" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/challans/import"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdFileUpload className="dl-subitem__icon" aria-hidden="true" />
                   <span>Import Challans</span>
                 </NavLink>
@@ -467,7 +592,13 @@ export default function DashboardLayout() {
                 {/* `end` so "/challans" matches ONLY the Delivery Challans list —
                     without it React Router also marks it active on the child
                     route "/challans/import", lighting BOTH dots at once. */}
-                <NavLink to="/challans" end className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/challans"
+                  end
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdDescription className="dl-subitem__icon" aria-hidden="true" />
                   <span>Delivery Challans</span>
                 </NavLink>
@@ -477,13 +608,23 @@ export default function DashboardLayout() {
                   (gated by invoices.list.view). Same underlying dataset, two
                   views with their own permission namespaces — see catalog. */}
               <Can permission="bills.list.view">
-                <NavLink to="/bills" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/bills"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdReceipt className="dl-subitem__icon" aria-hidden="true" />
                   <span>Bills</span>
                 </NavLink>
               </Can>
               <Can permission="invoices.list.view">
-                <NavLink to="/invoices" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/invoices"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdReceipt className="dl-subitem__icon" aria-hidden="true" />
                   <span>Invoices</span>
                 </NavLink>
@@ -494,19 +635,34 @@ export default function DashboardLayout() {
                   list-view perm; the "New" buttons on the pages are gated
                   by invoices.note.create. */}
               <Can permission="invoices.list.view">
-                <NavLink to="/credit-notes" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/credit-notes"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdUndo className="dl-subitem__icon" aria-hidden="true" />
                   <span>Credit Notes</span>
                 </NavLink>
               </Can>
               <Can permission="invoices.list.view">
-                <NavLink to="/debit-notes" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/debit-notes"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdUndo className="dl-subitem__icon" aria-hidden="true" />
                   <span>Debit Notes</span>
                 </NavLink>
               </Can>
               <Can permission="itemratehistory.view">
-                <NavLink to="/item-rate-history" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/item-rate-history"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdHistory className="dl-subitem__icon" aria-hidden="true" />
                   <span>Item Rate History</span>
                 </NavLink>
@@ -524,31 +680,56 @@ export default function DashboardLayout() {
               isChildActive={activeSection === "purchases"}
             >
               <Can permission="purchasebills.payables.view">
-                <NavLink to="/supplier-payables" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/supplier-payables"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdMenuBook className="dl-subitem__icon" aria-hidden="true" />
                   <span>Supplier Payables &amp; Ledger</span>
                 </NavLink>
               </Can>
               <Can permission="purchasebills.list.view">
-                <NavLink to="/purchase-bills" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/purchase-bills"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdShoppingCart className="dl-subitem__icon" aria-hidden="true" />
                   <span>Purchase Bills</span>
                 </NavLink>
               </Can>
               <Can permission="purchasedebitnotes.list.view">
-                <NavLink to="/purchase-debit-notes" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/purchase-debit-notes"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdReceiptLong className="dl-subitem__icon" aria-hidden="true" />
                   <span>Purchase Debit Notes</span>
                 </NavLink>
               </Can>
               <Can permission="goodsreceipts.list.view">
-                <NavLink to="/goods-receipts" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/goods-receipts"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdInventory2 className="dl-subitem__icon" aria-hidden="true" />
                   <span>Goods Receipts</span>
                 </NavLink>
               </Can>
               <Can permission="fbrimport.purchase.preview">
-                <NavLink to="/fbr-import/purchase" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/fbr-import/purchase"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdFileUpload className="dl-subitem__icon" aria-hidden="true" />
                   <span>FBR Purchase Import</span>
                 </NavLink>
@@ -566,55 +747,99 @@ export default function DashboardLayout() {
               isChildActive={activeSection === "accounting"}
             >
               <Can permission="accounting.coa.view">
-                <NavLink to="/bank-cash-accounts" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/bank-cash-accounts"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdAccountBalanceWallet className="dl-subitem__icon" aria-hidden="true" />
                   <span>Bank &amp; Cash Accounts</span>
                 </NavLink>
               </Can>
               <Can permission="accounting.transfers.view">
-                <NavLink to="/transfers" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/transfers"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdAccountBalanceWallet className="dl-subitem__icon" aria-hidden="true" />
                   <span>Internal Transfers</span>
                 </NavLink>
               </Can>
               <Can permission="accounting.coa.view">
-                <NavLink to="/chart-of-accounts" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/chart-of-accounts"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdAccountTree className="dl-subitem__icon" aria-hidden="true" />
                   <span>Chart of Accounts</span>
                 </NavLink>
               </Can>
               <Can permission="accounting.journal.view">
-                <NavLink to="/journal-entries" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/journal-entries"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdMenuBook className="dl-subitem__icon" aria-hidden="true" />
                   <span>Journal Entries</span>
                 </NavLink>
               </Can>
               <Can permission="withholdingtax.list.view">
-                <NavLink to="/withholding-tax-receipts" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
-                  <MdReceipt /><span>Withholding Tax Receipts</span>
+                <NavLink
+                  to="/withholding-tax-receipts"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
+                  <MdReceipt />
+                  <span>Withholding Tax Receipts</span>
                 </NavLink>
               </Can>
               <Can permission="accounting.receipts.view">
-                <NavLink to="/receipts" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/receipts"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdReceiptLong className="dl-subitem__icon" aria-hidden="true" />
                   <span>Receipts</span>
                 </NavLink>
               </Can>
               <Can permission="accounting.reports.view">
-                <NavLink to="/accounting/reports/catalog" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/accounting/reports/catalog"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdAssessment className="dl-subitem__icon" aria-hidden="true" />
                   <span>Reports</span>
                 </NavLink>
               </Can>
               <Can permission="accounting.payments.view">
-                <NavLink to="/payments" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/payments"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdPayments className="dl-subitem__icon" aria-hidden="true" />
                   <span>Payments</span>
                 </NavLink>
               </Can>
               {/* The guide is static help text — no permission of its own;
                   anyone who can see the Accounting group may read it. */}
-              <NavLink to="/help/accounting" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+              <NavLink
+                to="/help/accounting"
+                className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}
+              >
                 <MdMenuBook className="dl-subitem__icon" aria-hidden="true" />
                 <span>Accounting Guide</span>
               </NavLink>
@@ -630,30 +855,57 @@ export default function DashboardLayout() {
               defaultOpen={activeSection === "reports"}
               isChildActive={activeSection === "reports"}
             >
-              {hasAny(lineViewKeys) &&
-                <NavLink to="/reports/document-lines" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+              {hasAny(lineViewKeys) && (
+                <NavLink
+                  to="/reports/document-lines"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdAssessment className="dl-subitem__icon" aria-hidden="true" />
                   <span>Document Lines</span>
-                </NavLink>}
+                </NavLink>
+              )}
               <Can permission="reports.sales.view">
-                <NavLink to="/reports/sales" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/reports/sales"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdAssessment className="dl-subitem__icon" aria-hidden="true" />
                   <span>Sales Report</span>
                 </NavLink>
               </Can>
               <Can permission="reports.invoicedetail.view">
-                <NavLink to="/reports/invoice-sales-detail" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
-                  <MdAssessment className="dl-subitem__icon" aria-hidden="true" /><span>Invoice Sales Detail</span>
+                <NavLink
+                  to="/reports/invoice-sales-detail"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
+                  <MdAssessment className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Invoice Sales Detail</span>
                 </NavLink>
               </Can>
               <Can permission="reports.taxsheet.view">
-                <NavLink to="/reports/tax-sheet" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/reports/tax-sheet"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdFactCheck className="dl-subitem__icon" aria-hidden="true" />
                   <span>Tax Sheet</span>
                 </NavLink>
               </Can>
               <Can permission="reports.outstanding.view">
-                <NavLink to="/reports/outstanding" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/reports/outstanding"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdAccountBalanceWallet className="dl-subitem__icon" aria-hidden="true" />
                   <span>Outstanding Ledger</span>
                 </NavLink>
@@ -671,79 +923,144 @@ export default function DashboardLayout() {
               isChildActive={activeSection === "configuration"}
             >
               <Can permission="companies.manage.view">
-                <NavLink to="/companies/list" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/companies/list"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdBusiness className="dl-subitem__icon" aria-hidden="true" />
                   <span>Companies</span>
                 </NavLink>
               </Can>
               <Can permission="clients.manage.view">
-                <NavLink to="/Clients/list" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/Clients/list"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdPeople className="dl-subitem__icon" aria-hidden="true" />
                   <span>Clients</span>
                 </NavLink>
               </Can>
               <Can permission="suppliers.manage.view">
-                <NavLink to="/Suppliers/list" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/Suppliers/list"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdLocalShipping className="dl-subitem__icon" aria-hidden="true" />
                   <span>Suppliers</span>
                 </NavLink>
               </Can>
               <Can permission="itemtypes.manage.view">
-                <NavLink to="/item-types" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/item-types"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdCategory className="dl-subitem__icon" aria-hidden="true" />
                   <span>Item Types</span>
                 </NavLink>
               </Can>
               <Can permission="onboarding.import.run">
-                <NavLink to="/import-data" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/import-data"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdUploadFile className="dl-subitem__icon" aria-hidden="true" />
                   <span>Import Data</span>
                 </NavLink>
               </Can>
               <Can permission="config.units.manage">
-                <NavLink to="/units" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/units"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdStraighten className="dl-subitem__icon" aria-hidden="true" />
                   <span>Units</span>
                 </NavLink>
               </Can>
               <Can permission="poformats.manage.view">
-                <NavLink to="/po-formats" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/po-formats"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdDescription className="dl-subitem__icon" aria-hidden="true" />
                   <span>Customer Document Formats</span>
                 </NavLink>
               </Can>
               <Can permission="printtemplates.manage.update">
-                <NavLink to="/templates" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/templates"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdCode className="dl-subitem__icon" aria-hidden="true" />
                   <span>Print Templates</span>
                 </NavLink>
               </Can>
               <Can permission="folders.list.view">
-                <NavLink to="/configuration/navigation-menu" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/configuration/navigation-menu"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdFolder className="dl-subitem__icon" aria-hidden="true" />
                   <span>Navigation Menu</span>
                 </NavLink>
               </Can>
               <Can permission="customerportals.manage.view">
-                <NavLink to="/customer-portals" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/customer-portals"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdPublic className="dl-subitem__icon" aria-hidden="true" />
                   <span>Customer Portals</span>
                 </NavLink>
               </Can>
               <Can permission="fbr.config.update">
-                <NavLink to="/fbr-settings" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/fbr-settings"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdTune className="dl-subitem__icon" aria-hidden="true" />
                   <span>FBR Settings</span>
                 </NavLink>
               </Can>
               <Can permission="fbr.sandbox.view">
-                <NavLink to="/fbr-sandbox" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/fbr-sandbox"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdScience className="dl-subitem__icon" aria-hidden="true" />
                   <span>FBR Sandbox</span>
                 </NavLink>
               </Can>
               <Can permission="fbrmonitor.view">
-                <NavLink to="/fbr-monitor" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/fbr-monitor"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdMonitorHeart className="dl-subitem__icon" aria-hidden="true" />
                   <span>FBR Monitor</span>
                 </NavLink>
@@ -761,38 +1078,62 @@ export default function DashboardLayout() {
               isChildActive={activeSection === "administration"}
             >
               {user?.isSeedAdmin && (
-                <NavLink to="/administrators" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/administrators"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdSupervisorAccount className="dl-subitem__icon" aria-hidden="true" />
                   <span>Administrators</span>
                 </NavLink>
               )}
               <Can permission="users.manage.view">
-                <NavLink to="/users" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/users"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdGroupAdd className="dl-subitem__icon" aria-hidden="true" />
                   <span>Users</span>
                 </NavLink>
               </Can>
               <Can permission="rbac.roles.view">
-                <NavLink to="/roles" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/roles"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdAdminPanelSettings className="dl-subitem__icon" aria-hidden="true" />
                   <span>Roles &amp; Permissions</span>
                 </NavLink>
               </Can>
               <Can permission="tenantaccess.manage.view">
-                <NavLink to="/tenant-access" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/tenant-access"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdLock className="dl-subitem__icon" aria-hidden="true" />
                   <span>Tenant Access</span>
                 </NavLink>
               </Can>
               <Can permission="auditlogs.view">
-                <NavLink to="/audit-logs" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <NavLink
+                  to="/audit-logs"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
                   <MdBugReport className="dl-subitem__icon" aria-hidden="true" />
                   <span>Audit Logs</span>
                 </NavLink>
               </Can>
             </NavGroup>
           )}
-
         </nav>
 
         {/* Account & Footer – pinned to bottom, never scrolls. */}
@@ -808,12 +1149,7 @@ export default function DashboardLayout() {
             )}
             <span className="dl-item__label">{displayName}</span>
           </NavLink>
-          <button
-            type="button"
-            className="dl-logout-btn"
-            onClick={logout}
-            aria-label="Logout"
-          >
+          <button type="button" className="dl-logout-btn" onClick={logout} aria-label="Logout">
             <MdLogout aria-hidden="true" />
             <span>Logout</span>
           </button>
@@ -845,16 +1181,34 @@ export default function DashboardLayout() {
                 muted, the page the operator is on in bold. key= the path so
                 the trail fades in on each navigation. */}
             <span key={location.pathname} className="dl-crumbs">
-              {getBreadcrumb(location.pathname).split(" / ").map((part, i, all) => (
-                <span key={i} className={i === all.length - 1 ? "dl-crumb dl-crumb--current" : "dl-crumb"}>
-                  {i > 0 && <span className="dl-crumb__sep" aria-hidden="true">/</span>}
-                  {part}
-                </span>
-              ))}
+              {getBreadcrumb(location.pathname)
+                .split(" / ")
+                .map((part, i, all) => (
+                  <span
+                    key={i}
+                    className={i === all.length - 1 ? "dl-crumb dl-crumb--current" : "dl-crumb"}
+                  >
+                    {i > 0 && (
+                      <span className="dl-crumb__sep" aria-hidden="true">
+                        /
+                      </span>
+                    )}
+                    {part}
+                  </span>
+                ))}
             </span>
           </div>
 
-          <div className="dl-topbar__user-wrapper" ref={userMenuRef} onKeyDown={event => { if (event.key === "Escape") { setUserMenuOpen(false); userMenuRef.current?.querySelector("button")?.focus(); } }}>
+          <div
+            className="dl-topbar__user-wrapper"
+            ref={userMenuRef}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                setUserMenuOpen(false);
+                userMenuRef.current?.querySelector("button")?.focus();
+              }
+            }}
+          >
             <button
               type="button"
               className="dl-topbar__user"
@@ -880,7 +1234,10 @@ export default function DashboardLayout() {
                 <button
                   type="button"
                   className="dl-user-menu__item"
-                  onClick={() => { setUserMenuOpen(false); navigate("/profile"); }}
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    navigate("/profile");
+                  }}
                 >
                   <MdAccountCircle className="dl-user-menu__icon" />
                   My Profile
@@ -889,7 +1246,10 @@ export default function DashboardLayout() {
                 <button
                   type="button"
                   className="dl-user-menu__item dl-user-menu__item--danger"
-                  onClick={() => { setUserMenuOpen(false); logout(); }}
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    logout();
+                  }}
                 >
                   <MdLogout className="dl-user-menu__icon" />
                   Logout

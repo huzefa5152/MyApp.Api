@@ -1,9 +1,21 @@
 import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { MdFactCheck, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdPrint, MdVisibility, MdPictureAsPdf } from "react-icons/md";
 import {
-  getWithholdingReceiptsByCompany, createWithholdingReceipt,
-  updateWithholdingReceipt, deleteWithholdingReceipt,
+  MdFactCheck,
+  MdAdd,
+  MdBusiness,
+  MdSearch,
+  MdEdit,
+  MdDelete,
+  MdPrint,
+  MdVisibility,
+  MdPictureAsPdf,
+} from "react-icons/md";
+import {
+  getWithholdingReceiptsByCompany,
+  createWithholdingReceipt,
+  updateWithholdingReceipt,
+  deleteWithholdingReceipt,
   getWithholdingReceiptPrintData,
 } from "../api/withholdingTaxApi";
 import WithholdingTaxReceiptForm from "../Components/WithholdingTaxReceiptForm";
@@ -24,13 +36,25 @@ import { exportToPdf } from "../utils/exportUtils";
 import { defaultWithholdingTaxTemplate } from "../utils/accountingDocTemplates";
 import { formStyles, modalSizes, dropdownStyles, cardStyles } from "../theme";
 
-const colors = { blue: "#0d47a1", textPrimary: "#1a2332", textSecondary: "#5f6d7e", cardBorder: "#e8edf3" };
+const colors = {
+  blue: "#0d47a1",
+  textPrimary: "#1a2332",
+  textSecondary: "#5f6d7e",
+  cardBorder: "#e8edf3",
+};
 
-const money = (n) => "Rs. " + (Number(n) || 0).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = (n) =>
+  "Rs. " +
+  (Number(n) || 0).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString("en-GB") : "");
 
 export default function WithholdingTaxReceiptsPage() {
-  const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  const {
+    companies,
+    selectedCompany,
+    setSelectedCompany,
+    loading: loadingCompanies,
+  } = useCompany();
   const { has } = usePermissions();
   const confirm = useConfirm();
   const canView = has("withholdingtax.list.view");
@@ -51,19 +75,24 @@ export default function WithholdingTaxReceiptsPage() {
   const [viewReceipt, setViewReceipt] = useState(null);
 
   // Explicit dropdown pick wins; else the company default; else the built-in.
-  const resolveTpl = (r) => tplPicker.resolveTemplate(r)?.htmlContent || defaultWithholdingTaxTemplate;
+  const resolveTpl = (r) =>
+    tplPicker.resolveTemplate(r)?.htmlContent || defaultWithholdingTaxTemplate;
 
   const requestVersion = useRef(0);
   const fetchReceipts = useCallback(async (companyId) => {
     const version = ++requestVersion.current;
     setReceipts([]);
-    if (!companyId) { setLoading(false); return; }
+    if (!companyId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const { data } = await getWithholdingReceiptsByCompany(companyId);
       if (version === requestVersion.current) setReceipts(Array.isArray(data) ? data : []);
     } catch {
-      if (version === requestVersion.current) notify("Could not load withholding receipts.", "error");
+      if (version === requestVersion.current)
+        notify("Could not load withholding receipts.", "error");
     } finally {
       if (version === requestVersion.current) setLoading(false);
     }
@@ -74,7 +103,9 @@ export default function WithholdingTaxReceiptsPage() {
     setEditReceipt(null);
     setViewReceipt(null);
     fetchReceipts(canView ? selectedCompany?.id : null);
-    return () => { ++requestVersion.current; };
+    return () => {
+      ++requestVersion.current;
+    };
   }, [selectedCompany?.id, canView, fetchReceipts]);
 
   const handleSave = async (payload) => {
@@ -90,7 +121,8 @@ export default function WithholdingTaxReceiptsPage() {
     const ok = await confirm({
       title: "Delete receipt?",
       message: `Delete Withholding Tax Receipt #${r.receiptNumber} for "${r.clientName}" (${money(r.amount)})? This cannot be undone.`,
-      variant: "danger", confirmText: "Delete",
+      variant: "danger",
+      confirmText: "Delete",
     });
     if (!ok) return;
     try {
@@ -105,7 +137,10 @@ export default function WithholdingTaxReceiptsPage() {
   const handlePrint = async (r) => {
     // Open the popup BEFORE any await so the pop-up blocker doesn't kill it.
     const w = window.open("", "_blank");
-    if (!w) { notify("Popup blocked. Allow popups for this site to print.", "warning"); return; }
+    if (!w) {
+      notify("Popup blocked. Allow popups for this site to print.", "warning");
+      return;
+    }
     w.document.write("<p style='font-family:sans-serif;padding:24px'>Loading certificate…</p>");
     try {
       const { data } = await getWithholdingReceiptPrintData(r.id);
@@ -121,7 +156,10 @@ export default function WithholdingTaxReceiptsPage() {
     setExportingId(r.id);
     try {
       const { data } = await getWithholdingReceiptPrintData(r.id);
-      await exportToPdf(mergeTemplate(resolveTpl(r), data), `WHT Receipt ${data.receiptNumber || r.id}`);
+      await exportToPdf(
+        mergeTemplate(resolveTpl(r), data),
+        `WHT Receipt ${data.receiptNumber || r.id}`,
+      );
     } catch {
       notify("Failed to export PDF.", "error");
     } finally {
@@ -130,191 +168,321 @@ export default function WithholdingTaxReceiptsPage() {
   };
 
   const [attachTarget, setAttachTarget] = useState(null);
-  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "WithholdingTaxReceipt", receipts.map((r) => r.id));
+  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(
+    selectedCompany?.id,
+    "WithholdingTaxReceipt",
+    receipts.map((r) => r.id),
+  );
   const filtered = useMemo(() => {
     return receipts.filter((r) => {
       if (!search.trim()) return true;
       const t = search.toLowerCase();
-      return (r.clientName || "").toLowerCase().includes(t)
-        || (r.description || "").toLowerCase().includes(t)
-        || String(r.receiptNumber).includes(t);
+      return (
+        (r.clientName || "").toLowerCase().includes(t) ||
+        (r.description || "").toLowerCase().includes(t) ||
+        String(r.receiptNumber).includes(t)
+      );
     });
   }, [receipts, search]);
 
-  const total = useMemo(() => filtered.reduce((sum, r) => sum + (Number(r.amount) || 0), 0), [filtered]);
+  const total = useMemo(
+    () => filtered.reduce((sum, r) => sum + (Number(r.amount) || 0), 0),
+    [filtered],
+  );
 
   if (!canView) {
-    return <div style={styles.emptyState}><MdFactCheck size={40} color={colors.cardBorder} /><p style={{ color: colors.textSecondary, marginTop: 8 }}>You don't have access to Withholding Tax Receipts.</p></div>;
+    return (
+      <div style={styles.emptyState}>
+        <MdFactCheck size={40} color={colors.cardBorder} />
+        <p style={{ color: colors.textSecondary, marginTop: 8 }}>
+          You don't have access to Withholding Tax Receipts.
+        </p>
+      </div>
+    );
   }
 
   return (
     <div>
       <div data-admin-page-header="" style={styles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div data-admin-page-icon="" style={styles.headerIcon}><MdFactCheck size={26} color="#fff" /></div>
+          <div data-admin-page-icon="" style={styles.headerIcon}>
+            <MdFactCheck size={26} color="#fff" />
+          </div>
           <div>
             <h2 style={styles.pageTitle}>Withholding Tax Receipts</h2>
             <p style={styles.pageSubtitle}>
-              {selectedCompany ? `${filtered.length} receipt${filtered.length !== 1 ? "s" : ""} · ${money(total)} total` : "Select a company"}
+              {selectedCompany
+                ? `${filtered.length} receipt${filtered.length !== 1 ? "s" : ""} · ${money(total)} total`
+                : "Select a company"}
             </p>
           </div>
         </div>
         {companies.length > 0 && canCreate && selectedCompany && (
-          <button style={styles.addBtn} onClick={() => { setEditReceipt(null); setShowForm(true); }}>
+          <button
+            style={styles.addBtn}
+            onClick={() => {
+              setEditReceipt(null);
+              setShowForm(true);
+            }}
+          >
             <MdAdd size={18} /> New Receipt
           </button>
         )}
       </div>
 
       {loadingCompanies ? (
-        <div style={styles.loading}><div style={styles.spinner} /></div>
+        <div style={styles.loading}>
+          <div style={styles.spinner} />
+        </div>
       ) : companies.length > 0 ? (
         <div data-admin-toolbar="" style={styles.filters}>
-          {companies.length > 1 && (<div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-            <MdBusiness size={20} color={colors.blue} />
-            <select
-              aria-label="Company"
-              style={dropdownStyles.base}
-              value={selectedCompany?.id || ""}
-              onChange={(e) => setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))}
-            >
-              {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
-            </select>
-          </div>)}
+          {companies.length > 1 && (
+            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+              <MdBusiness size={20} color={colors.blue} />
+              <select
+                aria-label="Company"
+                style={dropdownStyles.base}
+                value={selectedCompany?.id || ""}
+                onChange={(e) =>
+                  setSelectedCompany(
+                    companies.find((c) => parseInt(c.id) === parseInt(e.target.value)),
+                  )
+                }
+              >
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.brandName || c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           {receipts.length > 3 && (
             <div style={styles.searchWrap}>
               <MdSearch style={styles.searchIcon} />
-              <input type="text" placeholder="Search customer / description…" value={search} onChange={(e) => setSearch(e.target.value)} style={styles.searchInput} />
+              <input
+                type="text"
+                placeholder="Search customer / description…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={styles.searchInput}
+              />
             </div>
           )}
           {canPrint && tplPicker.canChoose && <PrintTemplateSelect picker={tplPicker} />}
         </div>
       ) : (
-        <div style={styles.emptyState}><MdBusiness size={40} color={colors.cardBorder} /><p style={{ color: colors.textSecondary, marginTop: 8 }}>No companies available.</p></div>
+        <div style={styles.emptyState}>
+          <MdBusiness size={40} color={colors.cardBorder} />
+          <p style={{ color: colors.textSecondary, marginTop: 8 }}>No companies available.</p>
+        </div>
       )}
 
-      <RecordsViewport label="Withholding Tax Receipts records">{loading ? (
-        <div style={styles.loading}><div style={styles.spinner} /></div>
-      ) : selectedCompany && filtered.length === 0 ? (
-        <div style={styles.emptyState}>
-          <MdFactCheck size={40} color={colors.cardBorder} />
-          <p style={{ color: colors.textSecondary, marginTop: 8 }}>
-            {receipts.length === 0 ? "No withholding tax receipts yet." : "No receipts match your search."}
-          </p>
-        </div>
-      ) : selectedCompany && isNarrow ? (
-        <div style={styles.cardList}>
-          {filtered.map((r) => (
-            <div key={r.id} style={styles.card}>
-              <div style={cardStyles.cardHeader}>
-                <span style={styles.cardNum}>#{r.receiptNumber}</span>
-                <AttachmentBadge count={attachCounts[r.id]} onClick={() => setAttachTarget(r)} />
-                <span style={styles.cardDate}>{fmtDate(r.date)}</span>
-              </div>
-              <div style={cardStyles.cardLead}>
-                {r.clientName}
-              </div>
-              <div style={cardStyles.metaGrid}>
-                <div>
-                  <span style={cardStyles.metaLabel}>Description</span>
-                  <span style={cardStyles.metaValue}>{r.description || "—"}</span>
+      <RecordsViewport label="Withholding Tax Receipts records">
+        {loading ? (
+          <div style={styles.loading}>
+            <div style={styles.spinner} />
+          </div>
+        ) : selectedCompany && filtered.length === 0 ? (
+          <div style={styles.emptyState}>
+            <MdFactCheck size={40} color={colors.cardBorder} />
+            <p style={{ color: colors.textSecondary, marginTop: 8 }}>
+              {receipts.length === 0
+                ? "No withholding tax receipts yet."
+                : "No receipts match your search."}
+            </p>
+          </div>
+        ) : selectedCompany && isNarrow ? (
+          <div style={styles.cardList}>
+            {filtered.map((r) => (
+              <div key={r.id} style={styles.card}>
+                <div style={cardStyles.cardHeader}>
+                  <span style={styles.cardNum}>#{r.receiptNumber}</span>
+                  <AttachmentBadge count={attachCounts[r.id]} onClick={() => setAttachTarget(r)} />
+                  <span style={styles.cardDate}>{fmtDate(r.date)}</span>
+                </div>
+                <div style={cardStyles.cardLead}>{r.clientName}</div>
+                <div style={cardStyles.metaGrid}>
+                  <div>
+                    <span style={cardStyles.metaLabel}>Description</span>
+                    <span style={cardStyles.metaValue}>{r.description || "—"}</span>
+                  </div>
+                </div>
+                <div style={cardStyles.amountBox}>
+                  <span style={cardStyles.amountLabel}>Amount</span>
+                  <span style={cardStyles.amount}>{money(r.amount)}</span>
+                </div>
+                <div style={styles.cardActions}>
+                  <button
+                    style={{ ...styles.mIconBtn, ...styles.view }}
+                    title="View"
+                    onClick={() => setViewReceipt(r)}
+                  >
+                    <MdVisibility size={18} />
+                  </button>
+                  {canPrint && (
+                    <button
+                      style={{ ...styles.mIconBtn, ...styles.view }}
+                      title={"Print receipt"}
+                      onClick={() => handlePrint(r)}
+                    >
+                      <MdPrint size={18} />
+                    </button>
+                  )}
+                  {canPrint && (
+                    <button
+                      style={{
+                        ...styles.mIconBtn,
+                        ...styles.view,
+                        ...(exportingId === r.id ? { opacity: 0.5, cursor: "not-allowed" } : {}),
+                      }}
+                      disabled={exportingId === r.id}
+                      title={"Download PDF"}
+                      onClick={() => handleExportPdf(r)}
+                    >
+                      <MdPictureAsPdf size={18} />
+                    </button>
+                  )}
+                  {canUpdate && (
+                    <button
+                      style={{ ...styles.mIconBtn, ...styles.edit }}
+                      title="Edit"
+                      onClick={() => {
+                        setEditReceipt(r);
+                        setShowForm(true);
+                      }}
+                    >
+                      <MdEdit size={18} />
+                    </button>
+                  )}
+                  {canDelete && r.isLatest && (
+                    <button
+                      style={{ ...styles.mIconBtn, ...styles.del }}
+                      title="Delete (latest only)"
+                      onClick={() => handleDelete(r)}
+                    >
+                      <MdDelete size={18} />
+                    </button>
+                  )}
                 </div>
               </div>
-              <div style={cardStyles.amountBox}>
-                <span style={cardStyles.amountLabel}>Amount</span>
-                <span style={cardStyles.amount}>{money(r.amount)}</span>
-              </div>
-              <div style={styles.cardActions}>
-                <button style={{ ...styles.mIconBtn, ...styles.view }} title="View" onClick={() => setViewReceipt(r)}><MdVisibility size={18} /></button>
-                {canPrint && (
-                  <button
-                    style={{ ...styles.mIconBtn, ...styles.view,  }}
-                                        title={"Print receipt"}
-                    onClick={() => handlePrint(r)}
-                  ><MdPrint size={18} /></button>
-                )}
-                {canPrint && (
-                  <button
-                    style={{ ...styles.mIconBtn, ...styles.view, ...((exportingId === r.id) ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
-                    disabled={exportingId === r.id}
-                    title={"Download PDF"}
-                    onClick={() => handleExportPdf(r)}
-                  ><MdPictureAsPdf size={18} /></button>
-                )}
-                {canUpdate && <button style={{ ...styles.mIconBtn, ...styles.edit }} title="Edit" onClick={() => { setEditReceipt(r); setShowForm(true); }}><MdEdit size={18} /></button>}
-                {canDelete && r.isLatest && <button style={{ ...styles.mIconBtn, ...styles.del }} title="Delete (latest only)" onClick={() => handleDelete(r)}><MdDelete size={18} /></button>}
-              </div>
+            ))}
+            <div style={styles.totalCard}>
+              <span style={styles.totalCardLabel}>Total ({filtered.length})</span>
+              <span style={styles.totalCardValue}>{money(total)}</span>
             </div>
-          ))}
-          <div style={styles.totalCard}>
-            <span style={styles.totalCardLabel}>Total ({filtered.length})</span>
-            <span style={styles.totalCardValue}>{money(total)}</span>
           </div>
-        </div>
-      ) : selectedCompany ? (
-        <div data-admin-table-region="" style={styles.scroll}>
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={styles.thNum}>#</th>
-                <th style={styles.th}>Date</th>
-                <th style={styles.th}>Customer</th>
-                <th style={styles.th}>Description</th>
-                <th style={styles.thMoney}>Amount</th>
-                <th style={styles.thActions}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((r) => (
-                <tr key={r.id} style={styles.tr}>
-                  <td style={styles.tdNum}>{r.receiptNumber}{" "}<AttachmentBadge count={attachCounts[r.id]} onClick={() => setAttachTarget(r)} /></td>
-                  <td style={styles.td}>{fmtDate(r.date)}</td>
-                  <td style={{ ...styles.td, fontWeight: 600 }}>
-                    {r.clientName}
-                  </td>
-                  <td style={{ ...styles.td, color: colors.textSecondary }}>{r.description || "—"}</td>
-                  <td style={styles.tdMoney}>{money(r.amount)}</td>
-                  <td style={styles.tdActions}>
-                    <div style={styles.actionRow}>
-                      <button style={{ ...styles.iconBtn, ...styles.view }} title="View" onClick={() => setViewReceipt(r)}><MdVisibility size={16} /></button>
-                      {canPrint && (
-                        <button
-                          style={{ ...styles.iconBtn, ...styles.view,  }}
-                                                    title={"Print receipt"}
-                          onClick={() => handlePrint(r)}
-                        ><MdPrint size={16} /></button>
-                      )}
-                      {canPrint && (
-                        <button
-                          style={{ ...styles.iconBtn, ...styles.view, ...((exportingId === r.id) ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
-                          disabled={exportingId === r.id}
-                          title={"Download PDF"}
-                          onClick={() => handleExportPdf(r)}
-                        ><MdPictureAsPdf size={16} /></button>
-                      )}
-                      {canUpdate && <button style={{ ...styles.iconBtn, ...styles.edit }} title="Edit" onClick={() => { setEditReceipt(r); setShowForm(true); }}><MdEdit size={16} /></button>}
-                      {canDelete && r.isLatest && <button style={{ ...styles.iconBtn, ...styles.del }} title="Delete (latest only)" onClick={() => handleDelete(r)}><MdDelete size={16} /></button>}
-                    </div>
-                  </td>
+        ) : selectedCompany ? (
+          <div data-admin-table-region="" style={styles.scroll}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <th style={styles.thNum}>#</th>
+                  <th style={styles.th}>Date</th>
+                  <th style={styles.th}>Customer</th>
+                  <th style={styles.th}>Description</th>
+                  <th style={styles.thMoney}>Amount</th>
+                  <th style={styles.thActions}></th>
                 </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colSpan={4} style={styles.tfLabel}>Total</td>
-                <td style={styles.tfMoney}>{money(total)}</td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      ) : null}</RecordsViewport>
+              </thead>
+              <tbody>
+                {filtered.map((r) => (
+                  <tr key={r.id} style={styles.tr}>
+                    <td style={styles.tdNum}>
+                      {r.receiptNumber}{" "}
+                      <AttachmentBadge
+                        count={attachCounts[r.id]}
+                        onClick={() => setAttachTarget(r)}
+                      />
+                    </td>
+                    <td style={styles.td}>{fmtDate(r.date)}</td>
+                    <td style={{ ...styles.td, fontWeight: 600 }}>{r.clientName}</td>
+                    <td style={{ ...styles.td, color: colors.textSecondary }}>
+                      {r.description || "—"}
+                    </td>
+                    <td style={styles.tdMoney}>{money(r.amount)}</td>
+                    <td style={styles.tdActions}>
+                      <div style={styles.actionRow}>
+                        <button
+                          style={{ ...styles.iconBtn, ...styles.view }}
+                          title="View"
+                          onClick={() => setViewReceipt(r)}
+                        >
+                          <MdVisibility size={16} />
+                        </button>
+                        {canPrint && (
+                          <button
+                            style={{ ...styles.iconBtn, ...styles.view }}
+                            title={"Print receipt"}
+                            onClick={() => handlePrint(r)}
+                          >
+                            <MdPrint size={16} />
+                          </button>
+                        )}
+                        {canPrint && (
+                          <button
+                            style={{
+                              ...styles.iconBtn,
+                              ...styles.view,
+                              ...(exportingId === r.id
+                                ? { opacity: 0.5, cursor: "not-allowed" }
+                                : {}),
+                            }}
+                            disabled={exportingId === r.id}
+                            title={"Download PDF"}
+                            onClick={() => handleExportPdf(r)}
+                          >
+                            <MdPictureAsPdf size={16} />
+                          </button>
+                        )}
+                        {canUpdate && (
+                          <button
+                            style={{ ...styles.iconBtn, ...styles.edit }}
+                            title="Edit"
+                            onClick={() => {
+                              setEditReceipt(r);
+                              setShowForm(true);
+                            }}
+                          >
+                            <MdEdit size={16} />
+                          </button>
+                        )}
+                        {canDelete && r.isLatest && (
+                          <button
+                            style={{ ...styles.iconBtn, ...styles.del }}
+                            title="Delete (latest only)"
+                            onClick={() => handleDelete(r)}
+                          >
+                            <MdDelete size={16} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={4} style={styles.tfLabel}>
+                    Total
+                  </td>
+                  <td style={styles.tfMoney}>{money(total)}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        ) : null}
+      </RecordsViewport>
 
       {showForm && selectedCompany && (
         <WithholdingTaxReceiptForm
           companyId={selectedCompany.id}
           receipt={editReceipt}
-          onClose={() => { setShowForm(false); setEditReceipt(null); }}
+          onClose={() => {
+            setShowForm(false);
+            setEditReceipt(null);
+          }}
           onSaved={handleSave}
         />
       )}
@@ -325,34 +493,96 @@ export default function WithholdingTaxReceiptsPage() {
           entityType="WithholdingTaxReceipt"
           entityId={attachTarget.id}
           title={`Receipt #${attachTarget.receiptNumber} — Attachments`}
-          onClose={() => { setAttachTarget(null); refreshAttachCounts(); }}
+          onClose={() => {
+            setAttachTarget(null);
+            refreshAttachCounts();
+          }}
         />
       )}
       {viewReceipt && (
-        <div data-admin-backdrop="" style={formStyles.backdrop} onClick={() => setViewReceipt(null)}>
-          <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px` }} onClick={(e) => e.stopPropagation()}>
+        <div
+          data-admin-backdrop=""
+          style={formStyles.backdrop}
+          onClick={() => setViewReceipt(null)}
+        >
+          <div
+            data-admin-dialog=""
+            style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px` }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div data-admin-header="" style={formStyles.header}>
               <h5 style={formStyles.title}>Withholding Tax Receipt #{viewReceipt.receiptNumber}</h5>
-              <button data-admin-close="" style={formStyles.closeButton} onClick={() => setViewReceipt(null)}>&times;</button>
+              <button
+                data-admin-close=""
+                style={formStyles.closeButton}
+                onClick={() => setViewReceipt(null)}
+              >
+                &times;
+              </button>
             </div>
             <div data-admin-body="" style={formStyles.body}>
-              <div style={styles.vRow}><span style={styles.vLbl}>Customer</span><span style={styles.vVal}>{viewReceipt.clientName}</span></div>
-              <div style={styles.vRow}><span style={styles.vLbl}>Date</span><span style={styles.vVal}>{fmtDate(viewReceipt.date)}</span></div>
-              <div style={styles.vRow}><span style={styles.vLbl}>Description</span><span style={styles.vVal}>{viewReceipt.description || "—"}</span></div>
-              <div style={{ ...styles.vRow, borderTop: `1px solid ${colors.cardBorder}`, marginTop: 8, paddingTop: 12 }}>
-                <span style={styles.vLbl}>Amount</span><span style={{ ...styles.vVal, fontSize: "1.2rem", fontWeight: 700, color: colors.blue }}>{money(viewReceipt.amount)}</span>
+              <div style={styles.vRow}>
+                <span style={styles.vLbl}>Customer</span>
+                <span style={styles.vVal}>{viewReceipt.clientName}</span>
+              </div>
+              <div style={styles.vRow}>
+                <span style={styles.vLbl}>Date</span>
+                <span style={styles.vVal}>{fmtDate(viewReceipt.date)}</span>
+              </div>
+              <div style={styles.vRow}>
+                <span style={styles.vLbl}>Description</span>
+                <span style={styles.vVal}>{viewReceipt.description || "—"}</span>
+              </div>
+              <div
+                style={{
+                  ...styles.vRow,
+                  borderTop: `1px solid ${colors.cardBorder}`,
+                  marginTop: 8,
+                  paddingTop: 12,
+                }}
+              >
+                <span style={styles.vLbl}>Amount</span>
+                <span
+                  style={{
+                    ...styles.vVal,
+                    fontSize: "1.2rem",
+                    fontWeight: 700,
+                    color: colors.blue,
+                  }}
+                >
+                  {money(viewReceipt.amount)}
+                </span>
               </div>
               <div style={{ marginTop: 14 }}>
-                <AttachmentManager companyId={selectedCompany.id} entityType="WithholdingTaxReceipt" entityId={viewReceipt.id} mode="view" title="Certificate" />
+                <AttachmentManager
+                  companyId={selectedCompany.id}
+                  entityType="WithholdingTaxReceipt"
+                  entityId={viewReceipt.id}
+                  mode="view"
+                  title="Certificate"
+                />
               </div>
             </div>
             <div data-admin-footer="" style={formStyles.footer}>
-              <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setViewReceipt(null)}>Close</button>
+              <button
+                data-admin-close=""
+                type="button"
+                style={{ ...formStyles.button, ...formStyles.cancel }}
+                onClick={() => setViewReceipt(null)}
+              >
+                Close
+              </button>
               {canPrint && (
                 <button
                   type="button"
-                                    title={"Print receipt"}
-                  style={{ ...formStyles.button, ...formStyles.submit, display: "inline-flex", alignItems: "center", gap: 6,  }}
+                  title={"Print receipt"}
+                  style={{
+                    ...formStyles.button,
+                    ...formStyles.submit,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
                   onClick={() => handlePrint(viewReceipt)}
                 >
                   <MdPrint size={16} /> Print
@@ -363,7 +593,14 @@ export default function WithholdingTaxReceiptsPage() {
                   type="button"
                   disabled={!!exportingId}
                   title={"Download PDF"}
-                  style={{ ...formStyles.button, ...formStyles.submit, display: "inline-flex", alignItems: "center", gap: 6, ...((exportingId) ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
+                  style={{
+                    ...formStyles.button,
+                    ...formStyles.submit,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    ...(exportingId ? { opacity: 0.5, cursor: "not-allowed" } : {}),
+                  }}
                   onClick={() => handleExportPdf(viewReceipt)}
                 >
                   <MdPictureAsPdf size={16} /> PDF
@@ -378,48 +615,232 @@ export default function WithholdingTaxReceiptsPage() {
 }
 
 const styles = {
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem", marginBottom: "1.5rem" },
-  headerIcon: { width: 48, height: 48, borderRadius: 14, background: "linear-gradient(135deg, #0d47a1, #00897b)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  header: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: "1rem",
+    marginBottom: "1.5rem",
+  },
+  headerIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    background: "linear-gradient(135deg, #0d47a1, #00897b)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
   pageTitle: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: colors.textPrimary },
   pageSubtitle: { margin: "0.15rem 0 0", fontSize: "0.88rem", color: colors.textSecondary },
-  addBtn: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1.25rem", borderRadius: 10, border: "none", background: "linear-gradient(135deg, #0d47a1, #00897b)", color: "#fff", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 14px rgba(13,71,161,0.25)" },
-  filters: { display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1.25rem" },
+  addBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    padding: "0.55rem 1.25rem",
+    borderRadius: 10,
+    border: "none",
+    background: "linear-gradient(135deg, #0d47a1, #00897b)",
+    color: "#fff",
+    fontSize: "0.9rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    boxShadow: "0 4px 14px rgba(13,71,161,0.25)",
+  },
+  filters: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.75rem",
+    flexWrap: "wrap",
+    marginBottom: "1.25rem",
+  },
   searchWrap: { position: "relative", flex: 1, minWidth: 180, maxWidth: 320 },
-  searchIcon: { position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", fontSize: "1.1rem" },
-  searchInput: { width: "100%", padding: "0.55rem 0.75rem 0.55rem 2.3rem", border: "1px solid #d0d7e2", borderRadius: 10, fontSize: "0.88rem", backgroundColor: "#f8f9fb", color: "#1a2332", outline: "none" },
-  scroll: { width: "100%", overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 12, background: "#fff", WebkitOverflowScrolling: "touch" },
+  searchIcon: {
+    position: "absolute",
+    left: 12,
+    top: "50%",
+    transform: "translateY(-50%)",
+    color: "#94a3b8",
+    fontSize: "1.1rem",
+  },
+  searchInput: {
+    width: "100%",
+    padding: "0.55rem 0.75rem 0.55rem 2.3rem",
+    border: "1px solid #d0d7e2",
+    borderRadius: 10,
+    fontSize: "0.88rem",
+    backgroundColor: "#f8f9fb",
+    color: "#1a2332",
+    outline: "none",
+  },
+  scroll: {
+    width: "100%",
+    overflowX: "auto",
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 12,
+    background: "#fff",
+    WebkitOverflowScrolling: "touch",
+  },
   table: { width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", minWidth: 640 },
-  th: { textAlign: "left", padding: "0.6rem 0.8rem", fontWeight: 700, color: colors.textSecondary, fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.02em", background: "#f8f9fb", borderBottom: "2px solid #e8edf3", whiteSpace: "nowrap" },
-  thNum: { textAlign: "right", padding: "0.6rem 0.6rem", fontWeight: 700, color: colors.textSecondary, fontSize: "0.72rem", background: "#f8f9fb", borderBottom: "2px solid #e8edf3", width: 50 },
-  thMoney: { textAlign: "right", padding: "0.6rem 0.8rem", fontWeight: 700, color: colors.textSecondary, fontSize: "0.72rem", background: "#f8f9fb", borderBottom: "2px solid #e8edf3", whiteSpace: "nowrap" },
-  thActions: { padding: "0.6rem 0.5rem", background: "#f8f9fb", borderBottom: "2px solid #e8edf3", width: 1 },
+  th: {
+    textAlign: "left",
+    padding: "0.6rem 0.8rem",
+    fontWeight: 700,
+    color: colors.textSecondary,
+    fontSize: "0.72rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.02em",
+    background: "#f8f9fb",
+    borderBottom: "2px solid #e8edf3",
+    whiteSpace: "nowrap",
+  },
+  thNum: {
+    textAlign: "right",
+    padding: "0.6rem 0.6rem",
+    fontWeight: 700,
+    color: colors.textSecondary,
+    fontSize: "0.72rem",
+    background: "#f8f9fb",
+    borderBottom: "2px solid #e8edf3",
+    width: 50,
+  },
+  thMoney: {
+    textAlign: "right",
+    padding: "0.6rem 0.8rem",
+    fontWeight: 700,
+    color: colors.textSecondary,
+    fontSize: "0.72rem",
+    background: "#f8f9fb",
+    borderBottom: "2px solid #e8edf3",
+    whiteSpace: "nowrap",
+  },
+  thActions: {
+    padding: "0.6rem 0.5rem",
+    background: "#f8f9fb",
+    borderBottom: "2px solid #e8edf3",
+    width: 1,
+  },
   tr: { borderBottom: "1px solid #eef2f7" },
   td: { padding: "0.55rem 0.8rem", color: "#334155", verticalAlign: "middle" },
-  tdNum: { padding: "0.55rem 0.6rem", textAlign: "right", color: colors.textSecondary, verticalAlign: "middle", fontVariantNumeric: "tabular-nums" },
-  tdMoney: { padding: "0.55rem 0.8rem", textAlign: "right", color: "#1a2332", fontWeight: 600, verticalAlign: "middle", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" },
+  tdNum: {
+    padding: "0.55rem 0.6rem",
+    textAlign: "right",
+    color: colors.textSecondary,
+    verticalAlign: "middle",
+    fontVariantNumeric: "tabular-nums",
+  },
+  tdMoney: {
+    padding: "0.55rem 0.8rem",
+    textAlign: "right",
+    color: "#1a2332",
+    fontWeight: 600,
+    verticalAlign: "middle",
+    whiteSpace: "nowrap",
+    fontVariantNumeric: "tabular-nums",
+  },
   tdActions: { padding: "0.4rem 0.5rem", verticalAlign: "middle" },
-  divTag: { marginLeft: 8, fontSize: "0.68rem", fontWeight: 700, color: "#4527a0", background: "#ede7f6", padding: "0.1rem 0.4rem", borderRadius: 8 },
+  divTag: {
+    marginLeft: 8,
+    fontSize: "0.68rem",
+    fontWeight: 700,
+    color: "#4527a0",
+    background: "#ede7f6",
+    padding: "0.1rem 0.4rem",
+    borderRadius: 8,
+  },
   actionRow: { display: "flex", gap: 4, justifyContent: "flex-end" },
-  iconBtn: { display: "grid", placeItems: "center", padding: 0, boxShadow: "none", width: 44, height: 44, borderRadius: 8, border: "none", cursor: "pointer" },
+  iconBtn: {
+    display: "grid",
+    placeItems: "center",
+    padding: 0,
+    boxShadow: "none",
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    border: "none",
+    cursor: "pointer",
+  },
   // Phone and tablet (<1024px) stacked-card fallback for the wide table.
-  mIconBtn: { display: "grid", placeItems: "center", padding: 0, boxShadow: "none", width: 44, height: 44, borderRadius: 8, border: "none", cursor: "pointer" },
+  mIconBtn: {
+    display: "grid",
+    placeItems: "center",
+    padding: 0,
+    boxShadow: "none",
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    border: "none",
+    cursor: "pointer",
+  },
   cardList: { display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: 8 },
   card: { ...cardStyles.card, padding: "0.85rem 0.95rem" },
   cardNum: { fontWeight: 700, fontSize: "0.95rem", color: colors.blue },
   cardDate: { fontSize: "0.78rem", color: colors.textSecondary },
-  cardActions: { display: "flex", flexWrap: "wrap", gap: "0.4rem", justifyContent: "flex-end", borderTop: `1px solid ${colors.cardBorder}`, paddingTop: "0.6rem" },
-  totalCard: { ...cardStyles.card, padding: "0.75rem 0.95rem", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f0f7ff" },
+  cardActions: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "0.4rem",
+    justifyContent: "flex-end",
+    borderTop: `1px solid ${colors.cardBorder}`,
+    paddingTop: "0.6rem",
+  },
+  totalCard: {
+    ...cardStyles.card,
+    padding: "0.75rem 0.95rem",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    background: "#f0f7ff",
+  },
   totalCardLabel: { fontWeight: 700, color: colors.textSecondary },
   totalCardValue: { fontWeight: 800, color: colors.blue },
   view: { background: "#e0f2f1", color: "#00695c" },
   edit: { background: "#e3f2fd", color: "#0d47a1" },
   del: { background: "#ffebee", color: "#c62828" },
-  tfLabel: { padding: "0.6rem 0.8rem", textAlign: "right", fontWeight: 700, color: colors.textSecondary, borderTop: "2px solid #e8edf3", background: "#fafbfc" },
-  tfMoney: { padding: "0.6rem 0.8rem", textAlign: "right", fontWeight: 800, color: colors.blue, borderTop: "2px solid #e8edf3", background: "#fafbfc", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" },
+  tfLabel: {
+    padding: "0.6rem 0.8rem",
+    textAlign: "right",
+    fontWeight: 700,
+    color: colors.textSecondary,
+    borderTop: "2px solid #e8edf3",
+    background: "#fafbfc",
+  },
+  tfMoney: {
+    padding: "0.6rem 0.8rem",
+    textAlign: "right",
+    fontWeight: 800,
+    color: colors.blue,
+    borderTop: "2px solid #e8edf3",
+    background: "#fafbfc",
+    whiteSpace: "nowrap",
+    fontVariantNumeric: "tabular-nums",
+  },
   vRow: { display: "flex", justifyContent: "space-between", gap: 12, padding: "0.4rem 0" },
-  vLbl: { fontSize: "0.78rem", fontWeight: 600, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.02em" },
+  vLbl: {
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    color: colors.textSecondary,
+    textTransform: "uppercase",
+    letterSpacing: "0.02em",
+  },
   vVal: { fontSize: "0.9rem", color: "#1a2332", textAlign: "right" },
   loading: { display: "flex", alignItems: "center", justifyContent: "center", padding: "3rem 0" },
-  spinner: { width: 28, height: 28, border: `3px solid ${colors.cardBorder}`, borderTopColor: colors.blue, borderRadius: "50%", animation: "spin 0.8s linear infinite" },
-  emptyState: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "3rem 1rem", textAlign: "center" },
+  spinner: {
+    width: 28,
+    height: 28,
+    border: `3px solid ${colors.cardBorder}`,
+    borderTopColor: colors.blue,
+    borderRadius: "50%",
+    animation: "spin 0.8s linear infinite",
+  },
+  emptyState: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "3rem 1rem",
+    textAlign: "center",
+  },
 };

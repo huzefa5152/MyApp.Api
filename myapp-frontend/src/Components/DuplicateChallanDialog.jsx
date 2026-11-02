@@ -42,19 +42,30 @@ export default function DuplicateChallanDialog({ open, challanNumber, onConfirm,
   };
 
   return (
-    <div data-admin-backdrop=""
+    <div
+      data-admin-backdrop=""
       style={{ ...formStyles.backdrop, zIndex: 1102, animation: "fadeIn 0.2s ease" }}
       // No backdrop-close — keeps the operator's intent unambiguous.
     >
-      <div data-admin-dialog=""
-        style={{ ...formStyles.modal, maxWidth: `${modalSizes.sm}px`, animation: "fadeIn 0.25s ease" }}
+      <div
+        data-admin-dialog=""
+        style={{
+          ...formStyles.modal,
+          maxWidth: `${modalSizes.sm}px`,
+          animation: "fadeIn 0.25s ease",
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", justifyContent: "center", paddingTop: 28 }}>
           <div
             style={{
-              width: 56, height: 56, borderRadius: "50%", background: "#ede7f6",
-              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 56,
+              height: 56,
+              borderRadius: "50%",
+              background: "#ede7f6",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
             <MdContentCopy size={28} color="#4527a0" />
@@ -66,8 +77,8 @@ export default function DuplicateChallanDialog({ open, challanNumber, onConfirm,
             Duplicate Challan #{challanNumber}?
           </h3>
           <p style={{ margin: 0, fontSize: "0.88rem", color: "#5f6d7e", lineHeight: 1.5 }}>
-            How many copies should be created? Each copy reuses the same challan
-            number and can be edited (PO, items) independently.
+            How many copies should be created? Each copy reuses the same challan number and can be
+            edited (PO, items) independently.
           </p>
         </div>
 
@@ -79,7 +90,9 @@ export default function DuplicateChallanDialog({ open, challanNumber, onConfirm,
                 onClick={() => setCount((c) => clamp((+c || 1) - 1))}
                 aria-label="Decrease"
                 style={S.stepBtn}
-              >−</button>
+              >
+                −
+              </button>
               <input
                 ref={inputRef}
                 type="number"
@@ -96,25 +109,34 @@ export default function DuplicateChallanDialog({ open, challanNumber, onConfirm,
                 onClick={() => setCount((c) => clamp((+c || 1) + 1))}
                 aria-label="Increase"
                 style={S.stepBtn}
-              >+</button>
+              >
+                +
+              </button>
             </div>
           </div>
-          <div style={{ textAlign: "center", fontSize: "0.75rem", color: "#98a4b3", padding: "0 28px 4px" }}>
+          <div
+            style={{
+              textAlign: "center",
+              fontSize: "0.75rem",
+              color: "#98a4b3",
+              padding: "0 28px 4px",
+            }}
+          >
             Maximum 20 per request.
           </div>
 
-          <div style={{ display: "flex", gap: 10, padding: "16px 28px 24px", justifyContent: "center" }}>
-            <button data-admin-close=""
-              type="button"
-              onClick={onCancel}
-              style={S.cancelBtn}
-            >
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              padding: "16px 28px 24px",
+              justifyContent: "center",
+            }}
+          >
+            <button data-admin-close="" type="button" onClick={onCancel} style={S.cancelBtn}>
               Cancel
             </button>
-            <button
-              type="submit"
-              style={S.confirmBtn}
-            >
+            <button type="submit" style={S.confirmBtn}>
               {clamp(+count) === 1 ? "Create 1 copy" : `Create ${clamp(+count)} copies`}
             </button>
           </div>
@@ -126,24 +148,49 @@ export default function DuplicateChallanDialog({ open, challanNumber, onConfirm,
 
 const S = {
   stepBtn: {
-    width: 36, height: 36, borderRadius: 8, border: "1px solid #d0d7e2",
-    background: "#fff", color: "#1a2332", fontWeight: 700, fontSize: "1.1rem",
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    border: "1px solid #d0d7e2",
+    background: "#fff",
+    color: "#1a2332",
+    fontWeight: 700,
+    fontSize: "1.1rem",
     cursor: "pointer",
   },
   input: {
-    width: 84, height: 36, padding: "0 10px", borderRadius: 8,
-    border: "1px solid #d0d7e2", background: "#fff",
-    color: "#1a2332", fontSize: "1.1rem", fontWeight: 700, textAlign: "center",
+    width: 84,
+    height: 36,
+    padding: "0 10px",
+    borderRadius: 8,
+    border: "1px solid #d0d7e2",
+    background: "#fff",
+    color: "#1a2332",
+    fontSize: "1.1rem",
+    fontWeight: 700,
+    textAlign: "center",
     outline: "none",
   },
   cancelBtn: {
-    flex: 1, padding: "10px 20px", borderRadius: 10, border: "1px solid #d0d7e2",
-    background: "#fff", color: "#1a2332", fontWeight: 600, fontSize: "0.9rem",
+    flex: 1,
+    padding: "10px 20px",
+    borderRadius: 10,
+    border: "1px solid #d0d7e2",
+    background: "#fff",
+    color: "#1a2332",
+    fontWeight: 600,
+    fontSize: "0.9rem",
     cursor: "pointer",
   },
   confirmBtn: {
-    flex: 1, padding: "10px 20px", borderRadius: 10, border: "none",
-    background: "#4527a0", color: "#fff", fontWeight: 600, fontSize: "0.9rem",
+    flex: 1,
+    padding: "10px 20px",
+    borderRadius: 10,
+    border: "none",
+    background: "#4527a0",
+    color: "#fff",
+    fontWeight: 600,
+    fontSize: "0.9rem",
     cursor: "pointer",
   },
 };

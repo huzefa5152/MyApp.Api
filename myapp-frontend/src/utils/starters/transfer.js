@@ -10,13 +10,13 @@
  */
 
 export const transferStarters = [
-
   // ─── 1. Classic Serif (double-rule header, teal accent) ─────────────────────
   {
     id: "transfer-classic-serif",
     name: "Classic Serif",
     type: "Transfer",
-    description: "Traditional Times New Roman layout with double-rule header, framed From/To panel and highlighted amount box",
+    description:
+      "Traditional Times New Roman layout with double-rule header, framed From/To panel and highlighted amount box",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Fund Transfer Voucher {{reference}}</title><style>
 @media print { @page { size: A4; margin: 12mm; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -88,7 +88,8 @@ body { font-family: "Times New Roman", Times, serif; padding: 14mm; color: #000;
     id: "transfer-modern-minimal",
     name: "Modern Minimal",
     type: "Transfer",
-    description: "Clean sans-serif with a thin teal-to-purple gradient accent rule and From/To as two cards with a central arrow",
+    description:
+      "Clean sans-serif with a thin teal-to-purple gradient accent rule and From/To as two cards with a central arrow",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Inter-Account Transfer {{reference}}</title><style>
 @media print { @page { size: A4; margin: 12mm; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -159,7 +160,8 @@ body { font-family: Calibri, "Segoe UI", Arial, sans-serif; padding: 14mm; color
     id: "transfer-corporate-band",
     name: "Corporate Band",
     type: "Transfer",
-    description: "Full-width purple header band with white reversed company name and voucher reference, framed From/To row and bold amount panel",
+    description:
+      "Full-width purple header band with white reversed company name and voucher reference, framed From/To row and bold amount panel",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Fund Transfer Voucher {{reference}}</title><style>
 @media print { @page { size: A4; margin: 0; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -234,7 +236,8 @@ body { font-family: Calibri, Arial, sans-serif; color: #111; }
     id: "transfer-monochrome-ink",
     name: "Monochrome Ink-Saver",
     type: "Transfer",
-    description: "Hairline black borders only, no fills, pure black-and-white for minimum toner use",
+    description:
+      "Hairline black borders only, no fills, pure black-and-white for minimum toner use",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Fund Transfer Voucher {{reference}}</title><style>
 @media print { @page { size: A4; margin: 14mm; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -296,5 +299,4 @@ body { font-family: Arial, sans-serif; padding: 14mm; color: #000; font-size: 11
 </div>
 </body></html>`,
   },
-
 ];

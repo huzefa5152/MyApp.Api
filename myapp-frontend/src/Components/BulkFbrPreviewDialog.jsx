@@ -35,21 +35,31 @@ import { formStyles, modalSizes } from "../theme";
  */
 export default function BulkFbrPreviewDialog({ invoices, onClose }) {
   // Per-row UI state: which rows are expanded + their cached payloads.
-  const [expandedById, setExpandedById] = useState({});  // { id: boolean }
-  const [payloadById, setPayloadById] = useState({});    // { id: { loading, error, data, itemCount, originalLineCount } }
+  const [expandedById, setExpandedById] = useState({}); // { id: boolean }
+  const [payloadById, setPayloadById] = useState({}); // { id: { loading, error, data, itemCount, originalLineCount } }
 
   const toggleRow = useCallback((id) => {
     setExpandedById((prev) => ({ ...prev, [id]: !prev[id] }));
     // Lazy-fetch on first expand only.
     setPayloadById((prev) => {
-      if (prev[id]) return prev;        // already in-flight or loaded
-      const next = { ...prev, [id]: { loading: true, error: "", data: null, itemCount: 0, originalLineCount: 0 } };
+      if (prev[id]) return prev; // already in-flight or loaded
+      const next = {
+        ...prev,
+        [id]: { loading: true, error: "", data: null, itemCount: 0, originalLineCount: 0 },
+      };
       // Fire the fetch — we don't await; React updates state when it lands.
       httpClient
         .get(`/fbr/${id}/preview-payload`)
         .then(({ data }) => {
           if (!data?.success) {
-            setPayloadById((p) => ({ ...p, [id]: { ...p[id], loading: false, error: data?.errorMessage || "Failed to build preview" } }));
+            setPayloadById((p) => ({
+              ...p,
+              [id]: {
+                ...p[id],
+                loading: false,
+                error: data?.errorMessage || "Failed to build preview",
+              },
+            }));
             return;
           }
           const json = data.preview?.json;
@@ -68,7 +78,11 @@ export default function BulkFbrPreviewDialog({ invoices, onClose }) {
         .catch((e) => {
           setPayloadById((p) => ({
             ...p,
-            [id]: { ...p[id], loading: false, error: e.response?.data?.errorMessage || e.message || "Failed to load preview" },
+            [id]: {
+              ...p[id],
+              loading: false,
+              error: e.response?.data?.errorMessage || e.message || "Failed to load preview",
+            },
           }));
         });
       return next;
@@ -85,7 +99,7 @@ export default function BulkFbrPreviewDialog({ invoices, onClose }) {
       setExpandedById((prev) => {
         if (prev[inv.id]) return prev;
         toggleRow(inv.id);
-        return prev;  // toggleRow already updated; this guards re-entry
+        return prev; // toggleRow already updated; this guards re-entry
       });
     });
   }, [invoices, toggleRow]);
@@ -103,12 +117,17 @@ export default function BulkFbrPreviewDialog({ invoices, onClose }) {
 
   const fmtMoney = (n) =>
     `Rs. ${Number(n || 0).toLocaleString("en-PK", { maximumFractionDigits: 0 })}`;
-  const fmtNum = (n) => Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtNum = (n) =>
+    Number(n || 0).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
   const fmtQty = (n) => parseFloat(Number(n || 0).toFixed(4)).toString();
 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
-      <div data-admin-dialog=""
+      <div
+        data-admin-dialog=""
         style={{
           ...formStyles.modal,
           maxWidth: `${modalSizes.xl}px`,
@@ -121,8 +140,17 @@ export default function BulkFbrPreviewDialog({ invoices, onClose }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div data-admin-header="" style={formStyles.header}>
-          <h5 style={formStyles.title}>FBR Submission Preview · {stats.total} bill{stats.total === 1 ? "" : "s"}</h5>
-          <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close" title="Close">
+          <h5 style={formStyles.title}>
+            FBR Submission Preview · {stats.total} bill{stats.total === 1 ? "" : "s"}
+          </h5>
+          <button
+            data-admin-close=""
+            type="button"
+            style={formStyles.closeButton}
+            onClick={onClose}
+            aria-label="Close"
+            title="Close"
+          >
             <MdClose size={20} color="#fff" />
           </button>
         </div>
@@ -132,7 +160,9 @@ export default function BulkFbrPreviewDialog({ invoices, onClose }) {
           <div style={s.summaryStrip}>
             <div style={s.summaryItem}>
               <MdInfo size={16} color="#0d47a1" />
-              <span><strong>{stats.total}</strong> ready</span>
+              <span>
+                <strong>{stats.total}</strong> ready
+              </span>
             </div>
             <div style={s.summaryItem}>
               <strong>{fmtMoney(stats.grandTotalSum)}</strong>
@@ -140,15 +170,22 @@ export default function BulkFbrPreviewDialog({ invoices, onClose }) {
             </div>
             <div style={{ flex: 1 }} />
             <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
-              <button type="button" style={s.linkBtn} onClick={expandAll}>Expand all</button>
-              <button type="button" style={s.linkBtn} onClick={collapseAll}>Collapse all</button>
+              <button type="button" style={s.linkBtn} onClick={expandAll}>
+                Expand all
+              </button>
+              <button type="button" style={s.linkBtn} onClick={collapseAll}>
+                Collapse all
+              </button>
             </div>
           </div>
 
           {invoices.length === 0 ? (
             <div style={s.emptyState}>
               <MdInfo size={20} color="#5f6d7e" />
-              <span>No bills ready to validate. Set the FBR fields (HS Code, Sale Type, UOM, Unit Price) on each bill first.</span>
+              <span>
+                No bills ready to validate. Set the FBR fields (HS Code, Sale Type, UOM, Unit Price)
+                on each bill first.
+              </span>
             </div>
           ) : (
             <div style={s.rowsList}>
@@ -169,7 +206,12 @@ export default function BulkFbrPreviewDialog({ invoices, onClose }) {
         </div>
 
         <div data-admin-footer="" style={formStyles.footer}>
-          <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>
+          <button
+            data-admin-close=""
+            type="button"
+            style={{ ...formStyles.button, ...formStyles.cancel }}
+            onClick={onClose}
+          >
             Close
           </button>
         </div>
@@ -183,8 +225,10 @@ export default function BulkFbrPreviewDialog({ invoices, onClose }) {
 function BillRow({ invoice, expanded, payload, onToggle, fmtMoney, fmtNum, fmtQty }) {
   const statusBadge = useMemo(() => {
     const fs = invoice.fbrStatus;
-    if (fs === "Submitted") return { text: "Submitted", style: s.badgeSubmitted, icon: MdCheckCircle };
-    if (fs === "Validated") return { text: "Validated", style: s.badgeValidated, icon: MdCheckCircle };
+    if (fs === "Submitted")
+      return { text: "Submitted", style: s.badgeSubmitted, icon: MdCheckCircle };
+    if (fs === "Validated")
+      return { text: "Validated", style: s.badgeValidated, icon: MdCheckCircle };
     if (fs === "Failed") return { text: "Failed", style: s.badgeFailed, icon: MdWarning };
     return { text: "Ready", style: s.badgeReady, icon: MdHourglassEmpty };
   }, [invoice.fbrStatus]);
@@ -192,18 +236,26 @@ function BillRow({ invoice, expanded, payload, onToggle, fmtMoney, fmtNum, fmtQt
 
   return (
     <div data-admin-form-row="" style={s.row}>
-      <button
-        type="button"
-        style={s.rowHeader}
-        onClick={onToggle}
-        aria-expanded={expanded}
-      >
+      <button type="button" style={s.rowHeader} onClick={onToggle} aria-expanded={expanded}>
         <div style={s.rowHeaderLeft}>
-          {expanded ? <MdExpandLess size={20} color="#0d47a1" /> : <MdExpandMore size={20} color="#0d47a1" />}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", minWidth: 0 }}>
+          {expanded ? (
+            <MdExpandLess size={20} color="#0d47a1" />
+          ) : (
+            <MdExpandMore size={20} color="#0d47a1" />
+          )}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-start",
+              minWidth: 0,
+            }}
+          >
             <div style={s.rowTitle}>
               Bill #{invoice.invoiceNumber}
-              {invoice.fbrInvoiceNumber && <span style={s.rowSubtitle}> · {invoice.fbrInvoiceNumber}</span>}
+              {invoice.fbrInvoiceNumber && (
+                <span style={s.rowSubtitle}> · {invoice.fbrInvoiceNumber}</span>
+              )}
             </div>
             <div style={s.rowMeta}>
               {invoice.clientName} · {new Date(invoice.date).toLocaleDateString("en-GB")}
@@ -264,7 +316,7 @@ function PayloadPanel({ payload, itemCount, originalLineCount, fmtNum, fmtQty })
           total: acc.total + value + tax + further + extra,
         };
       },
-      { qty: 0, value: 0, tax: 0, further: 0, total: 0 }
+      { qty: 0, value: 0, tax: 0, further: 0, total: 0 },
     );
   }, [payload]);
   const [showRaw, setShowRaw] = useState(false);
@@ -274,7 +326,9 @@ function PayloadPanel({ payload, itemCount, originalLineCount, fmtNum, fmtQty })
       await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   };
 
   return (
@@ -288,7 +342,9 @@ function PayloadPanel({ payload, itemCount, originalLineCount, fmtNum, fmtQty })
         <div>
           <div style={s.partyLabel}>Buyer ({payload?.buyerRegistrationType})</div>
           <div style={s.partyName}>{payload?.buyerBusinessName}</div>
-          <div style={s.partyMeta}>NTN/CNIC: {payload?.buyerNTNCNIC || <em>(unregistered)</em>}</div>
+          <div style={s.partyMeta}>
+            NTN/CNIC: {payload?.buyerNTNCNIC || <em>(unregistered)</em>}
+          </div>
         </div>
         <div>
           <div style={s.partyLabel}>Document</div>
@@ -344,7 +400,9 @@ function PayloadPanel({ payload, itemCount, originalLineCount, fmtNum, fmtQty })
                   <td style={{ ...s.td, textAlign: "right" }}>{fmtQty(it.quantity)}</td>
                   <td style={{ ...s.td, textAlign: "right" }}>{fmtNum(value)}</td>
                   <td style={{ ...s.td, textAlign: "right" }}>{fmtNum(tax)}</td>
-                  <td style={{ ...s.td, textAlign: "right", fontWeight: 700 }}>{fmtNum(lineTotal)}</td>
+                  <td style={{ ...s.td, textAlign: "right", fontWeight: 700 }}>
+                    {fmtNum(lineTotal)}
+                  </td>
                 </tr>
               );
             })}
@@ -371,7 +429,15 @@ function PayloadPanel({ payload, itemCount, originalLineCount, fmtNum, fmtQty })
         </button>
         {showRaw && (
           <button type="button" style={s.linkBtn} onClick={copyJson}>
-            {copied ? <><MdCheckCircle size={14} /> Copied</> : <><MdContentCopy size={14} /> Copy</>}
+            {copied ? (
+              <>
+                <MdCheckCircle size={14} /> Copied
+              </>
+            ) : (
+              <>
+                <MdContentCopy size={14} /> Copy
+              </>
+            )}
           </button>
         )}
       </div>
@@ -429,7 +495,7 @@ const s = {
     border: "none",
     cursor: "pointer",
     textAlign: "left",
-    flexWrap: "wrap",  // mobile fallback — chip/totals drop below the title
+    flexWrap: "wrap", // mobile fallback — chip/totals drop below the title
   },
   rowHeaderLeft: {
     display: "flex",
@@ -465,10 +531,10 @@ const s = {
     fontWeight: 700,
     whiteSpace: "nowrap",
   },
-  badgeReady:     { background: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" },
+  badgeReady: { background: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" },
   badgeValidated: { background: "#e8f5e9", color: "#1b5e20", border: "1px solid #a5d6a7" },
   badgeSubmitted: { background: "#e0f2f1", color: "#00695c", border: "1px solid #80cbc4" },
-  badgeFailed:    { background: "#ffebee", color: "#b71c1c", border: "1px solid #ef9a9a" },
+  badgeFailed: { background: "#ffebee", color: "#b71c1c", border: "1px solid #ef9a9a" },
   rowBody: {
     padding: "0.65rem 0.85rem 0.85rem",
     borderTop: "1px solid #e8edf3",
@@ -476,43 +542,71 @@ const s = {
   },
   notice: { padding: "0.75rem", textAlign: "center", color: "#5f6d7e", fontSize: "0.85rem" },
   errorBox: {
-    display: "flex", gap: "0.5rem",
-    background: "#fff0f1", border: "1px solid #f5c6cb",
-    color: "#842029", padding: "0.65rem 0.85rem", borderRadius: 6,
+    display: "flex",
+    gap: "0.5rem",
+    background: "#fff0f1",
+    border: "1px solid #f5c6cb",
+    color: "#842029",
+    padding: "0.65rem 0.85rem",
+    borderRadius: 6,
   },
   partyLabel: {
-    fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.04em",
-    color: "#5f6d7e", fontWeight: 700, marginBottom: 3,
+    fontSize: "0.7rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    color: "#5f6d7e",
+    fontWeight: 700,
+    marginBottom: 3,
   },
   partyName: { fontSize: "0.88rem", fontWeight: 700, color: "#1a2332" },
   partyMeta: { fontSize: "0.78rem", color: "#5f6d7e", marginTop: 2 },
   itemsHeader: {
-    marginTop: "0.7rem", marginBottom: "0.35rem",
-    fontSize: "0.82rem", fontWeight: 700, color: "#1a2332",
+    marginTop: "0.7rem",
+    marginBottom: "0.35rem",
+    fontSize: "0.82rem",
+    fontWeight: 700,
+    color: "#1a2332",
   },
   tableWrap: {},
   table: { width: "100%", minWidth: "680px", borderCollapse: "collapse", fontSize: "0.82rem" },
   th: {
-    padding: "0.45rem 0.55rem", background: "#f8fafc", borderBottom: "1px solid #e8edf3",
-    fontSize: "0.72rem", fontWeight: 700, color: "#5f6d7e",
-    textTransform: "uppercase", letterSpacing: "0.03em", textAlign: "left",
+    padding: "0.45rem 0.55rem",
+    background: "#f8fafc",
+    borderBottom: "1px solid #e8edf3",
+    fontSize: "0.72rem",
+    fontWeight: 700,
+    color: "#5f6d7e",
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+    textAlign: "left",
   },
   thIdx: {
-    padding: "0.45rem 0.4rem", background: "#f8fafc", borderBottom: "1px solid #e8edf3",
-    fontSize: "0.72rem", fontWeight: 700, color: "#5f6d7e",
-    textAlign: "center", width: 34,
+    padding: "0.45rem 0.4rem",
+    background: "#f8fafc",
+    borderBottom: "1px solid #e8edf3",
+    fontSize: "0.72rem",
+    fontWeight: 700,
+    color: "#5f6d7e",
+    textAlign: "center",
+    width: 34,
   },
   td: { padding: "0.5rem 0.55rem", borderBottom: "1px solid #f0f3f7", color: "#1a2332" },
   tdIdx: {
-    padding: "0.5rem 0.4rem", borderBottom: "1px solid #f0f3f7",
-    color: "#5f6d7e", fontSize: "0.76rem", textAlign: "center",
+    padding: "0.5rem 0.4rem",
+    borderBottom: "1px solid #f0f3f7",
+    color: "#5f6d7e",
+    fontSize: "0.76rem",
+    textAlign: "center",
   },
   metaSub: { fontSize: "0.72rem", color: "#5f6d7e", marginTop: 2 },
   muted: { color: "#aab3bf" },
   totalsRow: { background: "#f5f7fa" },
   tdTotals: {
-    padding: "0.55rem 0.55rem", fontSize: "0.85rem", fontWeight: 700,
-    color: "#1a2332", borderTop: "2px solid #d0d7e2",
+    padding: "0.55rem 0.55rem",
+    fontSize: "0.85rem",
+    fontWeight: 700,
+    color: "#1a2332",
+    borderTop: "2px solid #d0d7e2",
   },
   linkBtn: {
     background: "transparent",
@@ -532,9 +626,16 @@ const s = {
     borderRadius: 4,
   },
   rawJson: {
-    margin: "0.5rem 0 0", padding: "0.7rem 0.9rem",
-    background: "#0a1628", color: "#e8f5e9", border: "1px solid #1a2332",
-    borderRadius: 6, fontSize: "0.75rem", lineHeight: 1.4,
-    maxHeight: 280, overflow: "auto", whiteSpace: "pre",
+    margin: "0.5rem 0 0",
+    padding: "0.7rem 0.9rem",
+    background: "#0a1628",
+    color: "#e8f5e9",
+    border: "1px solid #1a2332",
+    borderRadius: 6,
+    fontSize: "0.75rem",
+    lineHeight: 1.4,
+    maxHeight: 280,
+    overflow: "auto",
+    whiteSpace: "pre",
   },
 };

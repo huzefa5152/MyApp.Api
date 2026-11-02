@@ -26,7 +26,19 @@ const HS_FORMAT = /^\d{4}\.\d{4}(\.\d{2})?$/;
  *     that sale type. Used by the inline New-Item-Type popups when the
  *     parent bill has a scenario-locked sale type.
  */
-export default function HsCodeAutocomplete({ companyId, value, onChange, onSelect, companyItems = [], showCompanyStatus = false, style, placeholder, excludeHsCodes, saleType, ariaLabel }) {
+export default function HsCodeAutocomplete({
+  companyId,
+  value,
+  onChange,
+  onSelect,
+  companyItems = [],
+  showCompanyStatus = false,
+  style,
+  placeholder,
+  excludeHsCodes,
+  saleType,
+  ariaLabel,
+}) {
   const [query, setQuery] = useState(value || "");
   const [suggestions, setSuggestions] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -42,14 +54,26 @@ export default function HsCodeAutocomplete({ companyId, value, onChange, onSelec
   const wrapperRef = useRef(null);
   const debounceRef = useRef(null);
   const term = query.trim().toLowerCase();
-  const localMatches = companyItems.filter(t => t.hsCode && !t.isHsCodePartial
-    && (!term || [t.hsCode, t.name, t.uom].some(s => s?.toLowerCase().includes(term))));
-  const localCodes = new Set(localMatches.map(t => t.hsCode.trim()));
-  const options = [...localMatches.map(t => ({ hS_CODE: t.hsCode, description: t.name, companyItem: t })),
-    ...suggestions.filter(s => !localCodes.has(s.hS_CODE?.trim())).flatMap(s => {
-      const matches = companyItems.filter(t => !t.isHsCodePartial && t.hsCode?.trim() === s.hS_CODE?.trim());
-      return matches.length ? matches.map(t => ({ ...s, description: t.name, companyItem: t })) : [s];
-    })];
+  const localMatches = companyItems.filter(
+    (t) =>
+      t.hsCode &&
+      !t.isHsCodePartial &&
+      (!term || [t.hsCode, t.name, t.uom].some((s) => s?.toLowerCase().includes(term))),
+  );
+  const localCodes = new Set(localMatches.map((t) => t.hsCode.trim()));
+  const options = [
+    ...localMatches.map((t) => ({ hS_CODE: t.hsCode, description: t.name, companyItem: t })),
+    ...suggestions
+      .filter((s) => !localCodes.has(s.hS_CODE?.trim()))
+      .flatMap((s) => {
+        const matches = companyItems.filter(
+          (t) => !t.isHsCodePartial && t.hsCode?.trim() === s.hS_CODE?.trim(),
+        );
+        return matches.length
+          ? matches.map((t) => ({ ...s, description: t.name, companyItem: t }))
+          : [s];
+      }),
+  ];
 
   // Sync with external value changes (e.g. when auto-filled from item description)
   useEffect(() => {
@@ -59,8 +83,14 @@ export default function HsCodeAutocomplete({ companyId, value, onChange, onSelec
   useEffect(() => {
     requestRef.current += 1;
     clearTimeout(debounceRef.current);
-    setSuggestions([]); setLookupError(""); setLoading(false); setShowDropdown(false);
-    return () => { requestRef.current += 1; clearTimeout(debounceRef.current); };
+    setSuggestions([]);
+    setLookupError("");
+    setLoading(false);
+    setShowDropdown(false);
+    return () => {
+      requestRef.current += 1;
+      clearTimeout(debounceRef.current);
+    };
   }, [companyId]);
 
   // Close on outside click
@@ -100,30 +130,43 @@ export default function HsCodeAutocomplete({ companyId, value, onChange, onSelec
   // Fetches HS codes. Empty query → backend returns the first 100 (browse mode)
   // so the user can scroll the catalog without knowing keywords up front.
   // With a query, backend filters server-side.
-  const fetchResults = useCallback((q) => {
-    clearTimeout(debounceRef.current);
-    const request = ++requestRef.current;
-    setSuggestions([]); setHighlightIndex(-1); setLookupError(""); setLoading(true);
-    debounceRef.current = setTimeout(async () => {
-      const term = (q || "").trim();
+  const fetchResults = useCallback(
+    (q) => {
+      clearTimeout(debounceRef.current);
+      const request = ++requestRef.current;
+      setSuggestions([]);
+      setHighlightIndex(-1);
+      setLookupError("");
       setLoading(true);
-      try {
-        const { data } = await getFbrHSCodes(companyId, term, saleType || null,
-          excludeHsCodes ? { excludeSaved: true, includeHsCode: value || undefined } : {});
-        if (request !== requestRef.current) return;
-        // Hide HS codes already used elsewhere in the user's catalog
-        const exclude = new Set((excludeHsCodes || []).map((c) => (c || "").trim()));
-        const filtered = (data || []).filter((h) => !exclude.has((h.hS_CODE || "").trim()));
-        setSuggestions(filtered);
-      } catch (err) {
-        if (request !== requestRef.current) return;
-        setLookupError(err.response?.data?.message || "Could not load the FBR catalog. Check this company's FBR connection and focus this field to retry.");
-        setSuggestions([]);
-      } finally {
-        if (request === requestRef.current) setLoading(false);
-      }
-    }, 200);
-  }, [companyId, excludeHsCodes, saleType, value]);
+      debounceRef.current = setTimeout(async () => {
+        const term = (q || "").trim();
+        setLoading(true);
+        try {
+          const { data } = await getFbrHSCodes(
+            companyId,
+            term,
+            saleType || null,
+            excludeHsCodes ? { excludeSaved: true, includeHsCode: value || undefined } : {},
+          );
+          if (request !== requestRef.current) return;
+          // Hide HS codes already used elsewhere in the user's catalog
+          const exclude = new Set((excludeHsCodes || []).map((c) => (c || "").trim()));
+          const filtered = (data || []).filter((h) => !exclude.has((h.hS_CODE || "").trim()));
+          setSuggestions(filtered);
+        } catch (err) {
+          if (request !== requestRef.current) return;
+          setLookupError(
+            err.response?.data?.message ||
+              "Could not load the FBR catalog. Check this company's FBR connection and focus this field to retry.",
+          );
+          setSuggestions([]);
+        } finally {
+          if (request === requestRef.current) setLoading(false);
+        }
+      }, 200);
+    },
+    [companyId, excludeHsCodes, saleType, value],
+  );
 
   const handleSelect = (option) => {
     const code = option.hS_CODE;
@@ -180,20 +223,37 @@ export default function HsCodeAutocomplete({ companyId, value, onChange, onSelec
         onKeyDown={handleKeyDown}
         autoComplete="off"
       />
-      {showDropdown && (
+      {showDropdown &&
         createPortal(
           <ul data-admin-popup="" style={styles.dropdown(triggerRect)}>
             {loading && <li style={styles.loading}>Searching FBR catalog…</li>}
-            {lookupError && <li role="alert" style={styles.empty}>{lookupError}</li>}
-            {!loading && !lookupError && options.length === 0 && (
-              (excludeHsCodes || []).some(code => code?.trim() === query.trim()) ? <li style={styles.empty}>This HS code is already saved in this company. Choose its existing item from Item Catalog.</li> : HS_FORMAT.test(query.trim()) ? (
+            {lookupError && (
+              <li role="alert" style={styles.empty}>
+                {lookupError}
+              </li>
+            )}
+            {!loading &&
+              !lookupError &&
+              options.length === 0 &&
+              ((excludeHsCodes || []).some((code) => code?.trim() === query.trim()) ? (
                 <li style={styles.empty}>
-                  <span><b>{query.trim()}</b> — no FBR result returned. Check this company's FBR connection or search by product keyword.</span>
+                  This HS code is already saved in this company. Choose its existing item from Item
+                  Catalog.
+                </li>
+              ) : HS_FORMAT.test(query.trim()) ? (
+                <li style={styles.empty}>
+                  <span>
+                    <b>{query.trim()}</b> — no FBR result returned. Check this company's FBR
+                    connection or search by product keyword.
+                  </span>
                 </li>
               ) : (
-                <li style={styles.empty}>{query ? `No HS codes match “${query}”. Try a product keyword like “valve” or “steel pipe”.` : "No FBR HS codes are available. Check this company's FBR connection and retry."}</li>
-              )
-            )}
+                <li style={styles.empty}>
+                  {query
+                    ? `No HS codes match “${query}”. Try a product keyword like “valve” or “steel pipe”.`
+                    : "No FBR HS codes are available. Check this company's FBR connection and retry."}
+                </li>
+              ))}
             {options.map((s, idx) => (
               <li
                 key={s.hS_CODE + idx}
@@ -201,21 +261,33 @@ export default function HsCodeAutocomplete({ companyId, value, onChange, onSelec
                   ...styles.item,
                   backgroundColor: idx === highlightIndex ? "#e3f2fd" : "#fff",
                 }}
-                onMouseDown={(e) => { e.preventDefault(); handleSelect(s); }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleSelect(s);
+                }}
                 onMouseEnter={() => setHighlightIndex(idx)}
               >
                 <div style={styles.itemCode}>{s.hS_CODE}</div>
-                {!s.companyItem && s.shortName && s.shortName.toLowerCase() !== String(s.description).trim().toLowerCase() && <div style={{ ...styles.itemDesc, fontWeight: 600, color: "#1a2332" }}>{s.shortName}</div>}
+                {!s.companyItem &&
+                  s.shortName &&
+                  s.shortName.toLowerCase() !== String(s.description).trim().toLowerCase() && (
+                    <div style={{ ...styles.itemDesc, fontWeight: 600, color: "#1a2332" }}>
+                      {s.shortName}
+                    </div>
+                  )}
                 <div style={styles.itemDesc}>{s.description}</div>
-                {showCompanyStatus && <div style={{ ...styles.itemDesc, color: s.companyItem ? "#17603e" : "#5f6d7e" }}>{s.companyItem
-                  ? `Company item · ${Number(s.companyItem.availableQty || 0).toLocaleString("en-PK")} in stock · ${s.companyItem.uom || "Unit not set"}`
-                  : "FBR catalog · Add to this company on save"}</div>}
+                {showCompanyStatus && (
+                  <div style={{ ...styles.itemDesc, color: s.companyItem ? "#17603e" : "#5f6d7e" }}>
+                    {s.companyItem
+                      ? `Company item · ${Number(s.companyItem.availableQty || 0).toLocaleString("en-PK")} in stock · ${s.companyItem.uom || "Unit not set"}`
+                      : "FBR catalog · Add to this company on save"}
+                  </div>
+                )}
               </li>
             ))}
           </ul>,
-          document.body
-        )
-      )}
+          document.body,
+        )}
     </div>
   );
 }
@@ -229,12 +301,19 @@ const styles = {
     const r = rect ?? { top: 0, bottom: 0, left: 0, width: 300 };
     // Open upward when the input sits near the bottom of the screen (e.g. a pinned action bar)
     // and there is more room above; otherwise the list runs off-screen.
-    const below = window.innerHeight - r.bottom - 8, above = r.top - 8;
+    const below = window.innerHeight - r.bottom - 8,
+      above = r.top - 8;
     const up = below < 200 && above > below;
     return {
       position: "fixed",
       ...(up ? { bottom: window.innerHeight - r.top } : { top: r.bottom }),
-      left: Math.min(r.left, Math.max(8, window.innerWidth - Math.min(Math.max(r.width, 400), window.innerWidth - 16) - 8)),
+      left: Math.min(
+        r.left,
+        Math.max(
+          8,
+          window.innerWidth - Math.min(Math.max(r.width, 400), window.innerWidth - 16) - 8,
+        ),
+      ),
       width: Math.min(Math.max(r.width, 400), window.innerWidth - 16),
       maxHeight: Math.max(120, Math.min(340, up ? above : below)),
       overflowY: "auto",
@@ -271,6 +350,11 @@ const styles = {
     WebkitLineClamp: 2,
     WebkitBoxOrient: "vertical",
   },
-  loading: { padding: "0.6rem 0.75rem", color: "#5f6d7e", fontSize: "0.82rem", fontStyle: "italic" },
+  loading: {
+    padding: "0.6rem 0.75rem",
+    color: "#5f6d7e",
+    fontSize: "0.82rem",
+    fontStyle: "italic",
+  },
   empty: { padding: "0.6rem 0.75rem", color: "#5f6d7e", fontSize: "0.82rem" },
 };

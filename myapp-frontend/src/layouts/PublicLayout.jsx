@@ -35,8 +35,7 @@ export default function PublicLayout() {
   // Page title + description for the public site only (admin keeps its own)
   useEffect(() => {
     const prevTitle = document.title;
-    document.title =
-      "Hakimi Traders — Pneumatic, Hydraulic & Industrial Equipment | Karachi";
+    document.title = "Hakimi Traders — Pneumatic, Hydraulic & Industrial Equipment | Karachi";
     return () => {
       document.title = prevTitle;
     };
@@ -47,10 +46,10 @@ export default function PublicLayout() {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
 
-    const observer = new IntersectionObserver(
-      ([entry]) => setScrolled(!entry.isIntersecting),
-      { threshold: 0, rootMargin: "0px" }
-    );
+    const observer = new IntersectionObserver(([entry]) => setScrolled(!entry.isIntersecting), {
+      threshold: 0,
+      rootMargin: "0px",
+    });
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, []);
@@ -79,9 +78,7 @@ export default function PublicLayout() {
 
   // Section spy — highlights the nav link for the section in view
   useEffect(() => {
-    const els = NAV_LINKS
-      .map((l) => document.getElementById(l.href.slice(1)))
-      .filter(Boolean);
+    const els = NAV_LINKS.map((l) => document.getElementById(l.href.slice(1))).filter(Boolean);
     if (!els.length) return;
     const io = new IntersectionObserver(
       (entries) => {
@@ -89,7 +86,7 @@ export default function PublicLayout() {
           if (en.isIntersecting) setActive(`#${en.target.id}`);
         });
       },
-      { rootMargin: "-40% 0px -55% 0px", threshold: 0 }
+      { rootMargin: "-40% 0px -55% 0px", threshold: 0 },
     );
     els.forEach((el) => io.observe(el));
     return () => io.disconnect();
@@ -226,11 +223,7 @@ export default function PublicLayout() {
               {link.label}
             </a>
           ))}
-          <Link
-            to="/login"
-            className="pl-drawer__login-btn"
-            onClick={() => setDrawerOpen(false)}
-          >
+          <Link to="/login" className="pl-drawer__login-btn" onClick={() => setDrawerOpen(false)}>
             <FiLogIn aria-hidden="true" />
             System Login
           </Link>
@@ -265,12 +258,10 @@ export default function PublicLayout() {
               <span className="pl-footer__brand-name">HAKIMI TRADERS</span>
             </div>
             <p className="pl-footer__tagline">
-              Specialist of Pneumatics Fitting, Equipments &amp; General Order
-              Suppliers — serving Pakistan&apos;s industry since 2009.
+              Specialist of Pneumatics Fitting, Equipments &amp; General Order Suppliers — serving
+              Pakistan&apos;s industry since 2009.
             </p>
-            <p className="pl-footer__reg">
-              NTN 4228937-8&ensp;·&ensp;STRN 3277876175852
-            </p>
+            <p className="pl-footer__reg">NTN 4228937-8&ensp;·&ensp;STRN 3277876175852</p>
           </div>
 
           {/* Column 2 — Quick links */}
@@ -316,8 +307,10 @@ export default function PublicLayout() {
               <li className="pl-footer__address">
                 <FiMapPin className="pl-footer__contact-icon" aria-hidden="true" />
                 <address>
-                  Shop# 21, Falak Corporate City,<br />
-                  Talpur Road, opposite City Post Office,<br />
+                  Shop# 21, Falak Corporate City,
+                  <br />
+                  Talpur Road, opposite City Post Office,
+                  <br />
                   Karachi
                 </address>
               </li>

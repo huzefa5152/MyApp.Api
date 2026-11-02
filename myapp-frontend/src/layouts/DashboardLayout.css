@@ -30,7 +30,10 @@ body.dl-body--locked {
   width: 100%;
 }
 @media (min-width: 992px) {
-  body.dl-body--locked { position: static; overflow: auto; }
+  body.dl-body--locked {
+    position: static;
+    overflow: auto;
+  }
 }
 
 /* ---------- Layout Shell ---------- */
@@ -56,8 +59,13 @@ body.dl-body--locked {
   overflow: hidden;
 }
 
-.dl-sidebar::-webkit-scrollbar { width: 4px; }
-.dl-sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); border-radius: 4px; }
+.dl-sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+.dl-sidebar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
+}
 
 /* Mobile: drawer width clamps so it doesn't fill the whole screen on
    phones (visual hint that you can dismiss by tapping outside). */
@@ -120,8 +128,9 @@ body.dl-body--locked {
   flex-shrink: 0;
   padding: 0;
   line-height: 0;
-  transition: background var(--transition-fast) var(--easing-standard),
-              border-color var(--transition-fast) var(--easing-standard);
+  transition:
+    background var(--transition-fast) var(--easing-standard),
+    border-color var(--transition-fast) var(--easing-standard);
 }
 .dl-brand__close:hover {
   background: rgba(255, 255, 255, 0.28);
@@ -137,7 +146,9 @@ body.dl-body--locked {
   fill: currentColor;
 }
 @media (max-width: 991.98px) {
-  .dl-brand__close { display: inline-flex; }
+  .dl-brand__close {
+    display: inline-flex;
+  }
 }
 
 /* ---------- Nav ---------- */
@@ -150,10 +161,15 @@ body.dl-body--locked {
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.25) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
 }
-.dl-nav::-webkit-scrollbar { width: 4px; }
-.dl-nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); border-radius: 4px; }
+.dl-nav::-webkit-scrollbar {
+  width: 4px;
+}
+.dl-nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
+}
 
 /* ---------- Top-level item (Dashboard, etc.) ----------
    No transform jiggle — just a clean color fade and a left-edge
@@ -176,8 +192,9 @@ body.dl-body--locked {
   width: 100%;
   text-align: left;
   position: relative;
-  transition: background var(--transition-fast) var(--easing-standard),
-              color var(--transition-fast) var(--easing-standard);
+  transition:
+    background var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard);
 }
 
 .dl-item:hover {
@@ -247,8 +264,9 @@ body.dl-body--locked {
   text-align: left;
   user-select: none;
   position: relative;
-  transition: background var(--transition-fast) var(--easing-standard),
-              color var(--transition-fast) var(--easing-standard);
+  transition:
+    background var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard);
 }
 
 .dl-group__header:hover {
@@ -351,7 +369,7 @@ body.dl-body--locked {
 .dl-group__body-inner::before {
   content: "";
   position: absolute;
-  left: 17px;        /* icon-column center, matches header padding+icon */
+  left: 17px; /* icon-column center, matches header padding+icon */
   top: 4px;
   bottom: 6px;
   width: 1px;
@@ -372,8 +390,9 @@ body.dl-body--locked {
   font-size: 0.85rem;
   font-weight: 400;
   position: relative;
-  transition: background var(--transition-fast) var(--easing-standard),
-              color var(--transition-fast) var(--easing-standard);
+  transition:
+    background var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard);
 }
 
 .dl-subitem:hover {
@@ -447,9 +466,10 @@ body.dl-body--locked {
   border: 1px solid rgba(255, 82, 82, 0.25);
   cursor: pointer;
   text-align: left;
-  transition: background var(--transition-fast) var(--easing-standard),
-              color var(--transition-fast) var(--easing-standard),
-              border-color var(--transition-fast) var(--easing-standard);
+  transition:
+    background var(--transition-fast) var(--easing-standard),
+    color var(--transition-fast) var(--easing-standard),
+    border-color var(--transition-fast) var(--easing-standard);
 }
 
 .dl-logout-btn:hover {
@@ -498,7 +518,7 @@ body.dl-body--locked {
   position: sticky;
   top: 0;
   z-index: 1030;
-  box-shadow: 0 2px 8px rgba(13,71,161,0.06);
+  box-shadow: 0 2px 8px rgba(13, 71, 161, 0.06);
 }
 
 .dl-topbar__hamburger {
@@ -530,14 +550,32 @@ body.dl-body--locked {
   font-size: 0.85rem;
   color: #6c757d;
 }
-.dl-crumbs { display: inline-flex; flex-wrap: wrap; align-items: center; animation: dlFadeUp 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-.dl-crumb { display: inline-flex; align-items: center; }
-.dl-crumb__sep { margin: 0 0.45rem; color: #b8c2cf; }
-.dl-crumb--current { color: #1a2332; font-weight: 600; }
+.dl-crumbs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  animation: dlFadeUp 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.dl-crumb {
+  display: inline-flex;
+  align-items: center;
+}
+.dl-crumb__sep {
+  margin: 0 0.45rem;
+  color: #b8c2cf;
+}
+.dl-crumb--current {
+  color: #1a2332;
+  font-weight: 600;
+}
 @media (max-width: 599.98px) {
   /* The section is the open sidebar group; the bar shows the page. */
-  .dl-crumb:not(.dl-crumb--current) { display: none; }
-  .dl-crumb--current .dl-crumb__sep { display: none; }
+  .dl-crumb:not(.dl-crumb--current) {
+    display: none;
+  }
+  .dl-crumb--current .dl-crumb__sep {
+    display: none;
+  }
 }
 
 .dl-topbar__user-wrapper {
@@ -594,7 +632,6 @@ body.dl-body--locked {
   object-fit: cover;
   border-radius: 50%;
 }
-
 
 /* User dropdown menu */
 .dl-user-menu {
@@ -682,8 +719,12 @@ body.dl-body--locked {
 }
 
 @keyframes overlayFadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* ---------- Nav Section Divider ---------- */
@@ -698,7 +739,7 @@ body.dl-body--locked {
   font-size: 0.65rem;
   text-transform: uppercase;
   letter-spacing: 1.4px;
-  color: rgba(255,255,255,0.42);
+  color: rgba(255, 255, 255, 0.42);
   padding: 0.85rem 0.85rem 0.35rem;
   font-weight: 700;
 }
@@ -864,8 +905,12 @@ body.dl-body--locked {
 }
 
 /* ---------- Audit Logs: table on desktop, cards on mobile ---------- */
-.audit-table-wrap { display: block; }
-.audit-cards { display: none; }
+.audit-table-wrap {
+  display: block;
+}
+.audit-cards {
+  display: none;
+}
 
 @media (max-width: 767.98px) {
   .audit-page {
@@ -883,7 +928,9 @@ body.dl-body--locked {
     align-items: stretch !important;
     gap: 0.5rem !important;
   }
-  .audit-filters > select { width: 100% !important; }
+  .audit-filters > select {
+    width: 100% !important;
+  }
   .audit-filters > form {
     max-width: 100% !important;
     flex: 1 1 auto !important;
@@ -893,7 +940,9 @@ body.dl-body--locked {
     text-align: right;
   }
 
-  .audit-table-wrap { display: none; }
+  .audit-table-wrap {
+    display: none;
+  }
   .audit-cards {
     display: flex;
     flex-direction: column;
@@ -1015,14 +1064,20 @@ body.dl-body--locked {
 .irh-page {
   padding: 0;
 }
-.irh-table { display: block; }
-.irh-cards { display: none; }
+.irh-table {
+  display: block;
+}
+.irh-cards {
+  display: none;
+}
 
 @media (max-width: 767.98px) {
   .irh-page {
     padding: 0;
   }
-  .irh-table { display: none; }
+  .irh-table {
+    display: none;
+  }
   .irh-cards {
     display: flex;
     flex-direction: column;
@@ -1121,7 +1176,9 @@ body.dl-body--locked {
   gap: 1px;
   min-width: 0;
 }
-.irh-card__total { flex: 1; }
+.irh-card__total {
+  flex: 1;
+}
 
 .irh-card__field-label {
   font-size: 0.65rem;
@@ -1163,10 +1220,16 @@ body.dl-body--locked {
 /* ---------- Import Challans: mobile pass ----------
    Tighten paddings on phones, hide the per-row items TABLE and show
    stacked card editors instead so each input is easy to thumb-edit. */
-.imp-page { width: 100%; }
+.imp-page {
+  width: 100%;
+}
 
-.imp-items-table { display: block; }
-.imp-items-cards { display: none; }
+.imp-items-table {
+  display: block;
+}
+.imp-items-cards {
+  display: none;
+}
 .imp-items-empty {
   padding: 0.85rem;
   text-align: center;
@@ -1188,12 +1251,16 @@ body.dl-body--locked {
     padding: 0.5rem 0.75rem !important;
     gap: 0.25rem !important;
   }
-  .imp-stepper__label { display: none; }
+  .imp-stepper__label {
+    display: none;
+  }
   .imp-stepper__line {
     width: 1.25rem !important;
   }
 
-  .imp-items-table { display: none; }
+  .imp-items-table {
+    display: none;
+  }
   .imp-items-cards {
     display: flex;
     flex-direction: column;
@@ -1268,9 +1335,15 @@ body.dl-body--locked {
    surfaces the page's primary "answer" top-right at large size — for
    On-Hand it's the on-hand quantity; for Movements it's the +/- delta. */
 /* .dl-main pads every page; a second padding indented this one. */
-.stock-page { padding: 0; }
-.stock-table { display: block; }
-.stock-cards { display: none; }
+.stock-page {
+  padding: 0;
+}
+.stock-table {
+  display: block;
+}
+.stock-cards {
+  display: none;
+}
 
 @media (max-width: 991.98px) {
   .stock-page {
@@ -1279,7 +1352,9 @@ body.dl-body--locked {
 }
 
 @media (max-width: 767.98px) {
-  .stock-table { display: none; }
+  .stock-table {
+    display: none;
+  }
   .stock-cards {
     display: flex;
     flex-direction: column;
@@ -1429,11 +1504,17 @@ body.dl-body--locked {
 /* ---------- Item Types: row-list on desktop, cards on mobile ----------
    The desktop row layout has min-width: 720px which works fine on tablet+;
    below 768 we hide it entirely and render the same data as cards. */
-.it-list-wrap { display: block; }
-.it-cards { display: none; }
+.it-list-wrap {
+  display: block;
+}
+.it-cards {
+  display: none;
+}
 
 @media (max-width: 767.98px) {
-  .it-list-wrap { display: none; }
+  .it-list-wrap {
+    display: none;
+  }
   .it-cards {
     display: flex;
     flex-direction: column;
@@ -1555,14 +1636,18 @@ body.dl-body--locked {
   background: #e3f2fd;
   color: #0d47a1;
 }
-.it-card__edit:hover { background: #bbdefb; }
+.it-card__edit:hover {
+  background: #bbdefb;
+}
 
 .it-card__delete {
   border-color: rgba(220, 53, 69, 0.3);
   background: #fff0f1;
   color: #c62828;
 }
-.it-card__delete:hover { background: #ffe0e3; }
+.it-card__delete:hover {
+  background: #ffe0e3;
+}
 
 /* ---------- PO Formats page header ----------
    Desktop: title-block on the left, "+ Add PO Format" button right.
@@ -1615,7 +1700,9 @@ body.dl-body--locked {
   white-space: nowrap;
   min-height: 40px;
 }
-.pof-header__add:hover { background: #1565c0; }
+.pof-header__add:hover {
+  background: #1565c0;
+}
 
 @media (max-width: 767.98px) {
   .pof-header {
@@ -1624,7 +1711,9 @@ body.dl-body--locked {
     gap: 0.85rem;
     margin-bottom: 1rem;
   }
-  .pof-header__title { font-size: 1.3rem; }
+  .pof-header__title {
+    font-size: 1.3rem;
+  }
   .pof-header__subtitle {
     font-size: 0.82rem;
     line-height: 1.45;
@@ -1638,14 +1727,20 @@ body.dl-body--locked {
 }
 
 /* ---------- PO Formats: table on desktop, cards on mobile ---------- */
-.pof-table { display: block; }
-.pof-cards { display: none; }
+.pof-table {
+  display: block;
+}
+.pof-cards {
+  display: none;
+}
 
 @media (max-width: 767.98px) {
   .pof-page {
     padding: 1rem 0.85rem 1.25rem !important;
   }
-  .pof-table { display: none; }
+  .pof-table {
+    display: none;
+  }
   .pof-cards {
     display: flex;
     flex-direction: column;
@@ -1781,14 +1876,18 @@ body.dl-body--locked {
   background: #e3f2fd;
   color: #0d47a1;
 }
-.pof-card__edit:hover { background: #bbdefb; }
+.pof-card__edit:hover {
+  background: #bbdefb;
+}
 
 .pof-card__delete {
   border-color: rgba(220, 53, 69, 0.3);
   background: #fff0f1;
   color: #c62828;
 }
-.pof-card__delete:hover { background: #ffe0e3; }
+.pof-card__delete:hover {
+  background: #ffe0e3;
+}
 
 /* ---------- FBR Sandbox page header ----------
    Same problem as the PO Formats header — on mobile the inline-flex
@@ -1864,7 +1963,10 @@ body.dl-body--locked {
   min-width: 38px;
   min-height: 38px;
 }
-.fbr-header__icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.fbr-header__icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 .fbr-header__seed-btn {
   display: inline-flex;
@@ -1881,8 +1983,13 @@ body.dl-body--locked {
   white-space: nowrap;
   min-height: 38px;
 }
-.fbr-header__seed-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.fbr-header__seed-btn:not(:disabled):hover { background: #1565c0; }
+.fbr-header__seed-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.fbr-header__seed-btn:not(:disabled):hover {
+  background: #1565c0;
+}
 
 @media (max-width: 767.98px) {
   .fbr-header {
@@ -1890,7 +1997,9 @@ body.dl-body--locked {
     align-items: stretch;
     gap: 0.85rem;
   }
-  .fbr-header__title { font-size: 1.2rem; }
+  .fbr-header__title {
+    font-size: 1.2rem;
+  }
   .fbr-header__subtitle {
     font-size: 0.8rem;
     line-height: 1.45;
@@ -1918,8 +2027,12 @@ body.dl-body--locked {
 }
 
 /* ---------- FBR Sandbox: table on desktop, cards on mobile ---------- */
-.fbr-table { display: block; }
-.fbr-cards { display: none; }
+.fbr-table {
+  display: block;
+}
+.fbr-cards {
+  display: none;
+}
 
 @media (max-width: 991.98px) {
   .fbr-page {
@@ -1928,7 +2041,9 @@ body.dl-body--locked {
 }
 
 @media (max-width: 767.98px) {
-  .fbr-table { display: none; }
+  .fbr-table {
+    display: none;
+  }
   .fbr-cards {
     display: flex;
     flex-direction: column;
@@ -1981,10 +2096,22 @@ body.dl-body--locked {
   flex-shrink: 0;
   white-space: nowrap;
 }
-.fbr-card__status--success { background: #e8f5e9; color: #2e7d32; }
-.fbr-card__status--warn    { background: #fff8e1; color: #f57c00; }
-.fbr-card__status--fail    { background: #fff0f1; color: #dc3545; }
-.fbr-card__status--muted   { background: #f2f4f7; color: #5f6d7e; }
+.fbr-card__status--success {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+.fbr-card__status--warn {
+  background: #fff8e1;
+  color: #f57c00;
+}
+.fbr-card__status--fail {
+  background: #fff0f1;
+  color: #dc3545;
+}
+.fbr-card__status--muted {
+  background: #f2f4f7;
+  color: #5f6d7e;
+}
 
 .fbr-card__desc {
   font-size: 0.85rem;
@@ -2086,17 +2213,25 @@ body.dl-body--locked {
   cursor: pointer;
   min-height: 36px;
 }
-.fbr-card__delete:hover { background: #ffe0e3; }
+.fbr-card__delete:hover {
+  background: #ffe0e3;
+}
 
 /* ---------- Tenant Access: table on desktop, cards on mobile ---------- */
-.tenant-table { display: block; }
-.tenant-cards { display: none; }
+.tenant-table {
+  display: block;
+}
+.tenant-cards {
+  display: none;
+}
 
 @media (max-width: 767.98px) {
   .tenant-page {
     padding: 1rem 0.85rem 1.25rem !important;
   }
-  .tenant-table { display: none; }
+  .tenant-table {
+    display: none;
+  }
   .tenant-cards {
     display: flex;
     flex-direction: column;
@@ -2271,7 +2406,9 @@ body.dl-body--locked {
   cursor: pointer;
   min-height: 38px;
 }
-.irh-page-btn:disabled { cursor: not-allowed; }
+.irh-page-btn:disabled {
+  cursor: not-allowed;
+}
 
 .irh-page-info {
   font-size: 0.85rem;
@@ -2308,9 +2445,24 @@ body.dl-body--locked {
 
 /* Keep the profile/MCP header usable for long account names on phones. */
 @media (max-width: 575.98px) {
-  .dl-topbar { padding: 0 0.75rem; gap: 0.5rem; }
-  .dl-topbar__breadcrumb { min-width: 0; overflow-wrap: anywhere; }
-  .dl-topbar__user-wrapper { min-width: 0; max-width: 55%; }
-  .dl-topbar__user { max-width: 100%; min-height: 44px; }
-  .dl-topbar__user > span { min-width: 0; overflow-wrap: anywhere; }
+  .dl-topbar {
+    padding: 0 0.75rem;
+    gap: 0.5rem;
+  }
+  .dl-topbar__breadcrumb {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .dl-topbar__user-wrapper {
+    min-width: 0;
+    max-width: 55%;
+  }
+  .dl-topbar__user {
+    max-width: 100%;
+    min-height: 44px;
+  }
+  .dl-topbar__user > span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
 }

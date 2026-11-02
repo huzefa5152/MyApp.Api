@@ -11,9 +11,30 @@ export function useConfirm() {
 }
 
 const variants = {
-  danger: { bg: "#fdeded", color: "#842029", border: "#f5c6cb", icon: <MdDelete size={28} color="#dc3545" />, btnBg: "#dc3545", btnHover: "#b02a37" },
-  warning: { bg: "#fff3cd", color: "#664d03", border: "#ffecb5", icon: <MdWarning size={28} color="#fd7e14" />, btnBg: "#fd7e14", btnHover: "#e8590c" },
-  info: { bg: "#cff4fc", color: "#055160", border: "#b6effb", icon: <MdInfo size={28} color="#0d6efd" />, btnBg: "#0d6efd", btnHover: "#0b5ed7" },
+  danger: {
+    bg: "#fdeded",
+    color: "#842029",
+    border: "#f5c6cb",
+    icon: <MdDelete size={28} color="#dc3545" />,
+    btnBg: "#dc3545",
+    btnHover: "#b02a37",
+  },
+  warning: {
+    bg: "#fff3cd",
+    color: "#664d03",
+    border: "#ffecb5",
+    icon: <MdWarning size={28} color="#fd7e14" />,
+    btnBg: "#fd7e14",
+    btnHover: "#e8590c",
+  },
+  info: {
+    bg: "#cff4fc",
+    color: "#055160",
+    border: "#b6effb",
+    icon: <MdInfo size={28} color="#0d6efd" />,
+    btnBg: "#0d6efd",
+    btnHover: "#0b5ed7",
+  },
 };
 
 export default function ConfirmProvider({ children }) {
@@ -23,13 +44,23 @@ export default function ConfirmProvider({ children }) {
   const [inputValue, setInputValue] = useState("");
   const resolveRef = useRef(null);
 
-  const confirm = useCallback(({ title = "Are you sure?", message = "", variant = "danger", confirmText = "Confirm", cancelText = "Cancel", input = null } = {}) => {
-    return new Promise((resolve) => {
-      resolveRef.current = resolve;
-      setInputValue(input?.defaultValue ?? "");
-      setState({ title, message, variant, confirmText, cancelText, input });
-    });
-  }, []);
+  const confirm = useCallback(
+    ({
+      title = "Are you sure?",
+      message = "",
+      variant = "danger",
+      confirmText = "Confirm",
+      cancelText = "Cancel",
+      input = null,
+    } = {}) => {
+      return new Promise((resolve) => {
+        resolveRef.current = resolve;
+        setInputValue(input?.defaultValue ?? "");
+        setState({ title, message, variant, confirmText, cancelText, input });
+      });
+    },
+    [],
+  );
 
   // Backward-compatible resolution contract:
   //   • no `input`  → resolves the plain boolean (existing callers).
@@ -46,13 +77,14 @@ export default function ConfirmProvider({ children }) {
     else resolver?.(confirmed);
   };
 
-  const v = state ? (variants[state.variant] || variants.danger) : null;
+  const v = state ? variants[state.variant] || variants.danger : null;
 
   return (
     <ConfirmContext.Provider value={confirm}>
       {children}
       {state && (
-        <div data-admin-backdrop=""
+        <div
+          data-admin-backdrop=""
           // Sit slightly above the standard modal layer so a confirm-on-top-
           // of-a-modal stack still wins (e.g. "Discard unsaved changes?"
           // shown above an open Edit dialog). 1101 is just one above
@@ -62,7 +94,8 @@ export default function ConfirmProvider({ children }) {
           // confirmations should require explicit Cancel / Confirm.
           style={{ ...formStyles.backdrop, zIndex: 1101 }}
         >
-          <div data-admin-dialog=""
+          <div
+            data-admin-dialog=""
             // Smallest size tier — confirm dialogs are short by design.
             // Reuses formStyles.modal so width/border-radius/box-shadow/
             // non-movable behaviour all match the rest of the app.
@@ -71,17 +104,31 @@ export default function ConfirmProvider({ children }) {
           >
             {/* Icon header */}
             <div style={{ display: "flex", justifyContent: "center", paddingTop: 28 }}>
-              <div style={{
-                width: 56, height: 56, borderRadius: "50%", background: v.bg,
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
+              <div
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: "50%",
+                  background: v.bg,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
                 {v.icon}
               </div>
             </div>
 
             {/* Content */}
             <div style={{ padding: "16px 28px 8px", textAlign: "center" }}>
-              <h3 style={{ margin: "0 0 8px", fontSize: "1.15rem", fontWeight: 700, color: "#1a2332" }}>
+              <h3
+                style={{
+                  margin: "0 0 8px",
+                  fontSize: "1.15rem",
+                  fontWeight: 700,
+                  color: "#1a2332",
+                }}
+              >
                 {state.title}
               </h3>
               {state.message && (
@@ -95,7 +142,16 @@ export default function ConfirmProvider({ children }) {
             {state.input && (
               <div style={{ padding: "4px 28px 0" }}>
                 {state.input.label && (
-                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "#5f6d7e", marginBottom: 6, textAlign: "left" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      color: "#5f6d7e",
+                      marginBottom: 6,
+                      textAlign: "left",
+                    }}
+                  >
                     {state.input.label}
                   </label>
                 )}
@@ -106,37 +162,65 @@ export default function ConfirmProvider({ children }) {
                   placeholder={state.input.placeholder || ""}
                   rows={3}
                   style={{
-                    width: "100%", boxSizing: "border-box", padding: "10px 12px",
-                    borderRadius: 10, border: "1px solid #d0d7e2", fontSize: "0.9rem",
-                    resize: "vertical", fontFamily: "inherit", color: "#1a2332",
+                    width: "100%",
+                    boxSizing: "border-box",
+                    padding: "10px 12px",
+                    borderRadius: 10,
+                    border: "1px solid #d0d7e2",
+                    fontSize: "0.9rem",
+                    resize: "vertical",
+                    fontFamily: "inherit",
+                    color: "#1a2332",
                   }}
                 />
               </div>
             )}
 
             {/* Buttons */}
-            <div style={{ display: "flex", gap: 10, padding: "16px 28px 24px", justifyContent: "center" }}>
-              <button data-admin-close=""
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                padding: "16px 28px 24px",
+                justifyContent: "center",
+              }}
+            >
+              <button
+                data-admin-close=""
                 onClick={() => handleClose(false)}
                 style={{
-                  flex: 1, padding: "10px 20px", borderRadius: 10, border: "1px solid #d0d7e2",
-                  background: "#fff", color: "#1a2332", fontWeight: 600, fontSize: "0.9rem",
-                  cursor: "pointer", transition: "background 0.15s",
+                  flex: 1,
+                  padding: "10px 20px",
+                  borderRadius: 10,
+                  border: "1px solid #d0d7e2",
+                  background: "#fff",
+                  color: "#1a2332",
+                  fontWeight: 600,
+                  fontSize: "0.9rem",
+                  cursor: "pointer",
+                  transition: "background 0.15s",
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.background = "#f8f9fb"}
-                onMouseLeave={(e) => e.currentTarget.style.background = "#fff"}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#f8f9fb")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
               >
                 {state.cancelText}
               </button>
               <button
                 onClick={() => handleClose(true)}
                 style={{
-                  flex: 1, padding: "10px 20px", borderRadius: 10, border: "none",
-                  background: v.btnBg, color: "#fff", fontWeight: 600, fontSize: "0.9rem",
-                  cursor: "pointer", transition: "filter 0.15s",
+                  flex: 1,
+                  padding: "10px 20px",
+                  borderRadius: 10,
+                  border: "none",
+                  background: v.btnBg,
+                  color: "#fff",
+                  fontWeight: 600,
+                  fontSize: "0.9rem",
+                  cursor: "pointer",
+                  transition: "filter 0.15s",
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.filter = "brightness(0.9)"}
-                onMouseLeave={(e) => e.currentTarget.style.filter = ""}
+                onMouseEnter={(e) => (e.currentTarget.style.filter = "brightness(0.9)")}
+                onMouseLeave={(e) => (e.currentTarget.style.filter = "")}
               >
                 {state.confirmText}
               </button>

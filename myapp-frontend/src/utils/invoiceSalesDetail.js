@@ -6,10 +6,14 @@
 // on a page, the totals and the workbook filename.
 
 const PERIOD_OPTIONS = [
-  { value: "today", label: "Today" }, { value: "thisWeek", label: "This week" },
-  { value: "thisMonth", label: "This month" }, { value: "lastMonth", label: "Last month" },
-  { value: "thisQuarter", label: "This quarter" }, { value: "thisYear", label: "This year" },
-  { value: "lastYear", label: "Last year" }, { value: "custom", label: "Custom range" },
+  { value: "today", label: "Today" },
+  { value: "thisWeek", label: "This week" },
+  { value: "thisMonth", label: "This month" },
+  { value: "lastMonth", label: "Last month" },
+  { value: "thisQuarter", label: "This quarter" },
+  { value: "thisYear", label: "This year" },
+  { value: "lastYear", label: "Last year" },
+  { value: "custom", label: "Custom range" },
 ];
 
 /** The shared presets minus All Periods: this report returns every line in one
@@ -50,7 +54,10 @@ export function groupBills(rows = []) {
     let b = byId.get(r.invoiceId);
     if (!b) {
       b = {
-        invoiceId: r.invoiceId, first: r, lines: [], cancelled: r.billStatus === "Cancelled",
+        invoiceId: r.invoiceId,
+        first: r,
+        lines: [],
+        cancelled: r.billStatus === "Cancelled",
         totals: { excl: 0, gst: 0, incl: 0, further: 0, total: 0 },
       };
       byId.set(r.invoiceId, b);
@@ -80,16 +87,22 @@ export function pageOfBills(bills, page, pageSize) {
 }
 
 const TILE_LABELS = {
-  invoiceCount: "Bills", submittedCount: "Submitted", notSubmittedCount: "Not submitted",
-  excludingTax: "Excl", salesTax: "G. S. T", furtherTax: "Further tax",
+  invoiceCount: "Bills",
+  submittedCount: "Submitted",
+  notSubmittedCount: "Not submitted",
+  excludingTax: "Excl",
+  salesTax: "G. S. T",
+  furtherTax: "Further tax",
   total: "Total incl taxes",
 };
 
 /** The tiles: counts, then the money; further tax only when charged. */
 export function totalsFor(report) {
   const totals = {
-    invoiceCount: report.invoiceCount, submittedCount: report.submittedCount,
-    notSubmittedCount: report.notSubmittedCount, excludingTax: report.excludingTax,
+    invoiceCount: report.invoiceCount,
+    submittedCount: report.submittedCount,
+    notSubmittedCount: report.notSubmittedCount,
+    excludingTax: report.excludingTax,
     salesTax: report.salesTax,
   };
   if (Number(report.furtherTax)) totals.furtherTax = report.furtherTax;
@@ -99,13 +112,13 @@ export function totalsFor(report) {
 }
 
 const TONES = {
-  "submitted": "ok",
+  submitted: "ok",
   "not submitted": "warn",
-  "uncertain": "warn",
+  uncertain: "warn",
   "fbr cancelled": "bad",
-  "failed": "bad",
-  "submitting": "info",
-  "validated": "info",
+  failed: "bad",
+  submitting: "info",
+  validated: "info",
   "excluded from fbr": "muted",
 };
 /** The chip tone for an FBR status as the report words it. */
@@ -113,7 +126,9 @@ export const fbrTone = (status) => TONES[text(status).toLowerCase()] || "muted";
 
 export function fmtQty(n) {
   const v = Number(n) || 0;
-  return Number.isInteger(v) ? v.toLocaleString("en-PK") : v.toLocaleString("en-PK", { maximumFractionDigits: 4 });
+  return Number.isInteger(v)
+    ? v.toLocaleString("en-PK")
+    : v.toLocaleString("en-PK", { maximumFractionDigits: 4 });
 }
 
 export function fmtRate(n) {

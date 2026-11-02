@@ -38,7 +38,9 @@ export default function SmartItemAutocomplete({
   const debounceRef = useRef(null);
 
   // Sync with external changes
-  useEffect(() => { setQuery(value || ""); }, [value]);
+  useEffect(() => {
+    setQuery(value || "");
+  }, [value]);
 
   // Close on outside click
   useEffect(() => {
@@ -68,31 +70,34 @@ export default function SmartItemAutocomplete({
     };
   }, [showDropdown]);
 
-  const fetchBoth = useCallback((q) => {
-    clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      const term = (q || "").trim();
-      if (!term) {
-        setLocalResults([]);
-        setFbrResults([]);
-        return;
-      }
-      setLoading(true);
-      try {
-        const [localRes, fbrRes] = await Promise.allSettled([
-          searchItemDescriptions(term, companyId),
-          companyId ? getFbrHSCodes(companyId, term) : Promise.resolve({ data: [] }),
-        ]);
-        setLocalResults(localRes.status === "fulfilled" ? localRes.value.data : []);
-        setFbrResults(fbrRes.status === "fulfilled" ? fbrRes.value.data : []);
-      } catch {
-        setLocalResults([]);
-        setFbrResults([]);
-      } finally {
-        setLoading(false);
-      }
-    }, 350);
-  }, [companyId]);
+  const fetchBoth = useCallback(
+    (q) => {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(async () => {
+        const term = (q || "").trim();
+        if (!term) {
+          setLocalResults([]);
+          setFbrResults([]);
+          return;
+        }
+        setLoading(true);
+        try {
+          const [localRes, fbrRes] = await Promise.allSettled([
+            searchItemDescriptions(term, companyId),
+            companyId ? getFbrHSCodes(companyId, term) : Promise.resolve({ data: [] }),
+          ]);
+          setLocalResults(localRes.status === "fulfilled" ? localRes.value.data : []);
+          setFbrResults(fbrRes.status === "fulfilled" ? fbrRes.value.data : []);
+        } catch {
+          setLocalResults([]);
+          setFbrResults([]);
+        } finally {
+          setLoading(false);
+        }
+      }, 350);
+    },
+    [companyId],
+  );
 
   const handleInputChange = (e) => {
     const v = e.target.value;
@@ -135,7 +140,9 @@ export default function SmartItemAutocomplete({
           uom = data[0].description || "";
           fbrUOMId = data[0].uoM_ID ?? null;
         }
-      } catch { /* ignore, user can set UOM manually */ }
+      } catch {
+        /* ignore, user can set UOM manually */
+      }
     }
 
     onPick?.({
@@ -180,11 +187,16 @@ export default function SmartItemAutocomplete({
         value={query}
         placeholder={placeholder || "Search items or FBR catalog…"}
         onChange={handleInputChange}
-        onFocus={() => { if (query) { setShowDropdown(true); fetchBoth(query); } }}
+        onFocus={() => {
+          if (query) {
+            setShowDropdown(true);
+            fetchBoth(query);
+          }
+        }}
         onKeyDown={handleKeyDown}
         autoComplete="off"
       />
-      {showDropdown && (
+      {showDropdown &&
         createPortal(
           <ul style={styles.dropdown(wrapperRef.current)}>
             {loading && <li style={styles.loading}>Searching…</li>}
@@ -208,9 +220,24 @@ export default function SmartItemAutocomplete({
                     </div>
                     {(item.hsCode || item.uom) && (
                       <div style={styles.itemMeta}>
-                        {item.hsCode && <span><b>HS:</b> {item.hsCode}</span>}
-                        {item.uom && <span> · <b>UOM:</b> {item.uom}</span>}
-                        {item.saleType && <span> · <b>Sale:</b> {item.saleType.substring(0, 30)}{item.saleType.length > 30 ? "…" : ""}</span>}
+                        {item.hsCode && (
+                          <span>
+                            <b>HS:</b> {item.hsCode}
+                          </span>
+                        )}
+                        {item.uom && (
+                          <span>
+                            {" "}
+                            · <b>UOM:</b> {item.uom}
+                          </span>
+                        )}
+                        {item.saleType && (
+                          <span>
+                            {" "}
+                            · <b>Sale:</b> {item.saleType.substring(0, 30)}
+                            {item.saleType.length > 30 ? "…" : ""}
+                          </span>
+                        )}
                       </div>
                     )}
                   </li>
@@ -237,7 +264,9 @@ export default function SmartItemAutocomplete({
                         <span style={styles.hsCode}>{f.hS_CODE}</span>
                         <span style={styles.fbrBadge}>FBR</span>
                       </div>
-                      {f.shortName && <div style={{ ...styles.itemDesc, fontWeight: 600 }}>{f.shortName}</div>}
+                      {f.shortName && (
+                        <div style={{ ...styles.itemDesc, fontWeight: 600 }}>{f.shortName}</div>
+                      )}
                       <div style={styles.itemDesc}>{f.description}</div>
                     </li>
                   );
@@ -247,13 +276,13 @@ export default function SmartItemAutocomplete({
 
             {!loading && !hasAnyResults && query && (
               <li style={styles.empty}>
-                No matches. Keep typing or just use your own description — we'll save it for next time.
+                No matches. Keep typing or just use your own description — we'll save it for next
+                time.
               </li>
             )}
           </ul>,
-          document.body
-        )
-      )}
+          document.body,
+        )}
     </div>
   );
 }
@@ -352,6 +381,11 @@ const styles = {
     WebkitLineClamp: 2,
     WebkitBoxOrient: "vertical",
   },
-  loading: { padding: "0.6rem 0.75rem", color: "#5f6d7e", fontSize: "0.82rem", fontStyle: "italic" },
+  loading: {
+    padding: "0.6rem 0.75rem",
+    color: "#5f6d7e",
+    fontSize: "0.82rem",
+    fontStyle: "italic",
+  },
   empty: { padding: "0.6rem 0.75rem", color: "#5f6d7e", fontSize: "0.8rem", lineHeight: 1.4 },
 };

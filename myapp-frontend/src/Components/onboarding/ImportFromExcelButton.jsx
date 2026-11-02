@@ -13,14 +13,28 @@ export default function ImportFromExcelButton({ sheet }) {
   const meta = sheetByKey(sheet);
   if (!meta || !has(IMPORT_PERMISSION) || !has(meta.permission)) return null;
   return (
-    <Link to={importLinkFor(sheet)} style={style} title={`Import ${meta.title.toLowerCase()} from an Excel file`}>
+    <Link
+      to={importLinkFor(sheet)}
+      style={style}
+      title={`Import ${meta.title.toLowerCase()} from an Excel file`}
+    >
       <MdUploadFile size={18} aria-hidden="true" /> Import from Excel
     </Link>
   );
 }
 
 const style = {
-  display: "inline-flex", alignItems: "center", gap: "0.4rem", minHeight: 44, padding: "0 1rem",
-  borderRadius: 10, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue,
-  fontWeight: 600, fontSize: "0.88rem", textDecoration: "none", whiteSpace: "nowrap",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "0.4rem",
+  minHeight: 44,
+  padding: "0 1rem",
+  borderRadius: 10,
+  border: `1px solid ${colors.inputBorder}`,
+  background: "#fff",
+  color: colors.blue,
+  fontWeight: 600,
+  fontSize: "0.88rem",
+  textDecoration: "none",
+  whiteSpace: "nowrap",
 };

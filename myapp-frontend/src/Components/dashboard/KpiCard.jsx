@@ -22,13 +22,15 @@ function formatPkr(v) {
 // Display only: the card is always handed the true value, and a reduced-motion
 // preference or a non-numeric value shows it immediately.
 const prefersReducedMotion = () =>
-  typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  typeof window !== "undefined" &&
+  !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 function useCountUp(value, duration = 700) {
   // First paint shows 0, not the final figure, or the count would open with a
   // flash of the answer.
   const [shown, setShown] = useState(() =>
-    typeof value === "number" && isFinite(value) && !prefersReducedMotion() ? 0 : value);
+    typeof value === "number" && isFinite(value) && !prefersReducedMotion() ? 0 : value,
+  );
   // Where the display actually is. Starts at 0: the card mounts before its
   // data arrives, and the first real figure is the one worth counting up to.
   // Updated per frame (not to the target up front) so an effect that is torn
@@ -38,11 +40,17 @@ function useCountUp(value, duration = 700) {
   useEffect(() => {
     const target = value;
     if (typeof target !== "number" || !isFinite(target) || prefersReducedMotion()) {
-      setShown(target); if (typeof target === "number") at.current = target; return undefined;
+      setShown(target);
+      if (typeof target === "number") at.current = target;
+      return undefined;
     }
     const start = typeof at.current === "number" && isFinite(at.current) ? at.current : 0;
-    if (start === target) { setShown(target); return undefined; }
-    let raf; const t0 = performance.now();
+    if (start === target) {
+      setShown(target);
+      return undefined;
+    }
+    let raf;
+    const t0 = performance.now();
     const tick = (t) => {
       const k = Math.min(1, (t - t0) / duration);
       const eased = 1 - Math.pow(1 - k, 3);
@@ -129,65 +137,102 @@ export default function KpiCard({
     >
       {/* Thin accent strip — keeps section identity readable at a glance,
           even when the card is collapsed under its peers on mobile. */}
-      <div style={{
-        position: "absolute", inset: "0 auto auto 0", width: "100%", height: 3,
-        background: `linear-gradient(90deg, ${accent} 0%, ${accent}99 45%, transparent 100%)`,
-      }} />
+      <div
+        style={{
+          position: "absolute",
+          inset: "0 auto auto 0",
+          width: "100%",
+          height: 3,
+          background: `linear-gradient(90deg, ${accent} 0%, ${accent}99 45%, transparent 100%)`,
+        }}
+      />
 
-      <div className="dash-kpi-card__label" style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "0.55rem",
-        color: "#69788f",
-        fontSize: "0.7rem",
-        fontWeight: 600,
-        letterSpacing: "0.12em",
-        textTransform: "uppercase",
-        fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
-      }}>
+      <div
+        className="dash-kpi-card__label"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.55rem",
+          color: "#69788f",
+          fontSize: "0.7rem",
+          fontWeight: 600,
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
+          fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
+        }}
+      >
         {icon && (
-          <span className="dash-kpi-card__icon" style={{
-            display: "inline-flex", alignItems: "center", justifyContent: "center",
-            width: 26, height: 26, borderRadius: 8,
-            background: `${accent}14`,
-            border: `1px solid ${accent}2e`,
-            color: accent,
-            flexShrink: 0,
-          }}>{icon}</span>
+          <span
+            className="dash-kpi-card__icon"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 26,
+              height: 26,
+              borderRadius: 8,
+              background: `${accent}14`,
+              border: `1px solid ${accent}2e`,
+              color: accent,
+              flexShrink: 0,
+            }}
+          >
+            {icon}
+          </span>
         )}
-        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+        <span
+          style={{
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {label}
+        </span>
       </div>
 
-      <div className="dash-kpi-card__value" style={{
-        // Sized to the viewport so a 15-character figure stays on one line in
-        // a four-across tile; 4.2vw hit the 1.8rem cap on every desktop.
-        fontSize: "clamp(1.1rem, 1.45vw, 1.6rem)",
-        fontWeight: 600,
-        color: "#0c1830",
-        lineHeight: 1.1,
-        letterSpacing: "-0.01em",
-        fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
-        fontVariantNumeric: "tabular-nums",
-      }}>
+      <div
+        className="dash-kpi-card__value"
+        style={{
+          // Sized to the viewport so a 15-character figure stays on one line in
+          // a four-across tile; 4.2vw hit the 1.8rem cap on every desktop.
+          fontSize: "clamp(1.1rem, 1.45vw, 1.6rem)",
+          fontWeight: 600,
+          color: "#0c1830",
+          lineHeight: 1.1,
+          letterSpacing: "-0.01em",
+          fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
         {format(shownValue)}
       </div>
 
-      {(deltaPct != null) && (
-        <div className="dash-kpi-card__delta" style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "0.25rem",
-          alignSelf: "flex-start",
-          color: deltaColor,
-          backgroundColor: deltaBg,
-          borderRadius: 999,
-          padding: "0.14rem 0.55rem 0.14rem 0.4rem",
-          fontSize: "0.74rem",
-          fontWeight: 700,
-        }}>
+      {deltaPct != null && (
+        <div
+          className="dash-kpi-card__delta"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.25rem",
+            alignSelf: "flex-start",
+            color: deltaColor,
+            backgroundColor: deltaBg,
+            borderRadius: 999,
+            padding: "0.14rem 0.55rem 0.14rem 0.4rem",
+            fontSize: "0.74rem",
+            fontWeight: 700,
+          }}
+        >
           <DeltaIconComp size={13} />
           {deltaPct === Infinity ? "new" : formatPct(deltaPct)}
-          <span className="dash-kpi-card__delta-suffix" style={{ color: "#69788f", fontWeight: 500 }}>vs prev</span>
+          <span
+            className="dash-kpi-card__delta-suffix"
+            style={{ color: "#69788f", fontWeight: 500 }}
+          >
+            vs prev
+          </span>
         </div>
       )}
 

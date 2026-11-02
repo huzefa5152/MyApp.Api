@@ -5,13 +5,35 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import BillChallansEditor from "./BillChallansEditor";
 import { getBillChallans, updateBillChallans } from "../api/invoiceApi";
 vi.mock("../api/invoiceApi", () => ({ getBillChallans: vi.fn(), updateBillChallans: vi.fn() }));
-const source = (id, itemId) => ({ id, challanNumber: 12, poNumber: `PO-${id}`, version: `source-${id}`,
-  items: [{ id: itemId, description: `Item ${itemId}`, quantity: 2, unit: "Pcs" }] });
-const bill = { id: 1, invoiceNumber: 1, clientName: "Sample buyer", gstRate: 18, furtherTaxRate: 2,
-  withholdingTaxRate: 5.5, freightCharges: 50, items: [{ id: 1, deliveryItemId: 10, quantity: 2, unitPrice: 100, lineTotal: 200 }] };
-const snapshot = { version: "bill-version", bill, linked: [source(1, 10)], available: [source(2, 20)], hasMore: false };
+const source = (id, itemId) => ({
+  id,
+  challanNumber: 12,
+  poNumber: `PO-${id}`,
+  version: `source-${id}`,
+  items: [{ id: itemId, description: `Item ${itemId}`, quantity: 2, unit: "Pcs" }],
+});
+const bill = {
+  id: 1,
+  invoiceNumber: 1,
+  clientName: "Sample buyer",
+  gstRate: 18,
+  furtherTaxRate: 2,
+  withholdingTaxRate: 5.5,
+  freightCharges: 50,
+  items: [{ id: 1, deliveryItemId: 10, quantity: 2, unitPrice: 100, lineTotal: 200 }],
+};
+const snapshot = {
+  version: "bill-version",
+  bill,
+  linked: [source(1, 10)],
+  available: [source(2, 20)],
+  hasMore: false,
+};
 afterEach(cleanup);
-beforeEach(() => { vi.resetAllMocks(); getBillChallans.mockResolvedValue({ data: snapshot }); });
+beforeEach(() => {
+  vi.resetAllMocks();
+  getBillChallans.mockResolvedValue({ data: snapshot });
+});
 async function open() {
   const onSaved = vi.fn();
   render(<BillChallansEditor invoice={bill} onClose={vi.fn()} onSaved={onSaved} />);
@@ -27,11 +49,22 @@ it("distinguishes duplicate numbers and sends new rates with source versions", a
   updateBillChallans.mockResolvedValue({ data: bill });
   fireEvent.click(screen.getByRole("button", { name: "Save challans" }));
   await waitFor(() => expect(onSaved).toHaveBeenCalled());
-  expect(updateBillChallans).toHaveBeenCalledWith(1, { version: "bill-version", challanIds: [1, 2],
-    addedChallanVersions: { 2: "source-2" }, unitPrices: { 20: 3940 }, leaveOutDeliveryItemIds: [] });
+  expect(updateBillChallans).toHaveBeenCalledWith(1, {
+    version: "bill-version",
+    challanIds: [1, 2],
+    addedChallanVersions: { 2: "source-2" },
+    unitPrices: { 20: 3940 },
+    leaveOutDeliveryItemIds: [],
+  });
 });
 it("leaves a line out: no rate needed for it, and every line out of a challan blocks saving", async () => {
-  const twoLine = { ...source(2, 20), items: [{ id: 20, description: "Item 20", quantity: 2, unit: "Pcs" }, { id: 21, description: "Item 21", quantity: 3, unit: "Pcs" }] };
+  const twoLine = {
+    ...source(2, 20),
+    items: [
+      { id: 20, description: "Item 20", quantity: 2, unit: "Pcs" },
+      { id: 21, description: "Item 21", quantity: 3, unit: "Pcs" },
+    ],
+  };
   getBillChallans.mockResolvedValue({ data: { ...snapshot, available: [twoLine] } });
   const onSaved = await open();
   fireEvent.click(screen.getByRole("button", { name: "Add challan 12 record 2" }));
@@ -45,8 +78,13 @@ it("leaves a line out: no rate needed for it, and every line out of a challan bl
   updateBillChallans.mockResolvedValue({ data: bill });
   fireEvent.click(screen.getByRole("button", { name: "Save challans" }));
   await waitFor(() => expect(onSaved).toHaveBeenCalled());
-  expect(updateBillChallans).toHaveBeenCalledWith(1, { version: "bill-version", challanIds: [1, 2],
-    addedChallanVersions: { 2: "source-2" }, unitPrices: { 20: 100 }, leaveOutDeliveryItemIds: [21] });
+  expect(updateBillChallans).toHaveBeenCalledWith(1, {
+    version: "bill-version",
+    challanIds: [1, 2],
+    addedChallanVersions: { 2: "source-2" },
+    unitPrices: { 20: 100 },
+    leaveOutDeliveryItemIds: [21],
+  });
 });
 it("allows explicit zero and replacement while preventing an empty bill", async () => {
   await open();
@@ -65,21 +103,32 @@ it("keeps selected items and rates across searches and failed saves", async () =
   fireEvent.change(screen.getByLabelText("Search challans"), { target: { value: "another PO" } });
   fireEvent.click(screen.getByRole("button", { name: "Search" }));
   await waitFor(() => expect(getBillChallans).toHaveBeenCalledWith(1, "another PO"));
-  await waitFor(() => expect(screen.getByRole("button", { name: "Save challans" }).disabled).toBe(false));
-  updateBillChallans.mockRejectedValue({ response: { data: { error: "Bill changed. Refresh it." } } });
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Save challans" }).disabled).toBe(false),
+  );
+  updateBillChallans.mockRejectedValue({
+    response: { data: { error: "Bill changed. Refresh it." } },
+  });
   fireEvent.click(screen.getByRole("button", { name: "Save challans" }));
   expect((await screen.findByRole("alert")).textContent).toBe("Bill changed. Refresh it.");
   expect(screen.getByLabelText("Unit rate for Item 20").value).toBe("3940");
 });
 it("previews the fresh snapshot when the parent bill is stale", async () => {
-  getBillChallans.mockResolvedValue({ data: { ...snapshot, bill: { ...bill, items: [{ ...bill.items[0], lineTotal: 1000 }] } } });
+  getBillChallans.mockResolvedValue({
+    data: { ...snapshot, bill: { ...bill, items: [{ ...bill.items[0], lineTotal: 1000 }] } },
+  });
   await open();
   expect(screen.getByText("New bill total: Rs 1,200.00")).toBeTruthy();
 });
 
 it("lets an empty historical link be removed while keeping standalone items", async () => {
-  getBillChallans.mockResolvedValue({ data: { ...snapshot, linked: [{ ...source(1, 10), items: [] }],
-    bill: { ...bill, items: [{ ...bill.items[0], deliveryItemId: null }] } } });
+  getBillChallans.mockResolvedValue({
+    data: {
+      ...snapshot,
+      linked: [{ ...source(1, 10), items: [] }],
+      bill: { ...bill, items: [{ ...bill.items[0], deliveryItemId: null }] },
+    },
+  });
   await open();
   const remove = screen.getByRole("button", { name: "Remove challan 12 record 1" });
   expect(remove.disabled).toBe(false);

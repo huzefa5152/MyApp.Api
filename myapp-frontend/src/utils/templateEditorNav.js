@@ -17,21 +17,35 @@ export function setEditorEntry({ type, companyId, templateId = null }) {
     localStorage.setItem(ENTRY_COMPANY_KEY, String(companyId));
     if (templateId != null) localStorage.setItem(ENTRY_TEMPLATE_KEY, String(templateId));
     else localStorage.removeItem(ENTRY_TEMPLATE_KEY);
-  } catch { /* private mode — the editor falls back to the type's default */ }
+  } catch {
+    /* private mode — the editor falls back to the type's default */
+  }
 }
 
 export function markRecentTemplate(id) {
-  try { sessionStorage.setItem(RECENT_TEMPLATE_KEY, String(id)); } catch { /* ignore */ }
+  try {
+    sessionStorage.setItem(RECENT_TEMPLATE_KEY, String(id));
+  } catch {
+    /* ignore */
+  }
 }
 
 // Peek and clear are separate so a state initializer can read the id and a
 // mount effect can consume it — React's StrictMode runs initializers twice in
 // development, and a read-and-clear initializer would hand the second run null.
 export function peekRecentTemplate() {
-  try { return Number(sessionStorage.getItem(RECENT_TEMPLATE_KEY)) || null; } catch { return null; }
+  try {
+    return Number(sessionStorage.getItem(RECENT_TEMPLATE_KEY)) || null;
+  } catch {
+    return null;
+  }
 }
 
 // Consumed once per return, so a card is highlighted once, not forever.
 export function clearRecentTemplate() {
-  try { sessionStorage.removeItem(RECENT_TEMPLATE_KEY); } catch { /* ignore */ }
+  try {
+    sessionStorage.removeItem(RECENT_TEMPLATE_KEY);
+  } catch {
+    /* ignore */
+  }
 }

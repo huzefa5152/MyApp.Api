@@ -15,7 +15,13 @@ import RecordsViewport from "../Components/RecordsViewport";
 //      response (already-masked NTN/CNIC).
 import { useState, useEffect, useMemo } from "react";
 import {
-  MdCloudDone, MdHourglassEmpty, MdError, MdWarning, MdCheckCircle, MdRefresh, MdFilterList,
+  MdCloudDone,
+  MdHourglassEmpty,
+  MdError,
+  MdWarning,
+  MdCheckCircle,
+  MdRefresh,
+  MdFilterList,
 } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -27,23 +33,70 @@ import "./FbrMonitorPage.css";
 
 // Status -> visual config. Keys mirror FbrCommunicationLog.Status taxonomy.
 const STATUS_CFG = {
-  submitted:    { label: "Submitted",    color: "#2e7d32", bg: "#e8f5e9", border: "#a5d6a7", icon: MdCloudDone },
-  acknowledged: { label: "Validated",    color: "#0277bd", bg: "#e3f2fd", border: "#90caf9", icon: MdCheckCircle },
-  rejected:     { label: "Rejected",     color: "#c62828", bg: "#ffebee", border: "#ef9a9a", icon: MdError },
-  failed:       { label: "Failed",       color: "#b71c1c", bg: "#fdecea", border: "#f5a3a3", icon: MdError },
-  uncertain:    { label: "Uncertain",    color: "#8a4b00", bg: "#fff4e0", border: "#ffcc80", icon: MdWarning },
-  retrying:     { label: "Retrying",     color: "#6a1b9a", bg: "#f3e5f5", border: "#ce93d8", icon: MdHourglassEmpty },
-  sent:         { label: "Sent",         color: "#37474f", bg: "#eceff1", border: "#b0bec5", icon: MdHourglassEmpty },
+  submitted: {
+    label: "Submitted",
+    color: "#2e7d32",
+    bg: "#e8f5e9",
+    border: "#a5d6a7",
+    icon: MdCloudDone,
+  },
+  acknowledged: {
+    label: "Validated",
+    color: "#0277bd",
+    bg: "#e3f2fd",
+    border: "#90caf9",
+    icon: MdCheckCircle,
+  },
+  rejected: {
+    label: "Rejected",
+    color: "#c62828",
+    bg: "#ffebee",
+    border: "#ef9a9a",
+    icon: MdError,
+  },
+  failed: { label: "Failed", color: "#b71c1c", bg: "#fdecea", border: "#f5a3a3", icon: MdError },
+  uncertain: {
+    label: "Uncertain",
+    color: "#8a4b00",
+    bg: "#fff4e0",
+    border: "#ffcc80",
+    icon: MdWarning,
+  },
+  retrying: {
+    label: "Retrying",
+    color: "#6a1b9a",
+    bg: "#f3e5f5",
+    border: "#ce93d8",
+    icon: MdHourglassEmpty,
+  },
+  sent: {
+    label: "Sent",
+    color: "#37474f",
+    bg: "#eceff1",
+    border: "#b0bec5",
+    icon: MdHourglassEmpty,
+  },
 };
 
 function statusCfg(s) {
-  return STATUS_CFG[s] || { label: s || "—", color: "#5f6d7e", bg: "#eceff1", border: "#b0bec5", icon: MdWarning };
+  return (
+    STATUS_CFG[s] || {
+      label: s || "—",
+      color: "#5f6d7e",
+      bg: "#eceff1",
+      border: "#b0bec5",
+      icon: MdWarning,
+    }
+  );
 }
 
 function fmtDate(s) {
   if (!s) return "—";
-  try { return new Date(s).toLocaleString("en-PK", { dateStyle: "short", timeStyle: "medium" }); }
-  catch { return s; }
+  try {
+    return new Date(s).toLocaleString("en-PK", { dateStyle: "short", timeStyle: "medium" });
+  } catch {
+    return s;
+  }
 }
 
 function fmtMs(ms) {
@@ -86,7 +139,9 @@ export default function FbrMonitorPage() {
         if (!cancelled) notify(err.response?.data?.message || "Could not load summary.", "error");
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [canView, companyId, windowHours]);
 
   useEffect(() => {
@@ -97,7 +152,9 @@ export default function FbrMonitorPage() {
       try {
         const since = new Date(Date.now() - windowHours * 3600 * 1000).toISOString();
         const r = await getFbrLogs({
-          page, pageSize: pageSize || undefined, companyId,
+          page,
+          pageSize: pageSize || undefined,
+          companyId,
           status: statusFilter || undefined,
           action: actionFilter || undefined,
           since,
@@ -113,13 +170,36 @@ export default function FbrMonitorPage() {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [canView, companyId, windowHours, page, pageSize, statusFilter, actionFilter]);
 
   // ── Permission / state gates ──────────────────────────────────
-  if (permsLoading) return <Shell><div className="fbr-mon-placeholder" style={S.placeholder}>Loading…</div></Shell>;
-  if (!canView) return <Shell><div className="fbr-mon-placeholder" style={S.placeholder}>You don't have permission to view FBR monitor.</div></Shell>;
-  if (!selectedCompany) return <Shell><div className="fbr-mon-placeholder" style={S.placeholder}>Pick a company first.</div></Shell>;
+  if (permsLoading)
+    return (
+      <Shell>
+        <div className="fbr-mon-placeholder" style={S.placeholder}>
+          Loading…
+        </div>
+      </Shell>
+    );
+  if (!canView)
+    return (
+      <Shell>
+        <div className="fbr-mon-placeholder" style={S.placeholder}>
+          You don't have permission to view FBR monitor.
+        </div>
+      </Shell>
+    );
+  if (!selectedCompany)
+    return (
+      <Shell>
+        <div className="fbr-mon-placeholder" style={S.placeholder}>
+          Pick a company first.
+        </div>
+      </Shell>
+    );
 
   const effectiveSize = pageSize ?? observedSize ?? 10;
   const totalPages = Math.max(1, Math.ceil(total / effectiveSize));
@@ -139,34 +219,49 @@ export default function FbrMonitorPage() {
           }
         }}
         windowHours={windowHours}
-        onWindowChange={(h) => { setWindowHours(h); setPage(1); }}
+        onWindowChange={(h) => {
+          setWindowHours(h);
+          setPage(1);
+        }}
         onRefresh={() => setPage((p) => p)}
       />
 
-      <ListFilters label="Summary"><Summary summary={summary} windowHours={windowHours} /></ListFilters>
+      <ListFilters label="Summary">
+        <Summary summary={summary} windowHours={windowHours} />
+      </ListFilters>
 
-      <ListFilters label="Filters"><FilterBar
-        statusFilter={statusFilter}
-        onStatus={(s) => { setStatusFilter(s); setPage(1); }}
-        actionFilter={actionFilter}
-        onAction={(a) => { setActionFilter(a); setPage(1); }}
-        count={filteredCount}
-      /></ListFilters>
+      <ListFilters label="Filters">
+        <FilterBar
+          statusFilter={statusFilter}
+          onStatus={(s) => {
+            setStatusFilter(s);
+            setPage(1);
+          }}
+          actionFilter={actionFilter}
+          onAction={(a) => {
+            setActionFilter(a);
+            setPage(1);
+          }}
+          count={filteredCount}
+        />
+      </ListFilters>
 
-      <RecordsViewport label="FBR log records"><RowsList
-        rows={rows}
-        loading={loading}
-        onClickRow={async (r) => {
-          // Re-fetch the full row by id — the list view truncates bodies
-          // for performance.
-          try {
-            const fr = await getFbrLogById(r.id);
-            setDrawer(fr.data);
-          } catch (err) {
-            notify("Could not load row detail.", "error");
-          }
-        }}
-      /></RecordsViewport>
+      <RecordsViewport label="FBR log records">
+        <RowsList
+          rows={rows}
+          loading={loading}
+          onClickRow={async (r) => {
+            // Re-fetch the full row by id — the list view truncates bodies
+            // for performance.
+            try {
+              const fr = await getFbrLogById(r.id);
+              setDrawer(fr.data);
+            } catch (err) {
+              notify("Could not load row detail.", "error");
+            }
+          }}
+        />
+      </RecordsViewport>
 
       {total > PAGE_SIZE_OPTIONS[0] && (
         <Pagination
@@ -175,7 +270,10 @@ export default function FbrMonitorPage() {
           total={total}
           onPage={setPage}
           pageSize={pageSize ?? observedSize}
-          onPageSize={(n) => { setPageSize(n); setPage(1); }}
+          onPageSize={(n) => {
+            setPageSize(n);
+            setPage(1);
+          }}
           unit="rows"
         />
       )}
@@ -188,22 +286,39 @@ export default function FbrMonitorPage() {
 // ── Layout ─────────────────────────────────────────────────────────
 
 function Shell({ children }) {
-  return <div className="fbr-mon-page" style={{ width: "100%", maxWidth: 1480, margin: "0 auto" }}>{children}</div>;
+  return (
+    <div className="fbr-mon-page" style={{ width: "100%", maxWidth: 1480, margin: "0 auto" }}>
+      {children}
+    </div>
+  );
 }
 
-function Header({ company, companies, selectedCompanyId, onCompanyChange, windowHours, onWindowChange, onRefresh }) {
+function Header({
+  company,
+  companies,
+  selectedCompanyId,
+  onCompanyChange,
+  windowHours,
+  onWindowChange,
+  onRefresh,
+}) {
   // Hide the picker when there's only one company — it'd just be visual
   // noise. Same UX as the dashboard hero.
   const showCompanyPicker = (companies?.length ?? 0) > 1;
   return (
     <header className="fbr-mon-hero" style={S.heroBanner}>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <h1 className="fbr-mon-hero__title" style={S.heroH1}>FBR Communication Monitor</h1>
+        <h1 className="fbr-mon-hero__title" style={S.heroH1}>
+          FBR Communication Monitor
+        </h1>
         <p className="fbr-mon-hero__sub" style={S.heroSub}>
           <strong>{company}</strong> · last {windowHours}h
         </p>
       </div>
-      <div className="fbr-mon-hero__pickers" style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+      <div
+        className="fbr-mon-hero__pickers"
+        style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
+      >
         {showCompanyPicker && (
           <select
             value={selectedCompanyId ?? ""}
@@ -212,11 +327,18 @@ function Header({ company, companies, selectedCompanyId, onCompanyChange, window
             aria-label="Company"
           >
             {companies.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
             ))}
           </select>
         )}
-        <select value={windowHours} onChange={(e) => onWindowChange(parseInt(e.target.value, 10))} style={S.select} aria-label="Window">
+        <select
+          value={windowHours}
+          onChange={(e) => onWindowChange(parseInt(e.target.value, 10))}
+          style={S.select}
+          aria-label="Window"
+        >
           <option value={1}>Last 1h</option>
           <option value={6}>Last 6h</option>
           <option value={24}>Last 24h</option>
@@ -234,11 +356,21 @@ function Header({ company, companies, selectedCompanyId, onCompanyChange, window
 function Summary({ summary, windowHours }) {
   const tile = (label, value, accent, icon) => (
     <div className="fbr-mon-tile" style={{ ...S.tile, borderTop: `3px solid ${accent}` }}>
-      <div className="fbr-mon-tile__label" style={S.tileLabel}>{icon}<span>{label}</span></div>
-      <div className="fbr-mon-tile__value" style={{ ...S.tileValue, color: accent }}>{value ?? 0}</div>
+      <div className="fbr-mon-tile__label" style={S.tileLabel}>
+        {icon}
+        <span>{label}</span>
+      </div>
+      <div className="fbr-mon-tile__value" style={{ ...S.tileValue, color: accent }}>
+        {value ?? 0}
+      </div>
     </div>
   );
-  if (!summary) return <div style={S.tilesSkeleton}><div style={S.tile}>—</div></div>;
+  if (!summary)
+    return (
+      <div style={S.tilesSkeleton}>
+        <div style={S.tile}>—</div>
+      </div>
+    );
   return (
     <>
       <div className="fbr-mon-tiles" style={S.tiles}>
@@ -252,7 +384,14 @@ function Summary({ summary, windowHours }) {
       </div>
       {summary.topErrorCodes && Object.keys(summary.topErrorCodes).length > 0 && (
         <div className="fbr-mon-error-bar" style={S.errorBar}>
-          <span style={{ fontSize: "0.78rem", color: "#5f6d7e", fontWeight: 600, marginRight: "0.5rem" }}>
+          <span
+            style={{
+              fontSize: "0.78rem",
+              color: "#5f6d7e",
+              fontWeight: 600,
+              marginRight: "0.5rem",
+            }}
+          >
             Top FBR error codes ({windowHours}h):
           </span>
           {Object.entries(summary.topErrorCodes).map(([code, n]) => (
@@ -269,7 +408,16 @@ function Summary({ summary, windowHours }) {
 function FilterBar({ statusFilter, onStatus, actionFilter, onAction, count }) {
   return (
     <section data-admin-toolbar="" className="fbr-mon-filter-bar" style={S.filterBar}>
-      <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", color: "#5f6d7e", fontWeight: 600, fontSize: "0.82rem" }}>
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "0.3rem",
+          color: "#5f6d7e",
+          fontWeight: 600,
+          fontSize: "0.82rem",
+        }}
+      >
         <MdFilterList size={14} /> Filter:
       </span>
       <select value={statusFilter} onChange={(e) => onStatus(e.target.value)} style={S.select}>
@@ -286,7 +434,10 @@ function FilterBar({ statusFilter, onStatus, actionFilter, onAction, count }) {
         <option value="Validate">Validate</option>
         <option value="Preview">Preview</option>
       </select>
-      <span className="fbr-mon-filter-bar__count" style={{ marginLeft: "auto", fontSize: "0.82rem", color: "#5f6d7e" }}>
+      <span
+        className="fbr-mon-filter-bar__count"
+        style={{ marginLeft: "auto", fontSize: "0.82rem", color: "#5f6d7e" }}
+      >
         {count.toLocaleString()} {count === 1 ? "result" : "results"}
       </span>
     </section>
@@ -294,8 +445,18 @@ function FilterBar({ statusFilter, onStatus, actionFilter, onAction, count }) {
 }
 
 function RowsList({ rows, loading, onClickRow }) {
-  if (loading && rows.length === 0) return <div className="fbr-mon-placeholder" style={S.placeholder}>Loading…</div>;
-  if (rows.length === 0) return <div className="fbr-mon-placeholder" style={S.placeholder}>No FBR communication in the selected window.</div>;
+  if (loading && rows.length === 0)
+    return (
+      <div className="fbr-mon-placeholder" style={S.placeholder}>
+        Loading…
+      </div>
+    );
+  if (rows.length === 0)
+    return (
+      <div className="fbr-mon-placeholder" style={S.placeholder}>
+        No FBR communication in the selected window.
+      </div>
+    );
   return (
     <section style={S.list}>
       <div className="fbr-mon-list-header" style={S.listHeader}>
@@ -311,25 +472,87 @@ function RowsList({ rows, loading, onClickRow }) {
         const cfg = statusCfg(r.status);
         const Icon = cfg.icon;
         return (
-          <button type="button" key={r.id} onClick={() => onClickRow(r)} className="fbr-mon-row" style={S.row}>
-            <span className="fbr-mon-row__ts" style={{ width: 180, flexShrink: 0, whiteSpace: "nowrap", fontSize: "0.78rem", color: "#5f6d7e", fontFamily: "ui-monospace, monospace" }}>{fmtDate(r.timestamp)}</span>
+          <button
+            type="button"
+            key={r.id}
+            onClick={() => onClickRow(r)}
+            className="fbr-mon-row"
+            style={S.row}
+          >
+            <span
+              className="fbr-mon-row__ts"
+              style={{
+                width: 180,
+                flexShrink: 0,
+                whiteSpace: "nowrap",
+                fontSize: "0.78rem",
+                color: "#5f6d7e",
+                fontFamily: "ui-monospace, monospace",
+              }}
+            >
+              {fmtDate(r.timestamp)}
+            </span>
             <span className="fbr-mon-row__status" style={{ width: 110 }}>
-              <span style={{ ...S.pill, color: cfg.color, backgroundColor: cfg.bg, border: `1px solid ${cfg.border}` }}>
+              <span
+                style={{
+                  ...S.pill,
+                  color: cfg.color,
+                  backgroundColor: cfg.bg,
+                  border: `1px solid ${cfg.border}`,
+                }}
+              >
                 <Icon size={12} /> {cfg.label}
               </span>
             </span>
-            <span className="fbr-mon-row__action" style={{ width: 90, fontSize: "0.82rem", fontWeight: 600 }}>{r.action}</span>
-            <span className="fbr-mon-row__bill" style={{ width: 90, fontSize: "0.82rem", color: "#0d47a1", fontFamily: "ui-monospace, monospace" }}>
+            <span
+              className="fbr-mon-row__action"
+              style={{ width: 90, fontSize: "0.82rem", fontWeight: 600 }}
+            >
+              {r.action}
+            </span>
+            <span
+              className="fbr-mon-row__bill"
+              style={{
+                width: 90,
+                fontSize: "0.82rem",
+                color: "#0d47a1",
+                fontFamily: "ui-monospace, monospace",
+              }}
+            >
               {r.invoiceNumber != null ? `#${r.invoiceNumber}` : "—"}
             </span>
-            <span className="fbr-mon-row__http" style={{ width: 70, textAlign: "right", fontSize: "0.82rem", fontFamily: "ui-monospace, monospace" }}>
+            <span
+              className="fbr-mon-row__http"
+              style={{
+                width: 70,
+                textAlign: "right",
+                fontSize: "0.82rem",
+                fontFamily: "ui-monospace, monospace",
+              }}
+            >
               {r.httpStatusCode ?? "—"}
             </span>
-            <span className="fbr-mon-row__err" style={{ flex: 1, minWidth: 0, fontSize: "0.82rem", color: r.fbrErrorMessage ? "#b71c1c" : "#1a2332", whiteSpace: "pre-line", wordBreak: "break-word", lineHeight: 1.4 }}>
+            <span
+              className="fbr-mon-row__err"
+              style={{
+                flex: 1,
+                minWidth: 0,
+                fontSize: "0.82rem",
+                color: r.fbrErrorMessage ? "#b71c1c" : "#1a2332",
+                whiteSpace: "pre-line",
+                wordBreak: "break-word",
+                lineHeight: 1.4,
+              }}
+            >
               {r.fbrErrorCode ? <strong>[{r.fbrErrorCode}] </strong> : null}
               {r.fbrErrorMessage || "—"}
             </span>
-            <span className="fbr-mon-row__duration" style={{ width: 80, textAlign: "right", fontSize: "0.78rem", color: "#5f6d7e" }}>{fmtMs(r.requestDurationMs)}</span>
+            <span
+              className="fbr-mon-row__duration"
+              style={{ width: 80, textAlign: "right", fontSize: "0.78rem", color: "#5f6d7e" }}
+            >
+              {fmtMs(r.requestDurationMs)}
+            </span>
           </button>
         );
       })}
@@ -341,34 +564,75 @@ function Drawer({ row, onClose }) {
   const cfg = statusCfg(row.status);
   return (
     <div data-admin-backdrop="" style={S.drawerOverlay} onClick={onClose}>
-      <div data-admin-dialog="" className="fbr-mon-drawer-inner" style={S.drawerInner} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        className="fbr-mon-drawer-inner"
+        style={S.drawerInner}
+        onClick={(e) => e.stopPropagation()}
+      >
         <header className="fbr-mon-drawer-header" style={S.drawerHeader}>
           <div>
             <h2 style={{ margin: 0, fontSize: "1.1rem" }}>FBR call detail</h2>
             <div style={{ fontSize: "0.8rem", color: "#5f6d7e" }}>
-              {fmtDate(row.timestamp)} · {row.action} · invoice {row.invoiceNumber != null ? `#${row.invoiceNumber}` : "—"}
+              {fmtDate(row.timestamp)} · {row.action} · invoice{" "}
+              {row.invoiceNumber != null ? `#${row.invoiceNumber}` : "—"}
             </div>
           </div>
-          <button data-admin-close="" type="button" onClick={onClose} style={S.drawerClose} title="Close">×</button>
+          <button
+            data-admin-close=""
+            type="button"
+            onClick={onClose}
+            style={S.drawerClose}
+            title="Close"
+          >
+            ×
+          </button>
         </header>
         <div className="fbr-mon-drawer-body" style={S.drawerBody}>
-          <KeyValue label="Status" value={<span style={{ color: cfg.color, fontWeight: 600 }}>{cfg.label}</span>} />
+          <KeyValue
+            label="Status"
+            value={<span style={{ color: cfg.color, fontWeight: 600 }}>{cfg.label}</span>}
+          />
           <KeyValue label="HTTP" value={row.httpStatusCode ?? "—"} />
           <KeyValue label="Duration" value={fmtMs(row.requestDurationMs)} />
           <KeyValue label="Retry attempt" value={row.retryAttempt ?? 0} />
           <KeyValue label="User" value={row.userName || "—"} />
-          <KeyValue label="Correlation ID" value={row.correlationId ? <code style={S.code}>{row.correlationId}</code> : "—"} />
+          <KeyValue
+            label="Correlation ID"
+            value={row.correlationId ? <code style={S.code}>{row.correlationId}</code> : "—"}
+          />
           <KeyValue label="Endpoint" value={<code style={S.code}>{row.endpoint}</code>} />
-          {row.fbrErrorCode && <KeyValue label="FBR error code" value={<strong style={{ color: "#b71c1c" }}>{row.fbrErrorCode}</strong>} />}
-          {row.fbrErrorMessage && <KeyValue label="FBR message" value={<span style={{ color: "#b71c1c", whiteSpace: "pre-line" }}>{row.fbrErrorMessage}</span>} />}
+          {row.fbrErrorCode && (
+            <KeyValue
+              label="FBR error code"
+              value={<strong style={{ color: "#b71c1c" }}>{row.fbrErrorCode}</strong>}
+            />
+          )}
+          {row.fbrErrorMessage && (
+            <KeyValue
+              label="FBR message"
+              value={
+                <span style={{ color: "#b71c1c", whiteSpace: "pre-line" }}>
+                  {row.fbrErrorMessage}
+                </span>
+              }
+            />
+          )}
 
           <div style={{ marginTop: "1rem" }}>
-            <strong style={{ fontSize: "0.85rem", color: "#1a2332" }}>Request body (NTN/CNIC masked)</strong>
-            <pre className="fbr-mon-pre" style={S.pre}>{row.requestBodyMasked || "(empty)"}</pre>
+            <strong style={{ fontSize: "0.85rem", color: "#1a2332" }}>
+              Request body (NTN/CNIC masked)
+            </strong>
+            <pre className="fbr-mon-pre" style={S.pre}>
+              {row.requestBodyMasked || "(empty)"}
+            </pre>
           </div>
           <div style={{ marginTop: "1rem" }}>
             <strong style={{ fontSize: "0.85rem", color: "#1a2332" }}>Response body</strong>
-            <pre className="fbr-mon-pre" style={S.pre}>{row.responseBodyMasked?.replace(/\r\n?/g, "\n").replace(/\n\s*\n/g, "\n") || "(empty)"}</pre>
+            <pre className="fbr-mon-pre" style={S.pre}>
+              {row.responseBodyMasked?.replace(/\r\n?/g, "\n").replace(/\n\s*\n/g, "\n") ||
+                "(empty)"}
+            </pre>
           </div>
         </div>
       </div>
@@ -378,9 +642,14 @@ function Drawer({ row, onClose }) {
 
 function KeyValue({ label, value }) {
   return (
-    <div className="fbr-mon-kv" style={{ display: "flex", gap: "0.85rem", fontSize: "0.85rem", padding: "0.25rem 0" }}>
+    <div
+      className="fbr-mon-kv"
+      style={{ display: "flex", gap: "0.85rem", fontSize: "0.85rem", padding: "0.25rem 0" }}
+    >
       <span style={{ width: 130, color: "#5f6d7e", fontWeight: 600 }}>{label}</span>
-      <span style={{ flex: 1, color: "#1a2332", overflow: "hidden", overflowWrap: "anywhere" }}>{value}</span>
+      <span style={{ flex: 1, color: "#1a2332", overflow: "hidden", overflowWrap: "anywhere" }}>
+        {value}
+      </span>
     </div>
   );
 }
@@ -412,11 +681,17 @@ const S = {
     cursor: "pointer",
   },
   btnGhost: {
-    display: "inline-flex", alignItems: "center", gap: "0.3rem",
-    background: "rgba(255,255,255,0.92)", color: "#0d47a1",
-    border: "none", borderRadius: 8,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    background: "rgba(255,255,255,0.92)",
+    color: "#0d47a1",
+    border: "none",
+    borderRadius: 8,
     padding: "0.4rem 0.75rem",
-    fontSize: "0.82rem", fontWeight: 600, cursor: "pointer",
+    fontSize: "0.82rem",
+    fontWeight: 600,
+    cursor: "pointer",
   },
   tiles: {
     display: "grid",
@@ -433,33 +708,50 @@ const S = {
     boxShadow: "0 1px 2px rgba(13,71,161,0.04)",
   },
   tileLabel: {
-    display: "flex", alignItems: "center", gap: "0.3rem",
-    fontSize: "0.7rem", color: "#5f6d7e", fontWeight: 700,
-    textTransform: "uppercase", letterSpacing: "0.04em",
+    display: "flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    fontSize: "0.7rem",
+    color: "#5f6d7e",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
     marginBottom: "0.25rem",
   },
   tileValue: {
-    fontSize: "1.35rem", fontWeight: 800, fontFamily: "ui-monospace, monospace",
+    fontSize: "1.35rem",
+    fontWeight: 800,
+    fontFamily: "ui-monospace, monospace",
   },
   errorBar: {
     background: "#fff",
     border: "1px solid #e8edf3",
     borderRadius: 10,
     padding: "0.5rem 0.8rem",
-    display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.4rem",
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: "0.4rem",
     marginBottom: "0.55rem",
   },
   errChip: {
-    display: "inline-flex", alignItems: "center",
-    padding: "0.15rem 0.5rem", borderRadius: 999,
-    background: "#ffebee", color: "#b71c1c", fontSize: "0.78rem",
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "0.15rem 0.5rem",
+    borderRadius: 999,
+    background: "#ffebee",
+    color: "#b71c1c",
+    fontSize: "0.78rem",
   },
   filterBar: {
     background: "#f8fafd",
     border: "1px solid #e8edf3",
     borderRadius: 10,
     padding: "0.55rem 0.85rem",
-    display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.5rem",
+    display: "flex",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: "0.5rem",
     marginBottom: "0.5rem",
   },
   list: {
@@ -470,31 +762,50 @@ const S = {
     boxShadow: "0 1px 2px rgba(13,71,161,0.04)",
   },
   listHeader: {
-    display: "flex", alignItems: "center", gap: "0.5rem",
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
     padding: "0.55rem 0.85rem",
-    fontSize: "0.7rem", color: "#5f6d7e", fontWeight: 700,
-    textTransform: "uppercase", letterSpacing: "0.04em",
-    background: "#f4f7fb", borderBottom: "1px solid #e8edf3",
+    fontSize: "0.7rem",
+    color: "#5f6d7e",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    background: "#f4f7fb",
+    borderBottom: "1px solid #e8edf3",
   },
   row: {
     // alignItems: flex-start so a wrapped multi-line error doesn't
     // visually drift the other columns to the vertical middle. With
     // an 0.55rem top padding the first line lines up with the column
     // header guide above.
-    display: "flex", alignItems: "flex-start", gap: "0.5rem",
+    display: "flex",
+    alignItems: "flex-start",
+    gap: "0.5rem",
     padding: "0.55rem 0.85rem",
-    background: "#fff", border: "none",
+    background: "#fff",
+    border: "none",
     borderBottom: "1px solid #f0f3f8",
-    width: "100%", textAlign: "left", cursor: "pointer",
+    width: "100%",
+    textAlign: "left",
+    cursor: "pointer",
     fontFamily: "inherit",
   },
   pill: {
-    display: "inline-flex", alignItems: "center", gap: "0.25rem",
-    padding: "0.12rem 0.55rem", borderRadius: 999,
-    fontSize: "0.72rem", fontWeight: 700, whiteSpace: "nowrap",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.25rem",
+    padding: "0.12rem 0.55rem",
+    borderRadius: 999,
+    fontSize: "0.72rem",
+    fontWeight: 700,
+    whiteSpace: "nowrap",
   },
   pagination: {
-    display: "flex", alignItems: "center", justifyContent: "center", gap: "1rem",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "1rem",
     padding: "0.85rem 0",
   },
   pageBtn: {
@@ -508,34 +819,60 @@ const S = {
     cursor: "pointer",
   },
   placeholder: {
-    background: "#fff", border: "1px solid #e8edf3", borderRadius: 12,
-    padding: "1.5rem", textAlign: "center", color: "#5f6d7e", fontSize: "0.9rem",
+    background: "#fff",
+    border: "1px solid #e8edf3",
+    borderRadius: 12,
+    padding: "1.5rem",
+    textAlign: "center",
+    color: "#5f6d7e",
+    fontSize: "0.9rem",
   },
   drawerOverlay: {
-    position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
-    display: "flex", justifyContent: "flex-end", zIndex: 1050,
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.45)",
+    display: "flex",
+    justifyContent: "flex-end",
+    zIndex: 1050,
   },
   drawerInner: {
-    background: "#fff", width: "min(640px, 100%)", height: "100vh",
-    overflowY: "auto", display: "flex", flexDirection: "column",
+    background: "#fff",
+    width: "min(640px, 100%)",
+    height: "100vh",
+    overflowY: "auto",
+    display: "flex",
+    flexDirection: "column",
   },
   drawerHeader: {
-    display: "flex", alignItems: "flex-start", justifyContent: "space-between",
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
     padding: "0.85rem 1rem",
     borderBottom: "1px solid #e8edf3",
   },
   drawerClose: {
-    background: "none", border: "none", fontSize: "1.5rem", cursor: "pointer",
-    color: "#5f6d7e", lineHeight: 1, padding: "0 0.35rem",
+    background: "none",
+    border: "none",
+    fontSize: "1.5rem",
+    cursor: "pointer",
+    color: "#5f6d7e",
+    lineHeight: 1,
+    padding: "0 0.35rem",
   },
   drawerBody: { padding: "0.85rem 1rem 1.5rem", flex: 1 },
   pre: {
-    background: "#f5f8fc", border: "1px solid #e8edf3", borderRadius: 8,
-    padding: "0.6rem 0.75rem", margin: "0.35rem 0 0",
-    fontSize: "0.78rem", lineHeight: 1.4,
+    background: "#f5f8fc",
+    border: "1px solid #e8edf3",
+    borderRadius: 8,
+    padding: "0.6rem 0.75rem",
+    margin: "0.35rem 0 0",
+    fontSize: "0.78rem",
+    lineHeight: 1.4,
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-    whiteSpace: "pre-wrap", wordBreak: "break-word",
-    maxHeight: 300, overflow: "auto",
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+    maxHeight: 300,
+    overflow: "auto",
   },
   code: {
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",

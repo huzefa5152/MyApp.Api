@@ -8,17 +8,14 @@ export const getBillChallans = (id, search = "") =>
 export const updateBillChallans = (id, payload) =>
   httpClient.put(`/invoices/${id}/challans`, payload);
 
-export const getInvoicesByCompany = (companyId) =>
-  httpClient.get(`/invoices/company/${companyId}`);
+export const getInvoicesByCompany = (companyId) => httpClient.get(`/invoices/company/${companyId}`);
 
 export const getPagedInvoicesByCompany = (companyId, params = {}) =>
   httpClient.get(`/invoices/company/${companyId}/paged`, { params });
 
-export const getInvoiceById = (id) =>
-  httpClient.get(`/invoices/${id}`);
+export const getInvoiceById = (id) => httpClient.get(`/invoices/${id}`);
 
-export const createInvoice = (payload) =>
-  httpClient.post("/invoices", payload);
+export const createInvoice = (payload) => httpClient.post("/invoices", payload);
 
 // Create a bill WITHOUT a linked delivery challan — for FBR-only flows
 // (service invoices, retail walk-ins, ad-hoc billing) where no challan
@@ -31,8 +28,7 @@ export const createStandaloneInvoice = (payload) =>
 export const setTaxInvoiceLayout = (id, groupTaxInvoiceByItemType) =>
   httpClient.patch(`/invoices/${id}/tax-invoice-layout`, { groupTaxInvoiceByItemType });
 
-export const updateInvoice = (id, payload) =>
-  httpClient.put(`/invoices/${id}`, payload);
+export const updateInvoice = (id, payload) => httpClient.put(`/invoices/${id}`, payload);
 
 // Narrow-permission edit path — only re-classifies each line by ItemType.
 // Server re-derives HS Code / UOM / Sale Type from the catalog and refuses
@@ -51,11 +47,21 @@ export const updateInvoiceItemTypes = (id, items, groupTaxInvoiceByItemType) =>
 // leaving the underlying bill row untouched. Use "adjustment" from
 // Invoice-mode saves so the printed bill stays at real qty/price while
 // the FBR-side claim math reads the optimized decomposition.
-export const updateInvoiceItemTypesAndQty = (id, items, writeMode = "bill", groupTaxInvoiceByItemType, review = {}) =>
-  httpClient.patch(`/invoices/${id}/itemtypes-and-qty`, { items, writeMode, groupTaxInvoiceByItemType, ...review });
+export const updateInvoiceItemTypesAndQty = (
+  id,
+  items,
+  writeMode = "bill",
+  groupTaxInvoiceByItemType,
+  review = {},
+) =>
+  httpClient.patch(`/invoices/${id}/itemtypes-and-qty`, {
+    items,
+    writeMode,
+    groupTaxInvoiceByItemType,
+    ...review,
+  });
 
-export const deleteInvoice = (id) =>
-  httpClient.delete(`/invoices/${id}`);
+export const deleteInvoice = (id) => httpClient.delete(`/invoices/${id}`);
 
 // Void (cancel) a non-FBR-submitted bill. Unlike delete (trailing bill only,
 // removes the row), cancel works on ANY non-submitted bill: it keeps the bill
@@ -82,8 +88,7 @@ export const reverseInvoice = (id, { reason, remarks, documentType } = {}) =>
 // payload: { originalInvoiceId, documentType (9|10), reason, remarks, date?,
 //            lines: [{ invoiceItemId, quantity }] }  (empty lines = full reversal)
 // Gated server-side by `invoices.note.create`.
-export const createNote = (payload) =>
-  httpClient.post("/invoices/notes", payload);
+export const createNote = (payload) => httpClient.post("/invoices/notes", payload);
 
 // Bill quantity under-reported on an FBR-submitted invoice as a NEW unclassified
 // delta bill (+ cloned challan/PO), then hand to the tax consultant to classify
@@ -106,8 +111,7 @@ export const markInvoiceHandover = (id, remark) =>
 
 // Revert a delivered invoice's customer documents back to Pending.
 // Gated server-side by invoices.docs.revert.
-export const revertInvoiceHandover = (id) =>
-  httpClient.post(`/invoices/${id}/handover/revert`);
+export const revertInvoiceHandover = (id) => httpClient.post(`/invoices/${id}/handover/revert`);
 
 // Bulk-mark customer documents delivered across many invoices at once.
 // The server skips ineligible / cross-tenant ids and returns a per-id

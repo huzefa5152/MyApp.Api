@@ -131,15 +131,30 @@ export function injectSignatureBlock(html) {
   // Prefer the signing label itself over a row shared with other signatories.
   const signingLabel = />(\s*(?:Verified\s+By|Authori[sz]ed\s+(?:Signatory|Signature))\s*)</i;
   if (signingLabel.test(withCss)) {
-    return { html: withCss.replace(signingLabel, (_m, label) =>
-      '><span style="display:inline-flex;flex-direction:column;align-items:center">' + block + '<span>' + label + '</span></span><'),
-      anchor: "signature-text", changed: true };
+    return {
+      html: withCss.replace(
+        signingLabel,
+        (_m, label) =>
+          '><span style="display:inline-flex;flex-direction:column;align-items:center">' +
+          block +
+          "<span>" +
+          label +
+          "</span></span><",
+      ),
+      anchor: "signature-text",
+      changed: true,
+    };
   }
 
   // 1. An existing signature row — the block belongs inside it.
-  const rowRe = /(<[a-z]+[^>]*class="[^"]*\b(?:sig-row|sign-row|sig-block|signature)\b[^"]*"[^>]*>)/i;
+  const rowRe =
+    /(<[a-z]+[^>]*class="[^"]*\b(?:sig-row|sign-row|sig-block|signature)\b[^"]*"[^>]*>)/i;
   if (rowRe.test(withCss)) {
-    return { html: withCss.replace(rowRe, (m) => m + block), anchor: "signature-row", changed: true };
+    return {
+      html: withCss.replace(rowRe, (m) => m + block),
+      anchor: "signature-row",
+      changed: true,
+    };
   }
 
   // 2. Text that reads like a signature label — sit directly above it.
@@ -155,7 +170,11 @@ export function injectSignatureBlock(html) {
   // 3. Nothing matched — append a standalone row and say so.
   const row = '<div class="sig-row" style="margin-top:24px;text-align:right">' + block + "</div>";
   if (/<\/body>/i.test(withCss)) {
-    return { html: withCss.replace(/<\/body>/i, row + "</body>"), anchor: "appended", changed: true };
+    return {
+      html: withCss.replace(/<\/body>/i, row + "</body>"),
+      anchor: "appended",
+      changed: true,
+    };
   }
   return { html: withCss + row, anchor: "appended", changed: true };
 }

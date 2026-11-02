@@ -33,8 +33,7 @@ export const getIncorrectImports = (params = {}) =>
   httpClient.get("/import-feedback/incorrect", { params });
 
 // Parser accuracy — overall + per parser version.
-export const getParserFeedbackStatistics = () =>
-  httpClient.get("/import-feedback/statistics");
+export const getParserFeedbackStatistics = () => httpClient.get("/import-feedback/statistics");
 
 // Single retained PDF (blob).
 export const downloadFeedbackPdf = (id) =>

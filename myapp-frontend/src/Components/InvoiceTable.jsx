@@ -2,9 +2,25 @@ import CostingStatus from "./CostingStatus";
 import { useNavigate } from "react-router-dom";
 import CardActions from "./CardActions";
 import {
-  MdVisibility, MdPrint, MdPictureAsPdf, MdGridOn, MdDescription,
-  MdCloudUpload, MdCheckCircle, MdHourglassEmpty, MdError, MdBlock, MdRestore,
-  MdEdit, MdDelete, MdOpenInNew, MdCancel, MdUndo, MdPostAdd, MdAssignmentTurnedIn, MdAddShoppingCart,
+  MdVisibility,
+  MdPrint,
+  MdPictureAsPdf,
+  MdGridOn,
+  MdDescription,
+  MdCloudUpload,
+  MdCheckCircle,
+  MdHourglassEmpty,
+  MdError,
+  MdBlock,
+  MdRestore,
+  MdEdit,
+  MdDelete,
+  MdOpenInNew,
+  MdCancel,
+  MdUndo,
+  MdPostAdd,
+  MdAssignmentTurnedIn,
+  MdAddShoppingCart,
 } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
@@ -15,7 +31,14 @@ import AttachmentBadge from "./AttachmentBadge";
 function fbrStatusBadge(inv, isBillsMode) {
   if (inv.isCancelled) {
     return (
-      <StatusBadge tone="danger" title={inv.cancelReason ? `Cancelled — ${inv.cancelReason}` : "This bill has been cancelled (voided)"}>
+      <StatusBadge
+        tone="danger"
+        title={
+          inv.cancelReason
+            ? `Cancelled — ${inv.cancelReason}`
+            : "This bill has been cancelled (voided)"
+        }
+      >
         Cancelled
       </StatusBadge>
     );
@@ -28,26 +51,76 @@ function fbrStatusBadge(inv, isBillsMode) {
     );
   }
   if (inv.fbrStatus === "Submitting") {
-    return <StatusBadge tone="info" title="A submission is in progress. Please wait and refresh — do not submit again.">Submitting…</StatusBadge>;
+    return (
+      <StatusBadge
+        tone="info"
+        title="A submission is in progress. Please wait and refresh — do not submit again."
+      >
+        Submitting…
+      </StatusBadge>
+    );
   }
   if (inv.fbrStatus === "Uncertain") {
-    return <StatusBadge tone="warning" title="A previous submission timed out — its FBR outcome is unconfirmed. An administrator must verify it at FBR and reset it.">Uncertain</StatusBadge>;
+    return (
+      <StatusBadge
+        tone="warning"
+        title="A previous submission timed out — its FBR outcome is unconfirmed. An administrator must verify it at FBR and reset it."
+      >
+        Uncertain
+      </StatusBadge>
+    );
   }
-  if (inv.taxTreatment && inv.taxTreatment !== "FBR") return <StatusBadge tone="info">{inv.taxTreatment === "NoTax" ? "No tax" : "SRB"} · Outside FBR</StatusBadge>;
+  if (inv.taxTreatment && inv.taxTreatment !== "FBR")
+    return (
+      <StatusBadge tone="info">
+        {inv.taxTreatment === "NoTax" ? "No tax" : "SRB"} · Outside FBR
+      </StatusBadge>
+    );
   if (inv.isFbrExcluded) {
-    return <StatusBadge tone="excluded" title="Kept out of FBR: not adjusted, validated or submitted, alone or in bulk">Excluded from FBR</StatusBadge>;
+    return (
+      <StatusBadge
+        tone="excluded"
+        title="Kept out of FBR: not adjusted, validated or submitted, alone or in bulk"
+      >
+        Excluded from FBR
+      </StatusBadge>
+    );
   }
-  if (inv.fbrAdjustmentRequired) return <StatusBadge tone="warning" title="Complete initial HS classification and filing review before FBR validation or submission.">Needs adjustment</StatusBadge>;
-  if (inv.fbrReviewRequired) return <StatusBadge tone="warning" title="Next: consultant opens Invoices, reviews every current item and completes review. FBR validation and submission are blocked.">Needs consultant re-review</StatusBadge>;
+  if (inv.fbrAdjustmentRequired)
+    return (
+      <StatusBadge
+        tone="warning"
+        title="Complete initial HS classification and filing review before FBR validation or submission."
+      >
+        Needs adjustment
+      </StatusBadge>
+    );
+  if (inv.fbrReviewRequired)
+    return (
+      <StatusBadge
+        tone="warning"
+        title="Next: consultant opens Invoices, reviews every current item and completes review. FBR validation and submission are blocked."
+      >
+        Needs consultant re-review
+      </StatusBadge>
+    );
   if (isBillsMode) {
     return <StatusBadge tone="warning">Pending FBR</StatusBadge>;
   }
   if (inv.fbrStatus === "Failed") {
-    return <StatusBadge tone="danger" title={inv.fbrErrorMessage || "FBR rejected this submission"}>FBR Failed</StatusBadge>;
+    return (
+      <StatusBadge tone="danger" title={inv.fbrErrorMessage || "FBR rejected this submission"}>
+        FBR Failed
+      </StatusBadge>
+    );
   }
   if (!inv.fbrReady) {
     const missing = inv.fbrMissing?.length ? `Missing:\n• ${inv.fbrMissing.join("\n• ")}` : "";
-    return <StatusBadge tone="setup" title={missing}>Setup Incomplete</StatusBadge>;
+    return (
+      <StatusBadge tone="setup" title={missing}>
+        Setup Incomplete
+      </StatusBadge>
+    );
   }
   return <StatusBadge tone="ready">Ready</StatusBadge>;
 }
@@ -60,10 +133,24 @@ function handoverBadge(inv) {
     const when = inv.handoverAt ? new Date(inv.handoverAt).toLocaleDateString() : "";
     const who = inv.handoverByName ? ` by ${inv.handoverByName}` : " (migrated)";
     const remark = inv.handoverRemark ? ` — ${inv.handoverRemark}` : "";
-    return <StatusBadge tone="submitted" title={`Handed over${when ? ` on ${when}` : ""}${who}${remark}`}>Delivered</StatusBadge>;
+    return (
+      <StatusBadge
+        tone="submitted"
+        title={`Handed over${when ? ` on ${when}` : ""}${who}${remark}`}
+      >
+        Delivered
+      </StatusBadge>
+    );
   }
   if (inv.handoverStatus === "Pending") {
-    return <StatusBadge tone="warning" title="Submitted to FBR but the printed customer copies have not been marked handed over yet.">Pending</StatusBadge>;
+    return (
+      <StatusBadge
+        tone="warning"
+        title="Submitted to FBR but the printed customer copies have not been marked handed over yet."
+      >
+        Pending
+      </StatusBadge>
+    );
   }
   return <span style={{ color: "#90a4ae" }}>—</span>;
 }
@@ -103,7 +190,8 @@ export default function InvoiceTable({
   onFbrSubmit,
   onFbrReset,
   onEdit,
-  onCreateOrderFromBill, creatingOrderFor,
+  onCreateOrderFromBill,
+  creatingOrderFor,
   onToggleFbrExcluded,
   onDelete,
   onVoid,
@@ -115,10 +203,24 @@ export default function InvoiceTable({
   const navigate = useNavigate();
 
   const columns = [
-    ...(onCosts ? [{ key: "costing", header: "Actual costing", render: (i) => <CostingStatus document={i} onOpen={() => onCosts(i)} /> }] : []),
+    ...(onCosts
+      ? [
+          {
+            key: "costing",
+            header: "Actual costing",
+            render: (i) => <CostingStatus document={i} onOpen={() => onCosts(i)} />,
+          },
+        ]
+      : []),
     {
       key: "invoiceNumber",
-      header: isReturnsMode ? (noteDocType === 10 ? "Credit Note #" : "Debit Note #") : isBillsMode ? "Bill #" : "Invoice #",
+      header: isReturnsMode
+        ? noteDocType === 10
+          ? "Credit Note #"
+          : "Debit Note #"
+        : isBillsMode
+          ? "Bill #"
+          : "Invoice #",
       width: 130,
       accessor: (i) => Number(i.invoiceNumber) || i.invoiceNumber,
       render: (i) => (
@@ -130,10 +232,16 @@ export default function InvoiceTable({
           {(i.documentType === 9 || i.documentType === 10) && (
             <span
               style={{
-                fontSize: 10, fontWeight: 700, lineHeight: 1.2,
+                fontSize: 10,
+                fontWeight: 700,
+                lineHeight: 1.2,
                 color: i.documentType === 10 ? "#5e35b1" : "#00695c",
               }}
-              title={i.originalInvoiceNumber ? `Against bill #${i.originalInvoiceNumber}${i.originalInvoiceRefIRN ? ` (IRN ${i.originalInvoiceRefIRN})` : ""}` : undefined}
+              title={
+                i.originalInvoiceNumber
+                  ? `Against bill #${i.originalInvoiceNumber}${i.originalInvoiceRefIRN ? ` (IRN ${i.originalInvoiceRefIRN})` : ""}`
+                  : undefined
+              }
             >
               {i.documentType === 10 ? "CREDIT NOTE" : "DEBIT NOTE"}
               {i.originalInvoiceNumber ? ` ↩ #${i.originalInvoiceNumber}` : ""}
@@ -142,13 +250,24 @@ export default function InvoiceTable({
           {i.documentType !== 9 && i.documentType !== 10 && i.fbrCancelledAt && (
             <span
               style={{
-                display: "inline-flex", alignItems: "center", gap: 3, alignSelf: "flex-start",
-                fontSize: 10, fontWeight: 700, lineHeight: 1.2, padding: "2px 6px",
-                borderRadius: 6, background: "#f9dedc", color: "#b3261e", border: "1px solid #f2b8b5",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 3,
+                alignSelf: "flex-start",
+                fontSize: 10,
+                fontWeight: 700,
+                lineHeight: 1.2,
+                padding: "2px 6px",
+                borderRadius: 6,
+                background: "#f9dedc",
+                color: "#b3261e",
+                border: "1px solid #f2b8b5",
               }}
-              title={`Cancelled on the FBR portal on ${new Date(i.fbrCancelledAt).toLocaleDateString()}`
-                + (i.fbrCancelledReason ? ` — ${i.fbrCancelledReason}` : "")
-                + ". The bill keeps its number and IRN but no longer counts as a sale."}
+              title={
+                `Cancelled on the FBR portal on ${new Date(i.fbrCancelledAt).toLocaleDateString()}` +
+                (i.fbrCancelledReason ? ` — ${i.fbrCancelledReason}` : "") +
+                ". The bill keeps its number and IRN but no longer counts as a sale."
+              }
             >
               <MdBlock size={11} /> FBR CANCELLED
             </span>
@@ -156,9 +275,18 @@ export default function InvoiceTable({
           {i.documentType !== 9 && i.documentType !== 10 && i.reversedByCreditNoteNumber && (
             <span
               style={{
-                display: "inline-flex", alignItems: "center", gap: 3, alignSelf: "flex-start",
-                fontSize: 10, fontWeight: 700, lineHeight: 1.2, padding: "2px 6px",
-                borderRadius: 6, background: "#ede7f6", color: "#5e35b1", border: "1px solid #b39ddb",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 3,
+                alignSelf: "flex-start",
+                fontSize: 10,
+                fontWeight: 700,
+                lineHeight: 1.2,
+                padding: "2px 6px",
+                borderRadius: 6,
+                background: "#ede7f6",
+                color: "#5e35b1",
+                border: "1px solid #b39ddb",
               }}
               title={`A Credit Note (#${i.reversedByCreditNoteNumber}) has been created against this invoice — it reverses this sale.`}
             >
@@ -168,9 +296,18 @@ export default function InvoiceTable({
           {i.documentType !== 9 && i.documentType !== 10 && i.adjustedByDebitNoteNumber && (
             <span
               style={{
-                display: "inline-flex", alignItems: "center", gap: 3, alignSelf: "flex-start",
-                fontSize: 10, fontWeight: 700, lineHeight: 1.2, padding: "2px 6px",
-                borderRadius: 6, background: "#e0f2f1", color: "#00695c", border: "1px solid #80cbc4",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 3,
+                alignSelf: "flex-start",
+                fontSize: 10,
+                fontWeight: 700,
+                lineHeight: 1.2,
+                padding: "2px 6px",
+                borderRadius: 6,
+                background: "#e0f2f1",
+                color: "#00695c",
+                border: "1px solid #80cbc4",
               }}
               title={`A Debit Note (#${i.adjustedByDebitNoteNumber}) adjusts this invoice upward.`}
             >
@@ -186,20 +323,25 @@ export default function InvoiceTable({
       render: (i) => i.clientName || "—",
     },
     // Returns tab only: which invoice the note reverses + the FBR reason.
-    ...(isReturnsMode ? [{
-      key: "against",
-      header: "Against / Reason",
-      render: (i) => (
-        <div>
-          <div style={{ fontWeight: 600 }}>
-            Bill #{i.originalInvoiceNumber ?? "—"}
-          </div>
-          <div style={{ fontSize: "0.75rem", color: "#5f6d7e" }} title={i.noteReasonRemarks || undefined}>
-            {i.noteReason || "—"}
-          </div>
-        </div>
-      ),
-    }] : []),
+    ...(isReturnsMode
+      ? [
+          {
+            key: "against",
+            header: "Against / Reason",
+            render: (i) => (
+              <div>
+                <div style={{ fontWeight: 600 }}>Bill #{i.originalInvoiceNumber ?? "—"}</div>
+                <div
+                  style={{ fontSize: "0.75rem", color: "#5f6d7e" }}
+                  title={i.noteReasonRemarks || undefined}
+                >
+                  {i.noteReason || "—"}
+                </div>
+              </div>
+            ),
+          },
+        ]
+      : []),
     {
       key: "poNumber",
       header: "PO",
@@ -217,16 +359,15 @@ export default function InvoiceTable({
       header: "DC #",
       width: 120,
       accessor: (i) => (i.challanNumbers || []).join(","),
-      render: (i) => (i.challanNumbers && i.challanNumbers.length > 0
-        ? `#${i.challanNumbers.join(", #")}`
-        : "—"),
+      render: (i) =>
+        i.challanNumbers && i.challanNumbers.length > 0 ? `#${i.challanNumbers.join(", #")}` : "—",
     },
     {
       key: "date",
       header: "Date",
       width: 110,
-      accessor: (i) => i.date ? new Date(i.date).getTime() : 0,
-      render: (i) => i.date ? new Date(i.date).toLocaleDateString() : "—",
+      accessor: (i) => (i.date ? new Date(i.date).getTime() : 0),
+      render: (i) => (i.date ? new Date(i.date).toLocaleDateString() : "—"),
     },
     {
       key: "items",
@@ -253,23 +394,38 @@ export default function InvoiceTable({
     },
     // Customer document handover — Invoices + Notes only (not the pre-FBR
     // Bills tab). Its own column; answers a different question than FBR status.
-    ...(!isBillsMode ? [{
-      key: "handoverStatus",
-      header: "Documents",
-      width: 130,
-      accessor: (i) => i.handoverStatus || "",
-      render: (i) => handoverBadge(i),
-    }] : []),
+    ...(!isBillsMode
+      ? [
+          {
+            key: "handoverStatus",
+            header: "Documents",
+            width: 130,
+            accessor: (i) => i.handoverStatus || "",
+            render: (i) => handoverBadge(i),
+          },
+        ]
+      : []),
     // Payment status (AR) — gated by permission; not shown on the note tabs.
-    ...(showPaymentStatus && !isReturnsMode ? [{
-      key: "paymentStatus",
-      header: "Payment",
-      width: 150,
-      accessor: (i) => i.paymentStatus || "",
-      render: (i) => (i.isCancelled || !i.paymentStatus)
-        ? "—"
-        : <PaymentStatusBadge status={i.paymentStatus} balanceDue={i.balanceDue} daysOverdue={i.daysOverdue} />,
-    }] : []),
+    ...(showPaymentStatus && !isReturnsMode
+      ? [
+          {
+            key: "paymentStatus",
+            header: "Payment",
+            width: 150,
+            accessor: (i) => i.paymentStatus || "",
+            render: (i) =>
+              i.isCancelled || !i.paymentStatus ? (
+                "—"
+              ) : (
+                <PaymentStatusBadge
+                  status={i.paymentStatus}
+                  balanceDue={i.balanceDue}
+                  daysOverdue={i.daysOverdue}
+                />
+              ),
+          },
+        ]
+      : []),
   ];
 
   const renderActions = (inv) => {
@@ -281,15 +437,40 @@ export default function InvoiceTable({
     const canReset = !!perms?.canFbrReset && isFbrPending;
     return (
       <CardActions nowrap label={`More actions for ${inv.invoiceNumber}`}>
-        {onCosts && <button data-label="Costs & suppliers" style={btn.view} onClick={() => onCosts(inv)} title="Costs & suppliers"><MdDescription size={14} /></button>}
-        {onLocalPurchase && !inv.isCancelled && <button data-label="Local purchase" style={btn.view} onClick={() => onLocalPurchase(inv)} title="Create local purchase"><MdAddShoppingCart size={14} /></button>}
+        {onCosts && (
+          <button
+            data-label="Costs & suppliers"
+            style={btn.view}
+            onClick={() => onCosts(inv)}
+            title="Costs & suppliers"
+          >
+            <MdDescription size={14} />
+          </button>
+        )}
+        {onLocalPurchase && !inv.isCancelled && (
+          <button
+            data-label="Local purchase"
+            style={btn.view}
+            onClick={() => onLocalPurchase(inv)}
+            title="Create local purchase"
+          >
+            <MdAddShoppingCart size={14} />
+          </button>
+        )}
         {isBillsMode && (
-          <button data-label="View" data-primary={(isBillsMode) || undefined} style={btn.view} onClick={() => onView?.(inv)} title="View bill">
+          <button
+            data-label="View"
+            data-primary={isBillsMode || undefined}
+            style={btn.view}
+            onClick={() => onView?.(inv)}
+            title="View bill"
+          >
             <MdVisibility size={14} />
           </button>
         )}
         {isBillsMode && (
-          <button data-label="Open in Invoices"
+          <button
+            data-label="Open in Invoices"
             style={btn.teal}
             onClick={() => navigate(`/invoices?search=${encodeURIComponent(inv.invoiceNumber)}`)}
             title="Open this bill on the Invoices tab"
@@ -298,8 +479,14 @@ export default function InvoiceTable({
           </button>
         )}
         {isBillsMode && perms.canPrint && (
-          <button data-label="Print bill" data-primary
-            style={{ ...btn.print, opacity: printDisabled ? 0.5 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+          <button
+            data-label="Print bill"
+            data-primary
+            style={{
+              ...btn.print,
+              opacity: printDisabled ? 0.5 : 1,
+              cursor: printDisabled ? "not-allowed" : "pointer",
+            }}
             disabled={printDisabled}
             onClick={() => onPrintBill?.(inv)}
             title={printDisabled ? printDisabledReason : "Print bill"}
@@ -308,8 +495,14 @@ export default function InvoiceTable({
           </button>
         )}
         {!isBillsMode && perms.canPrint && (
-          <button data-label="Print tax invoice" data-primary={(isSubmitted || inv.isCancelled) || undefined}
-            style={{ ...btn.tax, opacity: printDisabled ? 0.5 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+          <button
+            data-label="Print tax invoice"
+            data-primary={isSubmitted || inv.isCancelled || undefined}
+            style={{
+              ...btn.tax,
+              opacity: printDisabled ? 0.5 : 1,
+              cursor: printDisabled ? "not-allowed" : "pointer",
+            }}
             disabled={printDisabled}
             onClick={() => onPrintTax?.(inv)}
             title={printDisabled ? printDisabledReason : "Print tax invoice"}
@@ -318,131 +511,237 @@ export default function InvoiceTable({
           </button>
         )}
         {isBillsMode && perms.canPrint && (
-          <button data-label="Bill PDF"
-            style={{ ...btn.pdf, opacity: printDisabled || exportingId ? 0.55 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+          <button
+            data-label="Bill PDF"
+            style={{
+              ...btn.pdf,
+              opacity: printDisabled || exportingId ? 0.55 : 1,
+              cursor: printDisabled ? "not-allowed" : "pointer",
+            }}
             disabled={printDisabled || !!exportingId}
             onClick={() => onExportBillPdf?.(inv)}
             title={printDisabled ? printDisabledReason : "Export Bill PDF"}
           >
-            {exportingId === inv.id + "-bill-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />}
+            {exportingId === inv.id + "-bill-pdf" ? (
+              <span className="btn-spinner" />
+            ) : (
+              <MdPictureAsPdf size={14} />
+            )}
           </button>
         )}
         {!isBillsMode && perms.canPrint && (
-          <button data-label="Tax invoice PDF"
-            style={{ ...btn.pdf, opacity: printDisabled || exportingId ? 0.55 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+          <button
+            data-label="Tax invoice PDF"
+            style={{
+              ...btn.pdf,
+              opacity: printDisabled || exportingId ? 0.55 : 1,
+              cursor: printDisabled ? "not-allowed" : "pointer",
+            }}
             disabled={printDisabled || !!exportingId}
             onClick={() => onExportTaxPdf?.(inv)}
             title={printDisabled ? printDisabledReason : "Export Tax Invoice PDF"}
           >
-            {exportingId === inv.id + "-tax-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />}
+            {exportingId === inv.id + "-tax-pdf" ? (
+              <span className="btn-spinner" />
+            ) : (
+              <MdPictureAsPdf size={14} />
+            )}
           </button>
         )}
         {isBillsMode && perms.canPrint && hasExcelBill && (
-          <button data-label="Bill XLS"
+          <button
+            data-label="Bill XLS"
             style={{ ...btn.excel, opacity: exportingId ? 0.55 : 1 }}
             disabled={!!exportingId}
             onClick={() => onExportBillExcel?.(inv)}
             title="Export Bill XLS"
           >
-            {exportingId === inv.id + "-bill-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />}
+            {exportingId === inv.id + "-bill-excel" ? (
+              <span className="btn-spinner" />
+            ) : (
+              <MdGridOn size={14} />
+            )}
           </button>
         )}
         {!isBillsMode && perms.canPrint && hasExcelTax && (
-          <button data-label="Tax invoice XLS"
+          <button
+            data-label="Tax invoice XLS"
             style={{ ...btn.excel, opacity: exportingId ? 0.55 : 1 }}
             disabled={!!exportingId}
             onClick={() => onExportTaxExcel?.(inv)}
             title="Export Tax Invoice XLS"
           >
-            {exportingId === inv.id + "-tax-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />}
+            {exportingId === inv.id + "-tax-excel" ? (
+              <span className="btn-spinner" />
+            ) : (
+              <MdGridOn size={14} />
+            )}
           </button>
         )}
-        {!isBillsMode && perms.canFbrPreview && (!inv.taxTreatment || inv.taxTreatment === "FBR") && !inv.isFbrExcluded && (
-          <button data-label="View FBR payload" data-primary={(isSubmitted) || undefined} style={btn.view} onClick={() => onFbrPreview?.(inv)} title="Preview FBR payload">
-            <MdVisibility size={14} />
-          </button>
-        )}
+        {!isBillsMode &&
+          perms.canFbrPreview &&
+          (!inv.taxTreatment || inv.taxTreatment === "FBR") &&
+          !inv.isFbrExcluded && (
+            <button
+              data-label="View FBR payload"
+              data-primary={isSubmitted || undefined}
+              style={btn.view}
+              onClick={() => onFbrPreview?.(inv)}
+              title="Preview FBR payload"
+            >
+              <MdVisibility size={14} />
+            </button>
+          )}
         {!isBillsMode && canReset && (
-          <button data-label="Reset FBR" data-primary
-            style={{ ...btn.neutral, backgroundColor: "#fff8e1", color: "#8a6d00", border: "1px solid #ffe082" }}
+          <button
+            data-label="Reset FBR"
+            data-primary
+            style={{
+              ...btn.neutral,
+              backgroundColor: "#fff8e1",
+              color: "#8a6d00",
+              border: "1px solid #ffe082",
+            }}
             onClick={() => onFbrReset?.(inv)}
             title="Reset this bill's FBR state (it is stuck after a timed-out/uncertain submit). Verify at FBR first."
           >
             <MdRestore size={14} />
           </button>
         )}
-        {!isBillsMode && perms.canFbrAny && selectedCompanyHasFbrToken && (inv.taxTreatment == null || inv.taxTreatment === "FBR") && inv.fbrReady && !isSubmitted && !isFbrPending && !inv.isCancelled && !inv.isFbrExcluded && (
-          <>
-            {perms.canFbrValidate && (
-              <button data-label="Validate with FBR" data-primary
-                style={{
-                  ...btn.fbrValidate,
-                  opacity: fbrLoading || !inv.fbrReady ? 0.45 : 1,
-                  cursor: !inv.fbrReady ? "not-allowed" : "pointer",
-                  ...(fbrValidated.has(inv.id) ? { backgroundColor: "#e8f5e9", color: "#2e7d32" } : {}),
-                }}
-                disabled={!!fbrLoading || !inv.fbrReady}
-                onClick={() => onFbrValidate?.(inv)}
-                title={
-                  !inv.fbrReady
-                    ? `Complete FBR setup first:\n• ${inv.fbrMissing?.join("\n• ") || "Missing FBR fields"}`
-                    : "Validate this bill with FBR (dry-run)"
-                }
-              >
-                {fbrLoading === inv.id + "-validate" ? <span className="btn-spinner" /> : <MdCheckCircle size={14} />}
-              </button>
-            )}
-            {perms.canFbrSubmit && (
-              <button data-label="Submit to FBR" data-primary
-                style={{
-                  ...btn.fbrSubmit,
-                  opacity: fbrLoading || !fbrValidated.has(inv.id) || !inv.fbrReady ? 0.4 : 1,
-                  cursor: !fbrValidated.has(inv.id) || !inv.fbrReady ? "not-allowed" : "pointer",
-                }}
-                disabled={!!fbrLoading || !fbrValidated.has(inv.id) || !inv.fbrReady}
-                onClick={() => onFbrSubmit?.(inv)}
-                title={
-                  !inv.fbrReady ? "Complete FBR setup first."
-                    : fbrValidated.has(inv.id) ? "Submit to FBR"
-                    : "Validate first before submitting."
-                }
-              >
-                {fbrLoading === inv.id + "-submit" ? <span className="btn-spinner" /> : <MdCloudUpload size={14} />}
-              </button>
-            )}
-          </>
-        )}
-        {isBillsMode && perms.canCreateOrderFromBill && inv.canCreateSalesOrder && <button style={btn.edit} disabled={!!creatingOrderFor} onClick={() => onCreateOrderFromBill?.(inv)}>Create sales order</button>}
-        {isBillsMode && perms.canViewOrders && inv.salesOrders?.map(o => <button key={o.id} style={btn.edit} onClick={() => navigate(`/sales-orders?viewOrder=${o.id}`)}>Order #{o.number || o.id}</button>)}
-        {perms.canOpenEdit && inv.isEditable && (isBillsMode || ((!inv.taxTreatment || inv.taxTreatment === "FBR") && !inv.isFbrExcluded)) && (
-          <button data-label="Edit" data-primary
+        {!isBillsMode &&
+          perms.canFbrAny &&
+          selectedCompanyHasFbrToken &&
+          (inv.taxTreatment == null || inv.taxTreatment === "FBR") &&
+          inv.fbrReady &&
+          !isSubmitted &&
+          !isFbrPending &&
+          !inv.isCancelled &&
+          !inv.isFbrExcluded && (
+            <>
+              {perms.canFbrValidate && (
+                <button
+                  data-label="Validate with FBR"
+                  data-primary
+                  style={{
+                    ...btn.fbrValidate,
+                    opacity: fbrLoading || !inv.fbrReady ? 0.45 : 1,
+                    cursor: !inv.fbrReady ? "not-allowed" : "pointer",
+                    ...(fbrValidated.has(inv.id)
+                      ? { backgroundColor: "#e8f5e9", color: "#2e7d32" }
+                      : {}),
+                  }}
+                  disabled={!!fbrLoading || !inv.fbrReady}
+                  onClick={() => onFbrValidate?.(inv)}
+                  title={
+                    !inv.fbrReady
+                      ? `Complete FBR setup first:\n• ${inv.fbrMissing?.join("\n• ") || "Missing FBR fields"}`
+                      : "Validate this bill with FBR (dry-run)"
+                  }
+                >
+                  {fbrLoading === inv.id + "-validate" ? (
+                    <span className="btn-spinner" />
+                  ) : (
+                    <MdCheckCircle size={14} />
+                  )}
+                </button>
+              )}
+              {perms.canFbrSubmit && (
+                <button
+                  data-label="Submit to FBR"
+                  data-primary
+                  style={{
+                    ...btn.fbrSubmit,
+                    opacity: fbrLoading || !fbrValidated.has(inv.id) || !inv.fbrReady ? 0.4 : 1,
+                    cursor: !fbrValidated.has(inv.id) || !inv.fbrReady ? "not-allowed" : "pointer",
+                  }}
+                  disabled={!!fbrLoading || !fbrValidated.has(inv.id) || !inv.fbrReady}
+                  onClick={() => onFbrSubmit?.(inv)}
+                  title={
+                    !inv.fbrReady
+                      ? "Complete FBR setup first."
+                      : fbrValidated.has(inv.id)
+                        ? "Submit to FBR"
+                        : "Validate first before submitting."
+                  }
+                >
+                  {fbrLoading === inv.id + "-submit" ? (
+                    <span className="btn-spinner" />
+                  ) : (
+                    <MdCloudUpload size={14} />
+                  )}
+                </button>
+              )}
+            </>
+          )}
+        {isBillsMode && perms.canCreateOrderFromBill && inv.canCreateSalesOrder && (
+          <button
             style={btn.edit}
-            onClick={() => onEdit?.(inv)}
-            title={isBillsMode ? "Edit bill" : inv.fbrReviewRequired ? "Review changed bill and complete consultant review" : "Adjust invoice for FBR"}
+            disabled={!!creatingOrderFor}
+            onClick={() => onCreateOrderFromBill?.(inv)}
           >
-            <MdEdit size={14} />
+            Create sales order
           </button>
         )}
-        {!isBillsMode && (!inv.taxTreatment || inv.taxTreatment === "FBR") && perms.canFbrExclude && !isSubmitted && !inv.isCancelled && (
-          <button data-label={inv.isFbrExcluded ? "Include in FBR" : "Exclude from FBR"} data-primary={inv.isFbrExcluded || undefined}
-            style={{
-              ...btn.neutral,
-              backgroundColor: inv.isFbrExcluded ? "#e8f5e9" : "#eceff1",
-              color: inv.isFbrExcluded ? "#2e7d32" : "#546e7a",
-              border: `1px solid ${inv.isFbrExcluded ? "#a5d6a7" : "#b0bec5"}`,
-            }}
-            onClick={() => onToggleFbrExcluded?.(inv)}
-            title={inv.isFbrExcluded
-              ? "Include in FBR again, so it can be validated and submitted."
-              : "Keep out of FBR: not validated or submitted, alone or in bulk."}
-          >
-            {inv.isFbrExcluded ? <MdRestore size={14} /> : <MdBlock size={14} />}
-          </button>
-        )}
+        {isBillsMode &&
+          perms.canViewOrders &&
+          inv.salesOrders?.map((o) => (
+            <button
+              key={o.id}
+              style={btn.edit}
+              onClick={() => navigate(`/sales-orders?viewOrder=${o.id}`)}
+            >
+              Order #{o.number || o.id}
+            </button>
+          ))}
+        {perms.canOpenEdit &&
+          inv.isEditable &&
+          (isBillsMode ||
+            ((!inv.taxTreatment || inv.taxTreatment === "FBR") && !inv.isFbrExcluded)) && (
+            <button
+              data-label="Edit"
+              data-primary
+              style={btn.edit}
+              onClick={() => onEdit?.(inv)}
+              title={
+                isBillsMode
+                  ? "Edit bill"
+                  : inv.fbrReviewRequired
+                    ? "Review changed bill and complete consultant review"
+                    : "Adjust invoice for FBR"
+              }
+            >
+              <MdEdit size={14} />
+            </button>
+          )}
+        {!isBillsMode &&
+          (!inv.taxTreatment || inv.taxTreatment === "FBR") &&
+          perms.canFbrExclude &&
+          !isSubmitted &&
+          !inv.isCancelled && (
+            <button
+              data-label={inv.isFbrExcluded ? "Include in FBR" : "Exclude from FBR"}
+              data-primary={inv.isFbrExcluded || undefined}
+              style={{
+                ...btn.neutral,
+                backgroundColor: inv.isFbrExcluded ? "#e8f5e9" : "#eceff1",
+                color: inv.isFbrExcluded ? "#2e7d32" : "#546e7a",
+                border: `1px solid ${inv.isFbrExcluded ? "#a5d6a7" : "#b0bec5"}`,
+              }}
+              onClick={() => onToggleFbrExcluded?.(inv)}
+              title={
+                inv.isFbrExcluded
+                  ? "Include in FBR again, so it can be validated and submitted."
+                  : "Keep out of FBR: not validated or submitted, alone or in bulk."
+              }
+            >
+              {inv.isFbrExcluded ? <MdRestore size={14} /> : <MdBlock size={14} />}
+            </button>
+          )}
         {/* Customer document handover — Mark (Pending rows) / Revert (Delivered
             rows). Invoices + Notes only; each gated by its own permission. */}
         {!isBillsMode && perms.canDocsDeliver && inv.handoverStatus === "Pending" && (
-          <button data-label="Mark handover"
+          <button
+            data-label="Mark handover"
             style={btn.handoverMark}
             onClick={() => onMarkHandover?.(inv)}
             title="Mark customer documents delivered"
@@ -451,7 +750,8 @@ export default function InvoiceTable({
           </button>
         )}
         {!isBillsMode && perms.canDocsRevert && inv.handoverStatus === "Delivered" && (
-          <button data-label="Revert handover"
+          <button
+            data-label="Revert handover"
             style={btn.handoverRevert}
             onClick={() => onRevertHandover?.(inv)}
             title={`Delivered${inv.handoverAt ? ` on ${new Date(inv.handoverAt).toLocaleDateString()}` : ""}${inv.handoverByName ? ` by ${inv.handoverByName}` : " (migrated)"}. Click to revert to Pending.`}
@@ -460,14 +760,22 @@ export default function InvoiceTable({
           </button>
         )}
         {(isBillsMode || isReturnsMode) && perms.canDelete && !isSubmitted && inv.isLatest && (
-          <button data-label="Delete" style={btn.delete} onClick={() => onDelete?.(inv)} title={inv.isCancelled
-            ? "Delete this voided document — it is the latest in its sequence, so removing it rolls the number back."
-            : "Delete — only the latest document in its sequence, removes the row entirely."}>
+          <button
+            data-label="Delete"
+            style={btn.delete}
+            onClick={() => onDelete?.(inv)}
+            title={
+              inv.isCancelled
+                ? "Delete this voided document — it is the latest in its sequence, so removing it rolls the number back."
+                : "Delete — only the latest document in its sequence, removes the row entirely."
+            }
+          >
             <MdDelete size={14} />
           </button>
         )}
         {(isBillsMode || isReturnsMode) && perms.canVoid && !isSubmitted && !inv.isCancelled && (
-          <button data-label="Void"
+          <button
+            data-label="Void"
             style={btn.void}
             onClick={() => onVoid?.(inv)}
             title="Void bill — keeps the bill number (no gap), marks it cancelled and reverts its delivery challan(s) to Pending so they can be re-billed."
@@ -475,26 +783,35 @@ export default function InvoiceTable({
             <MdCancel size={14} />
           </button>
         )}
-        {perms.canReverse && isSubmitted && !inv.isCancelled && !inv.fbrCancelledAt &&
-         inv.documentType !== 9 && inv.documentType !== 10 && (
-          <button data-label="Reverse"
-            style={btn.reverse}
-            onClick={() => onReverse?.(inv)}
-            title="Reverse this FBR-submitted bill — opens the Credit Note screen prefilled with its lines (trim for a partial return)."
-          >
-            <MdUndo size={14} />
-          </button>
-        )}
-        {perms.canReverse && isSubmitted && !inv.isCancelled &&
-         inv.documentType !== 9 && inv.documentType !== 10 && (
-          <button data-label="Correct"
-            style={btn.teal}
-            onClick={() => onCorrect?.(inv)}
-            title="Bill the balance quantity under-reported on this submitted bill — creates a new unclassified bill (+ same challan/PO) for the tax consultant to classify and submit to FBR."
-          >
-            <MdPostAdd size={14} />
-          </button>
-        )}
+        {perms.canReverse &&
+          isSubmitted &&
+          !inv.isCancelled &&
+          !inv.fbrCancelledAt &&
+          inv.documentType !== 9 &&
+          inv.documentType !== 10 && (
+            <button
+              data-label="Reverse"
+              style={btn.reverse}
+              onClick={() => onReverse?.(inv)}
+              title="Reverse this FBR-submitted bill — opens the Credit Note screen prefilled with its lines (trim for a partial return)."
+            >
+              <MdUndo size={14} />
+            </button>
+          )}
+        {perms.canReverse &&
+          isSubmitted &&
+          !inv.isCancelled &&
+          inv.documentType !== 9 &&
+          inv.documentType !== 10 && (
+            <button
+              data-label="Correct"
+              style={btn.teal}
+              onClick={() => onCorrect?.(inv)}
+              title="Bill the balance quantity under-reported on this submitted bill — creates a new unclassified bill (+ same challan/PO) for the tax consultant to classify and submit to FBR."
+            >
+              <MdPostAdd size={14} />
+            </button>
+          )}
       </CardActions>
     );
   };
@@ -524,19 +841,19 @@ const baseBtn = {
   padding: 0,
 };
 const btn = {
-  view:        { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1" },
-  teal:        { ...baseBtn, backgroundColor: "#e0f2f1", color: "#00695c" },
-  print:       { ...baseBtn, backgroundColor: "#f3e5f5", color: "#7b1fa2" },
-  tax:         { ...baseBtn, backgroundColor: "#e0f2f1", color: "#00695c" },
-  pdf:         { ...baseBtn, backgroundColor: "#ffebee", color: "#c62828" },
-  excel:       { ...baseBtn, backgroundColor: "#e8f5e9", color: "#2e7d32" },
-  edit:        { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },
-  delete:      { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" },
-  void:        { ...baseBtn, backgroundColor: "#fff8e1", color: "#b26a00" },
-  reverse:     { ...baseBtn, backgroundColor: "#ede7f6", color: "#5e35b1" },
+  view: { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1" },
+  teal: { ...baseBtn, backgroundColor: "#e0f2f1", color: "#00695c" },
+  print: { ...baseBtn, backgroundColor: "#f3e5f5", color: "#7b1fa2" },
+  tax: { ...baseBtn, backgroundColor: "#e0f2f1", color: "#00695c" },
+  pdf: { ...baseBtn, backgroundColor: "#ffebee", color: "#c62828" },
+  excel: { ...baseBtn, backgroundColor: "#e8f5e9", color: "#2e7d32" },
+  edit: { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },
+  delete: { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" },
+  void: { ...baseBtn, backgroundColor: "#fff8e1", color: "#b26a00" },
+  reverse: { ...baseBtn, backgroundColor: "#ede7f6", color: "#5e35b1" },
   fbrValidate: { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1" },
-  fbrSubmit:   { ...baseBtn, backgroundColor: "#e8eaf6", color: "#1a237e" },
-  neutral:     { ...baseBtn, backgroundColor: "#eceff1", color: "#546e7a" },
-  handoverMark:   { ...baseBtn, backgroundColor: "#e8f5e9", color: "#2e7d32" },
+  fbrSubmit: { ...baseBtn, backgroundColor: "#e8eaf6", color: "#1a237e" },
+  neutral: { ...baseBtn, backgroundColor: "#eceff1", color: "#546e7a" },
+  handoverMark: { ...baseBtn, backgroundColor: "#e8f5e9", color: "#2e7d32" },
   handoverRevert: { ...baseBtn, backgroundColor: "#fff8e1", color: "#8a6d00" },
 };

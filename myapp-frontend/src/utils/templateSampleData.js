@@ -14,7 +14,9 @@ import { withholdingTaxStarters } from "./starters/withholdingTax";
  */
 import { mergeTemplate } from "./templateEngine";
 import {
-  defaultChallanTemplate, defaultBillTemplate, defaultTaxInvoiceTemplate,
+  defaultChallanTemplate,
+  defaultBillTemplate,
+  defaultTaxInvoiceTemplate,
 } from "./defaultTemplates";
 import { defaultQuoteTemplate, defaultOrderTemplate } from "./salesDocTemplates";
 import { creditNoteStarters } from "./starters/creditNote";
@@ -29,8 +31,10 @@ import { defaultTransferTemplate, defaultJournalEntryTemplate } from "./accounti
 // so the starter gallery / editor preview shows the Image column without
 // depending on any uploaded file. Deliberately different aspect ratios: they
 // prove a template letterboxes photos instead of stretching rows.
-const SAMPLE_LINE_PHOTO = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMjAiIGhlaWdodD0iMjQwIiB2aWV3Qm94PSIwIDAgMzIwIDI0MCI+PHJlY3Qgd2lkdGg9IjMyMCIgaGVpZ2h0PSIyNDAiIHJ4PSI2IiBmaWxsPSJyZ2IoMzgsODYsMTQ1KSIvPjxjaXJjbGUgY3g9IjEwMiIgY3k9Ijg2IiByPSIyNiIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwuNzUpIi8+PHBhdGggZD0iTTM4IDE5NiBMMTM0IDExMCBMMTk4IDE2MyBMMjQzIDEzMiBMMjg4IDE5NiBaIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LC44NSkiLz48dGV4dCB4PSI1MCUiIHk9IjIyOCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjMxIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LC45NSkiPlNBTVBMRSBQSE9UTzwvdGV4dD48L3N2Zz4=";
-const SAMPLE_LINE_PHOTO_TALL = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgMjAwIDMwMCI+PHJlY3Qgd2lkdGg9IjIwMCIgaGVpZ2h0PSIzMDAiIHJ4PSI2IiBmaWxsPSJyZ2IoMTUwLDcyLDQyKSIvPjxjaXJjbGUgY3g9IjY0IiBjeT0iMTA4IiByPSIyMiIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwuNzUpIi8+PHBhdGggZD0iTTI0IDI0NSBMODQgMTM4IEwxMjQgMjA0IEwxNTIgMTY1IEwxODAgMjQ1IFoiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsLjg1KSIvPjx0ZXh0IHg9IjUwJSIgeT0iMjg1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMjYiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsLjk1KSI+VEFMTCBQSE9UTzwvdGV4dD48L3N2Zz4=";
+const SAMPLE_LINE_PHOTO =
+  "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMjAiIGhlaWdodD0iMjQwIiB2aWV3Qm94PSIwIDAgMzIwIDI0MCI+PHJlY3Qgd2lkdGg9IjMyMCIgaGVpZ2h0PSIyNDAiIHJ4PSI2IiBmaWxsPSJyZ2IoMzgsODYsMTQ1KSIvPjxjaXJjbGUgY3g9IjEwMiIgY3k9Ijg2IiByPSIyNiIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwuNzUpIi8+PHBhdGggZD0iTTM4IDE5NiBMMTM0IDExMCBMMTk4IDE2MyBMMjQzIDEzMiBMMjg4IDE5NiBaIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LC44NSkiLz48dGV4dCB4PSI1MCUiIHk9IjIyOCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjMxIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LC45NSkiPlNBTVBMRSBQSE9UTzwvdGV4dD48L3N2Zz4=";
+const SAMPLE_LINE_PHOTO_TALL =
+  "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgMjAwIDMwMCI+PHJlY3Qgd2lkdGg9IjIwMCIgaGVpZ2h0PSIzMDAiIHJ4PSI2IiBmaWxsPSJyZ2IoMTUwLDcyLDQyKSIvPjxjaXJjbGUgY3g9IjY0IiBjeT0iMTA4IiByPSIyMiIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwuNzUpIi8+PHBhdGggZD0iTTI0IDI0NSBMODQgMTM4IEwxMjQgMjA0IEwxNTIgMTY1IEwxODAgMjQ1IFoiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsLjg1KSIvPjx0ZXh0IHg9IjUwJSIgeT0iMjg1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMjYiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsLjk1KSI+VEFMTCBQSE9UTzwvdGV4dD48L3N2Zz4=";
 
 export const TEMPLATE_TYPES = [
   { value: "Challan", label: "Delivery Challan" },
@@ -50,7 +54,7 @@ export const TEMPLATE_TYPES = [
 ];
 
 export const TEMPLATE_TYPE_LABEL = Object.fromEntries(
-  TEMPLATE_TYPES.map((t) => [t.value, t.label])
+  TEMPLATE_TYPES.map((t) => [t.value, t.label]),
 );
 
 const SAMPLE_BRANDING = {
@@ -84,10 +88,15 @@ export const SAMPLE_DATA = {
     ],
   },
   WithholdingTaxReceipt: {
-    companyBrandName: "SAMPLE COMPANY", companyAddress: "123 Business Street, City",
-    customerName: "Sample Customer", customerNTN: "1234567", receiptNumber: 1,
-    date: new Date().toISOString(), description: "Sample certificate reference",
-    amount: 5500, amountInWords: "Five Thousand Five Hundred Rupees Only",
+    companyBrandName: "SAMPLE COMPANY",
+    companyAddress: "123 Business Street, City",
+    customerName: "Sample Customer",
+    customerNTN: "1234567",
+    receiptNumber: 1,
+    date: new Date().toISOString(),
+    description: "Sample certificate reference",
+    amount: 5500,
+    amountInWords: "Five Thousand Five Hundred Rupees Only",
   },
   Payment: {
     ...SAMPLE_BRANDING,
@@ -129,8 +138,22 @@ export const SAMPLE_DATA = {
     totalDebit: 45000,
     totalCredit: 45000,
     lines: [
-      { sNo: 1, accountCode: "5200", accountName: "Depreciation expense", description: "Monthly depreciation", debit: 45000, credit: 0 },
-      { sNo: 2, accountCode: "1500", accountName: "Accumulated depreciation", description: "", debit: 0, credit: 45000 },
+      {
+        sNo: 1,
+        accountCode: "5200",
+        accountName: "Depreciation expense",
+        description: "Monthly depreciation",
+        debit: 45000,
+        credit: 0,
+      },
+      {
+        sNo: 2,
+        accountCode: "1500",
+        accountName: "Accumulated depreciation",
+        description: "",
+        debit: 0,
+        credit: 45000,
+      },
     ],
   },
   Challan: {
@@ -180,8 +203,32 @@ export const SAMPLE_DATA = {
     commercialTotal: 181000,
     amountInWords: "One Hundred Eighty One Thousand Rupees Only",
     items: [
-      { sNo: 1, quantity: 10, description: "Sample Item One", itemTypeName: "Pneumatic", hsCode: "8481.8090", unitPrice: 8000, lineTotal: 80000, valueExclTax: 80000, gstRate: 18, gstAmount: 14400, totalInclTax: 94400 },
-      { sNo: 2, quantity: 5, description: "Sample Item Two", itemTypeName: "Pneumatic", hsCode: "8412.2100", unitPrice: 14000, lineTotal: 70000, valueExclTax: 70000, gstRate: 18, gstAmount: 12600, totalInclTax: 82600 },
+      {
+        sNo: 1,
+        quantity: 10,
+        description: "Sample Item One",
+        itemTypeName: "Pneumatic",
+        hsCode: "8481.8090",
+        unitPrice: 8000,
+        lineTotal: 80000,
+        valueExclTax: 80000,
+        gstRate: 18,
+        gstAmount: 14400,
+        totalInclTax: 94400,
+      },
+      {
+        sNo: 2,
+        quantity: 5,
+        description: "Sample Item Two",
+        itemTypeName: "Pneumatic",
+        hsCode: "8412.2100",
+        unitPrice: 14000,
+        lineTotal: 70000,
+        valueExclTax: 70000,
+        gstRate: 18,
+        gstAmount: 12600,
+        totalInclTax: 82600,
+      },
     ],
   },
   TaxInvoice: {
@@ -212,8 +259,30 @@ export const SAMPLE_DATA = {
     grandTotal: 177000,
     amountInWords: "One Hundred Seventy Seven Thousand Rupees Only",
     items: [
-      { quantity: 10, uom: "Pcs", description: "Sample Item One", itemTypeName: "Pneumatic", hsCode: "8481.8090", unitPrice: 8000, valueExclTax: 80000, gstRate: 18, gstAmount: 14400, totalInclTax: 94400 },
-      { quantity: 5, uom: "Pcs", description: "Sample Item Two", itemTypeName: "Hydraulic", hsCode: "8412.2100", unitPrice: 14000, valueExclTax: 70000, gstRate: 18, gstAmount: 12600, totalInclTax: 82600 },
+      {
+        quantity: 10,
+        uom: "Pcs",
+        description: "Sample Item One",
+        itemTypeName: "Pneumatic",
+        hsCode: "8481.8090",
+        unitPrice: 8000,
+        valueExclTax: 80000,
+        gstRate: 18,
+        gstAmount: 14400,
+        totalInclTax: 94400,
+      },
+      {
+        quantity: 5,
+        uom: "Pcs",
+        description: "Sample Item Two",
+        itemTypeName: "Hydraulic",
+        hsCode: "8412.2100",
+        unitPrice: 14000,
+        valueExclTax: 70000,
+        gstRate: 18,
+        gstAmount: 12600,
+        totalInclTax: 82600,
+      },
     ],
     // The same money as `items`, but as the BILL states it: the commercial
     // item type (no HS code) and the real quantity sold. Deliberately a
@@ -222,8 +291,30 @@ export const SAMPLE_DATA = {
     // the block, and a sample where both tables looked identical would hide a
     // template that bound the wrong one.
     billItems: [
-      { quantity: 3, uom: "Pcs", description: "Valve Assembly", itemTypeName: "Valve Assembly", hsCode: "", unitPrice: 30000, valueExclTax: 90000, gstRate: 18, gstAmount: 16200, totalInclTax: 106200 },
-      { quantity: 4, uom: "Pcs", description: "Fitting Set", itemTypeName: "Fitting Set", hsCode: "", unitPrice: 15000, valueExclTax: 60000, gstRate: 18, gstAmount: 10800, totalInclTax: 70800 },
+      {
+        quantity: 3,
+        uom: "Pcs",
+        description: "Valve Assembly",
+        itemTypeName: "Valve Assembly",
+        hsCode: "",
+        unitPrice: 30000,
+        valueExclTax: 90000,
+        gstRate: 18,
+        gstAmount: 16200,
+        totalInclTax: 106200,
+      },
+      {
+        quantity: 4,
+        uom: "Pcs",
+        description: "Fitting Set",
+        itemTypeName: "Fitting Set",
+        hsCode: "",
+        unitPrice: 15000,
+        valueExclTax: 60000,
+        gstRate: 18,
+        gstAmount: 10800,
+        totalInclTax: 70800,
+      },
     ],
   },
   SalesQuote: {
@@ -259,8 +350,31 @@ export const SAMPLE_DATA = {
     notes: "Prices valid for 15 days. Delivery within 2 weeks of confirmed order.",
     hasLineImages: true,
     items: [
-      { sNo: 1, description: "Sample Item One", quantity: 10, uom: "Pcs", unitPrice: 8000, lineTotal: 80000, grossAmount: 80000, discountAmount: 0, discountNote: null, imagePath: SAMPLE_LINE_PHOTO },
-      { sNo: 2, description: "Sample Item Two", quantity: 5, uom: "Pcs", unitPrice: 14000, lineTotal: 63000, grossAmount: 70000, discountAmount: 7000, discountReason: "Old item taken in exchange", discountNote: "Less 10% (Rs 7,000): Old item taken in exchange", imagePath: SAMPLE_LINE_PHOTO_TALL },
+      {
+        sNo: 1,
+        description: "Sample Item One",
+        quantity: 10,
+        uom: "Pcs",
+        unitPrice: 8000,
+        lineTotal: 80000,
+        grossAmount: 80000,
+        discountAmount: 0,
+        discountNote: null,
+        imagePath: SAMPLE_LINE_PHOTO,
+      },
+      {
+        sNo: 2,
+        description: "Sample Item Two",
+        quantity: 5,
+        uom: "Pcs",
+        unitPrice: 14000,
+        lineTotal: 63000,
+        grossAmount: 70000,
+        discountAmount: 7000,
+        discountReason: "Old item taken in exchange",
+        discountNote: "Less 10% (Rs 7,000): Old item taken in exchange",
+        imagePath: SAMPLE_LINE_PHOTO_TALL,
+      },
     ],
   },
   SalesOrder: {
@@ -278,8 +392,22 @@ export const SAMPLE_DATA = {
     clientAddress: "Client Address, City",
     site: "Main Warehouse",
     items: [
-      { sNo: 1, description: "Sample Item One", quantity: 10, uom: "Pcs", deliveredQuantity: 6, remainingQuantity: 4 },
-      { sNo: 2, description: "Sample Item Two", quantity: 5, uom: "Pcs", deliveredQuantity: 5, remainingQuantity: 0 },
+      {
+        sNo: 1,
+        description: "Sample Item One",
+        quantity: 10,
+        uom: "Pcs",
+        deliveredQuantity: 6,
+        remainingQuantity: 4,
+      },
+      {
+        sNo: 2,
+        description: "Sample Item Two",
+        quantity: 5,
+        uom: "Pcs",
+        deliveredQuantity: 5,
+        remainingQuantity: 0,
+      },
     ],
   },
   CreditNote: {
@@ -315,8 +443,30 @@ export const SAMPLE_DATA = {
     amountInWords: "Fifty Nine Thousand Rupees Only",
     fbrIRN: "",
     items: [
-      { quantity: 5, uom: "Pcs", description: "Sample Item One", itemTypeName: "Pneumatic", hsCode: "8481.1000", unitPrice: 8000, valueExclTax: 40000, gstRate: 18, gstAmount: 7200, totalInclTax: 47200 },
-      { quantity: 2, uom: "Pcs", description: "Sample Item Two", itemTypeName: "Hydraulic", hsCode: "8412.2100", unitPrice: 5000, valueExclTax: 10000, gstRate: 18, gstAmount: 1800, totalInclTax: 11800 },
+      {
+        quantity: 5,
+        uom: "Pcs",
+        description: "Sample Item One",
+        itemTypeName: "Pneumatic",
+        hsCode: "8481.1000",
+        unitPrice: 8000,
+        valueExclTax: 40000,
+        gstRate: 18,
+        gstAmount: 7200,
+        totalInclTax: 47200,
+      },
+      {
+        quantity: 2,
+        uom: "Pcs",
+        description: "Sample Item Two",
+        itemTypeName: "Hydraulic",
+        hsCode: "8412.2100",
+        unitPrice: 5000,
+        valueExclTax: 10000,
+        gstRate: 18,
+        gstAmount: 1800,
+        totalInclTax: 11800,
+      },
     ],
   },
   DebitNote: {
@@ -352,7 +502,18 @@ export const SAMPLE_DATA = {
     amountInWords: "Twenty Nine Thousand Five Hundred Rupees Only",
     fbrIRN: "",
     items: [
-      { quantity: 10, uom: "Pcs", description: "Sample Item One", itemTypeName: "Pneumatic", hsCode: "8481.1000", unitPrice: 2500, valueExclTax: 25000, gstRate: 18, gstAmount: 4500, totalInclTax: 29500 },
+      {
+        quantity: 10,
+        uom: "Pcs",
+        description: "Sample Item One",
+        itemTypeName: "Pneumatic",
+        hsCode: "8481.1000",
+        unitPrice: 2500,
+        valueExclTax: 25000,
+        gstRate: 18,
+        gstAmount: 4500,
+        totalInclTax: 29500,
+      },
     ],
   },
   PurchaseBill: {
@@ -380,8 +541,26 @@ export const SAMPLE_DATA = {
     grandTotal: 141600,
     amountInWords: "One Hundred Forty One Thousand Six Hundred Rupees Only",
     items: [
-      { sNo: 1, itemTypeName: "Pneumatic", description: "Sample Item One", quantity: 20, uom: "Pcs", unitPrice: 4000, lineTotal: 80000, hsCode: "8481.1000" },
-      { sNo: 2, itemTypeName: "Hydraulic", description: "Sample Item Two", quantity: 10, uom: "Pcs", unitPrice: 4000, lineTotal: 40000, hsCode: "8412.2100" },
+      {
+        sNo: 1,
+        itemTypeName: "Pneumatic",
+        description: "Sample Item One",
+        quantity: 20,
+        uom: "Pcs",
+        unitPrice: 4000,
+        lineTotal: 80000,
+        hsCode: "8481.1000",
+      },
+      {
+        sNo: 2,
+        itemTypeName: "Hydraulic",
+        description: "Sample Item Two",
+        quantity: 10,
+        uom: "Pcs",
+        unitPrice: 4000,
+        lineTotal: 40000,
+        hsCode: "8412.2100",
+      },
     ],
   },
   GoodsReceipt: {
@@ -399,8 +578,20 @@ export const SAMPLE_DATA = {
     site: "Main Warehouse",
     status: "Pending",
     items: [
-      { sNo: 1, itemTypeName: "Pneumatic", description: "Sample Item One", quantity: 20, unit: "Pcs" },
-      { sNo: 2, itemTypeName: "Hydraulic", description: "Sample Item Two", quantity: 10, unit: "Pcs" },
+      {
+        sNo: 1,
+        itemTypeName: "Pneumatic",
+        description: "Sample Item One",
+        quantity: 20,
+        unit: "Pcs",
+      },
+      {
+        sNo: 2,
+        itemTypeName: "Hydraulic",
+        description: "Sample Item Two",
+        quantity: 10,
+        unit: "Pcs",
+      },
     ],
   },
 };
@@ -409,21 +600,31 @@ export const SAMPLE_DATA = {
 // matching positions between separately grouped production collections.
 for (const [index, row] of SAMPLE_DATA.TaxInvoice.items.entries()) {
   Object.assign(row, {
-    billQuantity: index === 0 ? 3 : 4, invoiceQuantity: row.quantity,
+    billQuantity: index === 0 ? 3 : 4,
+    invoiceQuantity: row.quantity,
     billItemTypeName: index === 0 ? "Valve Assembly" : "Fitting Set",
-    invoiceItemTypeName: row.itemTypeName, billUom: "Pcs", invoiceUom: row.uom,
-    invoiceUnitPrice: row.unitPrice, invoiceValueExclTax: row.valueExclTax,
-    invoiceGstAmount: row.gstAmount, invoiceTotalInclTax: row.totalInclTax,
+    invoiceItemTypeName: row.itemTypeName,
+    billUom: "Pcs",
+    invoiceUom: row.uom,
+    invoiceUnitPrice: row.unitPrice,
+    invoiceValueExclTax: row.valueExclTax,
+    invoiceGstAmount: row.gstAmount,
+    invoiceTotalInclTax: row.totalInclTax,
   });
 }
 for (const [index, row] of SAMPLE_DATA.TaxInvoice.billItems.entries()) {
   const invoice = SAMPLE_DATA.TaxInvoice.items[index];
   Object.assign(row, {
-    billQuantity: row.quantity, invoiceQuantity: invoice.quantity,
-    billItemTypeName: row.itemTypeName, invoiceItemTypeName: invoice.itemTypeName,
-    billUom: row.uom, invoiceUom: invoice.uom,
-    invoiceUnitPrice: invoice.unitPrice, invoiceValueExclTax: invoice.valueExclTax,
-    invoiceGstAmount: invoice.gstAmount, invoiceTotalInclTax: invoice.totalInclTax,
+    billQuantity: row.quantity,
+    invoiceQuantity: invoice.quantity,
+    billItemTypeName: row.itemTypeName,
+    invoiceItemTypeName: invoice.itemTypeName,
+    billUom: row.uom,
+    invoiceUom: invoice.uom,
+    invoiceUnitPrice: invoice.unitPrice,
+    invoiceValueExclTax: invoice.valueExclTax,
+    invoiceGstAmount: invoice.gstAmount,
+    invoiceTotalInclTax: invoice.totalInclTax,
   });
 }
 

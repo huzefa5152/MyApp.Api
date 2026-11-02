@@ -82,7 +82,8 @@ export default function CopyToCompaniesDialog({
         <div data-admin-header="" style={styles.header}>
           <MdContentCopy size={20} color="#fff" />
           <h3 style={styles.title}>{title}</h3>
-          <button data-admin-close=""
+          <button
+            data-admin-close=""
             type="button"
             aria-label="Close"
             style={styles.closeBtn}
@@ -105,7 +106,8 @@ export default function CopyToCompaniesDialog({
             <div style={styles.emptyState}>
               <MdBusiness size={32} color="#cbd5e1" />
               <p style={{ margin: "0.5rem 0 0", color: "#5f6d7e", fontSize: "0.88rem" }}>
-                No other companies available — this record already exists in every accessible company.
+                No other companies available — this record already exists in every accessible
+                company.
               </p>
             </div>
           ) : (
@@ -139,7 +141,7 @@ export default function CopyToCompaniesDialog({
                       <span style={{ flex: 1 }}>
                         <strong>{c.brandName || c.name}</strong>
                         {c.brandName && c.name && c.brandName !== c.name && (
-                          <span style={styles.muted}>  ·  {c.name}</span>
+                          <span style={styles.muted}> · {c.name}</span>
                         )}
                       </span>
                       {checked && <MdCheckCircle size={16} color="#0d47a1" />}
@@ -154,7 +156,8 @@ export default function CopyToCompaniesDialog({
         </div>
 
         <div data-admin-footer="" style={styles.footer}>
-          <button data-admin-close=""
+          <button
+            data-admin-close=""
             style={styles.btnSecondary}
             onClick={() => onCancel?.()}
             disabled={submitting}
@@ -162,12 +165,17 @@ export default function CopyToCompaniesDialog({
             Cancel
           </button>
           <button
-            style={{ ...styles.btnPrimary, opacity: (submitting || busy || selected.size === 0) ? 0.6 : 1 }}
+            style={{
+              ...styles.btnPrimary,
+              opacity: submitting || busy || selected.size === 0 ? 0.6 : 1,
+            }}
             onClick={handleConfirm}
             disabled={submitting || busy || selected.size === 0}
           >
             <MdContentCopy size={15} />
-            {submitting ? "Copying..." : `Copy to ${selected.size || ""} ${selected.size === 1 ? "company" : "companies"}`}
+            {submitting
+              ? "Copying..."
+              : `Copy to ${selected.size || ""} ${selected.size === 1 ? "company" : "companies"}`}
           </button>
         </div>
       </div>
@@ -177,68 +185,125 @@ export default function CopyToCompaniesDialog({
 
 const styles = {
   backdrop: {
-    position: "fixed", inset: 0, backgroundColor: "rgba(15,20,30,0.55)",
-    backdropFilter: "blur(4px)", display: "flex", alignItems: "center",
-    justifyContent: "center", zIndex: 1100, padding: "2vh 1rem",
+    position: "fixed",
+    inset: 0,
+    backgroundColor: "rgba(15,20,30,0.55)",
+    backdropFilter: "blur(4px)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1100,
+    padding: "2vh 1rem",
   },
   modal: {
-    backgroundColor: "#fff", borderRadius: 14, width: "100%",
-    maxWidth: 520, maxHeight: "92vh", boxShadow: "0 20px 60px rgba(13,71,161,0.2)",
-    display: "flex", flexDirection: "column", overflow: "hidden",
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    width: "100%",
+    maxWidth: 520,
+    maxHeight: "92vh",
+    boxShadow: "0 20px 60px rgba(13,71,161,0.2)",
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
   },
   header: {
     background: "linear-gradient(135deg, #0d47a1, #00897b)",
     padding: "0.9rem 1.25rem",
-    display: "flex", alignItems: "center", gap: "0.5rem",
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
   },
   title: { margin: 0, flex: 1, fontSize: "1.02rem", fontWeight: 700, color: "#fff" },
   closeBtn: {
-    background: "rgba(255,255,255,0.18)", border: "none", color: "#fff",
-    cursor: "pointer", width: 44, height: 44, borderRadius: 6,
-    display: "inline-flex", alignItems: "center", justifyContent: "center",
+    background: "rgba(255,255,255,0.18)",
+    border: "none",
+    color: "#fff",
+    cursor: "pointer",
+    width: 44,
+    height: 44,
+    borderRadius: 6,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
   body: { padding: "1rem 1.25rem 0.5rem", overflowY: "auto", flex: 1 },
   subjectLine: { margin: "0 0 0.75rem", fontSize: "0.88rem", color: "#1a2332" },
   emptyState: {
-    display: "flex", flexDirection: "column", alignItems: "center",
-    padding: "1.25rem", textAlign: "center",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    padding: "1.25rem",
+    textAlign: "center",
   },
   toolbar: {
-    display: "flex", justifyContent: "space-between", alignItems: "center",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: "0.5rem",
   },
   linkBtn: {
-    background: "none", border: "none", color: "#0d47a1",
-    fontSize: "0.8rem", fontWeight: 600, cursor: "pointer", padding: 0,
+    background: "none",
+    border: "none",
+    color: "#0d47a1",
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    padding: 0,
   },
   list: { display: "flex", flexDirection: "column", gap: "0.35rem" },
   row: {
-    display: "flex", alignItems: "center", gap: "0.6rem",
-    padding: "0.55rem 0.75rem", borderRadius: 8,
-    border: "1px solid #e8edf3", cursor: "pointer",
-    fontSize: "0.9rem", color: "#1a2332", userSelect: "none",
+    display: "flex",
+    alignItems: "center",
+    gap: "0.6rem",
+    padding: "0.55rem 0.75rem",
+    borderRadius: 8,
+    border: "1px solid #e8edf3",
+    cursor: "pointer",
+    fontSize: "0.9rem",
+    color: "#1a2332",
+    userSelect: "none",
     transition: "background-color 0.15s, border-color 0.15s",
   },
   rowActive: { borderColor: "#0d47a1", backgroundColor: "#e3f2fd" },
   muted: { color: "#94a3b8", fontWeight: 400, fontSize: "0.82rem" },
   error: {
-    marginTop: "0.75rem", padding: "0.55rem 0.75rem",
-    backgroundColor: "#fff0f1", border: "1px solid #dc354540",
-    color: "#c62828", borderRadius: 8, fontSize: "0.82rem",
+    marginTop: "0.75rem",
+    padding: "0.55rem 0.75rem",
+    backgroundColor: "#fff0f1",
+    border: "1px solid #dc354540",
+    color: "#c62828",
+    borderRadius: 8,
+    fontSize: "0.82rem",
   },
   footer: {
-    display: "flex", justifyContent: "flex-end", gap: "0.5rem",
-    padding: "0.85rem 1.25rem", borderTop: "1px solid #e8edf3", backgroundColor: "#f8f9fb",
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: "0.5rem",
+    padding: "0.85rem 1.25rem",
+    borderTop: "1px solid #e8edf3",
+    backgroundColor: "#f8f9fb",
   },
   btnPrimary: {
-    display: "inline-flex", alignItems: "center", gap: 6,
-    padding: "0.45rem 1rem", borderRadius: 8, border: "none",
-    background: "linear-gradient(135deg, #0d47a1, #1565c0)", color: "#fff",
-    fontSize: "0.86rem", fontWeight: 600, cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "0.45rem 1rem",
+    borderRadius: 8,
+    border: "none",
+    background: "linear-gradient(135deg, #0d47a1, #1565c0)",
+    color: "#fff",
+    fontSize: "0.86rem",
+    fontWeight: 600,
+    cursor: "pointer",
   },
   btnSecondary: {
-    padding: "0.45rem 1rem", borderRadius: 8, border: "1px solid #d0d7e2",
-    backgroundColor: "#fff", color: "#5f6d7e",
-    fontSize: "0.86rem", fontWeight: 600, cursor: "pointer",
+    padding: "0.45rem 1rem",
+    borderRadius: 8,
+    border: "1px solid #d0d7e2",
+    backgroundColor: "#fff",
+    color: "#5f6d7e",
+    fontSize: "0.86rem",
+    fontWeight: 600,
+    cursor: "pointer",
   },
 };

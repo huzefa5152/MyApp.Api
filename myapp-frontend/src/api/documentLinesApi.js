@@ -12,10 +12,16 @@ export async function loadDocumentLines(type, companyId, filters = {}, signal) {
   const documents = await collectPagedDocuments(async (page) => {
     const { data } = await http.get(`/${source.path}/company/${companyId}/paged`, {
       signal,
-      params: { page, pageSize: 100, dateFrom: filters.from, dateTo: filters.to,
-        search: filters.search || undefined, status: filters.status || undefined,
+      params: {
+        page,
+        pageSize: 100,
+        dateFrom: filters.from,
+        dateTo: filters.to,
+        search: filters.search || undefined,
+        status: filters.status || undefined,
         salesOrderId: type === "challan" ? filters.salesOrderId || undefined : undefined,
-        type: source.typeParam },
+        type: source.typeParam,
+      },
     });
     return data;
   });

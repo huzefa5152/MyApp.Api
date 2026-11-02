@@ -1,8 +1,16 @@
 import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback } from "react";
 import {
-  MdPublic, MdAdd, MdContentCopy, MdCheck, MdDelete, MdBusiness, MdWarning,
-  MdOpenInNew, MdToggleOn, MdToggleOff,
+  MdPublic,
+  MdAdd,
+  MdContentCopy,
+  MdCheck,
+  MdDelete,
+  MdBusiness,
+  MdWarning,
+  MdOpenInNew,
+  MdToggleOn,
+  MdToggleOff,
 } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -14,12 +22,18 @@ import useScrollToError from "../hooks/useScrollToError";
 import SearchableSelect from "../Components/SearchableSelect";
 import { getClientsByCompany } from "../api/clientApi";
 import {
-  getCustomerPortals, getPortalDocumentOptions, createCustomerPortal,
-  setPortalDocumentType, setPortalActive, deleteCustomerPortal,
+  getCustomerPortals,
+  getPortalDocumentOptions,
+  createCustomerPortal,
+  setPortalDocumentType,
+  setPortalActive,
+  deleteCustomerPortal,
 } from "../api/customerPortalApi";
 
 const fmtDate = (d) =>
-  d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+  d
+    ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+    : "—";
 
 /**
  * Configuration → Customer Portals. Issue, disable and revoke the public links
@@ -51,11 +65,16 @@ export default function CustomerPortalsPage() {
     try {
       const { data } = await getCustomerPortals();
       setRows(data || []);
-    } catch { setRows([]); }
-    finally { setLoading(false); }
+    } catch {
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { if (canView) load(); }, [canView, load]);
+  useEffect(() => {
+    if (canView) load();
+  }, [canView, load]);
 
   const copyLink = async (p) => {
     try {
@@ -65,7 +84,10 @@ export default function CustomerPortalsPage() {
     } catch {
       // Clipboard access needs a secure context and a user gesture; when it is
       // unavailable, say so rather than silently doing nothing.
-      notify("Couldn't copy automatically — open the link and copy it from the address bar.", "warning");
+      notify(
+        "Couldn't copy automatically — open the link and copy it from the address bar.",
+        "warning",
+      );
     }
   };
 
@@ -129,7 +151,9 @@ export default function CustomerPortalsPage() {
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
           <MdPublic size={26} color={colors.blue} />
           <h2 style={st.h2}>Customer Portals</h2>
-          <span style={st.countChip}>{rows.length} link{rows.length === 1 ? "" : "s"}</span>
+          <span style={st.countChip}>
+            {rows.length} link{rows.length === 1 ? "" : "s"}
+          </span>
         </div>
         {canCreate && (
           <button style={st.primaryBtn} onClick={() => setShowForm(true)}>
@@ -141,84 +165,117 @@ export default function CustomerPortalsPage() {
       {/* Said once, plainly, at the top. An operator who thinks of this as "a
           link to the customer's page" will forward it without thinking. */}
       <div style={st.notice}>
-        <MdWarning size={16} style={{ verticalAlign: "-3px", marginRight: 6 }} />
-        A portal link is a password. Anyone who has it can see that customer's invoices
-        without logging in — so send it to the customer directly, and revoke it if it
-        goes anywhere else.
+        <MdWarning size={16} style={{ verticalAlign: "-3px", marginRight: 6 }} />A portal link is a
+        password. Anyone who has it can see that customer's invoices without logging in — so send it
+        to the customer directly, and revoke it if it goes anywhere else.
       </div>
 
-      <RecordsViewport label="Customer Portals records">{loading ? (
-        <div style={st.empty}>Loading…</div>
-      ) : rows.length === 0 ? (
-        <div style={st.empty}>
-          No portals yet. Issue one to let a customer see their own invoices without an account.
-        </div>
-      ) : (
-        <div style={st.list}>
-          {rows.map((p) => (
-            <div key={p.id} style={{ ...st.card, ...(p.isActive ? null : st.cardOff) }}>
-              <div style={st.cardHead}>
-                <span style={st.client}>{p.clientName}</span>
-                <span style={p.isActive ? st.activeChip : st.offChip}>
-                  {p.isActive ? "active" : `disabled ${fmtDate(p.disabledAt)}`}
-                </span>
-                {!p.templateAvailable && (
-                  <span style={st.warnChip} title="This company has no template for the chosen document">
-                    <MdWarning size={11} style={{ verticalAlign: "-1px" }} /> no template
+      <RecordsViewport label="Customer Portals records">
+        {loading ? (
+          <div style={st.empty}>Loading…</div>
+        ) : rows.length === 0 ? (
+          <div style={st.empty}>
+            No portals yet. Issue one to let a customer see their own invoices without an account.
+          </div>
+        ) : (
+          <div style={st.list}>
+            {rows.map((p) => (
+              <div key={p.id} style={{ ...st.card, ...(p.isActive ? null : st.cardOff) }}>
+                <div style={st.cardHead}>
+                  <span style={st.client}>{p.clientName}</span>
+                  <span style={p.isActive ? st.activeChip : st.offChip}>
+                    {p.isActive ? "active" : `disabled ${fmtDate(p.disabledAt)}`}
                   </span>
-                )}
-              </div>
-              <div style={st.meta}>
-                {p.companyName} · issued {fmtDate(p.createdAt)}
-              </div>
-
-              <div style={st.linkRow}>
-                {/* The URL is shown truncated with the token hidden: the point
-                    of the row is to COPY it, not to read a secret aloud. */}
-                <span style={st.linkText} title="Copy the link rather than reading it out">
-                  {p.publicUrl.replace(/\/portal\/.*$/, "/portal/") }
-                  <span style={st.tokenMask}>••••••••</span>
-                </span>
-                <button style={st.linkBtn} onClick={() => copyLink(p)} aria-label={`Copy ${p.clientName}'s link`}>
-                  {copiedId === p.id ? <><MdCheck size={15} /> Copied</> : <><MdContentCopy size={15} /> Copy link</>}
-                </button>
-                <a href={p.publicUrl} target="_blank" rel="noopener noreferrer"
-                   style={st.linkBtn} aria-label={`Open ${p.clientName}'s portal`}>
-                  <MdOpenInNew size={15} /> Open
-                </a>
-              </div>
-
-              <div style={st.cardActions}>
-                {canUpdate && (
-                  <label style={st.docLabel}>
-                    Document
-                    <select
-                      style={{ ...dropdownStyles.base, minWidth: 150 }}
-                      value={p.documentType || ""}
-                      onChange={(e) => changeDocument(p, e.target.value)}
+                  {!p.templateAvailable && (
+                    <span
+                      style={st.warnChip}
+                      title="This company has no template for the chosen document"
                     >
-                      <option value="">Automatic</option>
-                      {p.availableDocumentTypes.includes("Bill") && <option value="Bill">Bill</option>}
-                      {p.availableDocumentTypes.includes("TaxInvoice") && <option value="TaxInvoice">Tax Invoice</option>}
-                    </select>
-                  </label>
-                )}
-                <span style={{ flex: 1 }} />
-                {canUpdate && (
-                  <button style={st.rowBtn} onClick={() => toggle(p)}>
-                    {p.isActive ? <><MdToggleOff size={17} /> Disable</> : <><MdToggleOn size={17} /> Enable</>}
+                      <MdWarning size={11} style={{ verticalAlign: "-1px" }} /> no template
+                    </span>
+                  )}
+                </div>
+                <div style={st.meta}>
+                  {p.companyName} · issued {fmtDate(p.createdAt)}
+                </div>
+
+                <div style={st.linkRow}>
+                  {/* The URL is shown truncated with the token hidden: the point
+                    of the row is to COPY it, not to read a secret aloud. */}
+                  <span style={st.linkText} title="Copy the link rather than reading it out">
+                    {p.publicUrl.replace(/\/portal\/.*$/, "/portal/")}
+                    <span style={st.tokenMask}>••••••••</span>
+                  </span>
+                  <button
+                    style={st.linkBtn}
+                    onClick={() => copyLink(p)}
+                    aria-label={`Copy ${p.clientName}'s link`}
+                  >
+                    {copiedId === p.id ? (
+                      <>
+                        <MdCheck size={15} /> Copied
+                      </>
+                    ) : (
+                      <>
+                        <MdContentCopy size={15} /> Copy link
+                      </>
+                    )}
                   </button>
-                )}
-                {canDelete && (
-                  <button style={{ ...st.rowBtn, ...st.rowBtnDanger }} onClick={() => revoke(p)}>
-                    <MdDelete size={15} /> Revoke
-                  </button>
-                )}
+                  <a
+                    href={p.publicUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={st.linkBtn}
+                    aria-label={`Open ${p.clientName}'s portal`}
+                  >
+                    <MdOpenInNew size={15} /> Open
+                  </a>
+                </div>
+
+                <div style={st.cardActions}>
+                  {canUpdate && (
+                    <label style={st.docLabel}>
+                      Document
+                      <select
+                        style={{ ...dropdownStyles.base, minWidth: 150 }}
+                        value={p.documentType || ""}
+                        onChange={(e) => changeDocument(p, e.target.value)}
+                      >
+                        <option value="">Automatic</option>
+                        {p.availableDocumentTypes.includes("Bill") && (
+                          <option value="Bill">Bill</option>
+                        )}
+                        {p.availableDocumentTypes.includes("TaxInvoice") && (
+                          <option value="TaxInvoice">Tax Invoice</option>
+                        )}
+                      </select>
+                    </label>
+                  )}
+                  <span style={{ flex: 1 }} />
+                  {canUpdate && (
+                    <button style={st.rowBtn} onClick={() => toggle(p)}>
+                      {p.isActive ? (
+                        <>
+                          <MdToggleOff size={17} /> Disable
+                        </>
+                      ) : (
+                        <>
+                          <MdToggleOn size={17} /> Enable
+                        </>
+                      )}
+                    </button>
+                  )}
+                  {canDelete && (
+                    <button style={{ ...st.rowBtn, ...st.rowBtnDanger }} onClick={() => revoke(p)}>
+                      <MdDelete size={15} /> Revoke
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}</RecordsViewport>
+            ))}
+          </div>
+        )}
+      </RecordsViewport>
 
       {showForm && (
         <PortalForm
@@ -226,7 +283,10 @@ export default function CustomerPortalsPage() {
           defaultCompanyId={selectedCompany?.id}
           isNarrow={isNarrow}
           onClose={() => setShowForm(false)}
-          onSaved={() => { setShowForm(false); load(); }}
+          onSaved={() => {
+            setShowForm(false);
+            load();
+          }}
         />
       )}
     </div>
@@ -245,25 +305,43 @@ function PortalForm({ companies, defaultCompanyId, isNarrow, onClose, onSaved })
   const errRef = useScrollToError(error);
 
   useEffect(() => {
-    if (!companyId) { setClients([]); setOptions([]); return; }
+    if (!companyId) {
+      setClients([]);
+      setOptions([]);
+      return;
+    }
     let cancelled = false;
     // Scoped to the company on the SERVER — the picker must never be able to
     // offer a client the portal could not legally be issued for.
     getClientsByCompany(companyId)
-      .then(({ data }) => { if (!cancelled) setClients(data || []); })
-      .catch(() => { if (!cancelled) setClients([]); });
+      .then(({ data }) => {
+        if (!cancelled) setClients(data || []);
+      })
+      .catch(() => {
+        if (!cancelled) setClients([]);
+      });
     getPortalDocumentOptions(companyId)
-      .then(({ data }) => { if (!cancelled) setOptions(data || []); })
-      .catch(() => { if (!cancelled) setOptions([]); });
+      .then(({ data }) => {
+        if (!cancelled) setOptions(data || []);
+      })
+      .catch(() => {
+        if (!cancelled) setOptions([]);
+      });
     setClientId("");
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [companyId]);
 
   const submit = async (e) => {
     e.preventDefault();
     if (saving) return;
-    if (!companyId || !clientId) { setError("Pick a company and a customer."); return; }
-    setSaving(true); setError("");
+    if (!companyId || !clientId) {
+      setError("Pick a company and a customer.");
+      return;
+    }
+    setSaving(true);
+    setError("");
     try {
       await createCustomerPortal({
         companyId: Number(companyId),
@@ -282,25 +360,50 @@ function PortalForm({ companies, defaultCompanyId, isNarrow, onClose, onSaved })
 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px`, cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>New Customer Portal</h5>
-          <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close">&times;</button>
+          <button
+            data-admin-close=""
+            type="button"
+            style={formStyles.closeButton}
+            onClick={onClose}
+            aria-label="Close"
+          >
+            &times;
+          </button>
         </div>
-        <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+        <form
+          onSubmit={submit}
+          style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}
+        >
           <div data-admin-body="" style={formStyles.body}>
-            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
+            {error && (
+              <div ref={errRef} style={formStyles.error}>
+                {error}
+              </div>
+            )}
 
-            {companies.length > 1 && (<div style={formStyles.formGroup}>
-              <label style={formStyles.label}>Company</label>
-              <select
-                style={{ ...dropdownStyles.base, width: "100%" }}
-                value={companyId}
-                onChange={(e) => setCompanyId(e.target.value)}
-              >
-                {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
-              </select>
-            </div>)}
+            {companies.length > 1 && (
+              <div style={formStyles.formGroup}>
+                <label style={formStyles.label}>Company</label>
+                <select
+                  style={{ ...dropdownStyles.base, width: "100%" }}
+                  value={companyId}
+                  onChange={(e) => setCompanyId(e.target.value)}
+                >
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.brandName || c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div style={formStyles.formGroup}>
               <label style={formStyles.label}>Customer</label>
@@ -325,8 +428,12 @@ function PortalForm({ companies, defaultCompanyId, isNarrow, onClose, onSaved })
                 onChange={(e) => setDocumentType(e.target.value)}
               >
                 <option value="">Automatic</option>
-                {available.some((o) => (o.Type ?? o.type) === "Bill") && <option value="Bill">Bill</option>}
-                {available.some((o) => (o.Type ?? o.type) === "TaxInvoice") && <option value="TaxInvoice">Tax Invoice</option>}
+                {available.some((o) => (o.Type ?? o.type) === "Bill") && (
+                  <option value="Bill">Bill</option>
+                )}
+                {available.some((o) => (o.Type ?? o.type) === "TaxInvoice") && (
+                  <option value="TaxInvoice">Tax Invoice</option>
+                )}
               </select>
               {available.length === 0 && (
                 <div style={st.fieldHint}>
@@ -337,8 +444,19 @@ function PortalForm({ companies, defaultCompanyId, isNarrow, onClose, onSaved })
             </div>
           </div>
           <div data-admin-footer="" style={formStyles.footer}>
-            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
-            <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }} disabled={saving}>
+            <button
+              data-admin-close=""
+              type="button"
+              style={{ ...formStyles.button, ...formStyles.cancel }}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}
+              disabled={saving}
+            >
               {saving ? "Issuing…" : "Issue portal"}
             </button>
           </div>
@@ -349,27 +467,174 @@ function PortalForm({ companies, defaultCompanyId, isNarrow, onClose, onSaved })
 }
 
 const st = {
-  headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "0.9rem" },
+  headerRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "0.75rem",
+    flexWrap: "wrap",
+    marginBottom: "0.9rem",
+  },
   h2: { margin: 0, fontSize: "1.4rem", color: colors.textPrimary },
-  countChip: { fontSize: "0.72rem", fontWeight: 700, color: colors.blue, background: "#eef2ff", border: `1px solid ${colors.cardBorder}`, padding: "3px 10px", borderRadius: 12 },
-  primaryBtn: { display: "inline-flex", alignItems: "center", gap: 6, padding: "0 1rem", height: 44, borderRadius: 8, border: "none", background: colors.blue, color: "#fff", fontWeight: 700, cursor: "pointer", boxShadow: "none" },
-  notice: { padding: "0.6rem 0.9rem", borderRadius: 10, marginBottom: "1rem", background: "#fff3cd", border: "1px solid #ffe69c", color: "#8a5a00", fontSize: "0.83rem", fontWeight: 600, lineHeight: 1.5 },
+  countChip: {
+    fontSize: "0.72rem",
+    fontWeight: 700,
+    color: colors.blue,
+    background: "#eef2ff",
+    border: `1px solid ${colors.cardBorder}`,
+    padding: "3px 10px",
+    borderRadius: 12,
+  },
+  primaryBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "0 1rem",
+    height: 44,
+    borderRadius: 8,
+    border: "none",
+    background: colors.blue,
+    color: "#fff",
+    fontWeight: 700,
+    cursor: "pointer",
+    boxShadow: "none",
+  },
+  notice: {
+    padding: "0.6rem 0.9rem",
+    borderRadius: 10,
+    marginBottom: "1rem",
+    background: "#fff3cd",
+    border: "1px solid #ffe69c",
+    color: "#8a5a00",
+    fontSize: "0.83rem",
+    fontWeight: 600,
+    lineHeight: 1.5,
+  },
   list: { display: "grid", gap: "0.85rem" },
-  card: { background: colors.cardBg, border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.9rem 1rem", boxShadow: "0 2px 10px rgba(0,0,0,0.05)" },
+  card: {
+    background: colors.cardBg,
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 12,
+    padding: "0.9rem 1rem",
+    boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+  },
   cardOff: { background: "#fafbfc", borderStyle: "dashed" },
-  cardHead: { display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: 3 },
-  client: { fontWeight: 800, fontSize: "0.98rem", color: colors.textPrimary, overflowWrap: "anywhere" },
-  activeChip: { fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase", background: "#e8f5e9", color: "#1b5e20", padding: "1px 7px", borderRadius: 10 },
-  offChip: { fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase", background: "#eceff1", color: "#607d8b", padding: "1px 7px", borderRadius: 10 },
-  warnChip: { fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase", background: "#fff3cd", color: "#8a5a00", padding: "1px 7px", borderRadius: 10 },
-  meta: { fontSize: "0.78rem", color: colors.textSecondary, marginBottom: "0.6rem", overflowWrap: "anywhere" },
-  linkRow: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0.65rem", background: colors.inputBg, border: `1px solid ${colors.cardBorder}`, borderRadius: 8 },
-  linkText: { flex: "1 1 200px", minWidth: 0, fontSize: "0.78rem", fontFamily: "monospace", color: colors.textSecondary, overflowWrap: "anywhere" },
+  cardHead: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    flexWrap: "wrap",
+    marginBottom: 3,
+  },
+  client: {
+    fontWeight: 800,
+    fontSize: "0.98rem",
+    color: colors.textPrimary,
+    overflowWrap: "anywhere",
+  },
+  activeChip: {
+    fontSize: "0.62rem",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    background: "#e8f5e9",
+    color: "#1b5e20",
+    padding: "1px 7px",
+    borderRadius: 10,
+  },
+  offChip: {
+    fontSize: "0.62rem",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    background: "#eceff1",
+    color: "#607d8b",
+    padding: "1px 7px",
+    borderRadius: 10,
+  },
+  warnChip: {
+    fontSize: "0.62rem",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    background: "#fff3cd",
+    color: "#8a5a00",
+    padding: "1px 7px",
+    borderRadius: 10,
+  },
+  meta: {
+    fontSize: "0.78rem",
+    color: colors.textSecondary,
+    marginBottom: "0.6rem",
+    overflowWrap: "anywhere",
+  },
+  linkRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: "0.5rem",
+    padding: "0.5rem 0.65rem",
+    background: colors.inputBg,
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 8,
+  },
+  linkText: {
+    flex: "1 1 200px",
+    minWidth: 0,
+    fontSize: "0.78rem",
+    fontFamily: "monospace",
+    color: colors.textSecondary,
+    overflowWrap: "anywhere",
+  },
   tokenMask: { letterSpacing: 2, color: colors.textSecondary },
-  linkBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "0 0.8rem", height: 44, borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, fontSize: "0.8rem", fontWeight: 700, cursor: "pointer", textDecoration: "none", boxShadow: "none" },
-  cardActions: { display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.7rem", paddingTop: "0.6rem", borderTop: `1px solid ${colors.cardBorder}` },
-  docLabel: { display: "flex", alignItems: "center", gap: 8, fontSize: "0.78rem", fontWeight: 600, color: colors.textSecondary },
-  rowBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "0 0.9rem", height: 44, minWidth: 44, borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, fontSize: "0.8rem", fontWeight: 700, cursor: "pointer", boxShadow: "none" },
+  linkBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    padding: "0 0.8rem",
+    height: 44,
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    background: "#fff",
+    color: colors.blue,
+    fontSize: "0.8rem",
+    fontWeight: 700,
+    cursor: "pointer",
+    textDecoration: "none",
+    boxShadow: "none",
+  },
+  cardActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    flexWrap: "wrap",
+    marginTop: "0.7rem",
+    paddingTop: "0.6rem",
+    borderTop: `1px solid ${colors.cardBorder}`,
+  },
+  docLabel: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    color: colors.textSecondary,
+  },
+  rowBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    padding: "0 0.9rem",
+    height: 44,
+    minWidth: 44,
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    background: "#fff",
+    color: colors.blue,
+    fontSize: "0.8rem",
+    fontWeight: 700,
+    cursor: "pointer",
+    boxShadow: "none",
+  },
   rowBtnDanger: { color: colors.danger, borderColor: `${colors.danger}40` },
   fieldHint: { fontSize: "0.74rem", color: colors.textSecondary, marginTop: 5, lineHeight: 1.45 },
   empty: { padding: "2rem", textAlign: "center", color: colors.textSecondary },

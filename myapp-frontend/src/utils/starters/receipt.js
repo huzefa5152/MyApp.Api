@@ -12,13 +12,13 @@
  */
 
 export const receiptStarters = [
-
   // ─── 1. Classic Serif (double-rule header) — DEFAULT ────────────────────────
   {
     id: "receipt-classic-serif",
     name: "Classic Serif",
     type: "Receipt",
-    description: "Traditional Times New Roman layout with double-rule header, prominent amount box and settled-against table",
+    description:
+      "Traditional Times New Roman layout with double-rule header, prominent amount box and settled-against table",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt Voucher {{reference}}</title><style>
 @media print { @page { size: A4; margin: 12mm; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -114,7 +114,8 @@ tfoot td { font-weight: 700; border-top: 2px solid #000; }
     id: "receipt-modern-minimal",
     name: "Modern Minimal",
     type: "Receipt",
-    description: "Clean sans-serif with a thin gradient accent rule, card info strip and green money-in highlight",
+    description:
+      "Clean sans-serif with a thin gradient accent rule, card info strip and green money-in highlight",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt Voucher {{reference}}</title><style>
 @media print { @page { size: A4; margin: 12mm; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -212,7 +213,8 @@ tfoot td { font-weight: 700; border-top: 2px solid #1b7a3d; color: #14672f; }
     id: "receipt-corporate-band",
     name: "Corporate Band",
     type: "Receipt",
-    description: "Full-width green header band with white reversed company name and voucher number, money-in styling",
+    description:
+      "Full-width green header band with white reversed company name and voucher number, money-in styling",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt Voucher {{reference}}</title><style>
 @media print { @page { size: A4; margin: 0; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -318,7 +320,8 @@ tfoot td { font-weight: 700; background: #e8f5e9 !important; }
     id: "receipt-monochrome-ink",
     name: "Monochrome Ink-Saver",
     type: "Receipt",
-    description: "Hairline black borders only, no fills, pure black-and-white for minimum toner use",
+    description:
+      "Hairline black borders only, no fills, pure black-and-white for minimum toner use",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt Voucher {{reference}}</title><style>
 @media print { @page { size: A4; margin: 12mm; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -408,5 +411,4 @@ tfoot td { font-weight: 700; }
 </div>
 </body></html>`,
   },
-
 ];

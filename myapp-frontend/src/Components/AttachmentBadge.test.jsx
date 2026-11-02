@@ -8,16 +8,26 @@ import { getEntityAttachmentCounts } from "../api/attachmentApi";
 
 const perms = { view: true };
 vi.mock("../api/attachmentApi", () => ({ getEntityAttachmentCounts: vi.fn() }));
-vi.mock("../contexts/PermissionsContext", () => ({ usePermissions: () => ({ has: (k) => k === "attachments.list.view" && perms.view }) }));
+vi.mock("../contexts/PermissionsContext", () => ({
+  usePermissions: () => ({ has: (k) => k === "attachments.list.view" && perms.view }),
+}));
 
 afterEach(cleanup);
-beforeEach(() => { vi.clearAllMocks(); perms.view = true; });
+beforeEach(() => {
+  vi.clearAllMocks();
+  perms.view = true;
+});
 
 it("renders nothing at zero and a clickable count otherwise, without bubbling to the row", () => {
   const { container, rerender } = render(<AttachmentBadge count={0} />);
   expect(container.innerHTML).toBe("");
-  const onClick = vi.fn(); const onRow = vi.fn();
-  rerender(<div onClick={onRow}><AttachmentBadge count={3} onClick={onClick} /></div>);
+  const onClick = vi.fn();
+  const onRow = vi.fn();
+  rerender(
+    <div onClick={onRow}>
+      <AttachmentBadge count={3} onClick={onClick} />
+    </div>,
+  );
   fireEvent.click(screen.getByRole("button", { name: /3/ }));
   expect(onClick).toHaveBeenCalledTimes(1);
   expect(onRow).not.toHaveBeenCalled();

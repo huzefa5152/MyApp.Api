@@ -4,23 +4,19 @@
 import httpClient from "./httpClient";
 
 // ── Folders ──────────────────────────────────────────────────────────
-export const getFolders = (companyId) =>
-  httpClient.get(`/folders/company/${companyId}`);
+export const getFolders = (companyId) => httpClient.get(`/folders/company/${companyId}`);
 
 export const getPagedFolders = (companyId, params = {}) =>
   httpClient.get(`/folders/company/${companyId}/paged`, { params });
 
-export const getFolder = (folderId) =>
-  httpClient.get(`/folders/${folderId}`);
+export const getFolder = (folderId) => httpClient.get(`/folders/${folderId}`);
 
 export const createFolder = (companyId, payload) =>
   httpClient.post(`/folders/company/${companyId}`, payload);
 
-export const updateFolder = (folderId, payload) =>
-  httpClient.put(`/folders/${folderId}`, payload);
+export const updateFolder = (folderId, payload) => httpClient.put(`/folders/${folderId}`, payload);
 
-export const deleteFolder = (folderId) =>
-  httpClient.delete(`/folders/${folderId}`);
+export const deleteFolder = (folderId) => httpClient.delete(`/folders/${folderId}`);
 
 // ── Attachments ──────────────────────────────────────────────────────
 // folderId / entityType / entityId are all optional. Sent as multipart so
@@ -71,5 +67,4 @@ export const getEntityAttachmentCounts = (companyId, entityType, ids) =>
 export const downloadAttachment = (attachmentId) =>
   httpClient.get(`/attachments/${attachmentId}/download`, { responseType: "blob" });
 
-export const deleteAttachment = (attachmentId) =>
-  httpClient.delete(`/attachments/${attachmentId}`);
+export const deleteAttachment = (attachmentId) => httpClient.delete(`/attachments/${attachmentId}`);

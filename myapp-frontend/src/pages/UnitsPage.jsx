@@ -70,10 +70,7 @@ export default function UnitsPage() {
     return units.filter((u) => (u.name || "").toLowerCase().includes(q));
   }, [units, search]);
 
-  const decimalCount = useMemo(
-    () => units.filter((u) => u.allowsDecimalQuantity).length,
-    [units]
-  );
+  const decimalCount = useMemo(() => units.filter((u) => u.allowsDecimalQuantity).length, [units]);
 
   const handleToggle = async (unit) => {
     if (!canManage) return;
@@ -83,10 +80,8 @@ export default function UnitsPage() {
       const { data } = await updateUnit(unit.id, next);
       setUnits((prev) => prev.map((u) => (u.id === unit.id ? data : u)));
       notify(
-        `${data.name} → ${
-          data.allowsDecimalQuantity ? "decimal allowed" : "integer only"
-        }`,
-        "success"
+        `${data.name} → ${data.allowsDecimalQuantity ? "decimal allowed" : "integer only"}`,
+        "success",
       );
     } catch (err) {
       const msg = err.response?.data?.error || "Failed to update unit";
@@ -107,20 +102,39 @@ export default function UnitsPage() {
           <div>
             <h2 style={styles.headerTitle}>Units of Measure</h2>
             <p style={styles.headerSub}>
-              Configure which UOMs allow fractional quantities (KG, Liter, Carat) vs whole numbers only (Pcs, Pair, SET)
+              Configure which UOMs allow fractional quantities (KG, Liter, Carat) vs whole numbers
+              only (Pcs, Pair, SET)
             </p>
           </div>
         </div>
       </div>
 
-      {companies.length > 1 && (<label style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
-        Company
-        <select aria-label="Catalog company" value={selectedCompany?.id || ""}
-          onChange={(e) => setSelectedCompany(companies.find(c => c.id === Number(e.target.value)))}
-          style={{ padding: "0.6rem", borderRadius: 6, border: `1px solid ${colors.inputBorder}`, maxWidth: "100%" }}>
-          {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-      </label>)}
+      {companies.length > 1 && (
+        <label
+          style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}
+        >
+          Company
+          <select
+            aria-label="Catalog company"
+            value={selectedCompany?.id || ""}
+            onChange={(e) =>
+              setSelectedCompany(companies.find((c) => c.id === Number(e.target.value)))
+            }
+            style={{
+              padding: "0.6rem",
+              borderRadius: 6,
+              border: `1px solid ${colors.inputBorder}`,
+              maxWidth: "100%",
+            }}
+          >
+            {companies.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       {/* Info banner */}
       <div style={styles.infoBanner}>
@@ -130,11 +144,10 @@ export default function UnitsPage() {
             How this drives the bill / challan forms
           </div>
           <div style={{ fontSize: "0.85rem", lineHeight: 1.5 }}>
-            When an operator picks a UOM on a bill or challan line, the Quantity
-            input switches to decimal mode (up to 4 decimal places, e.g. 12.5 KG
-            or 0.0004 Carat) for any unit toggled on here. Units toggled off
-            accept whole numbers only — the server rejects 2.5 Pcs with an
-            HTTP 400.
+            When an operator picks a UOM on a bill or challan line, the Quantity input switches to
+            decimal mode (up to 4 decimal places, e.g. 12.5 KG or 0.0004 Carat) for any unit toggled
+            on here. Units toggled off accept whole numbers only — the server rejects 2.5 Pcs with
+            an HTTP 400.
             {!canManage && (
               <div
                 style={{
@@ -153,9 +166,8 @@ export default function UnitsPage() {
       {/* Summary + Search */}
       <div data-admin-toolbar="" style={styles.toolbar}>
         <div style={styles.summary}>
-          <strong>{units.length}</strong> total units ·{" "}
-          <strong>{decimalCount}</strong> allow decimals ·{" "}
-          <strong>{units.length - decimalCount}</strong> integer-only
+          <strong>{units.length}</strong> total units · <strong>{decimalCount}</strong> allow
+          decimals · <strong>{units.length - decimalCount}</strong> integer-only
         </div>
         <div style={styles.searchWrap}>
           <MdSearch style={{ color: colors.textSecondary, fontSize: "1.1rem" }} />
@@ -170,77 +182,75 @@ export default function UnitsPage() {
       </div>
 
       {/* Grid */}
-      <RecordsViewport label="Units records">{loading ? (
-        <p style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>
-          Loading units…
-        </p>
-      ) : filtered.length === 0 ? (
-        <p style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>
-          {search ? "No units match your search" : "No units yet"}
-        </p>
-      ) : (
-        <div data-admin-table-region="" style={styles.tableWrap}>
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={styles.th}>Unit Name</th>
-                <th style={{ ...styles.th, textAlign: "center", width: 220 }}>
-                  Allow Decimal Quantity
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((u) => {
-                const checked = !!u.allowsDecimalQuantity;
-                const saving = pendingId === u.id;
-                return (
-                  <tr key={u.id}>
-                    <td style={styles.td}>
-                      <div style={{ fontWeight: 600, color: colors.textPrimary }}>
-                        {u.name}
-                      </div>
-                    </td>
-                    <td style={{ ...styles.td, textAlign: "center" }}>
-                      <button
-                        type="button"
-                        onClick={() => handleToggle(u)}
-                        disabled={!canManage || saving}
-                        style={{
-                          ...styles.toggleBtn,
-                          backgroundColor: checked
-                            ? colors.successBg
-                            : colors.inputBg,
-                          color: checked ? colors.successFg : colors.textSecondary,
-                          border: `1px solid ${
-                            checked ? colors.successBorder : colors.inputBorder
-                          }`,
-                          cursor: canManage ? "pointer" : "not-allowed",
-                          opacity: saving ? 0.6 : 1,
-                        }}
-                        title={
-                          canManage
-                            ? checked
-                              ? `Click to lock ${u.name} to whole numbers only`
-                              : `Click to allow up to 4 decimal places for ${u.name}`
-                            : "You don't have permission to change this"
-                        }
-                      >
-                        {checked ? (
-                          <>
-                            <MdCheck style={{ fontSize: "1rem" }} /> Decimal allowed
-                          </>
-                        ) : (
-                          "Integer only"
-                        )}
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}</RecordsViewport>
+      <RecordsViewport label="Units records">
+        {loading ? (
+          <p style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>
+            Loading units…
+          </p>
+        ) : filtered.length === 0 ? (
+          <p style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>
+            {search ? "No units match your search" : "No units yet"}
+          </p>
+        ) : (
+          <div data-admin-table-region="" style={styles.tableWrap}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <th style={styles.th}>Unit Name</th>
+                  <th style={{ ...styles.th, textAlign: "center", width: 220 }}>
+                    Allow Decimal Quantity
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((u) => {
+                  const checked = !!u.allowsDecimalQuantity;
+                  const saving = pendingId === u.id;
+                  return (
+                    <tr key={u.id}>
+                      <td style={styles.td}>
+                        <div style={{ fontWeight: 600, color: colors.textPrimary }}>{u.name}</div>
+                      </td>
+                      <td style={{ ...styles.td, textAlign: "center" }}>
+                        <button
+                          type="button"
+                          onClick={() => handleToggle(u)}
+                          disabled={!canManage || saving}
+                          style={{
+                            ...styles.toggleBtn,
+                            backgroundColor: checked ? colors.successBg : colors.inputBg,
+                            color: checked ? colors.successFg : colors.textSecondary,
+                            border: `1px solid ${
+                              checked ? colors.successBorder : colors.inputBorder
+                            }`,
+                            cursor: canManage ? "pointer" : "not-allowed",
+                            opacity: saving ? 0.6 : 1,
+                          }}
+                          title={
+                            canManage
+                              ? checked
+                                ? `Click to lock ${u.name} to whole numbers only`
+                                : `Click to allow up to 4 decimal places for ${u.name}`
+                              : "You don't have permission to change this"
+                          }
+                        >
+                          {checked ? (
+                            <>
+                              <MdCheck style={{ fontSize: "1rem" }} /> Decimal allowed
+                            </>
+                          ) : (
+                            "Integer only"
+                          )}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </RecordsViewport>
     </div>
   );
 }

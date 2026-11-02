@@ -21,11 +21,26 @@ import BillNumberField, { billNumberPayload } from "./BillNumberField";
 
 import { todayYmd } from "../utils/dateInput";
 const colors = {
-  textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2", danger: "#dc3545", dangerLight: "#fff0f1", teal: "#00897b",
+  textSecondary: "#5f6d7e",
+  cardBorder: "#e8edf3",
+  inputBg: "#f8f9fb",
+  inputBorder: "#d0d7e2",
+  danger: "#dc3545",
+  dangerLight: "#fff0f1",
+  teal: "#00897b",
 };
 
-const blankItem = () => ({ id: 0, _imageKey: crypto.randomUUID(), imagePath: null, itemTypeId: null, description: "", quantity: 1, unit: "", unitPrice: 0, rateHint: "" });
+const blankItem = () => ({
+  id: 0,
+  _imageKey: crypto.randomUUID(),
+  imagePath: null,
+  itemTypeId: null,
+  description: "",
+  quantity: 1,
+  unit: "",
+  unitPrice: 0,
+  rateHint: "",
+});
 
 // Create + edit a Sales Quote. Pass `quote` to edit; omit to create.
 export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
@@ -34,7 +49,9 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
   const canCreateClient = has("clients.manage.create");
   const [showAddClient, setShowAddClient] = useState(false);
   const isEdit = !!quote;
-  const [client, setClient] = useState(quote ? { id: quote.clientId, label: quote.clientName } : null);
+  const [client, setClient] = useState(
+    quote ? { id: quote.clientId, label: quote.clientName } : null,
+  );
   const [date, setDate] = useState(quote?.date ? quote.date.slice(0, 10) : todayYmd());
   // "Valid for N days" drives expiry: ValidUntil = issue date + N days. Blank =
   // no expiry (quote stays Active until accepted). On edit, derive the day count
@@ -47,18 +64,34 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
     return "";
   });
   const [enquiryRef, setEnquiryRef] = useState(quote?.customerEnquiryRef || "");
-  const [enquiryDate, setEnquiryDate] = useState(quote?.enquiryDate ? quote.enquiryDate.slice(0, 10) : "");
+  const [enquiryDate, setEnquiryDate] = useState(
+    quote?.enquiryDate ? quote.enquiryDate.slice(0, 10) : "",
+  );
   const [gstRate, setGstRate] = useState(quote?.gstRate ?? 18);
   const [notes, setNotes] = useState(quote?.notes || "");
   const [contactPerson, setContactPerson] = useState(quote?.contactPerson || "");
   // Whole-quote discount: "5%" or "5000", taken off before GST. It stays on
   // the quote; a bill made from it only shows a reminder.
-  const [quoteDiscount, setQuoteDiscount] = useState(discountText(quote?.discountValue, quote?.discountIsPercent));
+  const [quoteDiscount, setQuoteDiscount] = useState(
+    discountText(quote?.discountValue, quote?.discountIsPercent),
+  );
   const [quoteDiscountReason, setQuoteDiscountReason] = useState(quote?.discountReason || "");
   const [items, setItems] = useState(
     quote?.items?.length
-      ? quote.items.map((i) => ({ id: i.id, _imageKey: crypto.randomUUID(), imagePath: i.imagePath || null, itemTypeId: i.itemTypeId, description: i.description, quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice, rateHint: "", discountText: discountText(i.discountValue, i.discountIsPercent), discountReason: i.discountReason || "" }))
-      : [blankItem()]
+      ? quote.items.map((i) => ({
+          id: i.id,
+          _imageKey: crypto.randomUUID(),
+          imagePath: i.imagePath || null,
+          itemTypeId: i.itemTypeId,
+          description: i.description,
+          quantity: i.quantity,
+          unit: i.unit,
+          unitPrice: i.unitPrice,
+          rateHint: "",
+          discountText: discountText(i.discountValue, i.discountIsPercent),
+          discountReason: i.discountReason || "",
+        }))
+      : [blankItem()],
   );
   const [units, setUnits] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
@@ -73,15 +106,27 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
   const [imageUploads, setImageUploads] = useState(0);
   const attachmentRef = useRef(null);
 
-  useEffect(() => { getAllUnits(companyId).then(({ data }) => setUnits(data)).catch(() => setUnits([])); }, [companyId]);
-  useEffect(() => { getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([])); }, [companyId]);
-  useEffect(() => { getClientsByCompany(companyId).then(({ data }) => setClients(data || [])).catch(() => setClients([])); }, [companyId]);
+  useEffect(() => {
+    getAllUnits(companyId)
+      .then(({ data }) => setUnits(data))
+      .catch(() => setUnits([]));
+  }, [companyId]);
+  useEffect(() => {
+    getItemTypes(companyId)
+      .then(({ data }) => setItemTypes(data || []))
+      .catch(() => setItemTypes([]));
+  }, [companyId]);
+  useEffect(() => {
+    getClientsByCompany(companyId)
+      .then(({ data }) => setClients(data || []))
+      .catch(() => setClients([]));
+  }, [companyId]);
   // A quote is a pre-sale document (never sent to FBR), so — like Bill mode —
   // it only offers item types WITHOUT an HS code (HS-coded types are the
   // FBR-classification set used on the Invoices tab).
   const nonHsItemTypes = useMemo(
     () => itemTypes.filter((it) => !(it.hsCode && String(it.hsCode).trim())),
-    [itemTypes]
+    [itemTypes],
   );
 
   // Last-billed-rate lookup for the shared editor's price auto-fill. Returns
@@ -97,7 +142,11 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
     };
   };
 
-  const totals = quoteTotals(items.filter((i) => i.description.trim()), quoteDiscount, gstRate);
+  const totals = quoteTotals(
+    items.filter((i) => i.description.trim()),
+    quoteDiscount,
+    gstRate,
+  );
   const money = (n) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
 
   const handleSubmit = async (e) => {
@@ -105,19 +154,38 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
     if (saving || imageUploads > 0 || !numberValid) return;
     setError("");
     const valid = items.filter((i) => i.description.trim());
-    if (!client) { setError("Please select a client."); return; }
-    if (valid.length === 0) { setError("Add at least one item."); return; }
+    if (!client) {
+      setError("Please select a client.");
+      return;
+    }
+    if (valid.length === 0) {
+      setError("Add at least one item.");
+      return;
+    }
     const badLine = valid.findIndex((i) => lineAmounts(i).error);
-    if (badLine >= 0) { setError(`Line ${items.indexOf(valid[badLine]) + 1}: the discount is not valid (${lineAmounts(valid[badLine]).error.toLowerCase()}).`); return; }
-    if (totals.error) { setError(`Quote discount: ${totals.error.toLowerCase()}.`); return; }
+    if (badLine >= 0) {
+      setError(
+        `Line ${items.indexOf(valid[badLine]) + 1}: the discount is not valid (${lineAmounts(valid[badLine]).error.toLowerCase()}).`,
+      );
+      return;
+    }
+    if (totals.error) {
+      setError(`Quote discount: ${totals.error.toLowerCase()}.`);
+      return;
+    }
 
     setSaving(true);
     try {
       const saved = await onSaved({
         clientId: client.id,
-        customNumber: quote ? billNumberPayload("custom", customNumber) : billNumberPayload(numberMode, customNumber),
+        customNumber: quote
+          ? billNumberPayload("custom", customNumber)
+          : billNumberPayload(numberMode, customNumber),
         date: date ? new Date(date).toISOString() : null,
-        validUntil: validForDays && date ? new Date(new Date(date).getTime() + Number(validForDays) * 86400000).toISOString() : null,
+        validUntil:
+          validForDays && date
+            ? new Date(new Date(date).getTime() + Number(validForDays) * 86400000).toISOString()
+            : null,
         customerEnquiryRef: enquiryRef.trim() || null,
         enquiryDate: enquiryDate ? new Date(enquiryDate).toISOString() : null,
         gstRate: Number(gstRate) || 0,
@@ -128,7 +196,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
           id: i.id || 0,
           itemTypeId: i.itemTypeId || null,
           description: i.description.trim(),
-          quantity: typeof i.quantity === "number" ? i.quantity : (parseFloat(i.quantity) || 1),
+          quantity: typeof i.quantity === "number" ? i.quantity : parseFloat(i.quantity) || 1,
           unit: i.unit,
           unitPrice: Number(i.unitPrice) || 0,
           imagePath: i.imagePath || null,
@@ -138,110 +206,252 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
       // Upload any files staged before the record had an id (no-op in edit
       // mode / when nothing was staged). Best-effort — the quote is saved.
       const savedId = saved?.id ?? quote?.id;
-      if (savedId) { try { await attachmentRef.current?.flush(savedId); } catch { /* attachments best-effort */ } }
+      if (savedId) {
+        try {
+          await attachmentRef.current?.flush(savedId);
+        } catch {
+          /* attachments best-effort */
+        }
+      }
       onClose();
     } catch (err) {
       const msg = err.response?.data?.error || err.response?.data?.message;
-      setError(msg || (!err.response ? "Could not reach the server." : "Could not save the quote."));
+      setError(
+        msg || (!err.response ? "Could not reach the server." : "Could not save the quote."),
+      );
       setSaving(false);
     }
   };
 
-  const disabled = !client || items.every((i) => !i.description.trim()) || saving || imageUploads > 0 || !numberValid;
+  const disabled =
+    !client ||
+    items.every((i) => !i.description.trim()) ||
+    saving ||
+    imageUploads > 0 ||
+    !numberValid;
 
   // Contact-person dropdown options come from the selected client's
   // semicolon-separated ContactPerson list (mirrors the challan Site dropdown).
   const contactOptions = useMemo(() => {
     const sel = clients.find((c) => String(c.id) === String(client?.id));
-    return sel?.contactPerson ? sel.contactPerson.split(";").map((x) => x.trim()).filter(Boolean) : [];
+    return sel?.contactPerson
+      ? sel.contactPerson
+          .split(";")
+          .map((x) => x.trim())
+          .filter(Boolean)
+      : [];
   }, [clients, client]);
 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
-          <h5 style={formStyles.title}>{isEdit ? `Edit Quote #${quote.quoteNumber}` : "Create Sales Quote"}</h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <h5 style={formStyles.title}>
+            {isEdit ? `Edit Quote #${quote.quoteNumber}` : "Create Sales Quote"}
+          </h5>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            &times;
+          </button>
         </div>
         <form onSubmit={handleSubmit}>
           <div data-admin-body="" className="admin-quote-body" style={formStyles.body}>
-            <DocumentCopyPicker companyId={companyId} destination="Quote" allowDetails={!isEdit} disabled={false}
-              onCopy={(source,lines,details) => {
-                setItems(prev => appendCopiedLines(details ? [] : prev, lines, blankItem, true));
-                if (details && source.discountValue) { setQuoteDiscount(discountText(source.discountValue, source.discountIsPercent)); setQuoteDiscountReason(source.discountReason || ""); }
-                if(details) { setClient({id:source.clientId,label:source.clientName});setNotes(source.notes||"");setGstRate(source.gstRate??18);setContactPerson(source.contactPerson||"");setEnquiryRef(source.customerEnquiryRef||"");setEnquiryDate(source.enquiryDate?.slice(0,10)||"");setValidForDays(source.validUntil && source.date ? String(Math.max(0, Math.round((new Date(source.validUntil)-new Date(source.date))/86400000))) : ""); }
-              }} />
-            {error && <div ref={errRef} style={s.err}>{error}</div>}
-            {<div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="quote" variant={quote ? "edit" : "create"} currentNumber={quote?.quoteNumber} editRecordId={quote?.id} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>}
-            <section className="admin-details-panel" aria-label="Customer & quotation"><h6 className="admin-section-heading">Customer & quotation</h6><div data-admin-form-row="" style={s.row}>
-              <div style={{ flex: 2, minWidth: 220 }}>
-                <label style={s.label}>Client</label>
-                {/* New Client sits beside the picker rather than on a line of its own. */}
-                <div style={{ display: "flex", gap: "0.5rem", alignItems: "stretch" }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <SearchableSelect
-                      items={clients}
-                      value={client?.id || ""}
-                      onChange={(id, item) => setClient(item)}
-                      placeholder="— Select Client —"
-                    />
+            <DocumentCopyPicker
+              companyId={companyId}
+              destination="Quote"
+              allowDetails={!isEdit}
+              disabled={false}
+              onCopy={(source, lines, details) => {
+                setItems((prev) => appendCopiedLines(details ? [] : prev, lines, blankItem, true));
+                if (details && source.discountValue) {
+                  setQuoteDiscount(discountText(source.discountValue, source.discountIsPercent));
+                  setQuoteDiscountReason(source.discountReason || "");
+                }
+                if (details) {
+                  setClient({ id: source.clientId, label: source.clientName });
+                  setNotes(source.notes || "");
+                  setGstRate(source.gstRate ?? 18);
+                  setContactPerson(source.contactPerson || "");
+                  setEnquiryRef(source.customerEnquiryRef || "");
+                  setEnquiryDate(source.enquiryDate?.slice(0, 10) || "");
+                  setValidForDays(
+                    source.validUntil && source.date
+                      ? String(
+                          Math.max(
+                            0,
+                            Math.round(
+                              (new Date(source.validUntil) - new Date(source.date)) / 86400000,
+                            ),
+                          ),
+                        )
+                      : "",
+                  );
+                }
+              }}
+            />
+            {error && (
+              <div ref={errRef} style={s.err}>
+                {error}
+              </div>
+            )}
+            {
+              <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}>
+                <BillNumberField
+                  companyId={companyId}
+                  documentType="quote"
+                  variant={quote ? "edit" : "create"}
+                  currentNumber={quote?.quoteNumber}
+                  editRecordId={quote?.id}
+                  mode={numberMode}
+                  onModeChange={setNumberMode}
+                  number={customNumber}
+                  onNumberChange={setCustomNumber}
+                  onValidityChange={setNumberValid}
+                  disabled={saving}
+                />
+              </div>
+            }
+            <section className="admin-details-panel" aria-label="Customer & quotation">
+              <h6 className="admin-section-heading">Customer & quotation</h6>
+              <div data-admin-form-row="" style={s.row}>
+                <div style={{ flex: 2, minWidth: 220 }}>
+                  <label style={s.label}>Client</label>
+                  {/* New Client sits beside the picker rather than on a line of its own. */}
+                  <div style={{ display: "flex", gap: "0.5rem", alignItems: "stretch" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <SearchableSelect
+                        items={clients}
+                        value={client?.id || ""}
+                        onChange={(id, item) => setClient(item)}
+                        placeholder="— Select Client —"
+                      />
+                    </div>
+                    {canCreateClient && (
+                      <button
+                        type="button"
+                        style={{
+                          ...s.inlineAddBtn,
+                          minHeight: 0,
+                          whiteSpace: "nowrap",
+                          flexShrink: 0,
+                        }}
+                        onClick={() => setShowAddClient(true)}
+                        title="Create a new client without leaving this form"
+                        aria-label="New client"
+                      >
+                        <MdPersonAdd size={15} /> New
+                      </button>
+                    )}
                   </div>
-                  {canCreateClient && (
-                    <button
-                      type="button"
-                      style={{ ...s.inlineAddBtn, minHeight: 0, whiteSpace: "nowrap", flexShrink: 0 }}
-                      onClick={() => setShowAddClient(true)}
-                      title="Create a new client without leaving this form"
-                      aria-label="New client"
-                    >
-                      <MdPersonAdd size={15} /> New
-                    </button>
+                  {!canCreateClient && (
+                    <PermissionLackedHint perm="clients.manage.create" what="add a new client" />
                   )}
                 </div>
-                {!canCreateClient && <PermissionLackedHint perm="clients.manage.create" what="add a new client" />}
+                <div style={{ flex: 1, minWidth: 140 }}>
+                  <label style={s.label}>Issue Date</label>
+                  <input
+                    type="date"
+                    style={s.input}
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                  />
+                </div>
+                <div style={{ flex: 1, minWidth: 140 }}>
+                  <label style={s.label}>
+                    Valid for (days) <span style={s.opt}>(optional)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    style={s.input}
+                    value={validForDays}
+                    onChange={(e) => setValidForDays(e.target.value)}
+                    placeholder="blank = no expiry"
+                  />
+                </div>
+              </div>
+              <div data-admin-form-row="" style={s.row}>
+                <div style={{ flex: 1.5, minWidth: 180 }}>
+                  <label style={s.label}>
+                    Customer Enquiry Ref <span style={s.opt}>(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    style={s.input}
+                    value={enquiryRef}
+                    onChange={(e) => setEnquiryRef(e.target.value)}
+                    placeholder="Their RFQ / enquiry number"
+                  />
+                </div>
+                <div style={{ flex: 1, minWidth: 140 }}>
+                  <label style={s.label}>
+                    Enquiry Date <span style={s.opt}>(optional)</span>
+                  </label>
+                  <input
+                    type="date"
+                    style={s.input}
+                    value={enquiryDate}
+                    onChange={(e) => setEnquiryDate(e.target.value)}
+                  />
+                </div>
+                <div style={{ flex: 1, minWidth: 120 }}>
+                  <label style={s.label}>GST Rate (%)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    style={{ ...s.input, textAlign: "right" }}
+                    value={gstRate}
+                    onChange={(e) => setGstRate(e.target.value)}
+                  />
+                </div>
+                <div style={{ flex: 1.5, minWidth: 180 }}>
+                  <label style={s.label}>
+                    Contact Person <span style={s.opt}>(optional)</span>
+                  </label>
+                  {contactOptions.length > 0 ? (
+                    <select
+                      style={s.input}
+                      value={contactPerson}
+                      onChange={(e) => setContactPerson(e.target.value)}
+                    >
+                      <option value="">(none)</option>
+                      {contactPerson && !contactOptions.includes(contactPerson) && (
+                        <option value={contactPerson}>{contactPerson}</option>
+                      )}
+                      {contactOptions.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      style={s.input}
+                      value={contactPerson}
+                      onChange={(e) => setContactPerson(e.target.value)}
+                      placeholder={
+                        client ? "Optional (client has no saved contacts)" : "Pick a client first"
+                      }
+                      disabled={!client}
+                    />
+                  )}
+                </div>
+              </div>
+            </section>
 
-              </div>
-              <div style={{ flex: 1, minWidth: 140 }}>
-                <label style={s.label}>Issue Date</label>
-                <input type="date" style={s.input} value={date} onChange={(e) => setDate(e.target.value)} />
-              </div>
-              <div style={{ flex: 1, minWidth: 140 }}>
-                <label style={s.label}>Valid for (days) <span style={s.opt}>(optional)</span></label>
-                <input type="number" min={1} step={1} style={s.input} value={validForDays} onChange={(e) => setValidForDays(e.target.value)} placeholder="blank = no expiry" />
-              </div>
-            </div>
-            <div data-admin-form-row="" style={s.row}>
-              <div style={{ flex: 1.5, minWidth: 180 }}>
-                <label style={s.label}>Customer Enquiry Ref <span style={s.opt}>(optional)</span></label>
-                <input type="text" style={s.input} value={enquiryRef} onChange={(e) => setEnquiryRef(e.target.value)} placeholder="Their RFQ / enquiry number" />
-              </div>
-              <div style={{ flex: 1, minWidth: 140 }}>
-                <label style={s.label}>Enquiry Date <span style={s.opt}>(optional)</span></label>
-                <input type="date" style={s.input} value={enquiryDate} onChange={(e) => setEnquiryDate(e.target.value)} />
-              </div>
-              <div style={{ flex: 1, minWidth: 120 }}>
-                <label style={s.label}>GST Rate (%)</label>
-                <input type="number" min="0" max="100" step="0.01" style={{ ...s.input, textAlign: "right" }} value={gstRate} onChange={(e) => setGstRate(e.target.value)} />
-              </div>
-              <div style={{ flex: 1.5, minWidth: 180 }}>
-                <label style={s.label}>Contact Person <span style={s.opt}>(optional)</span></label>
-                {contactOptions.length > 0 ? (
-                  <select style={s.input} value={contactPerson} onChange={(e) => setContactPerson(e.target.value)}>
-                    <option value="">(none)</option>
-                    {contactPerson && !contactOptions.includes(contactPerson) && <option value={contactPerson}>{contactPerson}</option>}
-                    {contactOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                ) : (
-                  <input type="text" style={s.input} value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} placeholder={client ? "Optional (client has no saved contacts)" : "Pick a client first"} disabled={!client} />
-                )}
-              </div>
-            </div></section>
-
-            <LineItemsEditor companyId={companyId}
+            <LineItemsEditor
+              companyId={companyId}
               entryModeKey="quote"
               showImage
-              onUploadImage={async file => (await uploadQuoteLineImage(companyId, file)).data.url}
-              onImageBusyChange={delta => setImageUploads(count => Math.max(0, count + delta))}
+              onUploadImage={async (file) => (await uploadQuoteLineImage(companyId, file)).data.url}
+              onImageBusyChange={(delta) => setImageUploads((count) => Math.max(0, count + delta))}
               items={items}
               onItemsChange={setItems}
               makeBlankItem={blankItem}
@@ -258,28 +468,79 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
             />
 
             <div style={s.totals}>
-              <div style={s.tRow}><span>Subtotal</span><span style={s.tAmt}>Rs {money(totals.subtotal)}</span></div>
+              <div style={s.tRow}>
+                <span>Subtotal</span>
+                <span style={s.tAmt}>Rs {money(totals.subtotal)}</span>
+              </div>
               <div style={s.discRow}>
-                <label htmlFor="quote-discount" style={s.discLabel}>Discount <span style={s.opt}>(whole quote)</span></label>
-                <input id="quote-discount" style={{ ...s.discInput, ...(totals.error ? s.inputError : null) }} value={quoteDiscount} onChange={(e) => setQuoteDiscount(e.target.value)} placeholder="5% or 500" />
-                <span style={totals.error ? s.discErr : s.tAmt}>{totals.error || (totals.discount ? `− Rs ${money(totals.discount)}` : "—")}</span>
+                <label htmlFor="quote-discount" style={s.discLabel}>
+                  Discount <span style={s.opt}>(whole quote)</span>
+                </label>
+                <input
+                  id="quote-discount"
+                  style={{ ...s.discInput, ...(totals.error ? s.inputError : null) }}
+                  value={quoteDiscount}
+                  onChange={(e) => setQuoteDiscount(e.target.value)}
+                  placeholder="5% or 500"
+                />
+                <span style={totals.error ? s.discErr : s.tAmt}>
+                  {totals.error || (totals.discount ? `− Rs ${money(totals.discount)}` : "—")}
+                </span>
               </div>
               {String(quoteDiscount).trim() !== "" && (
-                <input aria-label="Quote discount reason" style={{ ...s.input, marginTop: "0.35rem" }} value={quoteDiscountReason} maxLength={200} onChange={(e) => setQuoteDiscountReason(e.target.value)} placeholder="Reason (optional), e.g. bulk order" />
+                <input
+                  aria-label="Quote discount reason"
+                  style={{ ...s.input, marginTop: "0.35rem" }}
+                  value={quoteDiscountReason}
+                  maxLength={200}
+                  onChange={(e) => setQuoteDiscountReason(e.target.value)}
+                  placeholder="Reason (optional), e.g. bulk order"
+                />
               )}
-              <div style={s.tRow}><span>GST @ {gstRate || 0}%{totals.discount ? ` on Rs ${money(totals.taxable)}` : ""}</span><span style={s.tAmt}>Rs {money(totals.gstAmount)}</span></div>
-              <div style={{ ...s.tRow, ...s.grand }}><span>Grand Total</span><span style={s.tAmt}>Rs {money(totals.grandTotal)}</span></div>
+              <div style={s.tRow}>
+                <span>
+                  GST @ {gstRate || 0}%{totals.discount ? ` on Rs ${money(totals.taxable)}` : ""}
+                </span>
+                <span style={s.tAmt}>Rs {money(totals.gstAmount)}</span>
+              </div>
+              <div style={{ ...s.tRow, ...s.grand }}>
+                <span>Grand Total</span>
+                <span style={s.tAmt}>Rs {money(totals.grandTotal)}</span>
+              </div>
             </div>
 
-            <DocumentNotesEditor value={notes} onChange={setNotes} label="Notes / Terms (optional)" />
+            <DocumentNotesEditor
+              value={notes}
+              onChange={setNotes}
+              label="Notes / Terms (optional)"
+            />
 
             <div style={{ marginTop: "1rem" }}>
-              <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="SalesQuote" entityId={quote?.id ?? null} mode="edit" />
+              <AttachmentManager
+                ref={attachmentRef}
+                companyId={companyId}
+                entityType="SalesQuote"
+                entityId={quote?.id ?? null}
+                mode="edit"
+              />
             </div>
           </div>
           <div data-admin-footer="" style={formStyles.footer}>
-            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
-            <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: disabled ? 0.6 : 1 }} disabled={disabled}>{saving ? "Saving..." : isEdit ? "Update Quote" : "Save Quote"}</button>
+            <button
+              data-admin-close=""
+              type="button"
+              style={{ ...formStyles.button, ...formStyles.cancel }}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              style={{ ...formStyles.button, ...formStyles.submit, opacity: disabled ? 0.6 : 1 }}
+              disabled={disabled}
+            >
+              {saving ? "Saving..." : isEdit ? "Update Quote" : "Save Quote"}
+            </button>
           </div>
         </form>
       </div>
@@ -298,8 +559,13 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
             setShowAddClient(false);
             const { data } = await getClientsByCompany(companyId).catch(() => ({ data: [] }));
             setClients(data || []);
-            if (created?.id) setClient((data || []).find((c) => String(c.id) === String(created.id))
-              || { id: created.id, label: created.name });
+            if (created?.id)
+              setClient(
+                (data || []).find((c) => String(c.id) === String(created.id)) || {
+                  id: created.id,
+                  label: created.name,
+                },
+              );
           }}
         />
       )}
@@ -308,7 +574,12 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
         <ItemTypeForm
           companyId={companyId}
           onClose={() => setShowAddItemType(false)}
-          onSaved={() => { setShowAddItemType(false); getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => {}); }}
+          onSaved={() => {
+            setShowAddItemType(false);
+            getItemTypes(companyId)
+              .then(({ data }) => setItemTypes(data || []))
+              .catch(() => {});
+          }}
         />
       )}
     </div>
@@ -317,37 +588,241 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
 
 const s = {
   row: { display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" },
-  itemsHeaderBar: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.5rem" },
-  inlineAddBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.45rem 0.75rem", borderRadius: 6, border: `1px solid ${colors.teal}`, backgroundColor: "#fff", color: colors.teal, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
-  bulkApplyBar: { display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap", padding: "0.55rem 0.85rem", marginBottom: "0.5rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#f8faff" },
-  bulkClearBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.35rem 0.7rem", borderRadius: 6, border: `1px solid ${colors.danger}`, backgroundColor: "#fff", color: colors.danger, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 },
-  label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
+  itemsHeaderBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: "0.5rem",
+    marginBottom: "0.5rem",
+  },
+  inlineAddBtn: {
+    minHeight: 44,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    padding: "0.45rem 0.75rem",
+    borderRadius: 6,
+    border: `1px solid ${colors.teal}`,
+    backgroundColor: "#fff",
+    color: colors.teal,
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+  bulkApplyBar: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.65rem",
+    flexWrap: "wrap",
+    padding: "0.55rem 0.85rem",
+    marginBottom: "0.5rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.cardBorder}`,
+    backgroundColor: "#f8faff",
+  },
+  bulkClearBtn: {
+    minHeight: 44,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    padding: "0.35rem 0.7rem",
+    borderRadius: 6,
+    border: `1px solid ${colors.danger}`,
+    backgroundColor: "#fff",
+    color: colors.danger,
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    flexShrink: 0,
+  },
+  label: {
+    display: "block",
+    marginBottom: "0.35rem",
+    fontWeight: 600,
+    fontSize: "0.85rem",
+    color: colors.textSecondary,
+  },
   opt: { color: colors.textSecondary, fontWeight: 400 },
-  input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: "#1a2332", outline: "none", boxSizing: "border-box" },
-  err: { backgroundColor: colors.dangerLight, color: colors.danger, padding: "0.65rem 1rem", borderRadius: 8, marginBottom: "1rem", fontWeight: 500, fontSize: "0.85rem" },
-  tableWrap: { maxHeight: 300, overflowY: "auto", overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 10 },
+  input: {
+    width: "100%",
+    padding: "0.55rem 0.75rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    fontSize: "0.9rem",
+    backgroundColor: colors.inputBg,
+    color: "#1a2332",
+    outline: "none",
+    boxSizing: "border-box",
+  },
+  err: {
+    backgroundColor: colors.dangerLight,
+    color: colors.danger,
+    padding: "0.65rem 1rem",
+    borderRadius: 8,
+    marginBottom: "1rem",
+    fontWeight: 500,
+    fontSize: "0.85rem",
+  },
+  tableWrap: {
+    maxHeight: 300,
+    overflowY: "auto",
+    overflowX: "auto",
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 10,
+  },
   table: { width: "100%", borderCollapse: "collapse" },
-  th: { textAlign: "left", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.02em", fontWeight: 700, color: colors.textSecondary, padding: "0.5rem 0.4rem", borderBottom: `2px solid ${colors.cardBorder}`, whiteSpace: "nowrap", background: "#fafbfc", position: "sticky", top: 0 },
-  td: { padding: "0.3rem 0.4rem", verticalAlign: "middle", borderBottom: `1px solid ${colors.cardBorder}` },
-  cellInput: { width: "100%", padding: "0.5rem 0.55rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.88rem", backgroundColor: colors.inputBg, color: "#1a2332", outline: "none", boxSizing: "border-box" },
+  th: {
+    textAlign: "left",
+    fontSize: "0.7rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.02em",
+    fontWeight: 700,
+    color: colors.textSecondary,
+    padding: "0.5rem 0.4rem",
+    borderBottom: `2px solid ${colors.cardBorder}`,
+    whiteSpace: "nowrap",
+    background: "#fafbfc",
+    position: "sticky",
+    top: 0,
+  },
+  td: {
+    padding: "0.3rem 0.4rem",
+    verticalAlign: "middle",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+  },
+  cellInput: {
+    width: "100%",
+    padding: "0.5rem 0.55rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    fontSize: "0.88rem",
+    backgroundColor: colors.inputBg,
+    color: "#1a2332",
+    outline: "none",
+    boxSizing: "border-box",
+  },
   hint: { fontSize: "0.7rem", color: colors.teal, marginTop: 2, fontWeight: 600 },
-  del: { display: "grid", placeItems: "center", padding: "0.4rem", borderRadius: 8, border: `1px solid ${colors.danger}25`, backgroundColor: colors.dangerLight, color: colors.danger, cursor: "pointer", margin: "0 auto" },
-  addBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.3rem", marginTop: "0.6rem", padding: "0.4rem 0.9rem", borderRadius: 8, border: "none", backgroundColor: `${colors.teal}14`, color: colors.teal, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" },
-  totals: { marginTop: "1rem", marginLeft: "auto", width: "100%", maxWidth: 380, boxSizing: "border-box" },
+  del: {
+    display: "grid",
+    placeItems: "center",
+    padding: "0.4rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.danger}25`,
+    backgroundColor: colors.dangerLight,
+    color: colors.danger,
+    cursor: "pointer",
+    margin: "0 auto",
+  },
+  addBtn: {
+    minHeight: 44,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    marginTop: "0.6rem",
+    padding: "0.4rem 0.9rem",
+    borderRadius: 8,
+    border: "none",
+    backgroundColor: `${colors.teal}14`,
+    color: colors.teal,
+    fontSize: "0.82rem",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+  totals: {
+    marginTop: "1rem",
+    marginLeft: "auto",
+    width: "100%",
+    maxWidth: 380,
+    boxSizing: "border-box",
+  },
   tAmt: { whiteSpace: "nowrap", textAlign: "right" },
-  discRow: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.3rem 0", fontSize: "0.9rem", color: colors.textSecondary },
+  discRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    padding: "0.3rem 0",
+    fontSize: "0.9rem",
+    color: colors.textSecondary,
+  },
   discLabel: { flex: "1 1 auto", minWidth: 0 },
-  discInput: { width: 110, flex: "0 0 110px", padding: "0.45rem 0.6rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.88rem", backgroundColor: colors.inputBg, color: "#1a2332", outline: "none", boxSizing: "border-box", textAlign: "right" },
+  discInput: {
+    width: 110,
+    flex: "0 0 110px",
+    padding: "0.45rem 0.6rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    fontSize: "0.88rem",
+    backgroundColor: colors.inputBg,
+    color: "#1a2332",
+    outline: "none",
+    boxSizing: "border-box",
+    textAlign: "right",
+  },
   discErr: { whiteSpace: "nowrap", color: colors.danger, fontSize: "0.8rem", fontWeight: 600 },
   inputError: { borderColor: colors.danger, background: colors.dangerLight },
-  tRow: { display: "flex", justifyContent: "space-between", gap: "0.75rem", padding: "0.25rem 0", fontSize: "0.9rem", color: colors.textSecondary },
-  grand: { borderTop: "2px solid #0d47a1", marginTop: 4, paddingTop: 8, fontWeight: 800, fontSize: "1rem", color: "#0d47a1" },
+  tRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "0.75rem",
+    padding: "0.25rem 0",
+    fontSize: "0.9rem",
+    color: colors.textSecondary,
+  },
+  grand: {
+    borderTop: "2px solid #0d47a1",
+    marginTop: 4,
+    paddingTop: 8,
+    fontWeight: 800,
+    fontSize: "1rem",
+    color: "#0d47a1",
+  },
   // Mobile stacked-card line items (rendered below 760px instead of the table).
   mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
-  mcard: { border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff" },
+  mcard: {
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 12,
+    padding: "0.7rem 0.75rem",
+    background: "#fff",
+  },
   mcardHead: { display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" },
-  mnum: { flex: "0 0 auto", width: 24, height: 24, borderRadius: 7, background: "#f0f3f8", color: colors.textSecondary, display: "grid", placeItems: "center", fontSize: "0.78rem", fontWeight: 700 },
-  m3col: { display: "grid", gridTemplateColumns: "1fr 1fr 1.1fr", gap: "0.5rem", marginTop: "0.5rem" },
-  mlabel: { display: "block", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.03em", color: colors.textSecondary, fontWeight: 700, marginBottom: "0.2rem" },
-  mamt: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.55rem", paddingTop: "0.45rem", borderTop: `1px dashed ${colors.cardBorder}`, fontSize: "0.85rem", color: colors.textSecondary },
+  mnum: {
+    flex: "0 0 auto",
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    background: "#f0f3f8",
+    color: colors.textSecondary,
+    display: "grid",
+    placeItems: "center",
+    fontSize: "0.78rem",
+    fontWeight: 700,
+  },
+  m3col: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1.1fr",
+    gap: "0.5rem",
+    marginTop: "0.5rem",
+  },
+  mlabel: {
+    display: "block",
+    fontSize: "0.68rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+    color: colors.textSecondary,
+    fontWeight: 700,
+    marginBottom: "0.2rem",
+  },
+  mamt: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: "0.55rem",
+    paddingTop: "0.45rem",
+    borderTop: `1px dashed ${colors.cardBorder}`,
+    fontSize: "0.85rem",
+    color: colors.textSecondary,
+  },
 };

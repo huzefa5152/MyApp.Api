@@ -7,8 +7,14 @@ import useScrollToError from "../hooks/useScrollToError";
 
 import { todayYmd } from "../utils/dateInput";
 const colors = {
-  textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2", danger: "#dc3545", dangerLight: "#fff0f1", teal: "#00897b", blue: "#0d47a1",
+  textSecondary: "#5f6d7e",
+  cardBorder: "#e8edf3",
+  inputBg: "#f8f9fb",
+  inputBorder: "#d0d7e2",
+  danger: "#dc3545",
+  dangerLight: "#fff0f1",
+  teal: "#00897b",
+  blue: "#0d47a1",
 };
 
 // Raise a delivery challan that fulfils a Sales Order. Pre-fills each line's
@@ -19,7 +25,9 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
   const [site, setSite] = useState(order?.site || "");
   const [qtys, setQtys] = useState(() => {
     const m = {};
-    (order?.items || []).forEach((i) => { m[i.id] = i.remainingQuantity > 0 ? i.remainingQuantity : 0; });
+    (order?.items || []).forEach((i) => {
+      m[i.id] = i.remainingQuantity > 0 ? i.remainingQuantity : 0;
+    });
     return m;
   });
   const [clients, setClients] = useState([]);
@@ -28,7 +36,9 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
   const [saving, setSaving] = useState(false);
   // Responsive: the 5-col deliver grid clips the "Deliver now" input on a
   // phone, so below 760px each order line renders as a stacked card instead.
-  const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 760);
+  const [isNarrow, setIsNarrow] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < 760,
+  );
   useEffect(() => {
     const onResize = () => setIsNarrow(window.innerWidth < 760);
     window.addEventListener("resize", onResize);
@@ -39,11 +49,18 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
   // client's configured sites (";"-separated) as a dropdown — same UX as
   // the Delivery Challan form. Falls back to free text when none configured.
   useEffect(() => {
-    getClientsByCompany(companyId).then(({ data }) => setClients(data || [])).catch(() => {});
+    getClientsByCompany(companyId)
+      .then(({ data }) => setClients(data || []))
+      .catch(() => {});
   }, [companyId]);
 
   const client = clients.find((c) => String(c.id) === String(order?.clientId));
-  const sites = client?.site ? client.site.split(";").map((x) => x.trim()).filter(Boolean) : [];
+  const sites = client?.site
+    ? client.site
+        .split(";")
+        .map((x) => x.trim())
+        .filter(Boolean)
+    : [];
 
   const setQty = (id, val) => setQtys((p) => ({ ...p, [id]: val }));
   const anyToDeliver = Object.values(qtys).some((q) => Number(q) > 0);
@@ -70,28 +87,58 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>Deliver Sales Order #{order.salesOrderNumber}</h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            &times;
+          </button>
         </div>
         <div data-admin-body="" style={formStyles.body}>
-          {error && <div ref={errRef} style={s.err}>{error}</div>}
-          <p style={s.sub}>Quantities default to what's still remaining. Adjust to deliver a partial amount; a challan will be created and linked to this order.</p>
+          {error && (
+            <div ref={errRef} style={s.err}>
+              {error}
+            </div>
+          )}
+          <p style={s.sub}>
+            Quantities default to what's still remaining. Adjust to deliver a partial amount; a
+            challan will be created and linked to this order.
+          </p>
           <div data-admin-form-row="" style={s.row}>
             <div style={{ flex: 1, minWidth: 150 }}>
               <label style={s.label}>Delivery Date</label>
-              <input type="date" style={s.input} value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
+              <input
+                type="date"
+                style={s.input}
+                value={deliveryDate}
+                onChange={(e) => setDeliveryDate(e.target.value)}
+              />
             </div>
             <div style={{ flex: 2, minWidth: 180 }}>
-              <label style={s.label}>Site / Department <span style={{ fontWeight: 400 }}>(optional)</span></label>
+              <label style={s.label}>
+                Site / Department <span style={{ fontWeight: 400 }}>(optional)</span>
+              </label>
               {sites.length > 0 ? (
                 <select style={s.input} value={site} onChange={(e) => setSite(e.target.value)}>
                   <option value="">(none)</option>
-                  {sites.map((x) => <option key={x} value={x}>{x}</option>)}
+                  {sites.map((x) => (
+                    <option key={x} value={x}>
+                      {x}
+                    </option>
+                  ))}
                 </select>
               ) : (
-                <input type="text" style={s.input} value={site} onChange={(e) => setSite(e.target.value)} placeholder="Optional" />
+                <input
+                  type="text"
+                  style={s.input}
+                  value={site}
+                  onChange={(e) => setSite(e.target.value)}
+                  placeholder="Optional"
+                />
               )}
             </div>
           </div>
@@ -100,48 +147,109 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
             <div style={s.mcards}>
               {(order.items || []).map((i) => (
                 <div key={i.id} style={s.mcard}>
-                  <div style={s.desc}><RichText text={i.description} /></div>
+                  <div style={s.desc}>
+                    <RichText text={i.description} />
+                  </div>
                   {i.unit && <div style={s.unit}>{i.unit}</div>}
                   <div style={s.mgrid3}>
-                    <div><div style={s.mlabel}>Ordered</div><div>{i.quantity}</div></div>
-                    <div><div style={s.mlabel}>Delivered</div><div>{i.deliveredQuantity}</div></div>
-                    <div><div style={s.mlabel}>Remaining</div><div style={{ fontWeight: 700, color: i.remainingQuantity > 0 ? colors.blue : colors.teal }}>{i.remainingQuantity}</div></div>
+                    <div>
+                      <div style={s.mlabel}>Ordered</div>
+                      <div>{i.quantity}</div>
+                    </div>
+                    <div>
+                      <div style={s.mlabel}>Delivered</div>
+                      <div>{i.deliveredQuantity}</div>
+                    </div>
+                    <div>
+                      <div style={s.mlabel}>Remaining</div>
+                      <div
+                        style={{
+                          fontWeight: 700,
+                          color: i.remainingQuantity > 0 ? colors.blue : colors.teal,
+                        }}
+                      >
+                        {i.remainingQuantity}
+                      </div>
+                    </div>
                   </div>
                   <div style={{ marginTop: "0.6rem" }}>
                     <label style={s.mlabel}>Deliver now</label>
-                    <input type="number" min="0" step="0.0001" style={{ ...s.input, textAlign: "right" }} value={qtys[i.id] ?? 0} onChange={(e) => setQty(i.id, e.target.value)} />
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.0001"
+                      style={{ ...s.input, textAlign: "right" }}
+                      value={qtys[i.id] ?? 0}
+                      onChange={(e) => setQty(i.id, e.target.value)}
+                    />
                   </div>
                 </div>
               ))}
             </div>
-          ) : (<>
-          <div style={s.tableHead}>
-            <div style={{ flex: 2 }}>Item</div>
-            <div style={s.col}>Ordered</div>
-            <div style={s.col}>Delivered</div>
-            <div style={s.col}>Remaining</div>
-            <div style={s.col}>Deliver now</div>
-          </div>
-          {(order.items || []).map((i) => (
-            <div key={i.id} style={s.tableRow}>
-              <div style={{ flex: 2, minWidth: 0 }}>
-                <div style={s.desc}><RichText text={i.description} /></div>
-                <div style={s.unit}>{i.unit}</div>
+          ) : (
+            <>
+              <div style={s.tableHead}>
+                <div style={{ flex: 2 }}>Item</div>
+                <div style={s.col}>Ordered</div>
+                <div style={s.col}>Delivered</div>
+                <div style={s.col}>Remaining</div>
+                <div style={s.col}>Deliver now</div>
               </div>
-              <div style={s.col}>{i.quantity}</div>
-              <div style={s.col}>{i.deliveredQuantity}</div>
-              <div style={{ ...s.col, fontWeight: 700, color: i.remainingQuantity > 0 ? colors.blue : colors.teal }}>{i.remainingQuantity}</div>
-              <div style={s.col}>
-                <input type="number" min="0" step="0.0001" style={{ ...s.input, textAlign: "right", padding: "0.4rem 0.45rem" }} value={qtys[i.id] ?? 0} onChange={(e) => setQty(i.id, e.target.value)} />
-              </div>
-            </div>
-          ))}
-          </>
+              {(order.items || []).map((i) => (
+                <div key={i.id} style={s.tableRow}>
+                  <div style={{ flex: 2, minWidth: 0 }}>
+                    <div style={s.desc}>
+                      <RichText text={i.description} />
+                    </div>
+                    <div style={s.unit}>{i.unit}</div>
+                  </div>
+                  <div style={s.col}>{i.quantity}</div>
+                  <div style={s.col}>{i.deliveredQuantity}</div>
+                  <div
+                    style={{
+                      ...s.col,
+                      fontWeight: 700,
+                      color: i.remainingQuantity > 0 ? colors.blue : colors.teal,
+                    }}
+                  >
+                    {i.remainingQuantity}
+                  </div>
+                  <div style={s.col}>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.0001"
+                      style={{ ...s.input, textAlign: "right", padding: "0.4rem 0.45rem" }}
+                      value={qtys[i.id] ?? 0}
+                      onChange={(e) => setQty(i.id, e.target.value)}
+                    />
+                  </div>
+                </div>
+              ))}
+            </>
           )}
         </div>
         <div data-admin-footer="" style={formStyles.footer}>
-          <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
-          <button type="button" style={{ ...formStyles.button, ...formStyles.submit, opacity: anyToDeliver && !saving ? 1 : 0.6 }} disabled={!anyToDeliver || saving} onClick={submit}>{saving ? "Creating..." : "Create Challan"}</button>
+          <button
+            data-admin-close=""
+            type="button"
+            style={{ ...formStyles.button, ...formStyles.cancel }}
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            style={{
+              ...formStyles.button,
+              ...formStyles.submit,
+              opacity: anyToDeliver && !saving ? 1 : 0.6,
+            }}
+            disabled={!anyToDeliver || saving}
+            onClick={submit}
+          >
+            {saving ? "Creating..." : "Create Challan"}
+          </button>
         </div>
       </div>
     </div>
@@ -151,16 +259,74 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
 const s = {
   sub: { fontSize: "0.85rem", color: colors.textSecondary, marginBottom: "1rem" },
   row: { display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" },
-  label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
-  input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: "#1a2332", outline: "none", boxSizing: "border-box" },
-  err: { backgroundColor: colors.dangerLight, color: colors.danger, padding: "0.65rem 1rem", borderRadius: 8, marginBottom: "1rem", fontWeight: 500, fontSize: "0.85rem" },
-  tableHead: { display: "flex", gap: "0.4rem", padding: "0.5rem", fontSize: "0.72rem", textTransform: "uppercase", fontWeight: 700, color: colors.textSecondary, borderBottom: `2px solid ${colors.cardBorder}` },
-  tableRow: { display: "flex", gap: "0.4rem", alignItems: "center", padding: "0.5rem", borderBottom: `1px solid ${colors.cardBorder}` },
+  label: {
+    display: "block",
+    marginBottom: "0.35rem",
+    fontWeight: 600,
+    fontSize: "0.85rem",
+    color: colors.textSecondary,
+  },
+  input: {
+    width: "100%",
+    padding: "0.55rem 0.75rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    fontSize: "0.9rem",
+    backgroundColor: colors.inputBg,
+    color: "#1a2332",
+    outline: "none",
+    boxSizing: "border-box",
+  },
+  err: {
+    backgroundColor: colors.dangerLight,
+    color: colors.danger,
+    padding: "0.65rem 1rem",
+    borderRadius: 8,
+    marginBottom: "1rem",
+    fontWeight: 500,
+    fontSize: "0.85rem",
+  },
+  tableHead: {
+    display: "flex",
+    gap: "0.4rem",
+    padding: "0.5rem",
+    fontSize: "0.72rem",
+    textTransform: "uppercase",
+    fontWeight: 700,
+    color: colors.textSecondary,
+    borderBottom: `2px solid ${colors.cardBorder}`,
+  },
+  tableRow: {
+    display: "flex",
+    gap: "0.4rem",
+    alignItems: "center",
+    padding: "0.5rem",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+  },
   col: { width: 90, flexShrink: 0, textAlign: "center", fontSize: "0.85rem" },
   desc: { fontSize: "0.88rem", fontWeight: 600, color: "#1a2332", whiteSpace: "pre-wrap" },
   unit: { fontSize: "0.75rem", color: colors.textSecondary },
   mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
-  mcard: { border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff" },
-  mgrid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem", marginTop: "0.5rem", textAlign: "center", fontSize: "0.85rem" },
-  mlabel: { fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.03em", color: colors.textSecondary, fontWeight: 700, marginBottom: "0.15rem" },
+  mcard: {
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 12,
+    padding: "0.7rem 0.75rem",
+    background: "#fff",
+  },
+  mgrid3: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr",
+    gap: "0.5rem",
+    marginTop: "0.5rem",
+    textAlign: "center",
+    fontSize: "0.85rem",
+  },
+  mlabel: {
+    fontSize: "0.66rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+    color: colors.textSecondary,
+    fontWeight: 700,
+    marginBottom: "0.15rem",
+  },
 };

@@ -1,6 +1,15 @@
 import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useMemo, useRef } from "react";
-import { MdCategory, MdAdd, MdEdit, MdDelete, MdSearch, MdStar, MdStarBorder, MdInfo } from "react-icons/md";
+import {
+  MdCategory,
+  MdAdd,
+  MdEdit,
+  MdDelete,
+  MdSearch,
+  MdStar,
+  MdStarBorder,
+  MdInfo,
+} from "react-icons/md";
 import { getItemTypes, updateItemType, deleteItemType } from "../api/itemTypeApi";
 import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
@@ -92,15 +101,27 @@ export default function ItemTypesPage() {
 
   useEffect(() => {
     let active = true;
-    setItemTypes([]); setShowForm(false); setEditItem(null);
-    if (!selectedCompany?.id) { setLoading(false); return; }
+    setItemTypes([]);
+    setShowForm(false);
+    setEditItem(null);
+    if (!selectedCompany?.id) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
-    getItemTypes(selectedCompany.id).then(({ data }) => {
-      if (active) setItemTypes(data);
-    }).catch(() => {
-      if (active) notify("Failed to load item types.", "error");
-    }).finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    getItemTypes(selectedCompany.id)
+      .then(({ data }) => {
+        if (active) setItemTypes(data);
+      })
+      .catch(() => {
+        if (active) notify("Failed to load item types.", "error");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [selectedCompany?.id]);
 
   const openAdd = () => {
@@ -112,7 +133,6 @@ export default function ItemTypesPage() {
     setEditItem(it);
     setShowForm(true);
   };
-
 
   const toggleFavorite = async (it) => {
     try {
@@ -141,13 +161,14 @@ export default function ItemTypesPage() {
 
   const filtered = useMemo(() => {
     const term = search.toLowerCase().trim();
-    const relevant = itemTypes.filter(it => !!it.hsCode?.trim() === isFbr);
+    const relevant = itemTypes.filter((it) => !!it.hsCode?.trim() === isFbr);
     if (!term) return relevant;
-    return relevant.filter((it) =>
-      it.name.toLowerCase().includes(term) ||
-      (it.hsCode || "").toLowerCase().includes(term) ||
-      (it.uom || "").toLowerCase().includes(term) ||
-      (it.fbrDescription || "").toLowerCase().includes(term)
+    return relevant.filter(
+      (it) =>
+        it.name.toLowerCase().includes(term) ||
+        (it.hsCode || "").toLowerCase().includes(term) ||
+        (it.uom || "").toLowerCase().includes(term) ||
+        (it.fbrDescription || "").toLowerCase().includes(term),
     );
   }, [itemTypes, search, isFbr]);
 
@@ -158,13 +179,17 @@ export default function ItemTypesPage() {
     <div>
       <div data-admin-page-header="" style={styles.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.7rem" }}>
-          <div data-admin-page-icon="" style={styles.headerIcon}><MdCategory size={24} color="#fff" /></div>
+          <div data-admin-page-icon="" style={styles.headerIcon}>
+            <MdCategory size={24} color="#fff" />
+          </div>
           <div>
             <h2 style={styles.title}>Item Catalog</h2>
             <p style={styles.subtitle}>
               {itemTypes.length} item{itemTypes.length !== 1 ? "s" : ""}
-              {" · "}{withFbrCount} with FBR mapping
-              {" · "}{favoritesCount} favorited
+              {" · "}
+              {withFbrCount} with FBR mapping
+              {" · "}
+              {favoritesCount} favorited
             </p>
           </div>
         </div>
@@ -178,31 +203,70 @@ export default function ItemTypesPage() {
         </div>
       </div>
 
-      {companies.length > 1 && (<label style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
-        Company
-        <select aria-label="Catalog company" value={selectedCompany?.id || ""}
-          onChange={(e) => setSelectedCompany(companies.find(c => c.id === Number(e.target.value)))}
-          style={{ padding: "0.6rem", borderRadius: 6, border: `1px solid ${colors.inputBorder}`, maxWidth: "100%" }}>
-          {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-      </label>)}
+      {companies.length > 1 && (
+        <label
+          style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}
+        >
+          Company
+          <select
+            aria-label="Catalog company"
+            value={selectedCompany?.id || ""}
+            onChange={(e) =>
+              setSelectedCompany(companies.find((c) => c.id === Number(e.target.value)))
+            }
+            style={{
+              padding: "0.6rem",
+              borderRadius: 6,
+              border: `1px solid ${colors.inputBorder}`,
+              maxWidth: "100%",
+            }}
+          >
+            {companies.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
-      <div role="group" aria-label="Catalog purpose" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
-        {[{ key: "bill", label: "Bill categories", count: itemTypes.length - withFbrCount },
-          { key: "classification", label: "FBR classifications", count: withFbrCount }].map(tab =>
-          <button key={tab.key} type="button" aria-pressed={catalogKind === tab.key}
-            onClick={() => { setCatalogKind(tab.key); setSearch(""); }}
-            style={{ ...styles.addBtn, background: catalogKind === tab.key ? colors.blue : "#fff",
-              color: catalogKind === tab.key ? "#fff" : colors.blue, border: `1px solid ${colors.inputBorder}` }}>
+      <div
+        role="group"
+        aria-label="Catalog purpose"
+        style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}
+      >
+        {[
+          { key: "bill", label: "Bill categories", count: itemTypes.length - withFbrCount },
+          { key: "classification", label: "FBR classifications", count: withFbrCount },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            aria-pressed={catalogKind === tab.key}
+            onClick={() => {
+              setCatalogKind(tab.key);
+              setSearch("");
+            }}
+            style={{
+              ...styles.addBtn,
+              background: catalogKind === tab.key ? colors.blue : "#fff",
+              color: catalogKind === tab.key ? "#fff" : colors.blue,
+              border: `1px solid ${colors.inputBorder}`,
+            }}
+          >
             {tab.label} ({tab.count})
-          </button>)}
+          </button>
+        ))}
       </div>
       <div style={styles.infoBox}>
         <MdInfo size={16} style={{ flexShrink: 0 }} />
         <div>
-          <b>{selectedCompany?.name}</b>{" | "}{isFbr
+          <b>{selectedCompany?.name}</b>
+          {" | "}
+          {isFbr
             ? "Used when preparing FBR invoices. Save one classification per tax mapping; choose kg, pack or another supported unit on each filing row."
-            : "Used on commercial bills and challans. These categories have no HS code; select FBR classifications separately when preparing invoices."}</div>
+            : "Used on commercial bills and challans. These categories have no HS code; select FBR classifications separately when preparing invoices."}
+        </div>
       </div>
 
       {itemTypes.length > 0 && (
@@ -211,7 +275,9 @@ export default function ItemTypesPage() {
           <input
             type="text"
             aria-label="Search catalog"
-            placeholder={isFbr ? "Search classification, HS code, unit…" : "Search bill category, unit…"}
+            placeholder={
+              isFbr ? "Search classification, HS code, unit…" : "Search bill category, unit…"
+            }
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={styles.searchInput}
@@ -219,170 +285,244 @@ export default function ItemTypesPage() {
         </div>
       )}
 
-      <RecordsViewport label="Item Types records">{loading ? (
-        <p style={{ color: colors.textSecondary, textAlign: "center", padding: "2rem" }}>Loading…</p>
-      ) : filtered.length === 0 ? (
-        <p style={{ color: colors.textSecondary, textAlign: "center", padding: "2rem" }}>
-          {search ? "No matching entries." : isFbr ? "No FBR classifications yet. Add a classification to prepare invoices." : "No bill categories yet. Add a category for commercial bill entry."}
-        </p>
-      ) : (
-        <>
-          {/* Desktop / tablet — flex-row "list". The min-width: 720px on the
+      <RecordsViewport label="Item Types records">
+        {loading ? (
+          <p style={{ color: colors.textSecondary, textAlign: "center", padding: "2rem" }}>
+            Loading…
+          </p>
+        ) : filtered.length === 0 ? (
+          <p style={{ color: colors.textSecondary, textAlign: "center", padding: "2rem" }}>
+            {search
+              ? "No matching entries."
+              : isFbr
+                ? "No FBR classifications yet. Add a classification to prepare invoices."
+                : "No bill categories yet. Add a category for commercial bill entry."}
+          </p>
+        ) : (
+          <>
+            {/* Desktop / tablet — flex-row "list". The min-width: 720px on the
               inner list pushes columns wide; on narrower screens the
               .it-list-wrap below is hidden via media query and the mobile
               card list takes over. */}
-          <div className="it-list-wrap" style={styles.listWrap}>
-            <div style={styles.list}>
-              <div style={styles.listHeader}>
-                <span style={{ width: 32 }}></span>
-                <span style={{ flex: 2 }}>Name</span>
-                <span style={{ flex: 1.1 }}>{isFbr ? "HS code" : "Used for"}</span>
-                <span style={{ flex: 1.5 }}>{isFbr ? "Default filing unit" : "Usual unit"}</span>
-                {isFbr && <span style={{ flex: 1.6 }}>Sale Type</span>}
-                {isFbr && <span style={{ flex: 0.9, textAlign: "right" }}>On hand</span>}
-                <span style={{ flex: 0.7, textAlign: "center" }}>Used</span>
-                <span style={{ width: 90, textAlign: "right" }}></span>
-              </div>
-              {filtered.map((it) => (
-                <div key={it.id} style={styles.item}>
-                  <button
-                    style={styles.starBtn}
-                    onClick={() => toggleFavorite(it)}
-                    title={it.isFavorite ? "Unfavorite" : "Add to favorites"}
-                  >
-                    {it.isFavorite
-                      ? <MdStar size={18} color={colors.favorite} />
-                      : <MdStarBorder size={18} color={colors.textSecondary} />}
-                  </button>
-                  <div style={{ flex: 2, minWidth: 0 }}>
-                    <div style={styles.itemName}>{it.name}</div>
-                    {isFbr && <div style={{ fontSize: "0.75rem", color: colors.blue }}>{it.isHsCodePartial ? "Needs complete sales HS code" : "FBR invoice classification"}</div>}
-                    {it.fbrDescription && (
-                      <div style={styles.itemDesc} title={it.fbrDescription}>
-                        {it.fbrDescription}
-                      </div>
-                    )}
-                  </div>
-                  <span style={{ flex: 1.1, fontFamily: "monospace", fontSize: "0.82rem", color: it.hsCode ? colors.blue : colors.textSecondary }}>
-                    {isFbr ? it.hsCode : "Bills / challans"}
-                  </span>
-                  <span style={{ flex: 1.5, fontSize: "0.82rem", color: colors.textPrimary }}>
-                    {it.uom || "—"}
-                  </span>
-                  {isFbr && <span style={{ flex: 1.6, fontSize: "0.78rem", color: colors.textSecondary }}>
-                    {it.saleType || "—"}
-                  </span>}
-                  {isFbr && <span style={{
-                    flex: 0.9,
-                    textAlign: "right",
-                    fontSize: "0.82rem",
-                    fontWeight: 600,
-                    fontFamily: "monospace",
-                    color: it.availableQty == null
-                      ? colors.textSecondary
-                      : it.availableQty > 0 ? colors.teal : colors.danger,
-                  }}>
-                    {it.availableQty == null ? "—" : formatQty(it.availableQty)}
-                  </span>}
-                  <span style={{ flex: 0.7, textAlign: "center", fontSize: "0.82rem", color: colors.textSecondary }}>
-                    {it.usageCount > 0 ? `${it.usageCount}×` : "—"}
-                  </span>
-                  <div style={{ width: 90, display: "flex", gap: "0.4rem", justifyContent: "flex-end" }}>
-                    {canUpdate && (
-                      <button style={styles.editBtn} onClick={() => openEdit(it)} title="Edit"><MdEdit size={16} /></button>
-                    )}
-                    {canDelete && (
-                      <button style={styles.deleteBtn} onClick={() => handleDelete(it)} title="Delete"><MdDelete size={16} /></button>
-                    )}
-                  </div>
+            <div className="it-list-wrap" style={styles.listWrap}>
+              <div style={styles.list}>
+                <div style={styles.listHeader}>
+                  <span style={{ width: 32 }}></span>
+                  <span style={{ flex: 2 }}>Name</span>
+                  <span style={{ flex: 1.1 }}>{isFbr ? "HS code" : "Used for"}</span>
+                  <span style={{ flex: 1.5 }}>{isFbr ? "Default filing unit" : "Usual unit"}</span>
+                  {isFbr && <span style={{ flex: 1.6 }}>Sale Type</span>}
+                  {isFbr && <span style={{ flex: 0.9, textAlign: "right" }}>On hand</span>}
+                  <span style={{ flex: 0.7, textAlign: "center" }}>Used</span>
+                  <span style={{ width: 90, textAlign: "right" }}></span>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Mobile — stacked cards */}
-          <div className="it-cards">
-            {filtered.map((it) => (
-              <div key={it.id} className="it-card">
-                <div className="it-card__top">
-                  <button
-                    className="it-card__star"
-                    onClick={() => toggleFavorite(it)}
-                    aria-label={it.isFavorite ? "Unfavorite" : "Add to favorites"}
-                  >
-                    {it.isFavorite
-                      ? <MdStar size={20} color={colors.favorite} />
-                      : <MdStarBorder size={20} color={colors.textSecondary} />}
-                  </button>
-                  <div className="it-card__title">
-                    <div className="it-card__name">{it.name}</div>
-                    {isFbr && <div style={{ fontSize: "0.75rem", color: colors.blue }}>{it.isHsCodePartial ? "Needs complete sales HS code" : "FBR invoice classification"}</div>}
-                    {it.fbrDescription && (
-                      <div className="it-card__desc">{it.fbrDescription}</div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="it-card__grid">
-                  <div className="it-card__field">
-                    <span className="it-card__field-label">{isFbr ? "HS Code" : "Used for"}</span>
+                {filtered.map((it) => (
+                  <div key={it.id} style={styles.item}>
+                    <button
+                      style={styles.starBtn}
+                      onClick={() => toggleFavorite(it)}
+                      title={it.isFavorite ? "Unfavorite" : "Add to favorites"}
+                    >
+                      {it.isFavorite ? (
+                        <MdStar size={18} color={colors.favorite} />
+                      ) : (
+                        <MdStarBorder size={18} color={colors.textSecondary} />
+                      )}
+                    </button>
+                    <div style={{ flex: 2, minWidth: 0 }}>
+                      <div style={styles.itemName}>{it.name}</div>
+                      {isFbr && (
+                        <div style={{ fontSize: "0.75rem", color: colors.blue }}>
+                          {it.isHsCodePartial
+                            ? "Needs complete sales HS code"
+                            : "FBR invoice classification"}
+                        </div>
+                      )}
+                      {it.fbrDescription && (
+                        <div style={styles.itemDesc} title={it.fbrDescription}>
+                          {it.fbrDescription}
+                        </div>
+                      )}
+                    </div>
                     <span
-                      className="it-card__field-value"
-                      style={{ fontFamily: "monospace", color: it.hsCode ? colors.blue : colors.textSecondary }}
+                      style={{
+                        flex: 1.1,
+                        fontFamily: "monospace",
+                        fontSize: "0.82rem",
+                        color: it.hsCode ? colors.blue : colors.textSecondary,
+                      }}
                     >
                       {isFbr ? it.hsCode : "Bills / challans"}
                     </span>
-                  </div>
-                  <div className="it-card__field">
-                    <span className="it-card__field-label">{isFbr ? "Default filing unit" : "Usual unit"}</span>
-                    <span className="it-card__field-value">{it.uom || "—"}</span>
-                  </div>
-                  {isFbr && <div className="it-card__field it-card__field--full">
-                    <span className="it-card__field-label">Sale Type</span>
-                    <span className="it-card__field-value">{it.saleType || "—"}</span>
-                  </div>}
-                  {isFbr && <div className="it-card__field">
-                    <span className="it-card__field-label">On hand</span>
+                    <span style={{ flex: 1.5, fontSize: "0.82rem", color: colors.textPrimary }}>
+                      {it.uom || "—"}
+                    </span>
+                    {isFbr && (
+                      <span style={{ flex: 1.6, fontSize: "0.78rem", color: colors.textSecondary }}>
+                        {it.saleType || "—"}
+                      </span>
+                    )}
+                    {isFbr && (
+                      <span
+                        style={{
+                          flex: 0.9,
+                          textAlign: "right",
+                          fontSize: "0.82rem",
+                          fontWeight: 600,
+                          fontFamily: "monospace",
+                          color:
+                            it.availableQty == null
+                              ? colors.textSecondary
+                              : it.availableQty > 0
+                                ? colors.teal
+                                : colors.danger,
+                        }}
+                      >
+                        {it.availableQty == null ? "—" : formatQty(it.availableQty)}
+                      </span>
+                    )}
                     <span
-                      className="it-card__field-value"
                       style={{
-                        fontFamily: "monospace",
-                        fontWeight: 600,
-                        color: it.availableQty == null
-                          ? colors.textSecondary
-                          : it.availableQty > 0 ? colors.teal : colors.danger,
+                        flex: 0.7,
+                        textAlign: "center",
+                        fontSize: "0.82rem",
+                        color: colors.textSecondary,
                       }}
                     >
-                      {it.availableQty == null ? "—" : formatQty(it.availableQty)}
-                    </span>
-                  </div>}
-                  <div className="it-card__field">
-                    <span className="it-card__field-label">Used</span>
-                    <span className="it-card__field-value">
                       {it.usageCount > 0 ? `${it.usageCount}×` : "—"}
                     </span>
+                    <div
+                      style={{
+                        width: 90,
+                        display: "flex",
+                        gap: "0.4rem",
+                        justifyContent: "flex-end",
+                      }}
+                    >
+                      {canUpdate && (
+                        <button style={styles.editBtn} onClick={() => openEdit(it)} title="Edit">
+                          <MdEdit size={16} />
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          style={styles.deleteBtn}
+                          onClick={() => handleDelete(it)}
+                          title="Delete"
+                        >
+                          <MdDelete size={16} />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-
-                {(canUpdate || canDelete) && (
-                  <div className="it-card__actions">
-                    {canUpdate && (
-                      <button className="it-card__edit" onClick={() => openEdit(it)}>
-                        <MdEdit size={14} /> Edit
-                      </button>
-                    )}
-                    {canDelete && (
-                      <button className="it-card__delete" onClick={() => handleDelete(it)}>
-                        <MdDelete size={14} /> Delete
-                      </button>
-                    )}
-                  </div>
-                )}
+                ))}
               </div>
-            ))}
-          </div>
-        </>
-      )}</RecordsViewport>
+            </div>
+
+            {/* Mobile — stacked cards */}
+            <div className="it-cards">
+              {filtered.map((it) => (
+                <div key={it.id} className="it-card">
+                  <div className="it-card__top">
+                    <button
+                      className="it-card__star"
+                      onClick={() => toggleFavorite(it)}
+                      aria-label={it.isFavorite ? "Unfavorite" : "Add to favorites"}
+                    >
+                      {it.isFavorite ? (
+                        <MdStar size={20} color={colors.favorite} />
+                      ) : (
+                        <MdStarBorder size={20} color={colors.textSecondary} />
+                      )}
+                    </button>
+                    <div className="it-card__title">
+                      <div className="it-card__name">{it.name}</div>
+                      {isFbr && (
+                        <div style={{ fontSize: "0.75rem", color: colors.blue }}>
+                          {it.isHsCodePartial
+                            ? "Needs complete sales HS code"
+                            : "FBR invoice classification"}
+                        </div>
+                      )}
+                      {it.fbrDescription && (
+                        <div className="it-card__desc">{it.fbrDescription}</div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="it-card__grid">
+                    <div className="it-card__field">
+                      <span className="it-card__field-label">{isFbr ? "HS Code" : "Used for"}</span>
+                      <span
+                        className="it-card__field-value"
+                        style={{
+                          fontFamily: "monospace",
+                          color: it.hsCode ? colors.blue : colors.textSecondary,
+                        }}
+                      >
+                        {isFbr ? it.hsCode : "Bills / challans"}
+                      </span>
+                    </div>
+                    <div className="it-card__field">
+                      <span className="it-card__field-label">
+                        {isFbr ? "Default filing unit" : "Usual unit"}
+                      </span>
+                      <span className="it-card__field-value">{it.uom || "—"}</span>
+                    </div>
+                    {isFbr && (
+                      <div className="it-card__field it-card__field--full">
+                        <span className="it-card__field-label">Sale Type</span>
+                        <span className="it-card__field-value">{it.saleType || "—"}</span>
+                      </div>
+                    )}
+                    {isFbr && (
+                      <div className="it-card__field">
+                        <span className="it-card__field-label">On hand</span>
+                        <span
+                          className="it-card__field-value"
+                          style={{
+                            fontFamily: "monospace",
+                            fontWeight: 600,
+                            color:
+                              it.availableQty == null
+                                ? colors.textSecondary
+                                : it.availableQty > 0
+                                  ? colors.teal
+                                  : colors.danger,
+                          }}
+                        >
+                          {it.availableQty == null ? "—" : formatQty(it.availableQty)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="it-card__field">
+                      <span className="it-card__field-label">Used</span>
+                      <span className="it-card__field-value">
+                        {it.usageCount > 0 ? `${it.usageCount}×` : "—"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {(canUpdate || canDelete) && (
+                    <div className="it-card__actions">
+                      {canUpdate && (
+                        <button className="it-card__edit" onClick={() => openEdit(it)}>
+                          <MdEdit size={14} /> Edit
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button className="it-card__delete" onClick={() => handleDelete(it)}>
+                          <MdDelete size={14} /> Delete
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </RecordsViewport>
 
       {showForm && (
         <ItemTypeForm
@@ -398,14 +538,23 @@ export default function ItemTypesPage() {
             // notify() the page used to do.
             if (editItem) {
               const p = saved?.propagation;
-              const bills = p?.invoiceItemsUpdated > 0
-                ? `${p.invoiceItemsUpdated} unposted bill line${p.invoiceItemsUpdated !== 1 ? "s" : ""} synced.` : "";
-              const dcs = p?.deliveryItemsUpdated > 0
-                ? `${p.deliveryItemsUpdated} unposted challan line${p.deliveryItemsUpdated !== 1 ? "s" : ""} synced.` : "";
-              const skipped = p?.submittedInvoiceLinesSkipped > 0
-                ? `${p.submittedInvoiceLinesSkipped} FBR-submitted line${p.submittedInvoiceLinesSkipped !== 1 ? "s" : ""} left unchanged (locked).` : "";
+              const bills =
+                p?.invoiceItemsUpdated > 0
+                  ? `${p.invoiceItemsUpdated} unposted bill line${p.invoiceItemsUpdated !== 1 ? "s" : ""} synced.`
+                  : "";
+              const dcs =
+                p?.deliveryItemsUpdated > 0
+                  ? `${p.deliveryItemsUpdated} unposted challan line${p.deliveryItemsUpdated !== 1 ? "s" : ""} synced.`
+                  : "";
+              const skipped =
+                p?.submittedInvoiceLinesSkipped > 0
+                  ? `${p.submittedInvoiceLinesSkipped} FBR-submitted line${p.submittedInvoiceLinesSkipped !== 1 ? "s" : ""} left unchanged (locked).`
+                  : "";
               const propLines = [bills, dcs, skipped].filter(Boolean).join(" ");
-              notify(`"${saved?.name || "Item"}" updated.${propLines ? "\n" + propLines : ""}`, "success");
+              notify(
+                `"${saved?.name || "Item"}" updated.${propLines ? "\n" + propLines : ""}`,
+                "success",
+              );
             } else {
               notify(`"${saved?.name || "Item"}" added.`, "success");
             }
@@ -419,15 +568,71 @@ export default function ItemTypesPage() {
 }
 
 const styles = {
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: "1rem" },
-  headerIcon: { width: 42, height: 42, borderRadius: 12, background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, display: "flex", alignItems: "center", justifyContent: "center" },
+  header: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "1.25rem",
+    flexWrap: "wrap",
+    gap: "1rem",
+  },
+  headerIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   title: { fontSize: "1.45rem", fontWeight: 800, color: colors.textPrimary, margin: 0 },
   subtitle: { fontSize: "0.82rem", color: colors.textSecondary, margin: 0 },
-  addBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1.2rem", background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, color: "#fff", border: "none", borderRadius: 10, fontSize: "0.88rem", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 14px rgba(13,71,161,0.25)" },
-  infoBox: { display: "flex", alignItems: "flex-start", gap: "0.5rem", padding: "0.65rem 0.85rem", backgroundColor: "#e3f2fd", border: "1px solid #90caf9", color: colors.textPrimary, borderRadius: 8, marginBottom: "1rem", fontSize: "0.82rem", lineHeight: 1.4 },
+  addBtn: {
+    minHeight: 44,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    padding: "0.55rem 1.2rem",
+    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
+    color: "#fff",
+    border: "none",
+    borderRadius: 10,
+    fontSize: "0.88rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    boxShadow: "0 4px 14px rgba(13,71,161,0.25)",
+  },
+  infoBox: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: "0.5rem",
+    padding: "0.65rem 0.85rem",
+    backgroundColor: "#e3f2fd",
+    border: "1px solid #90caf9",
+    color: colors.textPrimary,
+    borderRadius: 8,
+    marginBottom: "1rem",
+    fontSize: "0.82rem",
+    lineHeight: 1.4,
+  },
   searchWrap: { position: "relative", marginBottom: "1rem", maxWidth: 420 },
-  searchIcon: { position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" },
-  searchInput: { width: "100%", padding: "0.55rem 0.75rem 0.55rem 2.3rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 10, fontSize: "0.88rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none" },
+  searchIcon: {
+    position: "absolute",
+    left: 12,
+    top: "50%",
+    transform: "translateY(-50%)",
+    color: "#94a3b8",
+  },
+  searchInput: {
+    width: "100%",
+    padding: "0.55rem 0.75rem 0.55rem 2.3rem",
+    border: `1px solid ${colors.inputBorder}`,
+    borderRadius: 10,
+    fontSize: "0.88rem",
+    backgroundColor: colors.inputBg,
+    color: colors.textPrimary,
+    outline: "none",
+  },
   // Outer wrapper with `responsive-table-wrap` class — on phones the
   // 7-column row layout below would otherwise squash and become
   // unreadable; horizontal scroll keeps every column at the right
@@ -438,22 +643,137 @@ const styles = {
   // viewports narrower than that. 720px gives every column a
   // legible minimum without horizontal scrolling on tablet+.
   list: { display: "flex", flexDirection: "column", gap: "0.35rem", minWidth: 720 },
-  listHeader: { display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.4rem 0.75rem", fontSize: "0.72rem", fontWeight: 800, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em" },
-  item: { display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.6rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#fff" },
-  starBtn: { width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "none", cursor: "pointer", borderRadius: 6, padding: 0 },
-  itemName: { fontWeight: 600, fontSize: "0.88rem", color: colors.textPrimary, overflowWrap: "anywhere" },
-  itemDesc: { fontSize: "0.7rem", color: colors.textSecondary, overflowWrap: "anywhere", lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" },
-  editBtn: { display: "flex", alignItems: "center", justifyContent: "center", padding: "0.35rem", borderRadius: 6, border: "none", backgroundColor: "#e3f2fd", color: colors.blue, cursor: "pointer" },
-  deleteBtn: { display: "flex", alignItems: "center", justifyContent: "center", padding: "0.35rem", borderRadius: 6, border: "none", backgroundColor: "#ffebee", color: colors.danger, cursor: "pointer" },
+  listHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.6rem",
+    padding: "0.4rem 0.75rem",
+    fontSize: "0.72rem",
+    fontWeight: 800,
+    color: colors.textSecondary,
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+  },
+  item: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.6rem",
+    padding: "0.6rem 0.75rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.cardBorder}`,
+    backgroundColor: "#fff",
+  },
+  starBtn: {
+    width: 32,
+    height: 32,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "transparent",
+    border: "none",
+    cursor: "pointer",
+    borderRadius: 6,
+    padding: 0,
+  },
+  itemName: {
+    fontWeight: 600,
+    fontSize: "0.88rem",
+    color: colors.textPrimary,
+    overflowWrap: "anywhere",
+  },
+  itemDesc: {
+    fontSize: "0.7rem",
+    color: colors.textSecondary,
+    overflowWrap: "anywhere",
+    lineHeight: 1.3,
+    display: "-webkit-box",
+    WebkitLineClamp: 1,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
+  },
+  editBtn: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "0.35rem",
+    borderRadius: 6,
+    border: "none",
+    backgroundColor: "#e3f2fd",
+    color: colors.blue,
+    cursor: "pointer",
+  },
+  deleteBtn: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "0.35rem",
+    borderRadius: 6,
+    border: "none",
+    backgroundColor: "#ffebee",
+    color: colors.danger,
+    cursor: "pointer",
+  },
   field: { marginBottom: "1rem" },
   row: { display: "flex", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap" },
-  label: { display: "block", marginBottom: "0.3rem", fontWeight: 600, fontSize: "0.82rem", color: colors.textPrimary },
-  optTag: { marginLeft: "0.3rem", padding: "0.05rem 0.35rem", borderRadius: 4, backgroundColor: "#fff3e0", color: "#e65100", fontSize: "0.62rem", fontWeight: 800, letterSpacing: "0.03em" },
-  input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.88rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", boxSizing: "border-box" },
-  hint: { margin: "0.25rem 0 0", fontSize: "0.72rem", color: colors.textSecondary, lineHeight: 1.3 },
-  hintBox: { marginTop: "0.55rem", padding: "0.6rem 0.75rem", backgroundColor: "#e3f2fd", border: "1px solid #90caf9", borderRadius: 6, fontSize: "0.78rem", color: colors.textPrimary, lineHeight: 1.5 },
+  label: {
+    display: "block",
+    marginBottom: "0.3rem",
+    fontWeight: 600,
+    fontSize: "0.82rem",
+    color: colors.textPrimary,
+  },
+  optTag: {
+    marginLeft: "0.3rem",
+    padding: "0.05rem 0.35rem",
+    borderRadius: 4,
+    backgroundColor: "#fff3e0",
+    color: "#e65100",
+    fontSize: "0.62rem",
+    fontWeight: 800,
+    letterSpacing: "0.03em",
+  },
+  input: {
+    width: "100%",
+    padding: "0.55rem 0.75rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    fontSize: "0.88rem",
+    backgroundColor: colors.inputBg,
+    color: colors.textPrimary,
+    outline: "none",
+    boxSizing: "border-box",
+  },
+  hint: {
+    margin: "0.25rem 0 0",
+    fontSize: "0.72rem",
+    color: colors.textSecondary,
+    lineHeight: 1.3,
+  },
+  hintBox: {
+    marginTop: "0.55rem",
+    padding: "0.6rem 0.75rem",
+    backgroundColor: "#e3f2fd",
+    border: "1px solid #90caf9",
+    borderRadius: 6,
+    fontSize: "0.78rem",
+    color: colors.textPrimary,
+    lineHeight: 1.5,
+  },
   hintRow: { display: "flex", flexWrap: "wrap", gap: "0.4rem", alignItems: "baseline" },
   hintLabel: { color: colors.textSecondary, fontSize: "0.72rem", fontWeight: 600 },
-  hintNotes: { margin: "0.35rem 0 0", paddingLeft: "1.1rem", color: colors.textSecondary, fontSize: "0.72rem" },
-  errorAlert: { backgroundColor: colors.danger_light, color: colors.danger, padding: "0.6rem 0.85rem", borderRadius: 6, marginBottom: "0.75rem", fontSize: "0.82rem", border: `1px solid ${colors.danger}40` },
+  hintNotes: {
+    margin: "0.35rem 0 0",
+    paddingLeft: "1.1rem",
+    color: colors.textSecondary,
+    fontSize: "0.72rem",
+  },
+  errorAlert: {
+    backgroundColor: colors.danger_light,
+    color: colors.danger,
+    padding: "0.6rem 0.85rem",
+    borderRadius: 6,
+    marginBottom: "0.75rem",
+    fontSize: "0.82rem",
+    border: `1px solid ${colors.danger}40`,
+  },
 };

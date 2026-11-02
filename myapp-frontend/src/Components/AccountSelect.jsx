@@ -63,7 +63,7 @@ export default function AccountSelect({
 
   const selected = useMemo(
     () => accounts.find((a) => String(a.id) === String(value)),
-    [accounts, value]
+    [accounts, value],
   );
 
   const label = (a) => `${a.code ? `${a.code} — ` : ""}${a.name}`;
@@ -98,7 +98,9 @@ export default function AccountSelect({
       .map((t) => ({
         type: t,
         label: TYPE_LABEL[t] || t,
-        accounts: byType.get(t).sort((a, b) => (a.code || a.name || "").localeCompare(b.code || b.name || "")),
+        accounts: byType
+          .get(t)
+          .sort((a, b) => (a.code || a.name || "").localeCompare(b.code || b.name || "")),
       }));
   }, [accounts, query, typeOrder]);
 
@@ -108,9 +110,12 @@ export default function AccountSelect({
   useEffect(() => {
     const onMouseDown = (e) => {
       if (
-        wrapperRef.current && !wrapperRef.current.contains(e.target) &&
-        triggerRef.current && !triggerRef.current.contains(e.target)
-      ) setOpen(false);
+        wrapperRef.current &&
+        !wrapperRef.current.contains(e.target) &&
+        triggerRef.current &&
+        !triggerRef.current.contains(e.target)
+      )
+        setOpen(false);
     };
     document.addEventListener("mousedown", onMouseDown);
     return () => document.removeEventListener("mousedown", onMouseDown);
@@ -138,15 +143,29 @@ export default function AccountSelect({
     };
   }, [open]);
 
-  const pick = (a) => { onChange?.(a ? a.id : null); setOpen(false); };
-  const clear = (e) => { e.stopPropagation(); onChange?.(null); };
+  const pick = (a) => {
+    onChange?.(a ? a.id : null);
+    setOpen(false);
+  };
+  const clear = (e) => {
+    e.stopPropagation();
+    onChange?.(null);
+  };
 
   const handleKeyDown = (e) => {
     if (!open) return;
-    if (e.key === "ArrowDown") { e.preventDefault(); setHighlightIdx((i) => Math.min(flat.length - 1, i + 1)); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); setHighlightIdx((i) => Math.max(0, i - 1)); }
-    else if (e.key === "Enter") { e.preventDefault(); if (highlightIdx >= 0 && highlightIdx < flat.length) pick(flat[highlightIdx]); }
-    else if (e.key === "Escape") { setOpen(false); }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightIdx((i) => Math.min(flat.length - 1, i + 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightIdx((i) => Math.max(0, i - 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (highlightIdx >= 0 && highlightIdx < flat.length) pick(flat[highlightIdx]);
+    } else if (e.key === "Escape") {
+      setOpen(false);
+    }
   };
 
   let runningIdx = -1;
@@ -169,104 +188,158 @@ export default function AccountSelect({
           {selected ? (
             <>
               {selected.accountType && (
-                <span style={{ ...styles.typeDot, backgroundColor: (TYPE_COLOR[selected.accountType] || {}).fg || "#94a3b8" }} />
+                <span
+                  style={{
+                    ...styles.typeDot,
+                    backgroundColor: (TYPE_COLOR[selected.accountType] || {}).fg || "#94a3b8",
+                  }}
+                />
               )}
               {label(selected)}
             </>
           ) : (
-            <span style={styles.placeholder}>{unavailable ? "(chart of accounts unavailable)" : placeholder}</span>
+            <span style={styles.placeholder}>
+              {unavailable ? "(chart of accounts unavailable)" : placeholder}
+            </span>
           )}
         </span>
-        {selected && <span onClick={clear} style={styles.clearBtn} title="Clear">×</span>}
+        {selected && (
+          <span onClick={clear} style={styles.clearBtn} title="Clear">
+            ×
+          </span>
+        )}
         <MdArrowDropDown size={18} style={{ flexShrink: 0 }} />
       </button>
 
-      {open && triggerRect && createPortal(
-        <div data-admin-popup="" ref={wrapperRef} style={styles.dropdown(triggerRect)} onKeyDown={handleKeyDown}>
-          <div style={styles.searchRow}>
-            <MdSearch size={16} style={styles.searchIcon} />
-            <input
-              ref={searchRef}
-              type="text"
-              placeholder="Search account by name, code, group…"
-              value={query}
-              onChange={(e) => { setQuery(e.target.value); setHighlightIdx(0); }}
-              onKeyDown={handleKeyDown}
-              style={styles.searchInput}
-            />
-          </div>
-
-          <div style={styles.list}>
-            {/* "None" row — clears back to the company default / empty. */}
-            <div onMouseDown={() => pick(null)} style={{ ...styles.row, ...styles.noneRow }}>
-              {unavailable ? "(chart of accounts unavailable)" : placeholder}
+      {open &&
+        triggerRect &&
+        createPortal(
+          <div
+            data-admin-popup=""
+            ref={wrapperRef}
+            style={styles.dropdown(triggerRect)}
+            onKeyDown={handleKeyDown}
+          >
+            <div style={styles.searchRow}>
+              <MdSearch size={16} style={styles.searchIcon} />
+              <input
+                ref={searchRef}
+                type="text"
+                placeholder="Search account by name, code, group…"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setHighlightIdx(0);
+                }}
+                onKeyDown={handleKeyDown}
+                style={styles.searchInput}
+              />
             </div>
 
-            {flat.length === 0 && (
-              <div style={styles.empty}>
-                {accounts.length === 0 ? "No accounts in the chart yet." : `No accounts match "${query}".`}
+            <div style={styles.list}>
+              {/* "None" row — clears back to the company default / empty. */}
+              <div onMouseDown={() => pick(null)} style={{ ...styles.row, ...styles.noneRow }}>
+                {unavailable ? "(chart of accounts unavailable)" : placeholder}
               </div>
-            )}
 
-            {groups.map((g) => {
-              const c = TYPE_COLOR[g.type] || { fg: "#5f6d7e", bg: "#f1f5f9" };
-              return (
-                <div key={g.type}>
-                  <div style={{ ...styles.groupHeader, color: c.fg, backgroundColor: c.bg }}>
-                    {g.label} ({g.accounts.length})
-                  </div>
-                  {g.accounts.map((a) => {
-                    runningIdx += 1;
-                    const idx = runningIdx;
-                    const highlighted = idx === highlightIdx;
-                    const isSel = String(a.id) === String(value);
-                    return (
-                      <div
-                        key={a.id}
-                        onMouseDown={() => pick(a)}
-                        onMouseEnter={() => setHighlightIdx(idx)}
-                        style={{ ...styles.row, backgroundColor: highlighted ? "#e3f2fd" : isSel ? "#f0f7ff" : "transparent" }}
-                      >
-                        <span style={styles.rowName}>
-                          {a.code && <span style={styles.codeChip}>{a.code}</span>}
-                          {a.name}
-                        </span>
-                        {/* Which group the account sits in, muted on the right —
+              {flat.length === 0 && (
+                <div style={styles.empty}>
+                  {accounts.length === 0
+                    ? "No accounts in the chart yet."
+                    : `No accounts match "${query}".`}
+                </div>
+              )}
+
+              {groups.map((g) => {
+                const c = TYPE_COLOR[g.type] || { fg: "#5f6d7e", bg: "#f1f5f9" };
+                return (
+                  <div key={g.type}>
+                    <div style={{ ...styles.groupHeader, color: c.fg, backgroundColor: c.bg }}>
+                      {g.label} ({g.accounts.length})
+                    </div>
+                    {g.accounts.map((a) => {
+                      runningIdx += 1;
+                      const idx = runningIdx;
+                      const highlighted = idx === highlightIdx;
+                      const isSel = String(a.id) === String(value);
+                      return (
+                        <div
+                          key={a.id}
+                          onMouseDown={() => pick(a)}
+                          onMouseEnter={() => setHighlightIdx(idx)}
+                          style={{
+                            ...styles.row,
+                            backgroundColor: highlighted
+                              ? "#e3f2fd"
+                              : isSel
+                                ? "#f0f7ff"
+                                : "transparent",
+                          }}
+                        >
+                          <span style={styles.rowName}>
+                            {a.code && <span style={styles.codeChip}>{a.code}</span>}
+                            {a.name}
+                          </span>
+                          {/* Which group the account sits in, muted on the right —
                             often the only way to tell two like-named accounts
                             apart at a glance. Dropped when it merely repeats the
                             section header above it, so it adds signal, not noise. */}
-                        {a.accountGroupName && a.accountGroupName !== g.label && (
-                          <span style={styles.rowGroup}>{a.accountGroupName}</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
-        </div>,
-        document.body
-      )}
+                          {a.accountGroupName && a.accountGroupName !== g.label && (
+                            <span style={styles.rowGroup}>{a.accountGroupName}</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
 
 const styles = {
   trigger: {
-    display: "flex", alignItems: "center", gap: "0.25rem", width: "100%",
+    display: "flex",
+    alignItems: "center",
+    gap: "0.25rem",
+    width: "100%",
     // 38px keeps the control a comfortable tap target inside a dense line-item
     // row without forcing the row to 44px on desktop.
     minHeight: 38,
-    padding: "0.45rem 0.55rem", border: "1px solid #d0d7e2", borderRadius: 6,
-    backgroundColor: "#fff", fontSize: "0.82rem", color: "#1a2332",
-    cursor: "pointer", textAlign: "left", boxShadow: "none",
+    padding: "0.45rem 0.55rem",
+    border: "1px solid #d0d7e2",
+    borderRadius: 6,
+    backgroundColor: "#fff",
+    fontSize: "0.82rem",
+    color: "#1a2332",
+    cursor: "pointer",
+    textAlign: "left",
+    boxShadow: "none",
   },
   triggerDisabled: { backgroundColor: "#f1f5f9", color: "#94a3b8", cursor: "not-allowed" },
-  triggerLabel: { flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 },
+  triggerLabel: {
+    flex: 1,
+    minWidth: 0,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+  },
   typeDot: { width: 8, height: 8, borderRadius: "50%", flexShrink: 0 },
   placeholder: { color: "#94a3b8" },
-  clearBtn: { fontSize: "1rem", color: "#94a3b8", padding: "0 0.3rem", cursor: "pointer", lineHeight: 1 },
+  clearBtn: {
+    fontSize: "1rem",
+    color: "#94a3b8",
+    padding: "0 0.3rem",
+    cursor: "pointer",
+    lineHeight: 1,
+  },
   dropdown: (rect) => {
     const spaceBelow = window.innerHeight - rect.bottom;
     const listHeight = 380;
@@ -277,34 +350,89 @@ const styles = {
       position: "fixed",
       top: flipAbove ? undefined : rect.bottom + 2,
       bottom: flipAbove ? window.innerHeight - rect.top + 2 : undefined,
-      left, width,
-      maxHeight: flipAbove ? Math.min(listHeight, rect.top - 10) : Math.min(listHeight, spaceBelow - 10),
-      backgroundColor: "#fff", border: "1px solid #d0d7e2", borderRadius: 8,
-      boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 9999,
-      display: "flex", flexDirection: "column",
+      left,
+      width,
+      maxHeight: flipAbove
+        ? Math.min(listHeight, rect.top - 10)
+        : Math.min(listHeight, spaceBelow - 10),
+      backgroundColor: "#fff",
+      border: "1px solid #d0d7e2",
+      borderRadius: 8,
+      boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+      zIndex: 9999,
+      display: "flex",
+      flexDirection: "column",
     };
   },
-  searchRow: { display: "flex", alignItems: "center", padding: "0.45rem 0.65rem", borderBottom: "1px solid #e8edf3", position: "relative" },
+  searchRow: {
+    display: "flex",
+    alignItems: "center",
+    padding: "0.45rem 0.65rem",
+    borderBottom: "1px solid #e8edf3",
+    position: "relative",
+  },
   searchIcon: { position: "absolute", left: 12, color: "#94a3b8" },
-  searchInput: { width: "100%", padding: "0.35rem 0.35rem 0.35rem 1.85rem", border: "1px solid #e8edf3", borderRadius: 6, fontSize: "0.82rem", outline: "none", backgroundColor: "#f8f9fb" },
+  searchInput: {
+    width: "100%",
+    padding: "0.35rem 0.35rem 0.35rem 1.85rem",
+    border: "1px solid #e8edf3",
+    borderRadius: 6,
+    fontSize: "0.82rem",
+    outline: "none",
+    backgroundColor: "#f8f9fb",
+  },
   list: { overflowY: "auto", flex: 1 },
-  groupHeader: { padding: "0.35rem 0.7rem", fontSize: "0.66rem", fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", position: "sticky", top: 0, zIndex: 1 },
+  groupHeader: {
+    padding: "0.35rem 0.7rem",
+    fontSize: "0.66rem",
+    fontWeight: 800,
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+    position: "sticky",
+    top: 0,
+    zIndex: 1,
+  },
   row: {
-    display: "flex", alignItems: "baseline", gap: "0.6rem",
+    display: "flex",
+    alignItems: "baseline",
+    gap: "0.6rem",
     // 44px min so a row is a real tap target on a phone.
     minHeight: 44,
-    padding: "0.5rem 0.7rem", cursor: "pointer", borderBottom: "1px solid #f0f4f8",
-    fontSize: "0.82rem", color: "#1a2332",
+    padding: "0.5rem 0.7rem",
+    cursor: "pointer",
+    borderBottom: "1px solid #f0f4f8",
+    fontSize: "0.82rem",
+    color: "#1a2332",
   },
   noneRow: { color: "#5f6d7e", fontStyle: "italic" },
   rowName: {
-    flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap",
+    flex: 1,
+    minWidth: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "wrap",
     // NOT nowrap + ellipsis: account names are operator-supplied and two that
     // share a long prefix would render identically, which is how a posting ends
     // up on the wrong account.
     overflowWrap: "anywhere",
   },
-  rowGroup: { flexShrink: 0, maxWidth: "45%", overflowWrap: "anywhere", color: "#94a3b8", fontSize: "0.74rem" },
-  codeChip: { padding: "0.05rem 0.35rem", backgroundColor: "#eef2ff", color: "#0d47a1", fontFamily: "monospace", fontWeight: 700, fontSize: "0.7rem", borderRadius: 3, flexShrink: 0 },
+  rowGroup: {
+    flexShrink: 0,
+    maxWidth: "45%",
+    overflowWrap: "anywhere",
+    color: "#94a3b8",
+    fontSize: "0.74rem",
+  },
+  codeChip: {
+    padding: "0.05rem 0.35rem",
+    backgroundColor: "#eef2ff",
+    color: "#0d47a1",
+    fontFamily: "monospace",
+    fontWeight: 700,
+    fontSize: "0.7rem",
+    borderRadius: 3,
+    flexShrink: 0,
+  },
   empty: { padding: "0.8rem", color: "#5f6d7e", fontSize: "0.82rem" },
 };

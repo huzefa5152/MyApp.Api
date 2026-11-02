@@ -1,5 +1,5 @@
 :root {
-  --font-sans: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  --font-sans: "Inter", system-ui, Avenir, Helvetica, Arial, sans-serif;
   --color-bg-dark: #1f1f1f;
   --color-bg-light: #ffffff;
   --color-text-dark: rgba(255, 255, 255, 0.87);
@@ -29,7 +29,9 @@ body {
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  transition: background-color var(--transition), color var(--transition);
+  transition:
+    background-color var(--transition),
+    color var(--transition);
 }
 
 h1 {
@@ -60,8 +62,11 @@ button {
   background-color: var(--color-button-bg-dark);
   color: var(--color-text-dark);
   cursor: pointer;
-  transition: background-color var(--transition), border-color var(--transition),
-              transform var(--transition), box-shadow var(--transition);
+  transition:
+    background-color var(--transition),
+    border-color var(--transition),
+    transform var(--transition),
+    box-shadow var(--transition);
 }
 /* The starter gave EVERY button a drop shadow, a 2px hover lift and a purple
    hover ring. A button that wants a shadow or a hover effect sets its own. */
@@ -74,24 +79,25 @@ button:focus-visible {
   background-color: #2c2c2c;
   border-radius: var(--radius);
   padding: 2rem;
-  box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
   text-align: center;
-  transition: background-color var(--transition), box-shadow var(--transition);
+  transition:
+    background-color var(--transition),
+    box-shadow var(--transition);
 }
 
 .card:hover {
-  box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
 }
 
 .table thead th.sticky-top {
   position: sticky; /* ensures sticky behavior works consistently */
-  top: 0; 
+  top: 0;
   z-index: 2; /* keeps header above rows */
   background-color: #f8f9fa !important; /* same as Bootstrap .table-light */
   border-top: 1px solid #dee2e6 !important;
   border-bottom: 1px solid #dee2e6 !important;
 }
-
 
 /* ────────────────────────────────────────────────────────────────────
    Responsive utility classes for inline-styled forms / dialogs.
@@ -186,11 +192,11 @@ button:focus-visible {
 
   .card {
     background-color: #ffffff;
-    box-shadow: 0 8px 30px rgba(0,0,0,0.1);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
   }
 
   .card:hover {
-    box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
   }
 
   a:hover {
@@ -200,9 +206,22 @@ button:focus-visible {
 
 /* Toast entrance (NotificationProvider): slides in from the right edge. */
 @keyframes dlToastIn {
-  from { opacity: 0; transform: translateX(24px) scale(0.98); }
-  to   { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateX(24px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  @keyframes dlToastIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes dlToastIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
 }

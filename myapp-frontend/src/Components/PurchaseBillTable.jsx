@@ -4,7 +4,21 @@ import StatusBadge from "./StatusBadge";
 import PaymentStatusBadge from "./PaymentStatusBadge";
 import AttachmentBadge from "./AttachmentBadge";
 
-export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDelete, onPrint, onExportPdf, exportingId, printDisabled = false, printDisabledReason = "", showPaymentStatus = false, attachCounts = {}, onAttach }) {
+export default function PurchaseBillTable({
+  bills,
+  perms,
+  onView,
+  onEdit,
+  onDelete,
+  onPrint,
+  onExportPdf,
+  exportingId,
+  printDisabled = false,
+  printDisabledReason = "",
+  showPaymentStatus = false,
+  attachCounts = {},
+  onAttach,
+}) {
   const columns = [
     {
       key: "purchaseBillNumber",
@@ -24,7 +38,21 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
       render: (b) => (
         <>
           {b.supplierName || "—"}
-          {b.isNonStockSupplierPurchase && <span style={{ marginLeft: 6, padding: "1px 6px", borderRadius: 6, fontSize: "0.7rem", fontWeight: 600, background: "#e0f2f1", color: "#00695c" }}>{b.source === "auto-cost" ? "From costs" : "Local direct purchase"}</span>}
+          {b.isNonStockSupplierPurchase && (
+            <span
+              style={{
+                marginLeft: 6,
+                padding: "1px 6px",
+                borderRadius: 6,
+                fontSize: "0.7rem",
+                fontWeight: 600,
+                background: "#e0f2f1",
+                color: "#00695c",
+              }}
+            >
+              {b.source === "auto-cost" ? "From costs" : "Local direct purchase"}
+            </span>
+          )}
         </>
       ),
     },
@@ -32,8 +60,8 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
       key: "date",
       header: "Date",
       width: 110,
-      accessor: (b) => b.date ? new Date(b.date).getTime() : 0,
-      render: (b) => b.date ? new Date(b.date).toLocaleDateString() : "—",
+      accessor: (b) => (b.date ? new Date(b.date).getTime() : 0),
+      render: (b) => (b.date ? new Date(b.date).toLocaleDateString() : "—"),
     },
     {
       key: "items",
@@ -56,26 +84,41 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
       header: "Status",
       width: 130,
       accessor: (b) => b.reconciliationStatus || "",
-      render: (b) => b.reconciliationStatus
-        ? <StatusBadge status={b.reconciliationStatus} />
-        : "—",
+      render: (b) =>
+        b.reconciliationStatus ? <StatusBadge status={b.reconciliationStatus} /> : "—",
     },
-    ...(showPaymentStatus ? [{
-      key: "paymentStatus",
-      header: "Payment",
-      width: 150,
-      accessor: (b) => b.paymentStatus || "",
-      render: (b) => b.paymentStatus
-        ? <PaymentStatusBadge status={b.paymentStatus} balanceDue={b.balanceDue} daysOverdue={b.daysOverdue} />
-        : "—",
-    }] : []),
+    ...(showPaymentStatus
+      ? [
+          {
+            key: "paymentStatus",
+            header: "Payment",
+            width: 150,
+            accessor: (b) => b.paymentStatus || "",
+            render: (b) =>
+              b.paymentStatus ? (
+                <PaymentStatusBadge
+                  status={b.paymentStatus}
+                  balanceDue={b.balanceDue}
+                  daysOverdue={b.daysOverdue}
+                />
+              ) : (
+                "—"
+              ),
+          },
+        ]
+      : []),
     {
       key: "supplierIRN",
       header: "Supplier IRN",
       defaultHidden: true,
-      render: (b) => b.supplierIRN
-        ? <span style={{ fontFamily: "monospace", fontSize: "0.75rem", wordBreak: "break-all" }}>{b.supplierIRN}</span>
-        : "—",
+      render: (b) =>
+        b.supplierIRN ? (
+          <span style={{ fontFamily: "monospace", fontSize: "0.75rem", wordBreak: "break-all" }}>
+            {b.supplierIRN}
+          </span>
+        ) : (
+          "—"
+        ),
     },
   ];
 
@@ -84,14 +127,20 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
       <button style={btn.view} onClick={() => onView?.(b)} title="View">
         <MdVisibility size={14} />
       </button>
-      {perms.canUpdate && (!["local-direct", "auto-cost"].includes(b.source) || !(b.amountPaid > 0 || b.amountCredited > 0)) && (
-        <button style={btn.edit} onClick={() => onEdit?.(b)} title="Edit">
-          <MdEdit size={14} />
-        </button>
-      )}
+      {perms.canUpdate &&
+        (!["local-direct", "auto-cost"].includes(b.source) ||
+          !(b.amountPaid > 0 || b.amountCredited > 0)) && (
+          <button style={btn.edit} onClick={() => onEdit?.(b)} title="Edit">
+            <MdEdit size={14} />
+          </button>
+        )}
       {onPrint && (
         <button
-          style={{ ...btn.print, opacity: printDisabled ? 0.5 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+          style={{
+            ...btn.print,
+            opacity: printDisabled ? 0.5 : 1,
+            cursor: printDisabled ? "not-allowed" : "pointer",
+          }}
           disabled={printDisabled}
           onClick={() => onPrint(b)}
           title={printDisabled ? printDisabledReason : "Print"}
@@ -101,7 +150,11 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
       )}
       {onExportPdf && (
         <button
-          style={{ ...btn.pdf, opacity: printDisabled || exportingId === b.id ? 0.5 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+          style={{
+            ...btn.pdf,
+            opacity: printDisabled || exportingId === b.id ? 0.5 : 1,
+            cursor: printDisabled ? "not-allowed" : "pointer",
+          }}
           onClick={() => onExportPdf(b)}
           disabled={printDisabled || !!exportingId}
           title={printDisabled ? printDisabledReason : "Download PDF"}
@@ -142,9 +195,9 @@ const baseBtn = {
   padding: 0,
 };
 const btn = {
-  view:   { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" },
-  edit:   { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },
-  print:  { ...baseBtn, backgroundColor: "#e8f5e9", color: "#1b5e20" },
-  pdf:    { ...baseBtn, backgroundColor: "#f3e5f5", color: "#6a1b9a" },
+  view: { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" },
+  edit: { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },
+  print: { ...baseBtn, backgroundColor: "#e8f5e9", color: "#1b5e20" },
+  pdf: { ...baseBtn, backgroundColor: "#f3e5f5", color: "#6a1b9a" },
   delete: { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" },
 };

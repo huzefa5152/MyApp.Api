@@ -39,7 +39,9 @@ export function PermissionsProvider({ children }) {
     }
   }, [isAuthenticated]);
 
-  useEffect(() => { load(); }, [load, user?.id, user?.username]);
+  useEffect(() => {
+    load();
+  }, [load, user?.id, user?.username]);
 
   const has = useCallback(
     (key) => {
@@ -47,7 +49,7 @@ export function PermissionsProvider({ children }) {
       if (isSeedAdmin) return true;
       return permissions.has(key);
     },
-    [permissions, isSeedAdmin]
+    [permissions, isSeedAdmin],
   );
 
   const hasAny = useCallback(
@@ -56,7 +58,7 @@ export function PermissionsProvider({ children }) {
       if (isSeedAdmin) return true;
       return keys.some((k) => permissions.has(k));
     },
-    [permissions, isSeedAdmin]
+    [permissions, isSeedAdmin],
   );
 
   const hasAll = useCallback(
@@ -65,17 +67,15 @@ export function PermissionsProvider({ children }) {
       if (isSeedAdmin) return true;
       return keys.every((k) => permissions.has(k));
     },
-    [permissions, isSeedAdmin]
+    [permissions, isSeedAdmin],
   );
 
   const value = useMemo(
     () => ({ permissions, isSeedAdmin, loading, has, hasAny, hasAll, reload: load }),
-    [permissions, isSeedAdmin, loading, has, hasAny, hasAll, load]
+    [permissions, isSeedAdmin, loading, has, hasAny, hasAll, load],
   );
 
-  return (
-    <PermissionsContext.Provider value={value}>{children}</PermissionsContext.Provider>
-  );
+  return <PermissionsContext.Provider value={value}>{children}</PermissionsContext.Provider>;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components

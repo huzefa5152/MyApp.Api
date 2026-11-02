@@ -49,18 +49,20 @@ export default function DataTable({
   // preference survives reloads.
   const [hiddenSerialized, setHiddenSerialized] = useUiPreference(
     storageKey ? `dataTable.hidden:${storageKey}` : "dataTable.hidden:__transient__",
-    JSON.stringify(
-      columns.filter((c) => c.defaultHidden).map((c) => c.key)
-    )
+    JSON.stringify(columns.filter((c) => c.defaultHidden).map((c) => c.key)),
   );
 
   let hidden;
-  try { hidden = new Set(JSON.parse(hiddenSerialized || "[]")); }
-  catch { hidden = new Set(); }
+  try {
+    hidden = new Set(JSON.parse(hiddenSerialized || "[]"));
+  } catch {
+    hidden = new Set();
+  }
 
   const toggleHidden = (key) => {
     const next = new Set(hidden);
-    if (next.has(key)) next.delete(key); else next.add(key);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
     setHiddenSerialized(JSON.stringify(Array.from(next)));
   };
 
@@ -96,8 +98,13 @@ export default function DataTable({
       if (bv == null) return -1;
       if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
       // Try numeric coercion for stringy numbers (totals etc.)
-      const an = Number(av), bn = Number(bv);
-      if (!Number.isNaN(an) && !Number.isNaN(bn) && (typeof av === "string" || typeof bv === "string")) {
+      const an = Number(av),
+        bn = Number(bv);
+      if (
+        !Number.isNaN(an) &&
+        !Number.isNaN(bn) &&
+        (typeof av === "string" || typeof bv === "string")
+      ) {
         return (an - bn) * dir;
       }
       return String(av).localeCompare(String(bv), undefined, { numeric: true }) * dir;
@@ -114,7 +121,7 @@ export default function DataTable({
         const v = getValue(row, col);
         if (v == null) return false;
         return String(v).toLowerCase().includes(q);
-      })
+      }),
     );
   }, [sortedRows, quickFilter, visibleColumns]);
 
@@ -131,7 +138,10 @@ export default function DataTable({
   const headPad = dense ? "0.5rem 0.7rem" : "0.65rem 0.85rem";
 
   return (
-    <div data-grid-shell="" style={pageScroll ? { ...styles.outer, overflow: "visible" } : styles.outer}>
+    <div
+      data-grid-shell=""
+      style={pageScroll ? { ...styles.outer, overflow: "visible" } : styles.outer}
+    >
       {(quickSearchPlaceholder || true) && (
         <div style={styles.toolbar}>
           {quickSearchPlaceholder && (
@@ -188,7 +198,14 @@ export default function DataTable({
         </div>
       )}
 
-      <div data-admin-table-region="" style={pageScroll ? { ...styles.tableWrap, maxHeight: "none", overflow: "visible" } : styles.tableWrap}>
+      <div
+        data-admin-table-region=""
+        style={
+          pageScroll
+            ? { ...styles.tableWrap, maxHeight: "none", overflow: "visible" }
+            : styles.tableWrap
+        }
+      >
         <table style={styles.table}>
           <thead>
             <tr>
@@ -210,11 +227,13 @@ export default function DataTable({
                   >
                     <span style={styles.thInner}>
                       {col.header}
-                      {sortable && isSorted && (
-                        sort.dir === "asc"
-                          ? <MdArrowUpward size={13} />
-                          : <MdArrowDownward size={13} />
-                      )}
+                      {sortable &&
+                        isSorted &&
+                        (sort.dir === "asc" ? (
+                          <MdArrowUpward size={13} />
+                        ) : (
+                          <MdArrowDownward size={13} />
+                        ))}
                     </span>
                   </th>
                 );
@@ -236,49 +255,66 @@ export default function DataTable({
                   {quickFilter ? "No rows match the quick filter." : emptyMessage}
                 </td>
               </tr>
-            ) : filteredRows.map((row, i) => {
-              const k = rowKey ? rowKey(row) : (row.id ?? i);
-              const expanded = renderExpandedRow?.(row);
-              return (
-                <Fragment key={k}>
-                <tr
-                  onClick={onRowClick ? () => onRowClick(row) : undefined}
-                  style={{
-                    ...styles.tr,
-                    cursor: onRowClick ? "pointer" : "default",
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#f8fafc"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#fff"; }}
-                >
-                  {visibleColumns.map((col) => (
-                    <td
-                      key={col.key}
+            ) : (
+              filteredRows.map((row, i) => {
+                const k = rowKey ? rowKey(row) : (row.id ?? i);
+                const expanded = renderExpandedRow?.(row);
+                return (
+                  <Fragment key={k}>
+                    <tr
+                      onClick={onRowClick ? () => onRowClick(row) : undefined}
                       style={{
-                        ...styles.td,
-                        padding: cellPad,
-                        textAlign: col.align || "left",
-                        width: col.width,
+                        ...styles.tr,
+                        cursor: onRowClick ? "pointer" : "default",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = "#f8fafc";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = "#fff";
                       }}
                     >
-                      {col.render ? col.render(row) : (() => {
-                        const v = getValue(row, col);
-                        return v == null || v === "" ? "—" : v;
-                      })()}
-                    </td>
-                  ))}
-                  {actions && (
-                    <td
-                      style={{ ...styles.td, padding: cellPad, textAlign: "right" }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div style={styles.actionsCell}>{actions(row)}</div>
-                    </td>
-                  )}
-                </tr>
-                {expanded != null && <tr><td colSpan={visibleColumns.length + (actions ? 1 : 0)} style={{ padding: 0 }}>{expanded}</td></tr>}
-                </Fragment>
-              );
-            })}
+                      {visibleColumns.map((col) => (
+                        <td
+                          key={col.key}
+                          style={{
+                            ...styles.td,
+                            padding: cellPad,
+                            textAlign: col.align || "left",
+                            width: col.width,
+                          }}
+                        >
+                          {col.render
+                            ? col.render(row)
+                            : (() => {
+                                const v = getValue(row, col);
+                                return v == null || v === "" ? "—" : v;
+                              })()}
+                        </td>
+                      ))}
+                      {actions && (
+                        <td
+                          style={{ ...styles.td, padding: cellPad, textAlign: "right" }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div style={styles.actionsCell}>{actions(row)}</div>
+                        </td>
+                      )}
+                    </tr>
+                    {expanded != null && (
+                      <tr>
+                        <td
+                          colSpan={visibleColumns.length + (actions ? 1 : 0)}
+                          style={{ padding: 0 }}
+                        >
+                          {expanded}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })
+            )}
           </tbody>
         </table>
       </div>

@@ -10,10 +10,9 @@ export default function SyncWarningModal({ onConfirm, onCancel }) {
       <div data-admin-dialog="" style={styles.modal} onClick={(e) => e.stopPropagation()}>
         <h3 style={styles.title}>Switch to Visual Editor?</h3>
         <p style={styles.text}>
-          This template was created in Code mode. Loading it into the Visual
-          Builder may not preserve all formatting. Complex Handlebars constructs
-          (nested helpers, block helpers like <code>{"{{#each}}"}</code>) will
-          appear as placeholder tags.
+          This template was created in Code mode. Loading it into the Visual Builder may not
+          preserve all formatting. Complex Handlebars constructs (nested helpers, block helpers like{" "}
+          <code>{"{{#each}}"}</code>) will appear as placeholder tags.
         </p>
         <p style={styles.textSmall}>
           Your code will not be modified until you save from Visual mode.

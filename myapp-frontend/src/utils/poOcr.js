@@ -61,7 +61,10 @@ export function mergeWordSets(primary, secondary) {
   const merged = [...primary];
   for (const w of secondary) {
     const hits = merged.map((p, i) => [p, i]).filter(([p]) => overlapShare(p, w) > 0.3);
-    if (hits.length === 0) { merged.push(w); continue; }
+    if (hits.length === 0) {
+      merged.push(w);
+      continue;
+    }
     if (hits.every(([p]) => (w.confidence || 0) > (p.confidence || 0))) {
       for (const [, i] of hits.sort((a, b) => b[1] - a[1])) merged.splice(i, 1);
       merged.push(w);
@@ -73,8 +76,13 @@ export function mergeWordSets(primary, secondary) {
 const assetUrl = (name) =>
   new URL(`${import.meta.env.BASE_URL || "/"}ocr/${name}`, window.location.origin).href;
 
-const toPngBlob = (canvas) => new Promise((resolve, reject) =>
-  canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not prepare the image."))), "image/png"));
+const toPngBlob = (canvas) =>
+  new Promise((resolve, reject) =>
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("Could not prepare the image."))),
+      "image/png",
+    ),
+  );
 
 function canvasOf(width, height) {
   const c = document.createElement("canvas");
@@ -86,7 +94,10 @@ function canvasOf(width, height) {
 async function imageToBlob(file) {
   const bitmap = await createImageBitmap(file);
   const s = upscaleFactor(bitmap.width);
-  if (s === 1) { bitmap.close?.(); return file; }
+  if (s === 1) {
+    bitmap.close?.();
+    return file;
+  }
   const c = canvasOf(bitmap.width * s, bitmap.height * s);
   const ctx = c.getContext("2d");
   ctx.imageSmoothingQuality = "high";
@@ -127,11 +138,14 @@ async function pdfToBlobs(file) {
     for (let n = 1; n <= Math.min(doc.numPages, MAX_OCR_PAGES); n++) {
       const page = await doc.getPage(n);
       const scan = await scanImageBlob(page, pdfjs);
-      if (scan) { blobs.push(scan); continue; }
+      if (scan) {
+        blobs.push(scan);
+        continue;
+      }
       const viewport = page.getViewport({ scale: 300 / 72 });
       const c = canvasOf(viewport.width, viewport.height);
       const ctx = c.getContext("2d");
-      ctx.fillStyle = "#fff";                     // a scan's page is paper, not transparency
+      ctx.fillStyle = "#fff"; // a scan's page is paper, not transparency
       ctx.fillRect(0, 0, c.width, c.height);
       // intent "print": the display intent paces rendering with
       // requestAnimationFrame, which stops firing when the tab is in the
@@ -164,8 +178,10 @@ export async function readPoFile(file, onProgress = () => {}) {
     gzip: true,
     logger: (m) => {
       if (m.status === "recognizing text")
-        onProgress(0.1 + 0.88 * ((step + (m.progress || 0)) / (images.length * 2)),
-          images.length > 1 ? `Reading page ${page + 1} of ${images.length}…` : "Reading the text…");
+        onProgress(
+          0.1 + 0.88 * ((step + (m.progress || 0)) / (images.length * 2)),
+          images.length > 1 ? `Reading page ${page + 1} of ${images.length}…` : "Reading the text…",
+        );
     },
   });
   let step = 0;
@@ -179,7 +195,14 @@ export async function readPoFile(file, onProgress = () => {}) {
         for (const l of p.lines || [])
           for (const w of l.words || [])
             if (w.text && w.text.trim())
-              words.push({ text: w.text, left: w.bbox.x0, right: w.bbox.x1, top: w.bbox.y0, bottom: w.bbox.y1, confidence: w.confidence });
+              words.push({
+                text: w.text,
+                left: w.bbox.x0,
+                right: w.bbox.x1,
+                top: w.bbox.y0,
+                bottom: w.bbox.y1,
+                confidence: w.confidence,
+              });
     return words;
   };
   try {

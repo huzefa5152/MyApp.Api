@@ -4,7 +4,24 @@ import { isBillableChallan } from "../utils/challanBilling";
 import CardActions from "./CardActions";
 import { useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn, MdWarning, MdRequestQuote, MdLocationOn, MdContentCopy, MdLink, MdAssignment } from "react-icons/md";
+import {
+  MdReceipt,
+  MdPerson,
+  MdCalendarToday,
+  MdVisibility,
+  MdEdit,
+  MdCancel,
+  MdDelete,
+  MdPrint,
+  MdPictureAsPdf,
+  MdGridOn,
+  MdWarning,
+  MdRequestQuote,
+  MdLocationOn,
+  MdContentCopy,
+  MdLink,
+  MdAssignment,
+} from "react-icons/md";
 import ChallanModal from "./ChallanModal";
 import AttachmentBadge from "./AttachmentBadge";
 import { cardStyles, cardHover } from "../theme";
@@ -41,28 +58,70 @@ function WarningTooltip({ warnings }) {
     setPos({ top: r.bottom + 6, left: Math.max(8, r.right - 260) });
   }, []);
   return (
-    <span ref={ref} onMouseEnter={show} onMouseLeave={() => setPos(null)} style={{ color: "#e65100", cursor: "help", display: "inline-flex", alignItems: "center" }}>
+    <span
+      ref={ref}
+      onMouseEnter={show}
+      onMouseLeave={() => setPos(null)}
+      style={{ color: "#e65100", cursor: "help", display: "inline-flex", alignItems: "center" }}
+    >
       <MdWarning size={18} />
-      {pos && createPortal(
-        <div style={{
-          position: "fixed", top: pos.top, left: pos.left, zIndex: 9999,
-          minWidth: 240, maxWidth: 320, padding: "0.6rem 0.75rem",
-          background: "#fff", border: "1px solid #e65100", borderRadius: 8,
-          boxShadow: "0 4px 16px rgba(0,0,0,0.15)", color: "#333",
-          pointerEvents: "none",
-        }}>
-          <div style={{ fontWeight: 700, marginBottom: 4, fontSize: "0.78rem", color: "#e65100" }}>FBR Setup Required</div>
-          <ul style={{ margin: 0, paddingLeft: "1.1rem", fontSize: "0.75rem", lineHeight: 1.6 }}>
-            {warnings.map((w, i) => <li key={i}>{w}</li>)}
-          </ul>
-        </div>,
-        document.body
-      )}
+      {pos &&
+        createPortal(
+          <div
+            style={{
+              position: "fixed",
+              top: pos.top,
+              left: pos.left,
+              zIndex: 9999,
+              minWidth: 240,
+              maxWidth: 320,
+              padding: "0.6rem 0.75rem",
+              background: "#fff",
+              border: "1px solid #e65100",
+              borderRadius: 8,
+              boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+              color: "#333",
+              pointerEvents: "none",
+            }}
+          >
+            <div
+              style={{ fontWeight: 700, marginBottom: 4, fontSize: "0.78rem", color: "#e65100" }}
+            >
+              FBR Setup Required
+            </div>
+            <ul style={{ margin: 0, paddingLeft: "1.1rem", fontSize: "0.75rem", lineHeight: 1.6 }}>
+              {warnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          </div>,
+          document.body,
+        )}
     </span>
   );
 }
 
-export default function ChallanList({ challans, onCancel, onDelete, onPrint, onCosts, onLocalPurchase, onEditItems, onEditDelivery, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, onLinkOrder, exportingId, duplicatingId, printDisabled = false, printDisabledReason = "", attachCounts = {}, onAttach }) {
+export default function ChallanList({
+  challans,
+  onCancel,
+  onDelete,
+  onPrint,
+  onCosts,
+  onLocalPurchase,
+  onEditItems,
+  onEditDelivery,
+  onExportPdf,
+  onExportExcel,
+  onGenerateBill,
+  onDuplicate,
+  onLinkOrder,
+  exportingId,
+  duplicatingId,
+  printDisabled = false,
+  printDisabledReason = "",
+  attachCounts = {},
+  onAttach,
+}) {
   const { has } = usePermissions();
   const permUpdate = has("challans.manage.update");
   const permDelete = has("challans.manage.delete");
@@ -87,10 +146,17 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onC
           // The row with the unbilled rest reads "Pending · rest of #N".
           const partlyBilled = c.isPartiallyBilled && c.status === "Invoiced";
           const restOf = c.isPartiallyBilled && c.status !== "Invoiced";
-          const sc = partlyBilled || restOf ? { bg: "#fff8e1", color: "#b26a00", border: "#b26a0030" }
-            : statusColors[c.status] || statusColors.Pending;
+          const sc =
+            partlyBilled || restOf
+              ? { bg: "#fff8e1", color: "#b26a00", border: "#b26a0030" }
+              : statusColors[c.status] || statusColors.Pending;
           // Backend now sends `isEditable` — use it so billed-but-not-FBR-submitted challans can also be edited
-          const isEditable = c.isEditable ?? (c.status === "Pending" || c.status === "Imported" || c.status === "No PO" || c.status === "Setup Required");
+          const isEditable =
+            c.isEditable ??
+            (c.status === "Pending" ||
+              c.status === "Imported" ||
+              c.status === "No PO" ||
+              c.status === "Setup Required");
           // Separate flag: delete/cancel is only allowed when NOT billed
           const canCancel = c.status !== "Invoiced" && isEditable;
           const isDuplicate = c.duplicatedFromId != null;
@@ -102,7 +168,8 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onC
           //     2026-05-08: this carve-out matches the new server-side rule
           //     in DeliveryChallanService.DeleteAsync.
           // A row split off a partial bill shares its number like a duplicate.
-          const canDelete = canCancel && (isDuplicate || c.splitFromChallanId != null || c.isLatest === true);
+          const canDelete =
+            canCancel && (isDuplicate || c.splitFromChallanId != null || c.isLatest === true);
           const hasWarnings = c.warnings && c.warnings.length > 0;
           // Generate Bill shortcut — only for billable statuses
           // (Pending / Imported), matching the backend's CreateAsync guard.
@@ -113,9 +180,8 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onC
           // dialog removes any reason to duplicate-the-duplicate as a workaround.
           // Permission gate: challans.manage.duplicate (split off from
           // .create on 2026-05-08).
-          const canDuplicate = permDuplicate
-            && !isDuplicate
-            && (c.status === "Pending" || c.status === "Imported");
+          const canDuplicate =
+            permDuplicate && !isDuplicate && (c.status === "Pending" || c.status === "Imported");
           // Link to a Sales Order — only "No PO" challans (a delivery raised
           // before the PO arrived). A Pending challan already carries its own
           // PO, so it isn't part of the attach-to-order flow.
@@ -126,17 +192,30 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onC
               style={cardStyles.card}
               onMouseEnter={(e) => Object.assign(e.currentTarget.style, cardHover)}
               onMouseLeave={(e) =>
-                Object.assign(e.currentTarget.style, { transform: "none", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" })
+                Object.assign(e.currentTarget.style, {
+                  transform: "none",
+                  boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+                })
               }
             >
               <div style={cardStyles.cardContent}>
                 <div>
                   <div style={styles.cardTopRow}>
                     <h5 style={cardStyles.title}>
-                      <MdReceipt style={{ color: colors.blue, marginRight: 6, verticalAlign: "middle" }} />
+                      <MdReceipt
+                        style={{ color: colors.blue, marginRight: 6, verticalAlign: "middle" }}
+                      />
                       Challan #{c.challanNumber}
                     </h5>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.35rem",
+                        flexWrap: "wrap",
+                        justifyContent: "flex-end",
+                      }}
+                    >
                       <AttachmentBadge count={attachCounts?.[c.id]} onClick={() => onAttach?.(c)} />
                       {hasWarnings && <WarningTooltip warnings={c.warnings} />}
                       {/* DUPLICATE pill — shown when this row was created via
@@ -146,52 +225,98 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onC
                       {isDuplicate && (
                         <span
                           style={{ ...styles.statusBadge, ...styles.duplicateBadge }}
-                          title={c.duplicatedFromChallanNumber
-                            ? `Duplicate of Challan #${c.duplicatedFromChallanNumber} — separate billable copy`
-                            : "Duplicate — separate billable copy of an earlier challan"}
+                          title={
+                            c.duplicatedFromChallanNumber
+                              ? `Duplicate of Challan #${c.duplicatedFromChallanNumber} — separate billable copy`
+                              : "Duplicate — separate billable copy of an earlier challan"
+                          }
                         >
                           <MdContentCopy size={11} style={{ marginRight: 3 }} />
                           DUPLICATE
                         </span>
                       )}
-                      <span style={{ ...styles.statusBadge, backgroundColor: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>
-                        {partlyBilled ? "Partially billed" : restOf ? `${c.status} · rest of #${c.challanNumber}` : c.status === "Invoiced" ? "Billed" : c.status}
+                      <span
+                        style={{
+                          ...styles.statusBadge,
+                          backgroundColor: sc.bg,
+                          color: sc.color,
+                          border: `1px solid ${sc.border}`,
+                        }}
+                      >
+                        {partlyBilled
+                          ? "Partially billed"
+                          : restOf
+                            ? `${c.status} · rest of #${c.challanNumber}`
+                            : c.status === "Invoiced"
+                              ? "Billed"
+                              : c.status}
                       </span>
                       {/* Which bill it went onto. */}
                       {c.invoiceNumber != null && (
-                        <span style={{ fontSize: "0.72rem", color: "#5f6d7e", whiteSpace: "nowrap" }}>
+                        <span
+                          style={{ fontSize: "0.72rem", color: "#5f6d7e", whiteSpace: "nowrap" }}
+                        >
                           Bill #{c.invoiceNumber}
                         </span>
                       )}
                     </div>
                   </div>
 
-                  {onCosts && <div style={{ margin: "8px 0" }}><CostingStatus document={c} onOpen={() => onCosts(c)} /></div>}
+                  {onCosts && (
+                    <div style={{ margin: "8px 0" }}>
+                      <CostingStatus document={c} onOpen={() => onCosts(c)} />
+                    </div>
+                  )}
                   {isDuplicate && c.duplicatedFromChallanNumber && (
-                    <p style={{
-                      ...cardStyles.text,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.35rem",
-                      color: "#6a1b9a",
-                      fontWeight: 600,
-                      fontSize: "0.78rem",
-                      marginTop: "-0.15rem",
-                    }}>
+                    <p
+                      style={{
+                        ...cardStyles.text,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.35rem",
+                        color: "#6a1b9a",
+                        fontWeight: 600,
+                        fontSize: "0.78rem",
+                        marginTop: "-0.15rem",
+                      }}
+                    >
                       <MdContentCopy size={13} style={{ flexShrink: 0 }} />
                       Duplicate of Challan #{c.duplicatedFromChallanNumber}
                     </p>
                   )}
-                  <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                  <p
+                    style={{
+                      ...cardStyles.text,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                    }}
+                  >
                     <MdPerson style={{ color: colors.teal, flexShrink: 0 }} />
                     <strong>Client:</strong> {c.clientName}
                   </p>
-                  <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                  <p
+                    style={{
+                      ...cardStyles.text,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                    }}
+                  >
                     <MdReceipt style={{ color: colors.textSecondary, flexShrink: 0 }} />
                     <strong>PO:</strong> {c.poNumber || "\u2014"}
                   </p>
                   {c.salesOrderNumber && (
-                    <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem", color: colors.blue, fontWeight: 600 }}>
+                    <p
+                      style={{
+                        ...cardStyles.text,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        color: colors.blue,
+                        fontWeight: 600,
+                      }}
+                    >
                       <MdAssignment size={14} style={{ flexShrink: 0 }} />
                       <strong>SO #{c.salesOrderNumber}</strong>
                     </p>
@@ -202,38 +327,76 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onC
                       view modal. Both fields are optional; only render
                       when set so unfilled cards don't get noise. */}
                   {c.indentNo && (
-                    <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                      <MdReceipt style={{ color: colors.textSecondary, flexShrink: 0, opacity: 0.7 }} />
+                    <p
+                      style={{
+                        ...cardStyles.text,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                      }}
+                    >
+                      <MdReceipt
+                        style={{ color: colors.textSecondary, flexShrink: 0, opacity: 0.7 }}
+                      />
                       <strong>Indent:</strong> {c.indentNo}
                     </p>
                   )}
                   {c.site && (
-                    <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                      <MdLocationOn size={14} style={{ color: colors.textSecondary, flexShrink: 0 }} />
+                    <p
+                      style={{
+                        ...cardStyles.text,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                      }}
+                    >
+                      <MdLocationOn
+                        size={14}
+                        style={{ color: colors.textSecondary, flexShrink: 0 }}
+                      />
                       <strong>Site:</strong> {c.site}
                     </p>
                   )}
                   {c.deliveryDate && (
-                    <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                      <MdCalendarToday size={14} style={{ color: colors.textSecondary, flexShrink: 0 }} />
+                    <p
+                      style={{
+                        ...cardStyles.text,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                      }}
+                    >
+                      <MdCalendarToday
+                        size={14}
+                        style={{ color: colors.textSecondary, flexShrink: 0 }}
+                      />
                       {new Date(c.deliveryDate).toLocaleDateString()}
                     </p>
                   )}
-                  <p style={{ ...cardStyles.text, fontSize: "0.78rem", color: colors.textSecondary }}>
+                  <p
+                    style={{ ...cardStyles.text, fontSize: "0.78rem", color: colors.textSecondary }}
+                  >
                     {c.items?.length || 0} item{(c.items?.length || 0) !== 1 ? "s" : ""}
                   </p>
                 </div>
 
                 <CardActions style={cardStyles.buttonGroup}>
-                  <button data-primary
+                  <button
+                    data-primary
                     style={{ ...styles.actionBtn, ...styles.viewBtn }}
                     onClick={() => setSelectedChallan(c)}
                   >
                     <MdVisibility size={14} /> View
                   </button>
                   {permPrint && (
-                    <button data-primary
-                      style={{ ...styles.actionBtn, ...styles.printBtn, opacity: printDisabled ? 0.5 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+                    <button
+                      data-primary
+                      style={{
+                        ...styles.actionBtn,
+                        ...styles.printBtn,
+                        opacity: printDisabled ? 0.5 : 1,
+                        cursor: printDisabled ? "not-allowed" : "pointer",
+                      }}
                       disabled={printDisabled}
                       onClick={() => onPrint?.(c)}
                       title={printDisabled ? printDisabledReason : "Print"}
@@ -243,36 +406,69 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onC
                   )}
                   {permPrint && (
                     <button
-                      style={{ ...styles.actionBtn, ...styles.pdfBtn, opacity: printDisabled || exportingId ? 0.5 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+                      style={{
+                        ...styles.actionBtn,
+                        ...styles.pdfBtn,
+                        opacity: printDisabled || exportingId ? 0.5 : 1,
+                        cursor: printDisabled ? "not-allowed" : "pointer",
+                      }}
                       disabled={printDisabled || !!exportingId}
                       onClick={() => onExportPdf?.(c)}
                       title={printDisabled ? printDisabledReason : "Export PDF"}
                     >
-                      {exportingId === c.id + "-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} PDF
+                      {exportingId === c.id + "-pdf" ? (
+                        <span className="btn-spinner" />
+                      ) : (
+                        <MdPictureAsPdf size={14} />
+                      )}{" "}
+                      PDF
                     </button>
                   )}
                   {permPrint && onExportExcel && (
                     <button
-                      style={{ ...styles.actionBtn, ...styles.excelBtn, opacity: exportingId ? 0.5 : 1 }}
+                      style={{
+                        ...styles.actionBtn,
+                        ...styles.excelBtn,
+                        opacity: exportingId ? 0.5 : 1,
+                      }}
                       disabled={!!exportingId}
                       onClick={() => onExportExcel(c)}
                     >
-                      {exportingId === c.id + "-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Excel
+                      {exportingId === c.id + "-excel" ? (
+                        <span className="btn-spinner" />
+                      ) : (
+                        <MdGridOn size={14} />
+                      )}{" "}
+                      Excel
                     </button>
                   )}
-                  {onLocalPurchase && c.status !== "Cancelled" && <button style={styles.actionBtn} onClick={() => onLocalPurchase(c)}>Local purchase</button>}
+                  {onLocalPurchase && c.status !== "Cancelled" && (
+                    <button style={styles.actionBtn} onClick={() => onLocalPurchase(c)}>
+                      Local purchase
+                    </button>
+                  )}
                   {permUpdate && isEditable && !c.invoiceId && (
                     <button
                       style={{ ...styles.actionBtn, ...styles.editBtn }}
                       onClick={() => onEditItems?.(c)}
-                      title={c.invoiceId || c.status === "Invoiced" ? "Edit supplier & cost" : "Edit items"}
+                      title={
+                        c.invoiceId || c.status === "Invoiced"
+                          ? "Edit supplier & cost"
+                          : "Edit items"
+                      }
                     >
-                      <MdEdit size={14} /> {c.invoiceId || c.status === "Invoiced" ? "Supplier & cost" : "Edit"}
+                      <MdEdit size={14} />{" "}
+                      {c.invoiceId || c.status === "Invoiced" ? "Supplier & cost" : "Edit"}
                     </button>
                   )}
-                  {onEditDelivery && canEditBilledDelivery(c, has) && <button
-                    style={{ ...styles.actionBtn, ...styles.editBtn, minHeight: 44 }}
-                    onClick={() => onEditDelivery(c)}><MdEdit size={14} /> Edit delivery & update bill</button>}
+                  {onEditDelivery && canEditBilledDelivery(c, has) && (
+                    <button
+                      style={{ ...styles.actionBtn, ...styles.editBtn, minHeight: 44 }}
+                      onClick={() => onEditDelivery(c)}
+                    >
+                      <MdEdit size={14} /> Edit delivery & update bill
+                    </button>
+                  )}
                   {canDuplicate && onDuplicate && (
                     <button
                       style={{
@@ -288,12 +484,17 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onC
                       onClick={() => onDuplicate(c)}
                       title="Create a new billable challan with the same number for a different PO"
                     >
-                      {isDuplicating ? <span className="btn-spinner" /> : <MdContentCopy size={14} />}
+                      {isDuplicating ? (
+                        <span className="btn-spinner" />
+                      ) : (
+                        <MdContentCopy size={14} />
+                      )}
                       {isDuplicating ? "Duplicating…" : "Duplicate"}
                     </button>
                   )}
                   {canGenerateBill && (
-                    <button data-primary
+                    <button
+                      data-primary
                       style={{ ...styles.actionBtn, ...styles.generateBillBtn }}
                       onClick={() => onGenerateBill?.(c)}
                       title="Open the New Bill form with this challan pre-selected"
@@ -311,7 +512,8 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onC
                     </button>
                   )}
                   {permUpdate && canCancel && (
-                    <button data-admin-close=""
+                    <button
+                      data-admin-close=""
                       style={{ ...styles.actionBtn, ...styles.cancelBtn }}
                       onClick={() => onCancel?.(c)}
                     >
@@ -322,9 +524,11 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onC
                     <button
                       style={{ ...styles.actionBtn, ...styles.deleteBtn }}
                       onClick={() => onDelete?.(c)}
-                      title={isDuplicate
-                        ? "Delete this duplicate. The original challan keeps the same number — no gap."
-                        : "Only the latest challan can be deleted — earlier ones must be edited to keep numbering gap-free."}
+                      title={
+                        isDuplicate
+                          ? "Delete this duplicate. The original challan keeps the same number — no gap."
+                          : "Only the latest challan can be deleted — earlier ones must be edited to keep numbering gap-free."
+                      }
                     >
                       <MdDelete size={14} /> Delete
                     </button>

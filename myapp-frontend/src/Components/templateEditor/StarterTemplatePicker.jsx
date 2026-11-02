@@ -21,9 +21,7 @@ export default function StarterTemplatePicker({ templateType, onSelect, onClose 
   const [hoveredId, setHoveredId] = useState(null);
 
   const starters = useStarterTemplates();
-  const templates = starters.filter(
-    (t) => !templateType || t.type === templateType
-  );
+  const templates = starters.filter((t) => !templateType || t.type === templateType);
 
   // Backdrop click is a no-op so a stray click can't drop the picker
   // before the operator commits to a starter template.
@@ -32,7 +30,9 @@ export default function StarterTemplatePicker({ templateType, onSelect, onClose 
       <div data-admin-dialog="" style={s.modal} onClick={(e) => e.stopPropagation()}>
         <div data-admin-header="" style={s.header}>
           <h3 style={s.title}>Start from Template</h3>
-          <button data-admin-close="" style={s.closeBtn} onClick={onClose}><MdClose size={20} /></button>
+          <button data-admin-close="" style={s.closeBtn} onClick={onClose}>
+            <MdClose size={20} />
+          </button>
         </div>
         <p style={s.subtitle}>Choose a starter template to begin customizing</p>
 
@@ -44,7 +44,11 @@ export default function StarterTemplatePicker({ templateType, onSelect, onClose 
             return (
               <button
                 key={t.id}
-                style={{ ...s.card, ...(isHovered ? s.cardHover : {}), borderColor: isHovered ? color : "#e0e0e0" }}
+                style={{
+                  ...s.card,
+                  ...(isHovered ? s.cardHover : {}),
+                  borderColor: isHovered ? color : "#e0e0e0",
+                }}
                 onClick={() => onSelect(t)}
                 onMouseEnter={() => setHoveredId(t.id)}
                 onMouseLeave={() => setHoveredId(null)}
@@ -74,45 +78,90 @@ const s = {
     padding: "1.5rem",
   },
   header: {
-    display: "flex", justifyContent: "space-between", alignItems: "center",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   title: {
-    margin: 0, fontSize: "1.25rem", fontWeight: 700, color: "#1a2332",
+    margin: 0,
+    fontSize: "1.25rem",
+    fontWeight: 700,
+    color: "#1a2332",
   },
-  closeBtn: { width: 44, height: 44, display: "grid", placeItems: "center",
-    border: "none", background: "transparent", cursor: "pointer",
-    color: "#888", padding: 4, borderRadius: 6,
+  closeBtn: {
+    width: 44,
+    height: 44,
+    display: "grid",
+    placeItems: "center",
+    border: "none",
+    background: "transparent",
+    cursor: "pointer",
+    color: "#888",
+    padding: 4,
+    borderRadius: 6,
   },
   subtitle: {
-    margin: "0.25rem 0 1.25rem", fontSize: "0.85rem", color: "#5f6d7e",
+    margin: "0.25rem 0 1.25rem",
+    fontSize: "0.85rem",
+    color: "#5f6d7e",
   },
   grid: {
-    display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
     gap: "0.75rem",
   },
   card: {
-    display: "flex", flexDirection: "column", alignItems: "center",
-    padding: "1.25rem 1rem", borderRadius: 10, border: "2px solid #e0e0e0",
-    background: "#fff", cursor: "pointer", transition: "all 0.2s",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    padding: "1.25rem 1rem",
+    borderRadius: 10,
+    border: "2px solid #e0e0e0",
+    background: "#fff",
+    cursor: "pointer",
+    transition: "all 0.2s",
     textAlign: "center",
   },
   cardHover: {
-    transform: "translateY(-2px)", boxShadow: "0 6px 20px rgba(0,0,0,0.1)",
+    transform: "translateY(-2px)",
+    boxShadow: "0 6px 20px rgba(0,0,0,0.1)",
   },
   iconCircle: {
-    width: 48, height: 48, borderRadius: "50%",
-    display: "flex", alignItems: "center", justifyContent: "center",
+    width: 48,
+    height: 48,
+    borderRadius: "50%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 8,
   },
   cardName: {
-    fontSize: "0.92rem", fontWeight: 700, color: "#1a2332", marginBottom: 4,
+    fontSize: "0.92rem",
+    fontWeight: 700,
+    color: "#1a2332",
+    marginBottom: 4,
   },
   typeBadge: {
-    fontSize: "0.68rem", fontWeight: 600, padding: "2px 8px", borderRadius: 4,
-    textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6,
+    fontSize: "0.68rem",
+    fontWeight: 600,
+    padding: "2px 8px",
+    borderRadius: 4,
+    textTransform: "uppercase",
+    letterSpacing: "0.5px",
+    marginBottom: 6,
   },
-  sharedTag: { fontSize: "0.68rem", fontWeight: 700, color: "#1b5e20", background: "#e8f5e9", borderRadius: 999, padding: "0.1rem 0.45rem", marginBottom: "0.25rem" },
+  sharedTag: {
+    fontSize: "0.68rem",
+    fontWeight: 700,
+    color: "#1b5e20",
+    background: "#e8f5e9",
+    borderRadius: 999,
+    padding: "0.1rem 0.45rem",
+    marginBottom: "0.25rem",
+  },
   cardDesc: {
-    fontSize: "0.78rem", color: "#5f6d7e", lineHeight: 1.4,
+    fontSize: "0.78rem",
+    color: "#5f6d7e",
+    lineHeight: 1.4,
   },
 };

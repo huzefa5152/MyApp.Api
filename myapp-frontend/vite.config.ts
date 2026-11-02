@@ -1,5 +1,5 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -9,17 +9,17 @@ export default defineConfig({
   // identical on every branch means bug-fixing merges never conflict here.
   // BASE_URL flows into asset URLs, index.html references, and the router
   // basename (see main.jsx).
-  base: process.env.VITE_BASE_PATH || '/',
+  base: process.env.VITE_BASE_PATH || "/",
   plugins: [react()],
   server: {
     proxy: {
-      '/api': {
+      "/api": {
         // Dev-only. Override when a second local backend is running (e.g.
         // a rehearsal instance on 5135); the default keeps the historic
         // behaviour so nothing changes for anyone who never sets it.
-        target: process.env.VITE_API_PROXY_TARGET || 'http://localhost:5134',
+        target: process.env.VITE_API_PROXY_TARGET || "http://localhost:5134",
         changeOrigin: true,
       },
     },
   },
-})
+});

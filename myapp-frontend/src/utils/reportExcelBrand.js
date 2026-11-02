@@ -23,7 +23,11 @@ export async function excelBrandParams(company) {
     const brand = await invoiceBranding(template, company);
     const brandFill = cssColorToHex(brand.headerBackground);
     const brandText = cssColorToHex(brand.headerColor);
-    return { letterhead: true, ...(brandFill ? { brandFill } : {}), ...(brandText ? { brandText } : {}) };
+    return {
+      letterhead: true,
+      ...(brandFill ? { brandFill } : {}),
+      ...(brandText ? { brandText } : {}),
+    };
   } catch {
     return { letterhead: true };
   }

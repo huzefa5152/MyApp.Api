@@ -28,10 +28,17 @@ export default function useStarterTemplates() {
   const [shared, setShared] = useState([]);
   useEffect(() => {
     let live = true;
-    httpClient.get("/starter-templates")
-      .then((r) => { if (live) setShared(Array.isArray(r.data) ? r.data : []); })
-      .catch(() => { if (live) setShared([]); });
-    return () => { live = false; };
+    httpClient
+      .get("/starter-templates")
+      .then((r) => {
+        if (live) setShared(Array.isArray(r.data) ? r.data : []);
+      })
+      .catch(() => {
+        if (live) setShared([]);
+      });
+    return () => {
+      live = false;
+    };
   }, []);
   return useMemo(() => mergeStarters(STARTER_TEMPLATES, shared), [shared]);
 }

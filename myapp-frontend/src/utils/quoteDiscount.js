@@ -5,7 +5,9 @@
 const round2 = (n) => Math.round(n * 100) / 100;
 
 export function parseDiscount(text) {
-  const t = String(text ?? "").trim().replace(/,/g, "");
+  const t = String(text ?? "")
+    .trim()
+    .replace(/,/g, "");
   if (!t) return { value: 0, isPercent: false, valid: true };
   const m = t.match(/^(\d+(?:\.\d+)?)\s*(%)?$/);
   if (!m) return { value: 0, isPercent: false, valid: false };
@@ -15,14 +17,15 @@ export function parseDiscount(text) {
 }
 
 /** The text a stored discount is edited as: "10%" or "1000"; "" for none. */
-export const discountText = (value, isPercent) => (Number(value) ? `${Number(value)}${isPercent ? "%" : ""}` : "");
+export const discountText = (value, isPercent) =>
+  Number(value) ? `${Number(value)}${isPercent ? "%" : ""}` : "";
 
 /** { amount, error } for a discount typed against `base`. */
 export function applyDiscount(base, text) {
   const d = parseDiscount(text);
   if (!d.valid) return { amount: 0, error: d.isPercent ? "Max 100%" : "Type 10% or 500" };
   if (!d.value) return { amount: 0, error: null };
-  const amount = d.isPercent ? round2(base * d.value / 100) : round2(d.value);
+  const amount = d.isPercent ? round2((base * d.value) / 100) : round2(d.value);
   return amount > base ? { amount: 0, error: "More than the amount" } : { amount, error: null };
 }
 
@@ -36,7 +39,7 @@ export function quoteTotals(items, headerDiscountText, gstRate) {
   const subtotal = round2(items.reduce((s, it) => s + lineAmounts(it).net, 0));
   const { amount: discount, error } = applyDiscount(subtotal, headerDiscountText);
   const taxable = round2(subtotal - discount);
-  const gstAmount = round2(taxable * (Number(gstRate) || 0) / 100);
+  const gstAmount = round2((taxable * (Number(gstRate) || 0)) / 100);
   return { subtotal, discount, error, taxable, gstAmount, grandTotal: round2(taxable + gstAmount) };
 }
 
@@ -44,7 +47,11 @@ export function quoteTotals(items, headerDiscountText, gstRate) {
 export function discountFields(text, reason) {
   const d = parseDiscount(text);
   const value = d.valid ? d.value : 0;
-  return { discountValue: value, discountIsPercent: value ? d.isPercent : false, discountReason: value ? (reason || "").trim() || null : null };
+  return {
+    discountValue: value,
+    discountIsPercent: value ? d.isPercent : false,
+    discountReason: value ? (reason || "").trim() || null : null,
+  };
 }
 
 const num = (v) => Number(v || 0).toLocaleString("en-US", { maximumFractionDigits: 2 });

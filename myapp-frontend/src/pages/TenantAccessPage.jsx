@@ -11,10 +11,7 @@ import {
   MdCheckBox,
   MdCheckBoxOutlineBlank,
 } from "react-icons/md";
-import {
-  getAllAssignments,
-  setUserCompanies,
-} from "../api/userCompaniesApi";
+import { getAllAssignments, setUserCompanies } from "../api/userCompaniesApi";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import { formStyles, modalSizes } from "../theme";
@@ -71,9 +68,7 @@ export default function TenantAccessPage() {
     const s = search.trim().toLowerCase();
     if (!s) return rows;
     return rows.filter(
-      (r) =>
-        r.fullName?.toLowerCase().includes(s) ||
-        r.username?.toLowerCase().includes(s)
+      (r) => r.fullName?.toLowerCase().includes(s) || r.username?.toLowerCase().includes(s),
     );
   }, [rows, search]);
 
@@ -88,9 +83,9 @@ export default function TenantAccessPage() {
 
   const openEdit = (row) => {
     setEditUser(row);
-    setEditSelected(new Set(
-      row.companies.filter((c) => c.hasExplicitGrant).map((c) => c.companyId)
-    ));
+    setEditSelected(
+      new Set(row.companies.filter((c) => c.hasExplicitGrant).map((c) => c.companyId)),
+    );
   };
 
   const closeEdit = () => {
@@ -115,7 +110,7 @@ export default function TenantAccessPage() {
       const { data } = await setUserCompanies(editUser.userId, ids);
       notify(
         `Saved: ${data.added} added, ${data.removed} removed (total ${data.total}).`,
-        "success"
+        "success",
       );
       closeEdit();
       await fetchAll();
@@ -135,9 +130,9 @@ export default function TenantAccessPage() {
           <div>
             <h1 style={pageStyles.title}>Tenant Access</h1>
             <p style={pageStyles.subtitle}>
-              Decide which companies each user can reach. This is the whole
-              answer: a user reaches the companies ticked here and no others.
-              No ticks, no access. Only the primary admin bypasses it.
+              Decide which companies each user can reach. This is the whole answer: a user reaches
+              the companies ticked here and no others. No ticks, no access. Only the primary admin
+              bypasses it.
             </p>
           </div>
         </div>
@@ -159,109 +154,115 @@ export default function TenantAccessPage() {
         </span>
       </div>
 
-      <RecordsViewport label="Tenant Access records">{loading ? (
-        <div style={pageStyles.empty}>Loading…</div>
-      ) : filtered.length === 0 ? (
-        <div style={pageStyles.empty}>
-          <MdPerson size={48} color={colors.textSecondary} />
-          <p>No users match that search.</p>
-        </div>
-      ) : (
-        <>
-          {/* Desktop / tablet — table */}
-          <div data-admin-table-region="" className="tenant-table" style={pageStyles.tableWrap}>
-            <table style={pageStyles.table}>
-              <thead>
-                <tr>
-                  <th style={pageStyles.th}>User</th>
-                  <th style={pageStyles.th}>Username</th>
-                  <th style={pageStyles.th}>Companies Granted</th>
-                  <th style={{ ...pageStyles.th, textAlign: "right" }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((row) => {
-                  // The grant is the whole story: CompanyAccessGuard is
-                  // fail-closed, so a user reaches exactly these and nothing
-                  // else. The old "isolated" split implied the rest were open,
-                  // which has not been true since the guard changed.
-                  const grants = row.companies.filter((c) => c.hasExplicitGrant);
-                  return (
-                    <tr key={row.userId} style={pageStyles.tr}>
-                      <td style={pageStyles.td}>
-                        <div style={pageStyles.userCell}>
-                          <div style={pageStyles.avatar}>
-                            {row.fullName?.[0]?.toUpperCase() ?? "?"}
-                          </div>
-                          <div>
-                            <div style={pageStyles.userName}>{row.fullName}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td style={pageStyles.td}>{row.username}</td>
-                      <td style={pageStyles.td}>
-                        <span style={pageStyles.pill}>{grants.length} / {row.companies.length}</span>
-                      </td>
-                      <td style={{ ...pageStyles.td, textAlign: "right" }}>
-                        <button
-                          type="button"
-                          style={pageStyles.btnPrimary}
-                          disabled={!canAssign}
-                          title={canAssign ? "" : "Requires tenantaccess.manage.assign permission"}
-                          onClick={() => openEdit(row)}
-                        >
-                          <MdEdit /> Edit Access
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+      <RecordsViewport label="Tenant Access records">
+        {loading ? (
+          <div style={pageStyles.empty}>Loading…</div>
+        ) : filtered.length === 0 ? (
+          <div style={pageStyles.empty}>
+            <MdPerson size={48} color={colors.textSecondary} />
+            <p>No users match that search.</p>
           </div>
+        ) : (
+          <>
+            {/* Desktop / tablet — table */}
+            <div data-admin-table-region="" className="tenant-table" style={pageStyles.tableWrap}>
+              <table style={pageStyles.table}>
+                <thead>
+                  <tr>
+                    <th style={pageStyles.th}>User</th>
+                    <th style={pageStyles.th}>Username</th>
+                    <th style={pageStyles.th}>Companies Granted</th>
+                    <th style={{ ...pageStyles.th, textAlign: "right" }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((row) => {
+                    // The grant is the whole story: CompanyAccessGuard is
+                    // fail-closed, so a user reaches exactly these and nothing
+                    // else. The old "isolated" split implied the rest were open,
+                    // which has not been true since the guard changed.
+                    const grants = row.companies.filter((c) => c.hasExplicitGrant);
+                    return (
+                      <tr key={row.userId} style={pageStyles.tr}>
+                        <td style={pageStyles.td}>
+                          <div style={pageStyles.userCell}>
+                            <div style={pageStyles.avatar}>
+                              {row.fullName?.[0]?.toUpperCase() ?? "?"}
+                            </div>
+                            <div>
+                              <div style={pageStyles.userName}>{row.fullName}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td style={pageStyles.td}>{row.username}</td>
+                        <td style={pageStyles.td}>
+                          <span style={pageStyles.pill}>
+                            {grants.length} / {row.companies.length}
+                          </span>
+                        </td>
+                        <td style={{ ...pageStyles.td, textAlign: "right" }}>
+                          <button
+                            type="button"
+                            style={pageStyles.btnPrimary}
+                            disabled={!canAssign}
+                            title={
+                              canAssign ? "" : "Requires tenantaccess.manage.assign permission"
+                            }
+                            onClick={() => openEdit(row)}
+                          >
+                            <MdEdit /> Edit Access
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
 
-          {/* Mobile — stacked cards. Username under the name; both stat
+            {/* Mobile — stacked cards. Username under the name; both stat
               pills on a labelled row; full-width Edit button at the
               bottom for an easy thumb target. */}
-          <div className="tenant-cards">
-            {filtered.map((row) => {
-              const grants = row.companies.filter((c) => c.hasExplicitGrant);
-              return (
-                <div key={row.userId} className="tenant-card">
-                  <div className="tenant-card__head">
-                    <div className="tenant-card__avatar">
-                      {row.fullName?.[0]?.toUpperCase() ?? "?"}
+            <div className="tenant-cards">
+              {filtered.map((row) => {
+                const grants = row.companies.filter((c) => c.hasExplicitGrant);
+                return (
+                  <div key={row.userId} className="tenant-card">
+                    <div className="tenant-card__head">
+                      <div className="tenant-card__avatar">
+                        {row.fullName?.[0]?.toUpperCase() ?? "?"}
+                      </div>
+                      <div className="tenant-card__who">
+                        <div className="tenant-card__name">{row.fullName}</div>
+                        <div className="tenant-card__username">@{row.username}</div>
+                      </div>
                     </div>
-                    <div className="tenant-card__who">
-                      <div className="tenant-card__name">{row.fullName}</div>
-                      <div className="tenant-card__username">@{row.username}</div>
-                    </div>
-                  </div>
 
-                  <div className="tenant-card__stats">
-                    <div className="tenant-card__stat">
-                      <span className="tenant-card__stat-label">Companies Granted</span>
-                      <span className="tenant-card__pill">
-                        {grants.length} / {row.companies.length}
-                      </span>
+                    <div className="tenant-card__stats">
+                      <div className="tenant-card__stat">
+                        <span className="tenant-card__stat-label">Companies Granted</span>
+                        <span className="tenant-card__pill">
+                          {grants.length} / {row.companies.length}
+                        </span>
+                      </div>
                     </div>
-                  </div>
 
-                  <button
-                    type="button"
-                    className="tenant-card__edit"
-                    disabled={!canAssign}
-                    title={canAssign ? "" : "Requires tenantaccess.manage.assign permission"}
-                    onClick={() => openEdit(row)}
-                  >
-                    <MdEdit size={16} /> Edit Access
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}</RecordsViewport>
+                    <button
+                      type="button"
+                      className="tenant-card__edit"
+                      disabled={!canAssign}
+                      title={canAssign ? "" : "Requires tenantaccess.manage.assign permission"}
+                      onClick={() => openEdit(row)}
+                    >
+                      <MdEdit size={16} /> Edit Access
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </RecordsViewport>
 
       {editUser && (
         <EditModal
@@ -281,7 +282,8 @@ export default function TenantAccessPage() {
 function EditModal({ user, selected, onToggle, onSubmit, onClose, saving, canAssign }) {
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
-      <div data-admin-dialog=""
+      <div
+        data-admin-dialog=""
         style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -289,16 +291,21 @@ function EditModal({ user, selected, onToggle, onSubmit, onClose, saving, canAss
           <span style={formStyles.title}>
             Edit Access — {user.fullName} ({user.username})
           </span>
-          <button data-admin-close="" type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close">
+          <button
+            data-admin-close=""
+            type="button"
+            style={formStyles.closeButton}
+            onClick={onClose}
+            aria-label="Close"
+          >
             <MdClose />
           </button>
         </div>
         <div data-admin-body="" style={formStyles.body}>
           <p style={pageStyles.helpText}>
-            Tick a company to grant access to it. Every company requires the
-            tick — there is no company this user reaches without one, and
-            removing a tick takes the access away within a minute (the access
-            cache holds for 60 seconds). RBAC decides what they may DO once
+            Tick a company to grant access to it. Every company requires the tick — there is no
+            company this user reaches without one, and removing a tick takes the access away within
+            a minute (the access cache holds for 60 seconds). RBAC decides what they may DO once
             inside; this decides where.
           </p>
           <div style={pageStyles.companyList}>
@@ -337,7 +344,8 @@ function EditModal({ user, selected, onToggle, onSubmit, onClose, saving, canAss
           </div>
         </div>
         <div data-admin-footer="" style={formStyles.footer}>
-          <button data-admin-close=""
+          <button
+            data-admin-close=""
             type="button"
             style={{ ...formStyles.button, ...formStyles.cancel }}
             onClick={onClose}
@@ -364,28 +372,164 @@ const pageStyles = {
   header: { marginBottom: "1.5rem" },
   headerInner: { display: "flex", gap: "1rem", alignItems: "flex-start" },
   title: { margin: 0, color: colors.textPrimary, fontSize: "1.5rem" },
-  subtitle: { margin: "0.25rem 0 0", color: colors.textSecondary, fontSize: "0.9rem", maxWidth: 720 },
-  toolbar: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", gap: "1rem", flexWrap: "wrap" },
-  searchBox: { display: "flex", alignItems: "center", gap: "0.5rem", background: colors.inputBg, border: `1px solid ${colors.inputBorder}`, borderRadius: 8, padding: "0.5rem 0.75rem", minWidth: 280 },
-  searchInput: { border: "none", outline: "none", background: "transparent", flex: 1, fontSize: "0.9rem", color: colors.textPrimary },
+  subtitle: {
+    margin: "0.25rem 0 0",
+    color: colors.textSecondary,
+    fontSize: "0.9rem",
+    maxWidth: 720,
+  },
+  toolbar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "1rem",
+    gap: "1rem",
+    flexWrap: "wrap",
+  },
+  searchBox: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    background: colors.inputBg,
+    border: `1px solid ${colors.inputBorder}`,
+    borderRadius: 8,
+    padding: "0.5rem 0.75rem",
+    minWidth: 280,
+  },
+  searchInput: {
+    border: "none",
+    outline: "none",
+    background: "transparent",
+    flex: 1,
+    fontSize: "0.9rem",
+    color: colors.textPrimary,
+  },
   count: { color: colors.textSecondary, fontSize: "0.85rem" },
-  empty: { textAlign: "center", padding: "3rem", color: colors.textSecondary, display: "flex", flexDirection: "column", alignItems: "center", gap: "0.75rem" },
-  tableWrap: { background: colors.cardBg, border: `1px solid ${colors.cardBorder}`, borderRadius: 8, overflow: "hidden" },
+  empty: {
+    textAlign: "center",
+    padding: "3rem",
+    color: colors.textSecondary,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: "0.75rem",
+  },
+  tableWrap: {
+    background: colors.cardBg,
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 8,
+    overflow: "hidden",
+  },
   table: { width: "100%", borderCollapse: "collapse" },
-  th: { textAlign: "left", padding: "0.75rem 1rem", background: colors.inputBg, borderBottom: `1px solid ${colors.cardBorder}`, color: colors.textSecondary, fontSize: "0.8rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" },
+  th: {
+    textAlign: "left",
+    padding: "0.75rem 1rem",
+    background: colors.inputBg,
+    borderBottom: `1px solid ${colors.cardBorder}`,
+    color: colors.textSecondary,
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  },
   tr: { borderBottom: `1px solid ${colors.cardBorder}` },
-  td: { padding: "0.75rem 1rem", color: colors.textPrimary, fontSize: "0.92rem", verticalAlign: "middle" },
+  td: {
+    padding: "0.75rem 1rem",
+    color: colors.textPrimary,
+    fontSize: "0.92rem",
+    verticalAlign: "middle",
+  },
   userCell: { display: "flex", alignItems: "center", gap: "0.75rem" },
-  avatar: { width: 32, height: 32, borderRadius: "50%", background: colors.blueLight, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 600, fontSize: "0.9rem" },
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: "50%",
+    background: colors.blueLight,
+    color: "white",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 600,
+    fontSize: "0.9rem",
+  },
   userName: { fontWeight: 600 },
-  pill: { display: "inline-block", padding: "0.2rem 0.55rem", borderRadius: 999, background: colors.inputBg, border: `1px solid ${colors.cardBorder}`, color: colors.textPrimary, fontSize: "0.8rem", fontWeight: 600 },
-  pillSuccess: { display: "inline-block", padding: "0.2rem 0.55rem", borderRadius: 999, background: colors.successLight, border: `1px solid ${colors.success}`, color: colors.success, fontSize: "0.8rem", fontWeight: 600 },
-  pillWarn: { display: "inline-block", padding: "0.2rem 0.55rem", borderRadius: 999, background: colors.warnLight, border: `1px solid ${colors.warn}`, color: colors.warn, fontSize: "0.8rem", fontWeight: 600 },
-  pillDanger: { display: "inline-block", padding: "0.2rem 0.55rem", borderRadius: 999, background: colors.dangerLight, border: `1px solid ${colors.danger}`, color: colors.danger, fontSize: "0.8rem", fontWeight: 600 },
+  pill: {
+    display: "inline-block",
+    padding: "0.2rem 0.55rem",
+    borderRadius: 999,
+    background: colors.inputBg,
+    border: `1px solid ${colors.cardBorder}`,
+    color: colors.textPrimary,
+    fontSize: "0.8rem",
+    fontWeight: 600,
+  },
+  pillSuccess: {
+    display: "inline-block",
+    padding: "0.2rem 0.55rem",
+    borderRadius: 999,
+    background: colors.successLight,
+    border: `1px solid ${colors.success}`,
+    color: colors.success,
+    fontSize: "0.8rem",
+    fontWeight: 600,
+  },
+  pillWarn: {
+    display: "inline-block",
+    padding: "0.2rem 0.55rem",
+    borderRadius: 999,
+    background: colors.warnLight,
+    border: `1px solid ${colors.warn}`,
+    color: colors.warn,
+    fontSize: "0.8rem",
+    fontWeight: 600,
+  },
+  pillDanger: {
+    display: "inline-block",
+    padding: "0.2rem 0.55rem",
+    borderRadius: 999,
+    background: colors.dangerLight,
+    border: `1px solid ${colors.danger}`,
+    color: colors.danger,
+    fontSize: "0.8rem",
+    fontWeight: 600,
+  },
   muted: { color: colors.textSecondary, fontSize: "0.85rem" },
-  btnPrimary: { display: "inline-flex", alignItems: "center", gap: "0.4rem", background: colors.blue, color: "white", border: "none", borderRadius: 6, padding: "0.45rem 0.75rem", cursor: "pointer", fontWeight: 600, fontSize: "0.85rem" },
-  helpText: { color: colors.textSecondary, fontSize: "0.85rem", marginTop: 0, marginBottom: "1rem", lineHeight: 1.5 },
-  companyList: { display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: "60vh", overflowY: "auto" },
-  companyRow: { display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.7rem 0.9rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 8, cursor: "pointer", transition: "all 0.15s ease" },
+  btnPrimary: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    background: colors.blue,
+    color: "white",
+    border: "none",
+    borderRadius: 6,
+    padding: "0.45rem 0.75rem",
+    cursor: "pointer",
+    fontWeight: 600,
+    fontSize: "0.85rem",
+  },
+  helpText: {
+    color: colors.textSecondary,
+    fontSize: "0.85rem",
+    marginTop: 0,
+    marginBottom: "1rem",
+    lineHeight: 1.5,
+  },
+  companyList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.5rem",
+    maxHeight: "60vh",
+    overflowY: "auto",
+  },
+  companyRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.75rem",
+    padding: "0.7rem 0.9rem",
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 8,
+    cursor: "pointer",
+    transition: "all 0.15s ease",
+  },
   companyName: { flex: 1, fontWeight: 500, color: colors.textPrimary },
 };

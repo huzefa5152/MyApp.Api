@@ -8,16 +8,31 @@ import AttachmentManager from "./AttachmentManager";
 export default function FolderDetailModal({ companyId, folder, onClose }) {
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={{ ...formStyles.title, display: "inline-flex", alignItems: "center", gap: 8 }}>
             <MdFolder size={20} /> {folder.name}
           </h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}><MdClose size={18} /></button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            <MdClose size={18} />
+          </button>
         </div>
         <div data-admin-body="" style={formStyles.body}>
           {folder.description && (
-            <p style={{ marginTop: 0, marginBottom: "0.5rem", color: "#5f6d7e", fontSize: "0.85rem" }}>{folder.description}</p>
+            <p
+              style={{
+                marginTop: 0,
+                marginBottom: "0.5rem",
+                color: "#5f6d7e",
+                fontSize: "0.85rem",
+              }}
+            >
+              {folder.description}
+            </p>
           )}
           <AttachmentManager
             companyId={companyId}
@@ -27,7 +42,14 @@ export default function FolderDetailModal({ companyId, folder, onClose }) {
           />
         </div>
         <div data-admin-footer="" style={formStyles.footer}>
-          <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
+          <button
+            data-admin-close=""
+            type="button"
+            style={{ ...formStyles.button, ...formStyles.cancel }}
+            onClick={onClose}
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>

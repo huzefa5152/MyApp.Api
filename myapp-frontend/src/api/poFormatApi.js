@@ -1,8 +1,7 @@
 import http from "./httpClient";
 
 // List formats — optionally scoped to a company and/or client.
-export const listPoFormats = (params = {}) =>
-  http.get("/poformats", { params });
+export const listPoFormats = (params = {}) => http.get("/poformats", { params });
 
 export const getPoFormat = (id) => http.get(`/poformats/${id}`);
 
@@ -24,15 +23,15 @@ export const fingerprintPdf = (file, companyId) => {
 };
 
 // Primary onboarding path: 5 label/header strings + sample raw text.
-export const createPoFormatSimple = (payload) =>
-  http.post("/poformats/simple", payload);
+export const createPoFormatSimple = (payload) => http.post("/poformats/simple", payload);
 
 // Edit existing format — same 5 strings + metadata.
-export const updatePoFormatSimple = (id, payload) =>
-  http.put(`/poformats/${id}/simple`, payload);
+export const updatePoFormatSimple = (id, payload) => http.put(`/poformats/${id}/simple`, payload);
 
 export const deletePoFormat = (id) => http.delete(`/poformats/${id}`);
 
-export const getPoFormatClients = (companyId) => http.get("/poformats/clients", { params: { companyId } });
+export const getPoFormatClients = (companyId) =>
+  http.get("/poformats/clients", { params: { companyId } });
 
-export const updatePoFormatMetadata = (id, payload) => http.put(`/poformats/${id}/metadata`, payload);
+export const updatePoFormatMetadata = (id, payload) =>
+  http.put(`/poformats/${id}/metadata`, payload);

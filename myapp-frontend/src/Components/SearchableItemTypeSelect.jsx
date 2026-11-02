@@ -13,7 +13,14 @@ import { MdArrowDropDown, MdSearch, MdStar } from "react-icons/md";
  *   onChange   — (newId, pickedItemType) ⇒ void
  *   placeholder, style — passthroughs
  */
-export default function SearchableItemTypeSelect({ items, value, onChange, placeholder, style, groupByHsCode = false }) {
+export default function SearchableItemTypeSelect({
+  items,
+  value,
+  onChange,
+  placeholder,
+  style,
+  groupByHsCode = false,
+}) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlightIdx, setHighlightIdx] = useState(-1);
@@ -27,7 +34,7 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
 
   const selected = useMemo(
     () => (items || []).find((it) => String(it.id) === String(value)),
-    [items, value]
+    [items, value],
   );
 
   // Sort:
@@ -54,7 +61,8 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
       }
       if (hasHs(a) !== hasHs(b)) return hasHs(a) ? 1 : -1;
       if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
-      if ((b.usageCount || 0) !== (a.usageCount || 0)) return (b.usageCount || 0) - (a.usageCount || 0);
+      if ((b.usageCount || 0) !== (a.usageCount || 0))
+        return (b.usageCount || 0) - (a.usageCount || 0);
       return (a.name || "").localeCompare(b.name || "");
     });
     return arr;
@@ -63,11 +71,12 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
   const filteredItems = useMemo(() => {
     const term = query.trim().toLowerCase();
     if (!term) return sortedItems;
-    return sortedItems.filter((it) =>
-      (it.name || "").toLowerCase().includes(term) ||
-      (it.hsCode || "").toLowerCase().includes(term) ||
-      (it.uom || "").toLowerCase().includes(term) ||
-      (it.fbrDescription || "").toLowerCase().includes(term)
+    return sortedItems.filter(
+      (it) =>
+        (it.name || "").toLowerCase().includes(term) ||
+        (it.hsCode || "").toLowerCase().includes(term) ||
+        (it.uom || "").toLowerCase().includes(term) ||
+        (it.fbrDescription || "").toLowerCase().includes(term),
     );
   }, [sortedItems, query]);
 
@@ -75,8 +84,10 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
   useEffect(() => {
     const onMouseDown = (e) => {
       if (
-        wrapperRef.current && !wrapperRef.current.contains(e.target) &&
-        triggerRef.current && !triggerRef.current.contains(e.target)
+        wrapperRef.current &&
+        !wrapperRef.current.contains(e.target) &&
+        triggerRef.current &&
+        !triggerRef.current.contains(e.target)
       ) {
         setOpen(false);
       }
@@ -126,7 +137,7 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
     if (!open) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setHighlightIdx((i) => Math.min((filteredItems.length - 1), i + 1));
+      setHighlightIdx((i) => Math.min(filteredItems.length - 1, i + 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setHighlightIdx((i) => Math.max(0, i - 1));
@@ -164,10 +175,25 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
         onClick={() => setOpen((v) => !v)}
         style={{ ...styles.trigger, ...style }}
       >
-        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left" }}>
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            textAlign: "left",
+          }}
+        >
           {selected ? (
             <>
-              {selected.isFavorite && <MdStar size={12} color="#f59f00" style={{ verticalAlign: "middle", marginRight: 3 }} />}
+              {selected.isFavorite && (
+                <MdStar
+                  size={12}
+                  color="#f59f00"
+                  style={{ verticalAlign: "middle", marginRight: 3 }}
+                />
+              )}
               {selected.name}
               {selected.hsCode && <span style={styles.hsInline}> · {selected.hsCode}</span>}
             </>
@@ -176,83 +202,113 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
           )}
         </span>
         {selected && (
-          <span onClick={handleClear} style={styles.clearBtn} title="Clear selection">×</span>
+          <span onClick={handleClear} style={styles.clearBtn} title="Clear selection">
+            ×
+          </span>
         )}
         <MdArrowDropDown size={18} style={{ flexShrink: 0 }} />
       </button>
 
-      {open && triggerRect && createPortal(
-        <div
-          ref={wrapperRef}
-          data-admin-popup="" style={styles.dropdown(triggerRect)}
-          onKeyDown={handleKeyDown}
-        >
-          <div style={styles.searchRow}>
-            <MdSearch size={16} style={styles.searchIcon} />
-            <input
-              ref={searchRef}
-              type="text"
-              placeholder="Search by name, HS code…"
-              value={query}
-              onChange={(e) => { setQuery(e.target.value); setHighlightIdx(0); }}
-              onKeyDown={handleKeyDown}
-              style={styles.searchInput}
-            />
-          </div>
+      {open &&
+        triggerRect &&
+        createPortal(
+          <div
+            ref={wrapperRef}
+            data-admin-popup=""
+            style={styles.dropdown(triggerRect)}
+            onKeyDown={handleKeyDown}
+          >
+            <div style={styles.searchRow}>
+              <MdSearch size={16} style={styles.searchIcon} />
+              <input
+                ref={searchRef}
+                type="text"
+                placeholder="Search by name, HS code…"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setHighlightIdx(0);
+                }}
+                onKeyDown={handleKeyDown}
+                style={styles.searchInput}
+              />
+            </div>
 
-          <div style={styles.list}>
-            {filteredItems.length === 0 && (
-              <div style={styles.empty}>
-                {items?.length === 0
-                  ? "No items in catalog yet. Add one on the Item Types page."
-                  : `No items match "${query}".`}
-              </div>
-            )}
+            <div style={styles.list}>
+              {filteredItems.length === 0 && (
+                <div style={styles.empty}>
+                  {items?.length === 0
+                    ? "No items in catalog yet. Add one on the Item Types page."
+                    : `No items match "${query}".`}
+                </div>
+              )}
 
-            {groupByHsCode && [true, false].map(withHs => {
-              const group = filteredItems.filter(it => hasHs(it) === withHs);
-              return group.length > 0 && <div key={String(withHs)}>
-                <div style={styles.sectionHeader}>{withHs ? "With HS code · inventory items" : "Without HS code · no stock movement"}</div>
-                {group.map(it => renderItem(it, filteredItems.indexOf(it), highlightIdx, setHighlightIdx, handlePick, withHs))}
-              </div>;
-            })}
-            {!groupByHsCode && stocked.length > 0 && (
-              <>
-                <div style={styles.sectionHeader}>📦 IN STOCK</div>
-                {stocked.map((it, i) => renderItem(it, i, highlightIdx, setHighlightIdx, handlePick))}
-              </>
-            )}
-            {!groupByHsCode && quick.length > 0 && (
-              <>
-                <div style={styles.sectionHeader}>⚡ QUICK (no HS code)</div>
-                {quick.map((it, i) => {
-                  const realIdx = stocked.length + i;
-                  return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
+              {groupByHsCode &&
+                [true, false].map((withHs) => {
+                  const group = filteredItems.filter((it) => hasHs(it) === withHs);
+                  return (
+                    group.length > 0 && (
+                      <div key={String(withHs)}>
+                        <div style={styles.sectionHeader}>
+                          {withHs
+                            ? "With HS code · inventory items"
+                            : "Without HS code · no stock movement"}
+                        </div>
+                        {group.map((it) =>
+                          renderItem(
+                            it,
+                            filteredItems.indexOf(it),
+                            highlightIdx,
+                            setHighlightIdx,
+                            handlePick,
+                            withHs,
+                          ),
+                        )}
+                      </div>
+                    )
+                  );
                 })}
-              </>
-            )}
-            {!groupByHsCode && favorites.length > 0 && (
-              <>
-                <div style={styles.sectionHeader}>★ FAVORITES</div>
-                {favorites.map((it, i) => {
-                  const realIdx = stocked.length + quick.length + i;
-                  return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
-                })}
-              </>
-            )}
-            {!groupByHsCode && others.length > 0 && (
-              <>
-                {(stocked.length > 0 || quick.length > 0 || favorites.length > 0) && <div style={styles.sectionHeader}>OTHER</div>}
-                {others.map((it, i) => {
-                  const realIdx = stocked.length + quick.length + favorites.length + i;
-                  return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
-                })}
-              </>
-            )}
-          </div>
-        </div>,
-        document.body
-      )}
+              {!groupByHsCode && stocked.length > 0 && (
+                <>
+                  <div style={styles.sectionHeader}>📦 IN STOCK</div>
+                  {stocked.map((it, i) =>
+                    renderItem(it, i, highlightIdx, setHighlightIdx, handlePick),
+                  )}
+                </>
+              )}
+              {!groupByHsCode && quick.length > 0 && (
+                <>
+                  <div style={styles.sectionHeader}>⚡ QUICK (no HS code)</div>
+                  {quick.map((it, i) => {
+                    const realIdx = stocked.length + i;
+                    return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
+                  })}
+                </>
+              )}
+              {!groupByHsCode && favorites.length > 0 && (
+                <>
+                  <div style={styles.sectionHeader}>★ FAVORITES</div>
+                  {favorites.map((it, i) => {
+                    const realIdx = stocked.length + quick.length + i;
+                    return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
+                  })}
+                </>
+              )}
+              {!groupByHsCode && others.length > 0 && (
+                <>
+                  {(stocked.length > 0 || quick.length > 0 || favorites.length > 0) && (
+                    <div style={styles.sectionHeader}>OTHER</div>
+                  )}
+                  {others.map((it, i) => {
+                    const realIdx = stocked.length + quick.length + favorites.length + i;
+                    return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
+                  })}
+                </>
+              )}
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
@@ -271,7 +327,9 @@ function renderItem(it, idx, highlightIdx, setHighlightIdx, handlePick, showStoc
     >
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={styles.rowName}>
-          {it.isFavorite && <MdStar size={12} color="#f59f00" style={{ verticalAlign: "middle", marginRight: 3 }} />}
+          {it.isFavorite && (
+            <MdStar size={12} color="#f59f00" style={{ verticalAlign: "middle", marginRight: 3 }} />
+          )}
           {it.name}
         </div>
         <div style={styles.rowMeta}>
@@ -279,10 +337,14 @@ function renderItem(it, idx, highlightIdx, setHighlightIdx, handlePick, showStoc
           {it.uom && <span style={{ color: "#5f6d7e" }}> {it.uom}</span>}
           {showStock && typeof it.availableQty === "number" && (
             <span style={(it.availableQty || 0) > 0 ? styles.stockChipOk : styles.stockChipEmpty}>
-              {(it.availableQty || 0) > 0 ? `${Number(it.availableQty).toLocaleString("en-PK")} in stock` : "out of stock"}
+              {(it.availableQty || 0) > 0
+                ? `${Number(it.availableQty).toLocaleString("en-PK")} in stock`
+                : "out of stock"}
             </span>
           )}
-          {it.usageCount > 0 && <span style={{ color: "#5f6d7e", marginLeft: 4 }}>· used {it.usageCount}×</span>}
+          {it.usageCount > 0 && (
+            <span style={{ color: "#5f6d7e", marginLeft: 4 }}>· used {it.usageCount}×</span>
+          )}
         </div>
       </div>
     </div>
@@ -325,9 +387,17 @@ const styles = {
       position: "fixed",
       top: flipAbove ? undefined : rect.bottom + 2,
       bottom: flipAbove ? window.innerHeight - rect.top + 2 : undefined,
-      left: Math.min(rect.left, Math.max(8, window.innerWidth - Math.min(Math.max(rect.width, 360), window.innerWidth - 16) - 8)),
+      left: Math.min(
+        rect.left,
+        Math.max(
+          8,
+          window.innerWidth - Math.min(Math.max(rect.width, 360), window.innerWidth - 16) - 8,
+        ),
+      ),
       width: Math.min(Math.max(rect.width, 360), window.innerWidth - 16),
-      maxHeight: flipAbove ? Math.min(listHeight, rect.top - 10) : Math.min(listHeight, spaceBelow - 10),
+      maxHeight: flipAbove
+        ? Math.min(listHeight, rect.top - 10)
+        : Math.min(listHeight, spaceBelow - 10),
       backgroundColor: "#fff",
       border: "1px solid #d0d7e2",
       borderRadius: 8,

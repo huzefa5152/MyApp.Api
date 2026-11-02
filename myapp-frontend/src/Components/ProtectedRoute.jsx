@@ -20,7 +20,11 @@ export default function ProtectedRoute() {
     // An AI application sent this visitor to approve a connection ("sign in to
     // connect"): remember the request so that signing in lands back on it.
     if (location.pathname === "/connect") {
-      try { sessionStorage.setItem("postLoginReturnTo", location.pathname + location.search); } catch { /* non-fatal */ }
+      try {
+        sessionStorage.setItem("postLoginReturnTo", location.pathname + location.search);
+      } catch {
+        /* non-fatal */
+      }
     }
     return <Navigate to="/login" replace />;
   }

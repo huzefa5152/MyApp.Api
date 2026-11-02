@@ -1,10 +1,29 @@
 import ListFilters from "../Components/ListFilters";
 import RecordsViewport from "../Components/RecordsViewport";
-import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
+import DocumentLinesNavigation, {
+  DocumentLinesHeaderLink,
+} from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { richTextToPlain } from "../utils/richText";
 import { useNavigate } from "react-router-dom";
-import { MdAssignment, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdLocalShipping, MdVisibility, MdUploadFile, MdGridOn, MdReceiptLong, MdLink } from "react-icons/md";
+import {
+  MdAssignment,
+  MdAdd,
+  MdBusiness,
+  MdSearch,
+  MdChevronLeft,
+  MdChevronRight,
+  MdPrint,
+  MdPictureAsPdf,
+  MdEdit,
+  MdDelete,
+  MdLocalShipping,
+  MdVisibility,
+  MdUploadFile,
+  MdGridOn,
+  MdReceiptLong,
+  MdLink,
+} from "react-icons/md";
 import { saveAs } from "file-saver";
 import { hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
 import SalesOrderForm from "../Components/SalesOrderForm";
@@ -18,8 +37,13 @@ import AttachmentBadge from "../Components/AttachmentBadge";
 import AttachmentQuickModal from "../Components/AttachmentQuickModal";
 import { useEntityAttachmentCounts } from "../hooks/useEntityAttachmentCounts";
 import {
-  getSalesOrderById, getPagedSalesOrdersByCompany, createSalesOrder, updateSalesOrder,
-  deleteSalesOrder, setSalesOrderStatus, getSalesOrderPrintData,
+  getSalesOrderById,
+  getPagedSalesOrdersByCompany,
+  createSalesOrder,
+  updateSalesOrder,
+  deleteSalesOrder,
+  setSalesOrderStatus,
+  getSalesOrderPrintData,
 } from "../api/salesOrderApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
@@ -35,19 +59,36 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
 
-const colors = { blue: "#0d47a1", teal: "#00897b", textPrimary: "#1a2332", textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBorder: "#d0d7e2" };
+const colors = {
+  blue: "#0d47a1",
+  teal: "#00897b",
+  textPrimary: "#1a2332",
+  textSecondary: "#5f6d7e",
+  cardBorder: "#e8edf3",
+  inputBorder: "#d0d7e2",
+};
 
 const FULFIL_COLORS = {
-  "Not Delivered": "#5f6d7e", "Partially Delivered": "#f57c00", "Fully Delivered": "#28a745", "Over Delivered": "#7b1fa2",
+  "Not Delivered": "#5f6d7e",
+  "Partially Delivered": "#f57c00",
+  "Fully Delivered": "#28a745",
+  "Over Delivered": "#7b1fa2",
 };
 const INVOICE_COLORS = {
-  "Uninvoiced": "#5f6d7e", "Partially Invoiced": "#f57c00", "Invoiced": "#28a745",
+  Uninvoiced: "#5f6d7e",
+  "Partially Invoiced": "#f57c00",
+  Invoiced: "#28a745",
 };
 
 export default function SalesOrderPage() {
   const confirm = useConfirm();
   const navigate = useNavigate();
-  const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  const {
+    companies,
+    selectedCompany,
+    setSelectedCompany,
+    loading: loadingCompanies,
+  } = useCompany();
   const tplPicker = usePrintTemplates("SalesOrder");
   const { has } = usePermissions();
   const canView = has("salesorders.list.view");
@@ -72,7 +113,13 @@ export default function SalesOrderPage() {
   const [billOrder, setBillOrder] = useState(null);
   const [attachOrder, setAttachOrder] = useState(null);
   const [viewOrder, setViewOrder] = useState(null);
-  useEffect(() => { const id = Number(new URLSearchParams(window.location.search).get("viewOrder")); if (id > 0) getSalesOrderById(id).then(({data}) => setViewOrder(data)).catch(() => notify("Could not open sales order.", "error")); }, []);
+  useEffect(() => {
+    const id = Number(new URLSearchParams(window.location.search).get("viewOrder"));
+    if (id > 0)
+      getSalesOrderById(id)
+        .then(({ data }) => setViewOrder(data))
+        .catch(() => notify("Could not open sales order.", "error"));
+  }, []);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = usePageSize("salesOrders");
   const [observedSize, setObservedSize] = useState(null);
@@ -82,30 +129,49 @@ export default function SalesOrderPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [hasExcelTpl, setHasExcelTpl] = useState(false);
   const [attachTarget, setAttachTarget] = useState(null);
-  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "SalesOrder", orders.map((o) => o.id));
+  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(
+    selectedCompany?.id,
+    "SalesOrder",
+    orders.map((o) => o.id),
+  );
 
-  const fetchOrders = useCallback(async (companyId, pg) => {
-    if (!companyId) return;
-    setLoading(true);
-    try {
-      const params = { page: pg || page };
-      if (pageSize) params.pageSize = pageSize;
-      if (search) params.search = search;
-      if (statusFilter) params.status = statusFilter;
-      const { data } = await getPagedSalesOrdersByCompany(companyId, params);
-      setOrders(data.items);
-      setTotalCount(data.totalCount);
-      setTotalPages(data.totalPages);
-      setObservedSize(data.pageSize ?? null);
-    } catch { setOrders([]); setTotalCount(0); setTotalPages(0); }
-    finally { setLoading(false); }
-  }, [page, pageSize, search, statusFilter]);
+  const fetchOrders = useCallback(
+    async (companyId, pg) => {
+      if (!companyId) return;
+      setLoading(true);
+      try {
+        const params = { page: pg || page };
+        if (pageSize) params.pageSize = pageSize;
+        if (search) params.search = search;
+        if (statusFilter) params.status = statusFilter;
+        const { data } = await getPagedSalesOrdersByCompany(companyId, params);
+        setOrders(data.items);
+        setTotalCount(data.totalCount);
+        setTotalPages(data.totalPages);
+        setObservedSize(data.pageSize ?? null);
+      } catch {
+        setOrders([]);
+        setTotalCount(0);
+        setTotalPages(0);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [page, pageSize, search, statusFilter],
+  );
 
   useEffect(() => {
-    setPage(1); setSearch(""); setStatusFilter("");
+    setPage(1);
+    setSearch("");
+    setStatusFilter("");
     if (selectedCompany) {
-      hasExcelTemplate(selectedCompany.id, "SalesOrder").then((r) => setHasExcelTpl(!!r.data.hasExcelTemplate)).catch(() => setHasExcelTpl(false));
-    } else { setOrders([]); setHasExcelTpl(false); }
+      hasExcelTemplate(selectedCompany.id, "SalesOrder")
+        .then((r) => setHasExcelTpl(!!r.data.hasExcelTemplate))
+        .catch(() => setHasExcelTpl(false));
+    } else {
+      setOrders([]);
+      setHasExcelTpl(false);
+    }
   }, [selectedCompany]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (selectedCompany) fetchOrders(selectedCompany.id, page);
@@ -124,27 +190,52 @@ export default function SalesOrderPage() {
   };
 
   const handleStatus = async (o, status) => {
-    try { await setSalesOrderStatus(o.id, status); reload(); }
-    catch (err) { notify(err.response?.data?.error || "Failed to update status.", "error"); }
+    try {
+      await setSalesOrderStatus(o.id, status);
+      reload();
+    } catch (err) {
+      notify(err.response?.data?.error || "Failed to update status.", "error");
+    }
   };
 
   const handleDelete = async (o) => {
-    const ok = await confirm({ title: "Delete Order?", message: `Delete Sales Order #${o.salesOrderNumber}? This cannot be undone.`, variant: "danger", confirmText: "Delete" });
+    const ok = await confirm({
+      title: "Delete Order?",
+      message: `Delete Sales Order #${o.salesOrderNumber}? This cannot be undone.`,
+      variant: "danger",
+      confirmText: "Delete",
+    });
     if (!ok) return;
-    try { await deleteSalesOrder(o.id); reload(); }
-    catch (err) { notify(err.response?.data?.error || "Failed to delete.", "error"); }
+    try {
+      await deleteSalesOrder(o.id);
+      reload();
+    } catch (err) {
+      notify(err.response?.data?.error || "Failed to delete.", "error");
+    }
   };
 
   const handlePrint = async (o) => {
-    if (tplPicker.noTemplate) { notify(tplPicker.noTemplateReason, "warning"); return; }
+    if (tplPicker.noTemplate) {
+      notify(tplPicker.noTemplateReason, "warning");
+      return;
+    }
     const w = window.open("", "_blank");
-    if (!w) { notify("Popup blocked. Allow popups for this site.", "warning"); return; }
+    if (!w) {
+      notify("Popup blocked. Allow popups for this site.", "warning");
+      return;
+    }
     w.document.write("<p>Loading order...</p>");
     try {
       const { data } = await getSalesOrderPrintData(o.id);
-      const html = mergeTemplate(tplPicker.resolveTemplate(o)?.htmlContent || defaultOrderTemplate, data);
+      const html = mergeTemplate(
+        tplPicker.resolveTemplate(o)?.htmlContent || defaultOrderTemplate,
+        data,
+      );
       writeAndPrint(w, html);
-    } catch { w.close(); notify("Failed to load print data.", "error"); }
+    } catch {
+      w.close();
+      notify("Failed to load print data.", "error");
+    }
   };
 
   const handleExportExcel = async (o) => {
@@ -154,20 +245,32 @@ export default function SalesOrderPage() {
       const { data } = await getSalesOrderPrintData(o.id);
       const res = await exportExcel(selectedCompany.id, "SalesOrder", data);
       saveAs(res.data, `SO # ${o.salesOrderNumber} ${o.clientName}.xlsx`);
-    } catch { notify("Failed to export Excel.", "error"); }
-    finally { setExportingId(null); }
+    } catch {
+      notify("Failed to export Excel.", "error");
+    } finally {
+      setExportingId(null);
+    }
   };
 
   const handleExportPdf = async (o) => {
-    if (tplPicker.noTemplate) { notify(tplPicker.noTemplateReason, "warning"); return; }
+    if (tplPicker.noTemplate) {
+      notify(tplPicker.noTemplateReason, "warning");
+      return;
+    }
     if (exportingId) return;
     setExportingId(o.id);
     try {
       const { data } = await getSalesOrderPrintData(o.id);
-      const html = mergeTemplate(tplPicker.resolveTemplate(o)?.htmlContent || defaultOrderTemplate, data);
+      const html = mergeTemplate(
+        tplPicker.resolveTemplate(o)?.htmlContent || defaultOrderTemplate,
+        data,
+      );
       await exportToPdf(html, `SO # ${o.salesOrderNumber} ${o.clientName}`);
-    } catch { notify("Failed to export PDF.", "error"); }
-    finally { setExportingId(null); }
+    } catch {
+      notify("Failed to export PDF.", "error");
+    } finally {
+      setExportingId(null);
+    }
   };
 
   const onChallanCreated = (challan) => {
@@ -186,228 +289,744 @@ export default function SalesOrderPage() {
 
   return (
     <DocumentLinesNavigation type="order">
-    <div>
-      <div data-admin-page-header="" style={st.header}>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={st.icon}><MdAssignment size={28} color="#fff" /></div>
-          <div>
-            <h2 style={st.title}>Sales Orders</h2>
-            <p style={st.subtitle}>{selectedCompany ? `${totalCount} order${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}` : "Select a company to view orders"}</p>
+      <div>
+        <div data-admin-page-header="" style={st.header}>
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+            <div style={st.icon}>
+              <MdAssignment size={28} color="#fff" />
+            </div>
+            <div>
+              <h2 style={st.title}>Sales Orders</h2>
+              <p style={st.subtitle}>
+                {selectedCompany
+                  ? `${totalCount} order${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
+                  : "Select a company to view orders"}
+              </p>
+            </div>
+            <DocumentLinesHeaderLink />
           </div>
-          <DocumentLinesHeaderLink />
-        </div>
-        {companies.length > 0 && (canCreate || canImportPo) && (
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            {canCreate && <button style={st.addBtn} onClick={() => selectedCompany && (setEditOrder(null), setShowForm(true))}><MdAdd size={18} /> New Order</button>}
-            {canImportPo && <button style={{ ...st.addBtn, background: colors.blue, boxShadow: "0 4px 14px rgba(13,71,161,0.25)" }} onClick={() => selectedCompany && setShowImport(true)}><MdUploadFile size={18} /> Import Customer PO</button>}
-          </div>
-        )}
-      </div>
-
-      {loadingCompanies ? <Spinner label="Loading companies..." /> : companies.length > 0 ? (
-        <>
-          {companies.length > 1 && (<div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-            <MdBusiness size={20} color={colors.blue} />
-            <select style={dropdownStyles.base} value={selectedCompany?.id || ""} onChange={(e) => setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))}>
-              {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
-            </select>
-          </div>)}
-          {selectedCompany && (
-            <ListFilters><div className="filters-row">
-              <div className="filter-search-wrap">
-                <MdSearch size={15} className="filter-search-icon" />
-                <input type="text" placeholder="Search Order#, Client, PO..." className="filter-search-input" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
-              </div>
-              <select className="filter-select" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
-                <option value="">All Status</option>
-                {["Open", "Closed", "Cancelled"].map((x) => <option key={x} value={x}>{x}</option>)}
-              </select>
-              <div style={{ marginLeft: "auto" }}><PrintTemplateSelect picker={tplPicker} /></div>
-            </div></ListFilters>
+          {companies.length > 0 && (canCreate || canImportPo) && (
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              {canCreate && (
+                <button
+                  style={st.addBtn}
+                  onClick={() => selectedCompany && (setEditOrder(null), setShowForm(true))}
+                >
+                  <MdAdd size={18} /> New Order
+                </button>
+              )}
+              {canImportPo && (
+                <button
+                  style={{
+                    ...st.addBtn,
+                    background: colors.blue,
+                    boxShadow: "0 4px 14px rgba(13,71,161,0.25)",
+                  }}
+                  onClick={() => selectedCompany && setShowImport(true)}
+                >
+                  <MdUploadFile size={18} /> Import Customer PO
+                </button>
+              )}
+            </div>
           )}
-        </>
-      ) : <Empty label="No companies available. Add a company first." />}
+        </div>
 
-      <RecordsViewport label="Sales Order records">{loading ? <Spinner label="Loading orders..." /> : orders.length === 0 && selectedCompany ? (
-        <Empty label="No sales orders found." />
-      ) : (
-        <>
-          <div style={st.grid}>
-            {orders.map((o) => {
-              const canDeliver = canMakeChallan && o.status === "Open" && o.fulfillmentStatus !== "Fully Delivered" && o.fulfillmentStatus !== "Over Delivered";
-              const canBillThis = canBill && (o.billableChallanCount || 0) > 0;
-              const canAttachThis = canAttach && o.status !== "Cancelled";
-              const totalOrdered = (o.items || []).reduce((s, i) => s + (Number(i.quantity) || 0), 0);
-              const totalDelivered = (o.items || []).reduce((s, i) => s + (Number(i.deliveredQuantity) || 0), 0);
-              return (
-                <div key={o.id} style={st.card}>
-                  <div style={st.cardTop}>
-                    <span style={st.oNum}>SO #{o.salesOrderNumber}</span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <AttachmentBadge count={attachCounts[o.id]} onClick={() => setAttachTarget(o)} />
-                      <span style={{ ...st.badge, background: `${FULFIL_COLORS[o.fulfillmentStatus] || "#5f6d7e"}18`, color: FULFIL_COLORS[o.fulfillmentStatus] || "#5f6d7e" }}>{o.fulfillmentStatus}</span>
-                    </div>
+        {loadingCompanies ? (
+          <Spinner label="Loading companies..." />
+        ) : companies.length > 0 ? (
+          <>
+            {companies.length > 1 && (
+              <div
+                style={{
+                  marginBottom: "1rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.75rem",
+                  flexWrap: "wrap",
+                }}
+              >
+                <MdBusiness size={20} color={colors.blue} />
+                <select
+                  style={dropdownStyles.base}
+                  value={selectedCompany?.id || ""}
+                  onChange={(e) =>
+                    setSelectedCompany(
+                      companies.find((c) => parseInt(c.id) === parseInt(e.target.value)),
+                    )
+                  }
+                >
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.brandName || c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {selectedCompany && (
+              <ListFilters>
+                <div className="filters-row">
+                  <div className="filter-search-wrap">
+                    <MdSearch size={15} className="filter-search-icon" />
+                    <input
+                      type="text"
+                      placeholder="Search Order#, Client, PO..."
+                      className="filter-search-input"
+                      value={search}
+                      onChange={(e) => {
+                        setSearch(e.target.value);
+                        setPage(1);
+                      }}
+                    />
                   </div>
-                  <div style={st.client}>{o.clientName}</div>
-                  <div style={st.metaRow}><span>{fmtDate(o.orderDate)}</span><span>{o.items?.length || 0} item{(o.items?.length || 0) !== 1 ? "s" : ""}</span></div>
-                  {o.customerPoNumber && <div style={st.meta}>Customer PO: {o.customerPoNumber}</div>}
-                  {o.salesQuoteNumber && <div style={st.meta}>From Quote #{o.salesQuoteNumber}</div>}
-                  <div style={st.fulfilBar}>
-                    {(o.items || []).slice(0, 4).map((i) => (
-                      <div key={i.id} style={st.fulfilRow}>
-                        <span style={st.fItem} title={richTextToPlain(i.description)}>{richTextToPlain(i.description)}</span>
-                        <span style={st.fQty}>{i.deliveredQuantity}/{i.quantity} {i.unit}</span>
-                      </div>
+                  <select
+                    className="filter-select"
+                    value={statusFilter}
+                    onChange={(e) => {
+                      setStatusFilter(e.target.value);
+                      setPage(1);
+                    }}
+                  >
+                    <option value="">All Status</option>
+                    {["Open", "Closed", "Cancelled"].map((x) => (
+                      <option key={x} value={x}>
+                        {x}
+                      </option>
                     ))}
-                    {(o.items?.length || 0) > 4 && <div style={st.fMore}>+{o.items.length - 4} more</div>}
-                    <div style={st.totalRow}>
-                      <span style={st.totalLabel}>Total Quantity</span>
-                      <span style={st.totalVal} title="Delivered / Ordered">{fmtQty(totalDelivered)} / {fmtQty(totalOrdered)}</span>
-                    </div>
-                  </div>
-                  <div style={st.statusLine}>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
-                      <span style={{ ...st.statusPill, color: o.status === "Cancelled" ? "#dc3545" : o.status === "Closed" ? "#5f6d7e" : colors.teal }}>{o.status}</span>
-                      <span style={{ ...st.invPill, color: INVOICE_COLORS[o.invoiceStatus] || "#5f6d7e", background: `${INVOICE_COLORS[o.invoiceStatus] || "#5f6d7e"}18` }}>{({ Invoiced: "Billed", "Partially Invoiced": "Partially billed", Uninvoiced: "Unbilled" })[o.invoiceStatus] || o.invoiceStatus}</span>
-                    </span>
-                    {o.challanCount > 0 && (
-                      <button style={st.challanCountBtn} onClick={() => viewChallans(o)} title="View this order's challans">
-                        <MdLocalShipping size={13} /> {o.challanCount} challan{o.challanCount !== 1 ? "s" : ""}
-                      </button>
-                    )}
-                  </div>
-                  <div style={st.actions}>
-                    {canView && <button style={st.actBtn} onClick={() => setViewOrder(o)} title="View details"><MdVisibility size={16} /></button>}
-                    {canDeliver && <button style={st.deliverBtn} onClick={() => setDeliverOrder(o)}><MdLocalShipping size={15} /> Deliver</button>}
-                    {canBillThis && <button style={st.billBtn} onClick={() => setBillOrder(o)} title="Generate a bill from this order's delivered challans"><MdReceiptLong size={15} /> Bill</button>}
-                    {canAttachThis && <button style={st.actBtn} onClick={() => setAttachOrder(o)} title="Attach an existing (No-PO) challan to this order"><MdLink size={16} /></button>}
-                    {canUpdate && o.isEditable && <button style={st.actBtn} onClick={() => { setEditOrder(o); setShowForm(true); }} title="Edit"><MdEdit size={16} /></button>}
-                    {canPrint && <button style={{ ...st.actBtn, opacity: tplPicker.noTemplate ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }} onClick={() => handlePrint(o)} disabled={tplPicker.noTemplate} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print"}><MdPrint size={16} /></button>}
-                    {canPrint && <button style={{ ...st.actBtn, opacity: tplPicker.noTemplate || exportingId === o.id ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }} onClick={() => handleExportPdf(o)} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}><MdPictureAsPdf size={16} /></button>}
-                    {canPrint && hasExcelTpl && <button style={{ ...st.actBtn, color: "#2e7d32", opacity: exportingId === o.id + "-excel" ? 0.5 : 1 }} onClick={() => handleExportExcel(o)} disabled={!!exportingId} title="Download Excel"><MdGridOn size={16} /></button>}
-                    {canUpdate && o.status !== "Cancelled" && (
-                      <select style={st.statusSelect} value={o.status} onChange={(e) => handleStatus(o, e.target.value)} title="Set status">
-                        {["Open", "Closed", "Cancelled"].map((x) => <option key={x} value={x}>{x}</option>)}
-                      </select>
-                    )}
-                    {canDelete && o.isLatest && o.challanCount === 0 && <button style={{ ...st.actBtn, color: "#dc3545" }} onClick={() => handleDelete(o)} title="Delete"><MdDelete size={16} /></button>}
+                  </select>
+                  <div style={{ marginLeft: "auto" }}>
+                    <PrintTemplateSelect picker={tplPicker} />
                   </div>
                 </div>
-              );
-            })}
-          </div>
-          {totalCount > PAGE_SIZE_OPTIONS[0] && (
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              total={totalCount}
-              onPage={setPage}
-              pageSize={pageSize ?? observedSize}
-              onPageSize={(n) => { setPageSize(n); setPage(1); }}
-            />
+              </ListFilters>
+            )}
+          </>
+        ) : (
+          <Empty label="No companies available. Add a company first." />
+        )}
+
+        <RecordsViewport label="Sales Order records">
+          {loading ? (
+            <Spinner label="Loading orders..." />
+          ) : orders.length === 0 && selectedCompany ? (
+            <Empty label="No sales orders found." />
+          ) : (
+            <>
+              <div style={st.grid}>
+                {orders.map((o) => {
+                  const canDeliver =
+                    canMakeChallan &&
+                    o.status === "Open" &&
+                    o.fulfillmentStatus !== "Fully Delivered" &&
+                    o.fulfillmentStatus !== "Over Delivered";
+                  const canBillThis = canBill && (o.billableChallanCount || 0) > 0;
+                  const canAttachThis = canAttach && o.status !== "Cancelled";
+                  const totalOrdered = (o.items || []).reduce(
+                    (s, i) => s + (Number(i.quantity) || 0),
+                    0,
+                  );
+                  const totalDelivered = (o.items || []).reduce(
+                    (s, i) => s + (Number(i.deliveredQuantity) || 0),
+                    0,
+                  );
+                  return (
+                    <div key={o.id} style={st.card}>
+                      <div style={st.cardTop}>
+                        <span style={st.oNum}>SO #{o.salesOrderNumber}</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <AttachmentBadge
+                            count={attachCounts[o.id]}
+                            onClick={() => setAttachTarget(o)}
+                          />
+                          <span
+                            style={{
+                              ...st.badge,
+                              background: `${FULFIL_COLORS[o.fulfillmentStatus] || "#5f6d7e"}18`,
+                              color: FULFIL_COLORS[o.fulfillmentStatus] || "#5f6d7e",
+                            }}
+                          >
+                            {o.fulfillmentStatus}
+                          </span>
+                        </div>
+                      </div>
+                      <div style={st.client}>{o.clientName}</div>
+                      <div style={st.metaRow}>
+                        <span>{fmtDate(o.orderDate)}</span>
+                        <span>
+                          {o.items?.length || 0} item{(o.items?.length || 0) !== 1 ? "s" : ""}
+                        </span>
+                      </div>
+                      {o.customerPoNumber && (
+                        <div style={st.meta}>Customer PO: {o.customerPoNumber}</div>
+                      )}
+                      {o.salesQuoteNumber && (
+                        <div style={st.meta}>From Quote #{o.salesQuoteNumber}</div>
+                      )}
+                      <div style={st.fulfilBar}>
+                        {(o.items || []).slice(0, 4).map((i) => (
+                          <div key={i.id} style={st.fulfilRow}>
+                            <span style={st.fItem} title={richTextToPlain(i.description)}>
+                              {richTextToPlain(i.description)}
+                            </span>
+                            <span style={st.fQty}>
+                              {i.deliveredQuantity}/{i.quantity} {i.unit}
+                            </span>
+                          </div>
+                        ))}
+                        {(o.items?.length || 0) > 4 && (
+                          <div style={st.fMore}>+{o.items.length - 4} more</div>
+                        )}
+                        <div style={st.totalRow}>
+                          <span style={st.totalLabel}>Total Quantity</span>
+                          <span style={st.totalVal} title="Delivered / Ordered">
+                            {fmtQty(totalDelivered)} / {fmtQty(totalOrdered)}
+                          </span>
+                        </div>
+                      </div>
+                      <div style={st.statusLine}>
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.4rem",
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <span
+                            style={{
+                              ...st.statusPill,
+                              color:
+                                o.status === "Cancelled"
+                                  ? "#dc3545"
+                                  : o.status === "Closed"
+                                    ? "#5f6d7e"
+                                    : colors.teal,
+                            }}
+                          >
+                            {o.status}
+                          </span>
+                          <span
+                            style={{
+                              ...st.invPill,
+                              color: INVOICE_COLORS[o.invoiceStatus] || "#5f6d7e",
+                              background: `${INVOICE_COLORS[o.invoiceStatus] || "#5f6d7e"}18`,
+                            }}
+                          >
+                            {{
+                              Invoiced: "Billed",
+                              "Partially Invoiced": "Partially billed",
+                              Uninvoiced: "Unbilled",
+                            }[o.invoiceStatus] || o.invoiceStatus}
+                          </span>
+                        </span>
+                        {o.challanCount > 0 && (
+                          <button
+                            style={st.challanCountBtn}
+                            onClick={() => viewChallans(o)}
+                            title="View this order's challans"
+                          >
+                            <MdLocalShipping size={13} /> {o.challanCount} challan
+                            {o.challanCount !== 1 ? "s" : ""}
+                          </button>
+                        )}
+                      </div>
+                      <div style={st.actions}>
+                        {canView && (
+                          <button
+                            style={st.actBtn}
+                            onClick={() => setViewOrder(o)}
+                            title="View details"
+                          >
+                            <MdVisibility size={16} />
+                          </button>
+                        )}
+                        {canDeliver && (
+                          <button style={st.deliverBtn} onClick={() => setDeliverOrder(o)}>
+                            <MdLocalShipping size={15} /> Deliver
+                          </button>
+                        )}
+                        {canBillThis && (
+                          <button
+                            style={st.billBtn}
+                            onClick={() => setBillOrder(o)}
+                            title="Generate a bill from this order's delivered challans"
+                          >
+                            <MdReceiptLong size={15} /> Bill
+                          </button>
+                        )}
+                        {canAttachThis && (
+                          <button
+                            style={st.actBtn}
+                            onClick={() => setAttachOrder(o)}
+                            title="Attach an existing (No-PO) challan to this order"
+                          >
+                            <MdLink size={16} />
+                          </button>
+                        )}
+                        {canUpdate && o.isEditable && (
+                          <button
+                            style={st.actBtn}
+                            onClick={() => {
+                              setEditOrder(o);
+                              setShowForm(true);
+                            }}
+                            title="Edit"
+                          >
+                            <MdEdit size={16} />
+                          </button>
+                        )}
+                        {canPrint && (
+                          <button
+                            style={{
+                              ...st.actBtn,
+                              opacity: tplPicker.noTemplate ? 0.5 : 1,
+                              cursor: tplPicker.noTemplate ? "not-allowed" : "pointer",
+                            }}
+                            onClick={() => handlePrint(o)}
+                            disabled={tplPicker.noTemplate}
+                            title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print"}
+                          >
+                            <MdPrint size={16} />
+                          </button>
+                        )}
+                        {canPrint && (
+                          <button
+                            style={{
+                              ...st.actBtn,
+                              opacity: tplPicker.noTemplate || exportingId === o.id ? 0.5 : 1,
+                              cursor: tplPicker.noTemplate ? "not-allowed" : "pointer",
+                            }}
+                            onClick={() => handleExportPdf(o)}
+                            disabled={tplPicker.noTemplate || !!exportingId}
+                            title={
+                              tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"
+                            }
+                          >
+                            <MdPictureAsPdf size={16} />
+                          </button>
+                        )}
+                        {canPrint && hasExcelTpl && (
+                          <button
+                            style={{
+                              ...st.actBtn,
+                              color: "#2e7d32",
+                              opacity: exportingId === o.id + "-excel" ? 0.5 : 1,
+                            }}
+                            onClick={() => handleExportExcel(o)}
+                            disabled={!!exportingId}
+                            title="Download Excel"
+                          >
+                            <MdGridOn size={16} />
+                          </button>
+                        )}
+                        {canUpdate && o.status !== "Cancelled" && (
+                          <select
+                            style={st.statusSelect}
+                            value={o.status}
+                            onChange={(e) => handleStatus(o, e.target.value)}
+                            title="Set status"
+                          >
+                            {["Open", "Closed", "Cancelled"].map((x) => (
+                              <option key={x} value={x}>
+                                {x}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        {canDelete && o.isLatest && o.challanCount === 0 && (
+                          <button
+                            style={{ ...st.actBtn, color: "#dc3545" }}
+                            onClick={() => handleDelete(o)}
+                            title="Delete"
+                          >
+                            <MdDelete size={16} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {totalCount > PAGE_SIZE_OPTIONS[0] && (
+                <Pagination
+                  page={page}
+                  totalPages={totalPages}
+                  total={totalCount}
+                  onPage={setPage}
+                  pageSize={pageSize ?? observedSize}
+                  onPageSize={(n) => {
+                    setPageSize(n);
+                    setPage(1);
+                  }}
+                />
+              )}
+            </>
           )}
-        </>
-      )}</RecordsViewport>
+        </RecordsViewport>
 
-      {attachTarget && selectedCompany && (
-        <AttachmentQuickModal
-          companyId={selectedCompany.id}
-          entityType="SalesOrder"
-          entityId={attachTarget.id}
-          title={`SO #${attachTarget.salesOrderNumber} — Attachments`}
-          onClose={() => { setAttachTarget(null); refreshAttachCounts(); }}
-        />
-      )}
+        {attachTarget && selectedCompany && (
+          <AttachmentQuickModal
+            companyId={selectedCompany.id}
+            entityType="SalesOrder"
+            entityId={attachTarget.id}
+            title={`SO #${attachTarget.salesOrderNumber} — Attachments`}
+            onClose={() => {
+              setAttachTarget(null);
+              refreshAttachCounts();
+            }}
+          />
+        )}
 
-      {showForm && selectedCompany && (
-        <SalesOrderForm companyId={selectedCompany.id} order={editOrder} onClose={() => { setShowForm(false); setEditOrder(null); refreshAttachCounts(); }} onSaved={handleSave} />
-      )}
-      {showImport && selectedCompany && (
-        <POImportForm
-          companyId={selectedCompany.id}
-          target="salesorder"
-          onClose={() => setShowImport(false)}
-          onSaved={() => { setShowImport(false); reload(); notify("Sales Order created from PO.", "success"); }}
-        />
-      )}
-      {deliverOrder && (
-        <CreateChallanFromOrderModal order={deliverOrder} companyId={selectedCompany?.id} onClose={() => setDeliverOrder(null)} onCreated={onChallanCreated} />
-      )}
-      {attachOrder && (
-        <AttachChallanToOrderModal order={attachOrder} companyId={selectedCompany?.id} onClose={() => setAttachOrder(null)} onAttached={onAttached} />
-      )}
-      {billOrder && selectedCompany && (
-        <InvoiceForm
-          companyId={selectedCompany.id}
-          company={selectedCompany}
-          prefillSalesOrderId={billOrder.id}
-          billsMode={true}
-          onClose={() => setBillOrder(null)}
-          onSaved={() => { setBillOrder(null); notify("Bill created.", "success"); reload(); }}
-        />
-      )}
-      {viewOrder && (
-        <SalesOrderDetailModal onChanged={updated => { setViewOrder(updated); reload(); }}
-          order={viewOrder}
-          companyId={selectedCompany?.id}
-          canDeliver={canMakeChallan && viewOrder.status === "Open" && viewOrder.fulfillmentStatus !== "Fully Delivered" && viewOrder.fulfillmentStatus !== "Over Delivered"}
-          canBill={canBill && (viewOrder.billableChallanCount || 0) > 0}
-          canAttach={canAttach && viewOrder.status !== "Cancelled"}
-          onClose={() => setViewOrder(null)}
-          onPrint={canPrint ? handlePrint : undefined}
-          onEdit={canUpdate ? (o) => { setEditOrder(o); setShowForm(true); } : undefined}
-          onDeliver={canMakeChallan ? (o) => setDeliverOrder(o) : undefined}
-          onGenerateBill={() => { setViewOrder(null); setBillOrder(viewOrder); }}
-          onAttach={() => { setViewOrder(null); setAttachOrder(viewOrder); }}
-          onViewChallans={() => { setViewOrder(null); viewChallans(viewOrder); }}
-        />
-      )}
-    </div>
+        {showForm && selectedCompany && (
+          <SalesOrderForm
+            companyId={selectedCompany.id}
+            order={editOrder}
+            onClose={() => {
+              setShowForm(false);
+              setEditOrder(null);
+              refreshAttachCounts();
+            }}
+            onSaved={handleSave}
+          />
+        )}
+        {showImport && selectedCompany && (
+          <POImportForm
+            companyId={selectedCompany.id}
+            target="salesorder"
+            onClose={() => setShowImport(false)}
+            onSaved={() => {
+              setShowImport(false);
+              reload();
+              notify("Sales Order created from PO.", "success");
+            }}
+          />
+        )}
+        {deliverOrder && (
+          <CreateChallanFromOrderModal
+            order={deliverOrder}
+            companyId={selectedCompany?.id}
+            onClose={() => setDeliverOrder(null)}
+            onCreated={onChallanCreated}
+          />
+        )}
+        {attachOrder && (
+          <AttachChallanToOrderModal
+            order={attachOrder}
+            companyId={selectedCompany?.id}
+            onClose={() => setAttachOrder(null)}
+            onAttached={onAttached}
+          />
+        )}
+        {billOrder && selectedCompany && (
+          <InvoiceForm
+            companyId={selectedCompany.id}
+            company={selectedCompany}
+            prefillSalesOrderId={billOrder.id}
+            billsMode={true}
+            onClose={() => setBillOrder(null)}
+            onSaved={() => {
+              setBillOrder(null);
+              notify("Bill created.", "success");
+              reload();
+            }}
+          />
+        )}
+        {viewOrder && (
+          <SalesOrderDetailModal
+            onChanged={(updated) => {
+              setViewOrder(updated);
+              reload();
+            }}
+            order={viewOrder}
+            companyId={selectedCompany?.id}
+            canDeliver={
+              canMakeChallan &&
+              viewOrder.status === "Open" &&
+              viewOrder.fulfillmentStatus !== "Fully Delivered" &&
+              viewOrder.fulfillmentStatus !== "Over Delivered"
+            }
+            canBill={canBill && (viewOrder.billableChallanCount || 0) > 0}
+            canAttach={canAttach && viewOrder.status !== "Cancelled"}
+            onClose={() => setViewOrder(null)}
+            onPrint={canPrint ? handlePrint : undefined}
+            onEdit={
+              canUpdate
+                ? (o) => {
+                    setEditOrder(o);
+                    setShowForm(true);
+                  }
+                : undefined
+            }
+            onDeliver={canMakeChallan ? (o) => setDeliverOrder(o) : undefined}
+            onGenerateBill={() => {
+              setViewOrder(null);
+              setBillOrder(viewOrder);
+            }}
+            onAttach={() => {
+              setViewOrder(null);
+              setAttachOrder(viewOrder);
+            }}
+            onViewChallans={() => {
+              setViewOrder(null);
+              viewChallans(viewOrder);
+            }}
+          />
+        )}
+      </div>
     </DocumentLinesNavigation>
   );
 }
 
-const fmtDate = (d) => { if (!d) return ""; const dt = new Date(d); const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return `${String(dt.getDate()).padStart(2,"0")}-${m[dt.getMonth()]}-${String(dt.getFullYear()).slice(-2)}`; };
-const fmtQty = (n) => { const v = Number(n) || 0; return Number.isInteger(v) ? String(v) : parseFloat(v.toFixed(4)).toString(); };
-const Spinner = ({ label }) => <div style={st.loading}><div style={st.spin} /><span style={{ color: colors.textSecondary, fontSize: "0.9rem" }}>{label}</span></div>;
-const Empty = ({ label }) => <div style={st.empty}><MdAssignment size={40} color={colors.cardBorder} /><p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>{label}</p></div>;
+const fmtDate = (d) => {
+  if (!d) return "";
+  const dt = new Date(d);
+  const m = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${String(dt.getDate()).padStart(2, "0")}-${m[dt.getMonth()]}-${String(dt.getFullYear()).slice(-2)}`;
+};
+const fmtQty = (n) => {
+  const v = Number(n) || 0;
+  return Number.isInteger(v) ? String(v) : parseFloat(v.toFixed(4)).toString();
+};
+const Spinner = ({ label }) => (
+  <div style={st.loading}>
+    <div style={st.spin} />
+    <span style={{ color: colors.textSecondary, fontSize: "0.9rem" }}>{label}</span>
+  </div>
+);
+const Empty = ({ label }) => (
+  <div style={st.empty}>
+    <MdAssignment size={40} color={colors.cardBorder} />
+    <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>{label}</p>
+  </div>
+);
 
 const st = {
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" },
-  icon: { width: 48, height: 48, borderRadius: 14, background: `linear-gradient(135deg, ${colors.teal}, ${colors.blue})`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  header: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "1.5rem",
+    flexWrap: "wrap",
+    gap: "1rem",
+  },
+  icon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    background: `linear-gradient(135deg, ${colors.teal}, ${colors.blue})`,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
   title: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: colors.textPrimary },
   subtitle: { margin: "0.15rem 0 0", fontSize: "0.88rem", color: colors.textSecondary },
-  addBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1.25rem", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${colors.teal}, ${colors.blue})`, color: "#fff", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 14px rgba(0,137,123,0.25)" },
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(330px, 100%), 1fr))", gap: "1rem" },
-  card: { border: `1px solid ${colors.cardBorder}`, borderRadius: 14, padding: "1rem", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" },
+  addBtn: {
+    minHeight: 44,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    padding: "0.55rem 1.25rem",
+    borderRadius: 10,
+    border: "none",
+    background: `linear-gradient(135deg, ${colors.teal}, ${colors.blue})`,
+    color: "#fff",
+    fontSize: "0.9rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    boxShadow: "0 4px 14px rgba(0,137,123,0.25)",
+  },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(330px, 100%), 1fr))",
+    gap: "1rem",
+  },
+  card: {
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 14,
+    padding: "1rem",
+    background: "#fff",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+  },
   cardTop: { display: "flex", justifyContent: "space-between", alignItems: "center" },
   oNum: { fontWeight: 800, fontSize: "1rem", color: colors.teal },
   badge: { fontSize: "0.72rem", fontWeight: 700, padding: "0.15rem 0.6rem", borderRadius: 20 },
-  client: { marginTop: "0.5rem", fontWeight: 600, color: colors.textPrimary, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
-  metaRow: { display: "flex", justifyContent: "space-between", marginTop: "0.35rem", fontSize: "0.8rem", color: colors.textSecondary },
+  client: {
+    marginTop: "0.5rem",
+    fontWeight: 600,
+    color: colors.textPrimary,
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
+  },
+  metaRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    marginTop: "0.35rem",
+    fontSize: "0.8rem",
+    color: colors.textSecondary,
+  },
   meta: { marginTop: "0.2rem", fontSize: "0.78rem", color: colors.textSecondary },
-  fulfilBar: { marginTop: "0.6rem", borderTop: `1px dashed ${colors.cardBorder}`, paddingTop: "0.5rem", display: "flex", flexDirection: "column", gap: "0.2rem" },
-  fulfilRow: { display: "flex", justifyContent: "space-between", gap: "0.5rem", fontSize: "0.78rem" },
-  fItem: { color: colors.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 },
+  fulfilBar: {
+    marginTop: "0.6rem",
+    borderTop: `1px dashed ${colors.cardBorder}`,
+    paddingTop: "0.5rem",
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.2rem",
+  },
+  fulfilRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "0.5rem",
+    fontSize: "0.78rem",
+  },
+  fItem: {
+    color: colors.textSecondary,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    flex: 1,
+  },
   fQty: { fontWeight: 700, color: colors.textPrimary, flexShrink: 0 },
   fMore: { fontSize: "0.72rem", color: colors.textSecondary, fontStyle: "italic" },
-  totalRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.4rem", paddingTop: "0.4rem", borderTop: `1px solid ${colors.cardBorder}` },
+  totalRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: "0.4rem",
+    paddingTop: "0.4rem",
+    borderTop: `1px solid ${colors.cardBorder}`,
+  },
   totalLabel: { fontSize: "0.8rem", fontWeight: 700, color: colors.textPrimary },
   totalVal: { fontSize: "0.85rem", fontWeight: 800, color: colors.teal },
-  statusLine: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.5rem" },
+  statusLine: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: "0.5rem",
+  },
   statusPill: { fontSize: "0.78rem", fontWeight: 700 },
   invPill: { fontSize: "0.7rem", fontWeight: 700, padding: "0.1rem 0.5rem", borderRadius: 20 },
-  challanCount: { display: "inline-flex", alignItems: "center", gap: "0.2rem", fontSize: "0.75rem", color: colors.textSecondary },
-  challanCountBtn: { display: "inline-flex", alignItems: "center", gap: "0.2rem", fontSize: "0.75rem", color: colors.blue, background: "none", border: "none", padding: 0, cursor: "pointer", fontWeight: 600, textDecoration: "underline", boxShadow: "none" },
-  actions: { display: "flex", gap: "0.4rem", marginTop: "0.75rem", flexWrap: "wrap", alignItems: "center" },
-  deliverBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.4rem 0.7rem", borderRadius: 8, border: "none", background: colors.teal, color: "#fff", fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" },
-  billBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.4rem 0.7rem", borderRadius: 8, border: "none", background: colors.blue, color: "#fff", fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" },
-  actBtn: { display: "grid", placeItems: "center", width: 34, height: 34, padding: 0, borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.blue, cursor: "pointer" },
-  statusSelect: { padding: "0.3rem 0.4rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.78rem", color: colors.textSecondary, background: "#fff", cursor: "pointer" },
-  pagination: { display: "flex", justifyContent: "center", alignItems: "center", gap: "1rem", padding: "1rem 0", marginTop: "0.5rem" },
-  pageBtn: { display: "inline-flex", alignItems: "center", gap: "0.2rem", padding: "0.4rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" },
+  challanCount: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.2rem",
+    fontSize: "0.75rem",
+    color: colors.textSecondary,
+  },
+  challanCountBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.2rem",
+    fontSize: "0.75rem",
+    color: colors.blue,
+    background: "none",
+    border: "none",
+    padding: 0,
+    cursor: "pointer",
+    fontWeight: 600,
+    textDecoration: "underline",
+    boxShadow: "none",
+  },
+  actions: {
+    display: "flex",
+    gap: "0.4rem",
+    marginTop: "0.75rem",
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
+  deliverBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    padding: "0.4rem 0.7rem",
+    borderRadius: 8,
+    border: "none",
+    background: colors.teal,
+    color: "#fff",
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+  billBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    padding: "0.4rem 0.7rem",
+    borderRadius: 8,
+    border: "none",
+    background: colors.blue,
+    color: "#fff",
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+  actBtn: {
+    display: "grid",
+    placeItems: "center",
+    width: 34,
+    height: 34,
+    padding: 0,
+    borderRadius: 8,
+    border: `1px solid ${colors.cardBorder}`,
+    background: "#fff",
+    color: colors.blue,
+    cursor: "pointer",
+  },
+  statusSelect: {
+    padding: "0.3rem 0.4rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    fontSize: "0.78rem",
+    color: colors.textSecondary,
+    background: "#fff",
+    cursor: "pointer",
+  },
+  pagination: {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: "1rem",
+    padding: "1rem 0",
+    marginTop: "0.5rem",
+  },
+  pageBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.2rem",
+    padding: "0.4rem 0.8rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    backgroundColor: "#fff",
+    color: colors.blue,
+    fontSize: "0.82rem",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
   pageInfo: { fontSize: "0.82rem", color: colors.textSecondary, fontWeight: 500 },
-  loading: { display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", padding: "3rem 0" },
-  spin: { width: 28, height: 28, border: `3px solid ${colors.cardBorder}`, borderTopColor: colors.teal, borderRadius: "50%", animation: "spin 0.8s linear infinite" },
-  empty: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "3rem 1rem", textAlign: "center" },
+  loading: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "0.75rem",
+    padding: "3rem 0",
+  },
+  spin: {
+    width: 28,
+    height: 28,
+    border: `3px solid ${colors.cardBorder}`,
+    borderTopColor: colors.teal,
+    borderRadius: "50%",
+    animation: "spin 0.8s linear infinite",
+  },
+  empty: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "3rem 1rem",
+    textAlign: "center",
+  },
 };

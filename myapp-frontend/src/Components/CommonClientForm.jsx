@@ -1,6 +1,21 @@
 import { useEffect, useState } from "react";
-import { MdInfo, MdBusiness, MdCheckCircle, MdDelete, MdAdd, MdStorefront, MdVerifiedUser, MdPlace } from "react-icons/md";
-import { getCommonClientById, updateCommonClient, deleteCommonClient, deleteClient, copyClientToCompanies } from "../api/clientApi";
+import {
+  MdInfo,
+  MdBusiness,
+  MdCheckCircle,
+  MdDelete,
+  MdAdd,
+  MdStorefront,
+  MdVerifiedUser,
+  MdPlace,
+} from "react-icons/md";
+import {
+  getCommonClientById,
+  updateCommonClient,
+  deleteCommonClient,
+  deleteClient,
+  copyClientToCompanies,
+} from "../api/clientApi";
 import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useCompany } from "../contexts/CompanyContext";
@@ -69,7 +84,9 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
         if (!cancelled) setProvinces([]);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -103,14 +120,16 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [groupId]);
 
   // Same registration-type → identity-fields mapping as ClientForm.
   const regType = form.registrationType;
   // NTN shows for every type and is required only for Registered; an NTN on
   // any other type is kept and prints through the NTN merge fields.
-  const showNtn  = !!regType;
+  const showNtn = !!regType;
   const ntnRequired = regType === "Registered";
   const showStrn = regType === "Registered";
   const showCnic = regType === "Unregistered" || regType === "CNIC";
@@ -124,9 +143,9 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
       setForm((f) => ({
         ...f,
         registrationType: value,
-        ntn:  value ? f.ntn : "",
-        strn: (value === "Registered")                    ? f.strn : "",
-        cnic: (value === "Unregistered" || value === "CNIC") ? f.cnic : "",
+        ntn: value ? f.ntn : "",
+        strn: value === "Registered" ? f.strn : "",
+        cnic: value === "Unregistered" || value === "CNIC" ? f.cnic : "",
       }));
       return;
     }
@@ -250,15 +269,12 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
           // doesn't see stale state.
           setError(
             refreshErr?.response?.data?.message ||
-              `Removed from ${member.companyName}, but failed to refresh. Close and reopen to see the latest state.`
+              `Removed from ${member.companyName}, but failed to refresh. Close and reopen to see the latest state.`,
           );
         }
       }
     } catch (e) {
-      setError(
-        e?.response?.data?.message ||
-          `Failed to remove from ${member.companyName}.`
-      );
+      setError(e?.response?.data?.message || `Failed to remove from ${member.companyName}.`);
     } finally {
       setDeletingMemberId(null);
     }
@@ -283,8 +299,14 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
     }
     if (showCnic) {
       const digits = (form.cnic || "").replace(/\D/g, "");
-      if (!digits) { setError("CNIC is required for this registration type."); return; }
-      if (digits.length !== 13) { setError("CNIC must be 13 digits."); return; }
+      if (!digits) {
+        setError("CNIC is required for this registration type.");
+        return;
+      }
+      if (digits.length !== 13) {
+        setError("CNIC must be 13 digits.");
+        return;
+      }
     }
     setSaving(true);
     setError("");
@@ -294,9 +316,9 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
         address: form.address?.trim() || null,
         phone: form.phone?.trim() || null,
         email: form.email?.trim() || null,
-        ntn: showNtn ? (form.ntn?.trim() || null) : null,
-        strn: showStrn ? (form.strn?.trim() || null) : null,
-        cnic: showCnic ? (form.cnic?.trim() || null) : null,
+        ntn: showNtn ? form.ntn?.trim() || null : null,
+        strn: showStrn ? form.strn?.trim() || null : null,
+        cnic: showCnic ? form.cnic?.trim() || null : null,
         site: form.site?.trim() || null,
         registrationType: form.registrationType?.trim() || null,
         fbrProvinceCode: form.fbrProvinceCode ?? null,
@@ -315,24 +337,37 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
-      <div data-admin-dialog=""
+      <div
+        data-admin-dialog=""
         style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }}
         onClick={(e) => e.stopPropagation()}
       >
         <PartyFormHeader
           title="Edit Common Client"
-          subtitle={detail ? `Shared by ${detail.members?.length || 0} companies · changes apply to every one` : "Loading…"}
+          subtitle={
+            detail
+              ? `Shared by ${detail.members?.length || 0} companies · changes apply to every one`
+              : "Loading…"
+          }
           name={form.name}
           onClose={onClose}
         />
 
         <form onSubmit={handleSubmit} style={{ display: "contents" }}>
-          <div data-admin-body="" className="pf-body" style={{ ...formStyles.body, background: "#f5f8fc" }}>
+          <div
+            data-admin-body=""
+            className="pf-body"
+            style={{ ...formStyles.body, background: "#f5f8fc" }}
+          >
             {loading ? (
               <div style={s.notice}>Loading…</div>
             ) : (
               <>
-                {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
+                {error && (
+                  <div ref={errRef} style={formStyles.error}>
+                    {error}
+                  </div>
+                )}
 
                 {/* Cascade summary banner — sets expectations BEFORE the
                     operator saves: every change here applies to every
@@ -343,150 +378,192 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                     <div>
                       <div style={{ fontWeight: 700, marginBottom: 2 }}>
                         Changes propagate to {detail.members?.length || 0} client
-                        {(detail.members?.length || 0) !== 1 ? "s" : ""} across {memberCompanyList || "this company"}
+                        {(detail.members?.length || 0) !== 1 ? "s" : ""} across{" "}
+                        {memberCompanyList || "this company"}
                       </div>
                       <div style={{ fontSize: "0.8rem", color: "#5f6d7e" }}>
-                        Every field below — including <strong>Sites</strong> — applies to every sibling
-                        company's record on save. Sites pre-fill from the longest existing list so the
-                        common case (you set them under one tenant, forgot the others) is a no-op rewrite.
+                        Every field below — including <strong>Sites</strong> — applies to every
+                        sibling company's record on save. Sites pre-fill from the longest existing
+                        list so the common case (you set them under one tenant, forgot the others)
+                        is a no-op rewrite.
                       </div>
                     </div>
                   </div>
                 )}
 
-                <FormSection icon={<MdStorefront size={18} />} title="Business details" hint="As it should print on documents">
-                <div data-admin-field="" style={formStyles.formGroup}>
-                  <label style={formStyles.label}>Name *</label>
-                  <input
-                    name="name"
-                    value={form.name}
-                    onChange={handleChange}
-                    style={formStyles.input}
-                    required
-                  />
-                </div>
-                <div className="form-grid-2col">
+                <FormSection
+                  icon={<MdStorefront size={18} />}
+                  title="Business details"
+                  hint="As it should print on documents"
+                >
                   <div data-admin-field="" style={formStyles.formGroup}>
-                    <label style={formStyles.label}>Phone</label>
-                    <input name="phone" value={form.phone} onChange={handleChange} style={formStyles.input} />
+                    <label style={formStyles.label}>Name *</label>
+                    <input
+                      name="name"
+                      value={form.name}
+                      onChange={handleChange}
+                      style={formStyles.input}
+                      required
+                    />
+                  </div>
+                  <div className="form-grid-2col">
+                    <div data-admin-field="" style={formStyles.formGroup}>
+                      <label style={formStyles.label}>Phone</label>
+                      <input
+                        name="phone"
+                        value={form.phone}
+                        onChange={handleChange}
+                        style={formStyles.input}
+                      />
+                    </div>
+                    <div data-admin-field="" style={formStyles.formGroup}>
+                      <label style={formStyles.label}>Email</label>
+                      <input
+                        name="email"
+                        type="email"
+                        value={form.email}
+                        onChange={handleChange}
+                        style={formStyles.input}
+                      />
+                    </div>
                   </div>
                   <div data-admin-field="" style={formStyles.formGroup}>
-                    <label style={formStyles.label}>Email</label>
-                    <input name="email" type="email" value={form.email} onChange={handleChange} style={formStyles.input} />
+                    <label style={formStyles.label}>Address</label>
+                    <input
+                      name="address"
+                      value={form.address}
+                      onChange={handleChange}
+                      style={formStyles.input}
+                    />
                   </div>
-                </div>
-                <div data-admin-field="" style={formStyles.formGroup}>
-                  <label style={formStyles.label}>Address</label>
-                  <input name="address" value={form.address} onChange={handleChange} style={formStyles.input} />
-                </div>
                 </FormSection>
 
-                <FormSection tone="fbr" icon={<MdVerifiedUser size={18} />} title="FBR identity" hint="Checked by FBR on every invoice">
-                {/* Registration type drives the identity fields below.
+                <FormSection
+                  tone="fbr"
+                  icon={<MdVerifiedUser size={18} />}
+                  title="FBR identity"
+                  hint="Checked by FBR on every invoice"
+                >
+                  {/* Registration type drives the identity fields below.
                     Switching type clears values for hidden fields so a
                     stale NTN doesn't propagate to every member company. */}
-                <div className="form-grid-2col">
-                  <div data-admin-field="" style={formStyles.formGroup}>
-                    <label style={formStyles.label}>Registration Type</label>
-                    <select
-                      name="registrationType"
-                      value={form.registrationType}
-                      onChange={handleChange}
-                      style={formStyles.input}
-                    >
-                      <option value="">—</option>
-                      <option value="Registered">Registered</option>
-                      <option value="Unregistered">Unregistered</option>
-                      <option value="FTN">FTN</option>
-                      <option value="CNIC">CNIC</option>
-                    </select>
-                  </div>
-                  <div data-admin-field="" style={formStyles.formGroup}>
-                    <label style={formStyles.label}>Province</label>
-                    <select
-                      name="fbrProvinceCode"
-                      value={form.fbrProvinceCode ?? ""}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...f,
-                          fbrProvinceCode: e.target.value === "" ? null : Number(e.target.value),
-                        }))
-                      }
-                      style={formStyles.input}
-                    >
-                      <option value="">— Select province —</option>
-                      {provinces.map((p) => (
-                        <option key={p.id} value={p.code}>{p.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {(showNtn || showStrn) && (
                   <div className="form-grid-2col">
-                    {showNtn && (
-                      <div data-admin-field="" style={formStyles.formGroup}>
-                        <label style={formStyles.label}>
-                          {ntnLabel} {ntnRequired ? "*" : <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional)</span>}
-                        </label>
-                        <input
-                          name="ntn"
-                          value={form.ntn}
-                          onChange={handleChange}
-                          style={formStyles.input}
-                          placeholder={regType === "FTN" ? "7-digit NTN or Federal Tax Number" : "7-digit NTN"}
-                        />
-                      </div>
-                    )}
-                    {showStrn && (
-                      <div data-admin-field="" style={formStyles.formGroup}>
-                        <label style={formStyles.label}>STRN *</label>
-                        <input
-                          name="strn"
-                          value={form.strn}
-                          onChange={handleChange}
-                          style={formStyles.input}
-                          placeholder="13-digit Sales Tax Registration Number"
-                        />
-                      </div>
-                    )}
+                    <div data-admin-field="" style={formStyles.formGroup}>
+                      <label style={formStyles.label}>Registration Type</label>
+                      <select
+                        name="registrationType"
+                        value={form.registrationType}
+                        onChange={handleChange}
+                        style={formStyles.input}
+                      >
+                        <option value="">—</option>
+                        <option value="Registered">Registered</option>
+                        <option value="Unregistered">Unregistered</option>
+                        <option value="FTN">FTN</option>
+                        <option value="CNIC">CNIC</option>
+                      </select>
+                    </div>
+                    <div data-admin-field="" style={formStyles.formGroup}>
+                      <label style={formStyles.label}>Province</label>
+                      <select
+                        name="fbrProvinceCode"
+                        value={form.fbrProvinceCode ?? ""}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            fbrProvinceCode: e.target.value === "" ? null : Number(e.target.value),
+                          }))
+                        }
+                        style={formStyles.input}
+                      >
+                        <option value="">— Select province —</option>
+                        {provinces.map((p) => (
+                          <option key={p.id} value={p.code}>
+                            {p.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                )}
 
-                {showCnic && (
-                  <div data-admin-field="" style={formStyles.formGroup}>
-                    <label style={formStyles.label}>CNIC (13 digits) *</label>
-                    <input
-                      name="cnic"
-                      value={form.cnic}
-                      onChange={handleChange}
-                      style={formStyles.input}
-                      placeholder="3520112345678"
-                      maxLength={13}
-                    />
-                    <span style={s.fieldHelp}>
-                      CNIC is the FBR identity for individuals; an NTN above is optional.
-                    </span>
-                  </div>
-                )}
+                  {(showNtn || showStrn) && (
+                    <div className="form-grid-2col">
+                      {showNtn && (
+                        <div data-admin-field="" style={formStyles.formGroup}>
+                          <label style={formStyles.label}>
+                            {ntnLabel}{" "}
+                            {ntnRequired ? (
+                              "*"
+                            ) : (
+                              <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional)</span>
+                            )}
+                          </label>
+                          <input
+                            name="ntn"
+                            value={form.ntn}
+                            onChange={handleChange}
+                            style={formStyles.input}
+                            placeholder={
+                              regType === "FTN"
+                                ? "7-digit NTN or Federal Tax Number"
+                                : "7-digit NTN"
+                            }
+                          />
+                        </div>
+                      )}
+                      {showStrn && (
+                        <div data-admin-field="" style={formStyles.formGroup}>
+                          <label style={formStyles.label}>STRN *</label>
+                          <input
+                            name="strn"
+                            value={form.strn}
+                            onChange={handleChange}
+                            style={formStyles.input}
+                            placeholder="13-digit Sales Tax Registration Number"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {showCnic && (
+                    <div data-admin-field="" style={formStyles.formGroup}>
+                      <label style={formStyles.label}>CNIC (13 digits) *</label>
+                      <input
+                        name="cnic"
+                        value={form.cnic}
+                        onChange={handleChange}
+                        style={formStyles.input}
+                        placeholder="3520112345678"
+                        maxLength={13}
+                      />
+                      <span style={s.fieldHelp}>
+                        CNIC is the FBR identity for individuals; an NTN above is optional.
+                      </span>
+                    </div>
+                  )}
                 </FormSection>
 
-                <FormSection icon={<MdPlace size={18} />} title="Sites" hint="Offered as choices on delivery challans">
-                <div data-admin-field="" style={formStyles.formGroup}>
-                  <label style={formStyles.label}>Sites</label>
-                  <input
-                    name="site"
-                    value={form.site}
-                    onChange={handleChange}
-                    style={formStyles.input}
-                    placeholder="e.g. Site-A ; Site-B ; Site-C"
-                  />
-                  <span style={s.fieldHelp}>
-                    Semicolon-separated. Saving here overwrites the site list on every member
-                    company — pre-filled from the longest existing list across this client's
-                    tenants, so editing once propagates the same sites everywhere.
-                  </span>
-                </div>
+                <FormSection
+                  icon={<MdPlace size={18} />}
+                  title="Sites"
+                  hint="Offered as choices on delivery challans"
+                >
+                  <div data-admin-field="" style={formStyles.formGroup}>
+                    <label style={formStyles.label}>Sites</label>
+                    <input
+                      name="site"
+                      value={form.site}
+                      onChange={handleChange}
+                      style={formStyles.input}
+                      placeholder="e.g. Site-A ; Site-B ; Site-C"
+                    />
+                    <span style={s.fieldHelp}>
+                      Semicolon-separated. Saving here overwrites the site list on every member
+                      company — pre-filled from the longest existing list across this client's
+                      tenants, so editing once propagates the same sites everywhere.
+                    </span>
+                  </div>
                 </FormSection>
 
                 {/* Member breakdown — lists every per-company copy of this
@@ -501,9 +578,15 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                     icon={<MdBusiness size={18} />}
                     title={`Companies (${detail.members.length})`}
                     hint="Each company keeps its own copy; remove one without touching the others"
-                    aside={canCopy && (() => {
-                        const memberCompanyIds = new Set((detail.members || []).map((m) => m.companyId));
-                        const remainingCount = companies.filter((c) => !memberCompanyIds.has(c.id)).length;
+                    aside={
+                      canCopy &&
+                      (() => {
+                        const memberCompanyIds = new Set(
+                          (detail.members || []).map((m) => m.companyId),
+                        );
+                        const remainingCount = companies.filter(
+                          (c) => !memberCompanyIds.has(c.id),
+                        ).length;
                         if (remainingCount === 0) return null;
                         return (
                           <button
@@ -514,25 +597,34 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                             title="Add this common client to other companies that don't have it yet"
                           >
                             <MdAdd size={14} />
-                            Add to {remainingCount === 1 ? "1 more company" : `${remainingCount} more companies`}
+                            Add to{" "}
+                            {remainingCount === 1
+                              ? "1 more company"
+                              : `${remainingCount} more companies`}
                           </button>
                         );
-                      })()}
+                      })()
+                    }
                   >
                     <div className="pf-members">
                       {detail.members.map((m) => {
                         const removingThis = deletingMemberId === m.clientId;
                         const otherActionInFlight =
-                          (deletingMemberId !== null && !removingThis) ||
-                          deleting || saving;
+                          (deletingMemberId !== null && !removingThis) || deleting || saving;
                         return (
                           <div key={m.clientId} className="pf-member">
                             <div className="pf-member__company">
                               <MdCheckCircle size={14} color="#28a745" /> {m.companyName}
                             </div>
-                            <div className="pf-member__site">{m.site || <em style={{ color: "#aab3bf" }}>(no sites)</em>}</div>
+                            <div className="pf-member__site">
+                              {m.site || <em style={{ color: "#aab3bf" }}>(no sites)</em>}
+                            </div>
                             <div className="pf-member__flag">
-                              {m.hasInvoices ? "Has bills" : <span style={{ color: "#aab3bf" }}>—</span>}
+                              {m.hasInvoices ? (
+                                "Has bills"
+                              ) : (
+                                <span style={{ color: "#aab3bf" }}>—</span>
+                              )}
                             </div>
                             {canDelete ? (
                               <button
@@ -540,7 +632,8 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                                 style={{
                                   ...s.memberDeleteBtn,
                                   opacity: removingThis || otherActionInFlight ? 0.55 : 1,
-                                  cursor: removingThis || otherActionInFlight ? "not-allowed" : "pointer",
+                                  cursor:
+                                    removingThis || otherActionInFlight ? "not-allowed" : "pointer",
                                 }}
                                 onClick={() => handleDeleteMember(m)}
                                 disabled={removingThis || otherActionInFlight}
@@ -581,10 +674,13 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                 <MdDelete size={16} style={{ verticalAlign: "-3px", marginRight: 4 }} />
                 {deleting ? "Deleting…" : "Delete from all companies"}
               </button>
-            ) : <span />}
+            ) : (
+              <span />
+            )}
 
             <div style={{ display: "flex", gap: "0.6rem" }}>
-              <button data-admin-close=""
+              <button
+                data-admin-close=""
                 type="button"
                 style={{ ...formStyles.button, ...formStyles.cancel }}
                 onClick={onClose}
@@ -627,8 +723,8 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
             if (createdCount > 0) {
               notify(
                 `Added "${detail.displayName}" to ${createdCount} ${createdCount === 1 ? "company" : "companies"}` +
-                (skipped.length > 0 ? ` (${skipped.length} skipped)` : "."),
-                "success"
+                  (skipped.length > 0 ? ` (${skipped.length} skipped)` : "."),
+                "success",
               );
             } else if (skipped.length > 0) {
               notify(`No copies made — ${skipped[0]}`, "warning");
@@ -640,7 +736,9 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
             try {
               const { data: fresh } = await getCommonClientById(groupId);
               setDetail(fresh);
-            } catch { /* non-fatal */ }
+            } catch {
+              /* non-fatal */
+            }
             onChange?.();
           }}
         />

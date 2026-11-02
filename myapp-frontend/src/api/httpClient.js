@@ -33,18 +33,38 @@ installServiceContinuity(httpClient, { probePath: `${getApiBase()}/auth/me` });
 // Renew valid device sessions before expiry; never retry document writes.
 let renewal = null;
 function tokenExpiry(token) {
-  try { return JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).exp * 1000; }
-  catch { return 0; }
+  try {
+    return JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).exp * 1000;
+  } catch {
+    return 0;
+  }
 }
 async function renewSession(token) {
-  if (!token || tokenExpiry(token) - Date.now() > 60 * 60 * 1000 || tokenExpiry(token) <= Date.now()) return;
+  if (
+    !token ||
+    tokenExpiry(token) - Date.now() > 60 * 60 * 1000 ||
+    tokenExpiry(token) <= Date.now()
+  )
+    return;
   if (!renewal) {
-    renewal = axios.post(`${getApiBase()}/auth/refresh`, {}, {
-      headers: { Authorization: `Bearer ${token}` }, timeout: 10000,
-    }).then(({ data }) => {
-      if (localStorage.getItem("token") === token) localStorage.setItem("token", data.token);
-    }).catch(() => { /* Original token remains valid until its actual expiry. */ })
-      .finally(() => { renewal = null; });
+    renewal = axios
+      .post(
+        `${getApiBase()}/auth/refresh`,
+        {},
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          timeout: 10000,
+        },
+      )
+      .then(({ data }) => {
+        if (localStorage.getItem("token") === token) localStorage.setItem("token", data.token);
+      })
+      .catch(() => {
+        /* Original token remains valid until its actual expiry. */
+      })
+      .finally(() => {
+        renewal = null;
+      });
   }
   await renewal;
 }
@@ -64,7 +84,7 @@ httpClient.interceptors.request.use(
     if (isLogin) delete config.headers.Authorization;
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(error),
 );
 
 // Normalize the assorted error-body shapes the API can return so every
@@ -105,14 +125,21 @@ function ensureMessage(data) {
   }
   // ProblemDetails: { errors: {...}, title, status }
   const fromErrors = flattenErrors(data.errors);
-  if (fromErrors) { data.message = fromErrors; return; }
+  if (fromErrors) {
+    data.message = fromErrors;
+    return;
+  }
   // Older raw ModelState dictionary (no envelope, just field→messages)
   if (!data.errors && !data.title) {
     const looksLikeModelState = Object.values(data).every(
-      (v) => Array.isArray(v) || typeof v === "string");
+      (v) => Array.isArray(v) || typeof v === "string",
+    );
     if (looksLikeModelState) {
       const flat = flattenErrors(data);
-      if (flat) { data.message = flat; return; }
+      if (flat) {
+        data.message = flat;
+        return;
+      }
     }
   }
   if (typeof data.title === "string" && data.title) {
@@ -124,14 +151,20 @@ function ensureMessage(data) {
 httpClient.interceptors.response.use(
   (response) => {
     const bearer = response.config?.headers?.Authorization;
-    if (bearer?.startsWith("Bearer ") && !sameSession(bearer.slice(7), localStorage.getItem("token")))
+    if (
+      bearer?.startsWith("Bearer ") &&
+      !sameSession(bearer.slice(7), localStorage.getItem("token"))
+    )
       return Promise.reject(new axios.CanceledError("Response belongs to a previous session."));
     return response;
   },
   (error) => {
     if (axios.isCancel(error)) return Promise.reject(error);
     const bearer = error.config?.headers?.Authorization;
-    if (bearer?.startsWith("Bearer ") && !sameSession(bearer.slice(7), localStorage.getItem("token")))
+    if (
+      bearer?.startsWith("Bearer ") &&
+      !sameSession(bearer.slice(7), localStorage.getItem("token"))
+    )
       return Promise.reject(new axios.CanceledError("Error belongs to a previous session."));
     const status = error.response?.status;
     if (error.response?.data) ensureMessage(error.response.data);
@@ -163,8 +196,12 @@ httpClient.interceptors.response.use(
       return p;
     })();
 
-    if (status === 401 && !routerHere.startsWith("/login") && !skipAuthRedirect
-        && error.config?.headers?.Authorization === `Bearer ${localStorage.getItem("token")}`) {
+    if (
+      status === 401 &&
+      !routerHere.startsWith("/login") &&
+      !skipAuthRedirect &&
+      error.config?.headers?.Authorization === `Bearer ${localStorage.getItem("token")}`
+    ) {
       // Preserve where the operator was so re-login lands them back
       // there instead of dropping to /dashboard. Captured via sessionStorage
       // (survives the hard reload) — query-string would work too but a
@@ -176,7 +213,9 @@ httpClient.interceptors.response.use(
         // Distinct from the user typing a bad password — LoginPage uses
         // this to render a "session expired" banner.
         sessionStorage.setItem("loginReason", "expired");
-      } catch { /* sessionStorage may be disabled (private mode) — non-fatal */ }
+      } catch {
+        /* sessionStorage may be disabled (private mode) — non-fatal */
+      }
       localStorage.removeItem("token");
       window.location.href = appBase + "/login";
     } else if (status === 403) {
@@ -190,7 +229,11 @@ httpClient.interceptors.response.use(
       // selected company may have been revoked while this tab was open.
       // CompanyContext listens and re-fetches the allowed list.
       if (typeof m === "string" && /company\s+\d+/i.test(m) && /access|authori[sz]ed/i.test(m)) {
-        try { window.dispatchEvent(new Event("company-access-denied")); } catch { /* non-fatal */ }
+        try {
+          window.dispatchEvent(new Event("company-access-denied"));
+        } catch {
+          /* non-fatal */
+        }
       }
     } else if (status >= 500) {
       notify("Something went wrong on the server. Please try again.", "error");
@@ -199,7 +242,7 @@ httpClient.interceptors.response.use(
     }
 
     return Promise.reject(error);
-  }
+  },
 );
 
 export default httpClient;

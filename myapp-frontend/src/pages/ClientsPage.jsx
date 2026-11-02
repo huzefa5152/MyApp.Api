@@ -22,7 +22,12 @@ const colors = {
 };
 
 export default function ClientsPage() {
-  const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  const {
+    companies,
+    selectedCompany,
+    setSelectedCompany,
+    loading: loadingCompanies,
+  } = useCompany();
   const { has } = usePermissions();
   const canCreate = has("clients.manage.create");
   const [clients, setClients] = useState([]);
@@ -63,7 +68,9 @@ export default function ClientsPage() {
         if (!cancelled) setCommonGroups(new Map());
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [selectedCompany, commonRefreshKey]);
 
   const fetchClients = async (companyId) => {
@@ -100,9 +107,12 @@ export default function ClientsPage() {
 
   const searched = clients.filter((c) => matchesSearch(c, search));
   const counts = { ...countByType(searched), common: searched.filter(isCommon).length };
-  const filtered = typeFilter === "all" ? searched
-    : typeFilter === "common" ? searched.filter(isCommon)
-    : searched.filter((c) => (c.registrationType || "None") === typeFilter);
+  const filtered =
+    typeFilter === "all"
+      ? searched
+      : typeFilter === "common"
+        ? searched.filter(isCommon)
+        : searched.filter((c) => (c.registrationType || "None") === typeFilter);
 
   return (
     <div>
@@ -128,8 +138,12 @@ export default function ClientsPage() {
             <button
               style={styles.addBtn}
               onClick={handleAdd}
-              onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.transform = ""; }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-2px)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "";
+              }}
             >
               <MdAdd size={18} /> New Client
             </button>
@@ -141,7 +155,9 @@ export default function ClientsPage() {
       {loadingCompanies ? (
         <div style={styles.loadingContainer}>
           <div style={styles.spinner} />
-          <span style={{ color: colors.textSecondary, fontSize: "0.9rem" }}>Loading companies...</span>
+          <span style={{ color: colors.textSecondary, fontSize: "0.9rem" }}>
+            Loading companies...
+          </span>
         </div>
       ) : companies.length > 0 ? (
         <PartyToolbar
@@ -157,42 +173,55 @@ export default function ClientsPage() {
         />
       ) : (
         <div className="pd-empty">
-          <span className="pd-empty__icon"><MdBusiness size={30} /></span>
+          <span className="pd-empty__icon">
+            <MdBusiness size={30} />
+          </span>
           <strong>No companies yet</strong>
           <p>Add a company first, then its clients will appear here.</p>
         </div>
       )}
 
       {/* Client List */}
-      <RecordsViewport label="Clients records">{loadingClients ? (
-        <div className="pd-grid" aria-busy="true" aria-label="Loading clients">
-          {[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="pd-skeleton" />)}
-        </div>
-      ) : filtered.length === 0 && selectedCompany ? (
-        <div className="pd-empty">
-          <span className="pd-empty__icon">{clients.length === 0 ? <MdPeople size={30} /> : <MdSearchOff size={30} />}</span>
-          <strong>{clients.length === 0 ? "No clients yet" : "No matching clients"}</strong>
-          <p>
-            {clients.length === 0
-              ? "Add your first client, or bring them in from an Excel file."
-              : "Try a different search or registration type."}
-          </p>
-          {clients.length === 0 && canCreate && (
-            <button type="button" className="pd-btn pd-btn--primary" style={{ flex: "none" }} onClick={handleAdd}>
-              <MdAdd size={18} /> New Client
-            </button>
-          )}
-        </div>
-      ) : (
-        <ClientList
-          clients={filtered}
-          commonGroups={commonGroups}
-          onEdit={handleEdit}
-          onEditCommon={(groupId) => setEditingGroupId(groupId)}
-          onCopy={(client) => setCopyingClient(client)}
-          fetchClients={() => fetchClients(selectedCompany?.id)}
-        />
-      )}</RecordsViewport>
+      <RecordsViewport label="Clients records">
+        {loadingClients ? (
+          <div className="pd-grid" aria-busy="true" aria-label="Loading clients">
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="pd-skeleton" />
+            ))}
+          </div>
+        ) : filtered.length === 0 && selectedCompany ? (
+          <div className="pd-empty">
+            <span className="pd-empty__icon">
+              {clients.length === 0 ? <MdPeople size={30} /> : <MdSearchOff size={30} />}
+            </span>
+            <strong>{clients.length === 0 ? "No clients yet" : "No matching clients"}</strong>
+            <p>
+              {clients.length === 0
+                ? "Add your first client, or bring them in from an Excel file."
+                : "Try a different search or registration type."}
+            </p>
+            {clients.length === 0 && canCreate && (
+              <button
+                type="button"
+                className="pd-btn pd-btn--primary"
+                style={{ flex: "none" }}
+                onClick={handleAdd}
+              >
+                <MdAdd size={18} /> New Client
+              </button>
+            )}
+          </div>
+        ) : (
+          <ClientList
+            clients={filtered}
+            commonGroups={commonGroups}
+            onEdit={handleEdit}
+            onEditCommon={(groupId) => setEditingGroupId(groupId)}
+            onCopy={(client) => setCopyingClient(client)}
+            fetchClients={() => fetchClients(selectedCompany?.id)}
+          />
+        )}
+      </RecordsViewport>
 
       {/* Copy client into other companies — shared dialog used by both
           the per-company list (this screen) and the Common Client edit
@@ -214,8 +243,8 @@ export default function ClientsPage() {
             if (createdCount > 0) {
               notify(
                 `Copied "${copyingClient.name}" into ${createdCount} ${createdCount === 1 ? "company" : "companies"}` +
-                (skipped.length > 0 ? ` (${skipped.length} skipped)` : "."),
-                "success"
+                  (skipped.length > 0 ? ` (${skipped.length} skipped)` : "."),
+                "success",
               );
             } else if (skipped.length > 0) {
               notify(`No copies made — ${skipped[0]}`, "warning");
@@ -307,7 +336,8 @@ const styles = {
     fontSize: "0.88rem",
     color: colors.textSecondary,
   },
-  addBtn: { minHeight: 44,
+  addBtn: {
+    minHeight: 44,
     display: "inline-flex",
     alignItems: "center",
     gap: "0.4rem",

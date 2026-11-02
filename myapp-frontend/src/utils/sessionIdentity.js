@@ -5,7 +5,9 @@ export function sessionIdentity(token) {
     const sid = claims.sid || (claims.jti ? `legacy:${claims.jti}` : null);
     if (!claims.sub || !claims.stamp || !sid) return null;
     return JSON.stringify([String(claims.sub), claims.stamp, sid]);
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 export function sameSession(first, second) {
   if (first === second) return true;

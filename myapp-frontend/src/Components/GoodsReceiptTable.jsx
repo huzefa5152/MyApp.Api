@@ -3,7 +3,20 @@ import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
 import AttachmentBadge from "./AttachmentBadge";
 
-export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onDelete, onPrint, onExportPdf, exportingId, printDisabled = false, printDisabledReason = "", attachCounts, onAttach }) {
+export default function GoodsReceiptTable({
+  receipts,
+  perms,
+  onView,
+  onEdit,
+  onDelete,
+  onPrint,
+  onExportPdf,
+  exportingId,
+  printDisabled = false,
+  printDisabledReason = "",
+  attachCounts,
+  onAttach,
+}) {
   const columns = [
     {
       key: "goodsReceiptNumber",
@@ -26,8 +39,8 @@ export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onD
       key: "receiptDate",
       header: "Date",
       width: 110,
-      accessor: (g) => g.receiptDate ? new Date(g.receiptDate).getTime() : 0,
-      render: (g) => g.receiptDate ? new Date(g.receiptDate).toLocaleDateString() : "—",
+      accessor: (g) => (g.receiptDate ? new Date(g.receiptDate).getTime() : 0),
+      render: (g) => (g.receiptDate ? new Date(g.receiptDate).toLocaleDateString() : "—"),
     },
     {
       key: "items",
@@ -41,7 +54,7 @@ export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onD
       key: "purchaseBillNumber",
       header: "Linked PB",
       width: 110,
-      render: (g) => g.purchaseBillNumber ? `#${g.purchaseBillNumber}` : "—",
+      render: (g) => (g.purchaseBillNumber ? `#${g.purchaseBillNumber}` : "—"),
     },
     {
       key: "supplierChallanNumber",
@@ -54,7 +67,7 @@ export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onD
       header: "Status",
       width: 130,
       accessor: (g) => g.status || "",
-      render: (g) => g.status ? <StatusBadge status={g.status} /> : "—",
+      render: (g) => (g.status ? <StatusBadge status={g.status} /> : "—"),
     },
   ];
 
@@ -70,7 +83,11 @@ export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onD
       )}
       {onPrint && (
         <button
-          style={{ ...btn.print, opacity: printDisabled ? 0.5 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+          style={{
+            ...btn.print,
+            opacity: printDisabled ? 0.5 : 1,
+            cursor: printDisabled ? "not-allowed" : "pointer",
+          }}
           disabled={printDisabled}
           onClick={() => onPrint(g)}
           title={printDisabled ? printDisabledReason : "Print"}
@@ -80,7 +97,11 @@ export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onD
       )}
       {onExportPdf && (
         <button
-          style={{ ...btn.pdf, opacity: printDisabled || exportingId === g.id ? 0.5 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+          style={{
+            ...btn.pdf,
+            opacity: printDisabled || exportingId === g.id ? 0.5 : 1,
+            cursor: printDisabled ? "not-allowed" : "pointer",
+          }}
           onClick={() => onExportPdf(g)}
           disabled={printDisabled || !!exportingId}
           title={printDisabled ? printDisabledReason : "Download PDF"}
@@ -121,9 +142,9 @@ const baseBtn = {
   padding: 0,
 };
 const btn = {
-  view:   { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" },
-  edit:   { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },
-  print:  { ...baseBtn, backgroundColor: "#e8f5e9", color: "#1b5e20" },
-  pdf:    { ...baseBtn, backgroundColor: "#f3e5f5", color: "#6a1b9a" },
+  view: { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" },
+  edit: { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },
+  print: { ...baseBtn, backgroundColor: "#e8f5e9", color: "#1b5e20" },
+  pdf: { ...baseBtn, backgroundColor: "#f3e5f5", color: "#6a1b9a" },
   delete: { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" },
 };

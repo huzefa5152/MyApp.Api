@@ -24,16 +24,23 @@ export default function FolderFormModal({ companyId, folder, onClose, onSaved })
     // Quote form would submit + close when you create a folder.
     e.stopPropagation();
     if (saving) return;
-    if (!name.trim()) { setError("Folder name is required."); return; }
+    if (!name.trim()) {
+      setError("Folder name is required.");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
       const payload = { name: name.trim(), description: description.trim() || null };
-      const res = isEdit ? await updateFolder(folder.id, payload) : await createFolder(companyId, payload);
+      const res = isEdit
+        ? await updateFolder(folder.id, payload)
+        : await createFolder(companyId, payload);
       onSaved?.(res.data);
       onClose();
     } catch (err) {
-      setError(err.response?.data?.error || err.response?.data?.message || "Could not save the folder.");
+      setError(
+        err.response?.data?.error || err.response?.data?.message || "Could not save the folder.",
+      );
       setSaving(false);
     }
   };
@@ -44,34 +51,68 @@ export default function FolderFormModal({ companyId, folder, onClose, onSaved })
   // stack clean above the parent modal (1100) / ConfirmDialog (1101).
   return createPortal(
     <div data-admin-backdrop="" style={{ ...formStyles.backdrop, zIndex: 1102 }} onClick={onClose}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px` }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.md}px` }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? "Rename Folder" : "New Folder"}</h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            &times;
+          </button>
         </div>
         <form onSubmit={submit}>
           <div data-admin-body="" style={formStyles.body}>
-            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
+            {error && (
+              <div ref={errRef} style={formStyles.error}>
+                {error}
+              </div>
+            )}
             <div data-admin-field="" style={formStyles.formGroup}>
               <label style={formStyles.label}>Folder Name</label>
-              <input autoFocus style={formStyles.input} value={name} maxLength={200}
-                onChange={(e) => setName(e.target.value)} placeholder="e.g. Contracts, Certificates" />
+              <input
+                autoFocus
+                style={formStyles.input}
+                value={name}
+                maxLength={200}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Contracts, Certificates"
+              />
             </div>
             <div data-admin-field="" style={formStyles.formGroup}>
-              <label style={formStyles.label}>Description <span style={{ fontWeight: 400 }}>(optional)</span></label>
-              <textarea style={{ ...formStyles.input, minHeight: 70, resize: "vertical" }} value={description} maxLength={1000}
-                onChange={(e) => setDescription(e.target.value)} placeholder="What goes in this folder?" />
+              <label style={formStyles.label}>
+                Description <span style={{ fontWeight: 400 }}>(optional)</span>
+              </label>
+              <textarea
+                style={{ ...formStyles.input, minHeight: 70, resize: "vertical" }}
+                value={description}
+                maxLength={1000}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="What goes in this folder?"
+              />
             </div>
           </div>
           <div data-admin-footer="" style={formStyles.footer}>
-            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
-            <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }} disabled={saving}>
+            <button
+              data-admin-close=""
+              type="button"
+              style={{ ...formStyles.button, ...formStyles.cancel }}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}
+              disabled={saving}
+            >
               {saving ? "Saving..." : isEdit ? "Rename" : "Create Folder"}
             </button>
           </div>
         </form>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

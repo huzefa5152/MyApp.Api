@@ -111,16 +111,33 @@ body { font-family:Arial,Helvetica,sans-serif; color:#111; font-size:8pt; line-h
 </body></html>
 `;
 
-export function invoiceDocumentTemplate(type, { accent = "#111111", font = "Arial,Helvetica,sans-serif" } = {}) {
+export function invoiceDocumentTemplate(
+  type,
+  { accent = "#111111", font = "Arial,Helvetica,sans-serif" } = {},
+) {
   const tax = type === "TaxInvoice";
   const buyer = tax ? "buyer" : "client";
-  let html = DOCUMENT.replaceAll("__TITLE__", tax ? "Sales Tax Invoice" : "Invoice")
-    .replaceAll("__NUMBER_LABEL__", tax ? "Sale Tax Inv #" : "Invoice #");
-  for (const [token, field] of [["NAME", "Name"], ["ADDRESS", "Address"], ["PHONE", "Phone"], ["STRN", "STRN"], ["NTN", "NTN"]]) {
+  let html = DOCUMENT.replaceAll("__TITLE__", tax ? "Sales Tax Invoice" : "Invoice").replaceAll(
+    "__NUMBER_LABEL__",
+    tax ? "Sale Tax Inv #" : "Invoice #",
+  );
+  for (const [token, field] of [
+    ["NAME", "Name"],
+    ["ADDRESS", "Address"],
+    ["PHONE", "Phone"],
+    ["STRN", "STRN"],
+    ["NTN", "NTN"],
+  ]) {
     html = html.replaceAll(`__BUYER_${token}__`, buyer + field);
   }
-  html = html.replace("__DESCRIPTION__", tax
-    ? '{{#if this.hsCode}}{{this.hsCode}} - {{/if}}{{#if this.itemTypeName}}{{{richText this.itemTypeName}}}{{else}}{{{richText this.description}}}{{/if}}'
-    : '{{{richText this.description}}}');
-  return html.replace("</style>", `body { font-family:${font}; } .title,.fbr-title { color:${accent}; } .party-title { color:${accent}; } </style>`);
+  html = html.replace(
+    "__DESCRIPTION__",
+    tax
+      ? "{{#if this.hsCode}}{{this.hsCode}} - {{/if}}{{#if this.itemTypeName}}{{{richText this.itemTypeName}}}{{else}}{{{richText this.description}}}{{/if}}"
+      : "{{{richText this.description}}}",
+  );
+  return html.replace(
+    "</style>",
+    `body { font-family:${font}; } .title,.fbr-title { color:${accent}; } .party-title { color:${accent}; } </style>`,
+  );
 }

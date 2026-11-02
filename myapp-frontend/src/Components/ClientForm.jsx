@@ -8,11 +8,8 @@ import { formStyles } from "../theme";
 import { MdStorefront, MdVerifiedUser, MdContacts, MdApartment } from "react-icons/md";
 import { PartyFormHeader, FormSection } from "./party/PartyFormKit";
 
-const {
-  backdrop, modal,
-  body, formGroup, label, input,
-  footer, button, cancel, submit,
-} = formStyles;
+const { backdrop, modal, body, formGroup, label, input, footer, button, cancel, submit } =
+  formStyles;
 
 /**
  * Per-company client form. Two modes:
@@ -45,8 +42,30 @@ const {
 export default function ClientForm({ client, companyId, companies = [], onClose, onSaved }) {
   const [formData, setFormData] = useState(
     client
-      ? { ...client, ntn: client.ntn || "", strn: client.strn || "", site: client.site || "", contactPerson: client.contactPerson || "", registrationType: client.registrationType || "", cnic: client.cnic || "", fbrProvinceCode: client.fbrProvinceCode ?? "" }
-      : { id: null, name: "", address: "", email: "", phone: "", ntn: "", strn: "", site: "", contactPerson: "", registrationType: "", cnic: "", fbrProvinceCode: "" }
+      ? {
+          ...client,
+          ntn: client.ntn || "",
+          strn: client.strn || "",
+          site: client.site || "",
+          contactPerson: client.contactPerson || "",
+          registrationType: client.registrationType || "",
+          cnic: client.cnic || "",
+          fbrProvinceCode: client.fbrProvinceCode ?? "",
+        }
+      : {
+          id: null,
+          name: "",
+          address: "",
+          email: "",
+          phone: "",
+          ntn: "",
+          strn: "",
+          site: "",
+          contactPerson: "",
+          registrationType: "",
+          cnic: "",
+          fbrProvinceCode: "",
+        },
   );
   const [errors, setErrors] = useState({});
   const [provinces, setProvinces] = useState([]);
@@ -59,28 +78,36 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
   const isCreate = !client;
   const showCompanyPicker = isCreate && Array.isArray(companies) && companies.length > 1;
   const [selectedCompanyIds, setSelectedCompanyIds] = useState(() =>
-    companyId ? [Number(companyId)] : []
+    companyId ? [Number(companyId)] : [],
   );
 
   // Keep the default in sync if the parent dropdown changes the
   // active company while the modal is closed (rare, but safe).
   useEffect(() => {
     if (isCreate && companyId) {
-      setSelectedCompanyIds((prev) =>
-        prev.length === 0 ? [Number(companyId)] : prev
-      );
+      setSelectedCompanyIds((prev) => (prev.length === 0 ? [Number(companyId)] : prev));
     }
   }, [companyId, isCreate]);
 
   const toggleCompany = (id) => {
     const n = Number(id);
     setSelectedCompanyIds((prev) =>
-      prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]
+      prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n],
     );
   };
 
   useEffect(() => {
-    if (client) setFormData({ ...client, ntn: client.ntn || "", strn: client.strn || "", site: client.site || "", contactPerson: client.contactPerson || "", registrationType: client.registrationType || "", cnic: client.cnic || "", fbrProvinceCode: client.fbrProvinceCode ?? "" });
+    if (client)
+      setFormData({
+        ...client,
+        ntn: client.ntn || "",
+        strn: client.strn || "",
+        site: client.site || "",
+        contactPerson: client.contactPerson || "",
+        registrationType: client.registrationType || "",
+        cnic: client.cnic || "",
+        fbrProvinceCode: client.fbrProvinceCode ?? "",
+      });
   }, [client]);
 
   useEffect(() => {
@@ -92,7 +119,9 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
         ]);
         setProvinces(provRes.data);
         setRegTypes(regRes.data);
-      } catch { /* ignore — fallback to empty */ }
+      } catch {
+        /* ignore — fallback to empty */
+      }
     };
     loadLookups();
   }, []);
@@ -110,15 +139,20 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
   // NTN merge fields like any other.
   // Blank — pick the type first.
   const regType = formData.registrationType;
-  const showNtn  = !!regType;
+  const showNtn = !!regType;
   const ntnRequired = regType === "Registered";
   const showStrn = regType === "Registered"; // shown, but optional
   // CNIC shows for every type once one is picked; optional throughout —
   // the server files under the NTN when there is one, else the CNIC.
   const showCnic = !!regType;
-  const ntnLabel = ntnRequired
-    ? "NTN *"
-    : <>{regType === "FTN" ? "NTN / FTN" : "NTN"} <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional)</span></>;
+  const ntnLabel = ntnRequired ? (
+    "NTN *"
+  ) : (
+    <>
+      {regType === "FTN" ? "NTN / FTN" : "NTN"}{" "}
+      <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional)</span>
+    </>
+  );
 
   // "Check with FBR": FBR's Get_Reg_Type answer for the typed NTN/CNIC.
   // A buyer recorded as Registered whom FBR holds as Unregistered is
@@ -134,7 +168,11 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
       const { data } = await getFbrRegistrationType(companyId, regNo);
       const type = (data?.registratioN_TYPE || data?.registrationType || "").trim();
       if (type === "Registered" || type === "Unregistered") {
-        setFormData((f) => ({ ...f, registrationType: type, ...(type === "Unregistered" ? { strn: "" } : {}) }));
+        setFormData((f) => ({
+          ...f,
+          registrationType: type,
+          ...(type === "Unregistered" ? { strn: "" } : {}),
+        }));
         setErrors((e) => ({ ...e, registrationType: "" }));
         setFbrCheck({ busy: false, result: `FBR: ${regNo} is ${type}` });
       } else {
@@ -149,7 +187,8 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
     const newErrors = {};
     if (!formData.name.trim()) newErrors.name = "Name is required";
     if (!formData.registrationType) newErrors.registrationType = "Registration Type is required";
-    if (!formData.fbrProvinceCode && formData.fbrProvinceCode !== 0) newErrors.fbrProvinceCode = "Province is required";
+    if (!formData.fbrProvinceCode && formData.fbrProvinceCode !== 0)
+      newErrors.fbrProvinceCode = "Province is required";
 
     // NTN: required only for Registered; optional for every other type.
     if (ntnRequired && !formData.ntn.trim()) newErrors.ntn = "NTN is required";
@@ -178,9 +217,9 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
     // Registered keeps the new (empty) state until the operator types.
     if (name === "registrationType") {
       const next = { ...formData, registrationType: value };
-      const willShowNtn  = !!value;
+      const willShowNtn = !!value;
       const willShowStrn = value === "Registered";
-      if (!willShowNtn)  next.ntn  = "";
+      if (!willShowNtn) next.ntn = "";
       if (!willShowStrn) next.strn = "";
       setFormData(next);
       setErrors({ ...errors, registrationType: "", ntn: "", strn: "", cnic: "" });
@@ -224,7 +263,7 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
           notify(
             `Created ${created.length} client record${created.length !== 1 ? "s" : ""}` +
               (data.clientGroupId ? " (linked as a Common Client)" : ""),
-            "success"
+            "success",
           );
         }
         onSaved(created[0] || null);
@@ -239,11 +278,16 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
     }
   };
 
-  const fieldError = (name) =>
-    errors[name] ? { border: "1px solid #dc3545" } : {};
+  const fieldError = (name) => (errors[name] ? { border: "1px solid #dc3545" } : {});
 
   const errorMsg = (name) =>
-    errors[name] ? <span style={{ color: "#dc3545", fontSize: "0.78rem", marginTop: "0.2rem", display: "block" }}>{errors[name]}</span> : null;
+    errors[name] ? (
+      <span
+        style={{ color: "#dc3545", fontSize: "0.78rem", marginTop: "0.2rem", display: "block" }}
+      >
+        {errors[name]}
+      </span>
+    ) : null;
 
   return (
     <div data-admin-backdrop="" style={backdrop}>
@@ -254,7 +298,11 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
           name={formData.name}
           onClose={onClose}
         />
-        <form onSubmit={handleSubmit} noValidate style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+        <form
+          onSubmit={handleSubmit}
+          noValidate
+          style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}
+        >
           <div data-admin-body="" className="pf-body" style={{ ...body, background: "#f5f8fc" }}>
             {/* Multi-company picker — CREATE mode only, when the parent
                 has supplied the companies list and the operator has
@@ -284,7 +332,8 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
                         }}
                         title={checked ? `Tap to remove ${lbl}` : `Tap to include ${lbl}`}
                       >
-                        {checked ? "✓ " : ""}{lbl}
+                        {checked ? "✓ " : ""}
+                        {lbl}
                       </button>
                     );
                   })}
@@ -293,68 +342,140 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
               </FormSection>
             )}
 
-            <FormSection icon={<MdStorefront size={18} />} title="Business details" hint="As it should print on documents">
-            <div data-admin-field="" style={formGroup}>
-              <label style={label}>Name *</label>
-              <input type="text" name="name" value={formData.name} onChange={handleChange} style={{ ...input, ...fieldError("name") }} />
-              {errorMsg("name")}
-            </div>
-
-            <div data-admin-field="" style={formGroup}>
-              <label style={label}>Address</label>
-              <input type="text" name="address" value={formData.address} onChange={handleChange} style={input} />
-            </div>
-
-            <div className="form-grid-2col">
+            <FormSection
+              icon={<MdStorefront size={18} />}
+              title="Business details"
+              hint="As it should print on documents"
+            >
               <div data-admin-field="" style={formGroup}>
-                <label style={label}>Email</label>
-                <input type="email" name="email" value={formData.email} onChange={handleChange} style={input} />
+                <label style={label}>Name *</label>
+                <input
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  style={{ ...input, ...fieldError("name") }}
+                />
+                {errorMsg("name")}
               </div>
+
               <div data-admin-field="" style={formGroup}>
-                <label style={label}>Phone</label>
-                <input type="text" name="phone" value={formData.phone} onChange={handleChange} style={input} />
+                <label style={label}>Address</label>
+                <input
+                  type="text"
+                  name="address"
+                  value={formData.address}
+                  onChange={handleChange}
+                  style={input}
+                />
               </div>
-            </div>
+
+              <div className="form-grid-2col">
+                <div data-admin-field="" style={formGroup}>
+                  <label style={label}>Email</label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    style={input}
+                  />
+                </div>
+                <div data-admin-field="" style={formGroup}>
+                  <label style={label}>Phone</label>
+                  <input
+                    type="text"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleChange}
+                    style={input}
+                  />
+                </div>
+              </div>
             </FormSection>
 
             {/* FBR identity — pick Registration Type first; the relevant
                 identity fields render below conditionally. NTN shows for
                 every type (required only for Registered); STRN only for
                 Registered; CNIC for every type, optional. */}
-            <FormSection tone="fbr" icon={<MdVerifiedUser size={18} />} title="FBR identity" hint="Checked by FBR on every invoice">
+            <FormSection
+              tone="fbr"
+              icon={<MdVerifiedUser size={18} />}
+              title="FBR identity"
+              hint="Checked by FBR on every invoice"
+            >
               <div className="form-grid-2col">
                 <div data-admin-field="" style={formGroup}>
                   <label style={label}>Registration Type *</label>
-                  <select name="registrationType" value={formData.registrationType} onChange={handleChange} style={{ ...input, ...fieldError("registrationType") }}>
+                  <select
+                    name="registrationType"
+                    value={formData.registrationType}
+                    onChange={handleChange}
+                    style={{ ...input, ...fieldError("registrationType") }}
+                  >
                     <option value="">Select...</option>
                     {regTypes.map((rt) => (
-                      <option key={rt.id} value={rt.code}>{rt.label}</option>
+                      <option key={rt.id} value={rt.code}>
+                        {rt.label}
+                      </option>
                     ))}
                   </select>
                   {errorMsg("registrationType")}
                   {canAskFbr && companyId && (
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.35rem", flexWrap: "wrap" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                        marginTop: "0.35rem",
+                        flexWrap: "wrap",
+                      }}
+                    >
                       <button
                         type="button"
                         disabled={fbrCheck.busy || !(formData.ntn || formData.cnic).trim()}
                         title="Ask FBR whether this NTN/CNIC is registered for sales tax and set the type accordingly"
                         onClick={checkRegistrationWithFbr}
-                        style={{ ...input, width: "auto", minHeight: 44, padding: "0 0.8rem", cursor: fbrCheck.busy ? "wait" : "pointer", background: "#fff", color: "#0d47a1", fontWeight: 700, borderColor: "#0d47a1" }}
+                        style={{
+                          ...input,
+                          width: "auto",
+                          minHeight: 44,
+                          padding: "0 0.8rem",
+                          cursor: fbrCheck.busy ? "wait" : "pointer",
+                          background: "#fff",
+                          color: "#0d47a1",
+                          fontWeight: 700,
+                          borderColor: "#0d47a1",
+                        }}
                       >
                         {fbrCheck.busy ? "Asking FBR…" : "Check with FBR"}
                       </button>
                       {fbrCheck.result && (
-                        <span style={{ fontSize: "0.78rem", color: fbrCheck.result.startsWith("FBR:") ? "#1b5e20" : "#b71c1c" }}>{fbrCheck.result}</span>
+                        <span
+                          style={{
+                            fontSize: "0.78rem",
+                            color: fbrCheck.result.startsWith("FBR:") ? "#1b5e20" : "#b71c1c",
+                          }}
+                        >
+                          {fbrCheck.result}
+                        </span>
                       )}
                     </div>
                   )}
                 </div>
                 <div data-admin-field="" style={formGroup}>
                   <label style={label}>Province *</label>
-                  <select name="fbrProvinceCode" value={formData.fbrProvinceCode} onChange={handleChange} style={{ ...input, ...fieldError("fbrProvinceCode") }}>
+                  <select
+                    name="fbrProvinceCode"
+                    value={formData.fbrProvinceCode}
+                    onChange={handleChange}
+                    style={{ ...input, ...fieldError("fbrProvinceCode") }}
+                  >
                     <option value="">Select...</option>
                     {provinces.map((p) => (
-                      <option key={p.id} value={p.code}>{p.label}</option>
+                      <option key={p.id} value={p.code}>
+                        {p.label}
+                      </option>
                     ))}
                   </select>
                   {errorMsg("fbrProvinceCode")}
@@ -379,14 +500,21 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
                         value={formData.ntn}
                         onChange={handleChange}
                         style={{ ...input, ...fieldError("ntn") }}
-                        placeholder={regType === "FTN" ? "7-digit NTN or Federal Tax Number" : "7-digit NTN"}
+                        placeholder={
+                          regType === "FTN" ? "7-digit NTN or Federal Tax Number" : "7-digit NTN"
+                        }
                       />
                       {errorMsg("ntn")}
                     </div>
                   )}
                   {showStrn && (
                     <div data-admin-field="" style={formGroup}>
-                      <label style={label}>STRN <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional — not sent to FBR)</span></label>
+                      <label style={label}>
+                        STRN{" "}
+                        <span style={{ fontWeight: 400, color: "#5f6d7e" }}>
+                          (optional — not sent to FBR)
+                        </span>
+                      </label>
                       <input
                         type="text"
                         name="strn"
@@ -403,7 +531,10 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
 
               {showCnic && (
                 <div style={{ ...formGroup, marginTop: "0.5rem" }}>
-                  <label style={label}>CNIC (13 digits) <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional)</span></label>
+                  <label style={label}>
+                    CNIC (13 digits){" "}
+                    <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional)</span>
+                  </label>
                   <input
                     type="text"
                     name="cnic"
@@ -414,33 +545,87 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
                     maxLength={13}
                   />
                   {errorMsg("cnic")}
-                  <span style={{ fontSize: "0.75rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" }}>
-                    Optional — FBR files a buyer under the NTN when it has one, and under the CNIC otherwise.
+                  <span
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "#5f6d7e",
+                      marginTop: "0.2rem",
+                      display: "block",
+                    }}
+                  >
+                    Optional — FBR files a buyer under the NTN when it has one, and under the CNIC
+                    otherwise.
                   </span>
                 </div>
               )}
               {!regType && <div style={{ height: "0.8rem" }} />}
             </FormSection>
 
-            <FormSection icon={<MdContacts size={18} />} title="Sites & contacts" hint="Offered as choices on challans and quotes">
-            <div data-admin-field="" style={formGroup}>
-              <label style={label}>Sites</label>
-              <input type="text" name="site" value={formData.site} onChange={handleChange} style={input} placeholder="e.g. Site-A ; Site-B ; Site-C" />
-              <span style={{ fontSize: "0.75rem", color: "#5f6d7e", marginTop: "0.25rem", display: "block" }}>Separate multiple sites with semicolons (;). These will appear as dropdown options when creating a delivery challan.</span>
-            </div>
+            <FormSection
+              icon={<MdContacts size={18} />}
+              title="Sites & contacts"
+              hint="Offered as choices on challans and quotes"
+            >
+              <div data-admin-field="" style={formGroup}>
+                <label style={label}>Sites</label>
+                <input
+                  type="text"
+                  name="site"
+                  value={formData.site}
+                  onChange={handleChange}
+                  style={input}
+                  placeholder="e.g. Site-A ; Site-B ; Site-C"
+                />
+                <span
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "#5f6d7e",
+                    marginTop: "0.25rem",
+                    display: "block",
+                  }}
+                >
+                  Separate multiple sites with semicolons (;). These will appear as dropdown options
+                  when creating a delivery challan.
+                </span>
+              </div>
 
-            <div data-admin-field="" style={formGroup}>
-              <label style={label}>Contact Persons</label>
-              <input type="text" name="contactPerson" value={formData.contactPerson} onChange={handleChange} style={input} placeholder="e.g. Ali ; Bilal ; Sara" />
-              <span style={{ fontSize: "0.75rem", color: "#5f6d7e", marginTop: "0.25rem", display: "block" }}>Separate multiple contacts with semicolons (;). These appear as a dropdown when creating a Sales Quote.</span>
-            </div>
+              <div data-admin-field="" style={formGroup}>
+                <label style={label}>Contact Persons</label>
+                <input
+                  type="text"
+                  name="contactPerson"
+                  value={formData.contactPerson}
+                  onChange={handleChange}
+                  style={input}
+                  placeholder="e.g. Ali ; Bilal ; Sara"
+                />
+                <span
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "#5f6d7e",
+                    marginTop: "0.25rem",
+                    display: "block",
+                  }}
+                >
+                  Separate multiple contacts with semicolons (;). These appear as a dropdown when
+                  creating a Sales Quote.
+                </span>
+              </div>
             </FormSection>
-
           </div>
 
           <div data-admin-footer="" style={footer}>
-            <button data-admin-close="" type="button" style={{ ...button, ...cancel }} onClick={onClose}>Cancel</button>
-            <button type="submit" style={{ ...button, ...submit }}>{client ? "Update" : "Create"}</button>
+            <button
+              data-admin-close=""
+              type="button"
+              style={{ ...button, ...cancel }}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+            <button type="submit" style={{ ...button, ...submit }}>
+              {client ? "Update" : "Create"}
+            </button>
           </div>
         </form>
       </div>

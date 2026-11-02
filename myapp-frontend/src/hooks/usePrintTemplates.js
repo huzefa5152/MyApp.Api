@@ -47,11 +47,26 @@ export function usePrintTemplates(templateType) {
     let alive = true;
     setAllTemplates([]);
     setTemplatesLoaded(false);
-    if (!companyId || !canViewTemplates) return () => { alive = false; };
+    if (!companyId || !canViewTemplates)
+      return () => {
+        alive = false;
+      };
     getTemplatesByCompany(companyId)
-      .then(({ data }) => { if (alive) { setAllTemplates(data || []); setTemplatesLoaded(true); } })
-      .catch(() => { if (alive) { setAllTemplates([]); setTemplatesLoaded(false); } });
-    return () => { alive = false; };
+      .then(({ data }) => {
+        if (alive) {
+          setAllTemplates(data || []);
+          setTemplatesLoaded(true);
+        }
+      })
+      .catch(() => {
+        if (alive) {
+          setAllTemplates([]);
+          setTemplatesLoaded(false);
+        }
+      });
+    return () => {
+      alive = false;
+    };
   }, [companyId, canViewTemplates]);
 
   // Re-read the remembered choice when the company or document type changes.
@@ -63,7 +78,7 @@ export function usePrintTemplates(templateType) {
   // resolve against.
   const templates = useMemo(
     () => allTemplates.filter((t) => t.templateType === templateType),
-    [allTemplates, templateType]
+    [allTemplates, templateType],
   );
 
   // Gating signal for the picker + Print/PDF buttons: true once we've CONFIRMED
@@ -74,15 +89,20 @@ export function usePrintTemplates(templateType) {
   const noTemplateReason =
     "No print template exists for this document type yet. Add one on the Print Templates page (Configuration → Print Templates).";
 
-  const setSelectedId = useCallback((id) => {
-    const next = id == null ? "" : String(id);
-    setSelectedIdState(next);
-    if (!companyId) return;
-    try {
-      if (next === "") localStorage.removeItem(storageKey(companyId, templateType));
-      else localStorage.setItem(storageKey(companyId, templateType), next);
-    } catch { /* private mode — non-fatal */ }
-  }, [companyId, templateType]);
+  const setSelectedId = useCallback(
+    (id) => {
+      const next = id == null ? "" : String(id);
+      setSelectedIdState(next);
+      if (!companyId) return;
+      try {
+        if (next === "") localStorage.removeItem(storageKey(companyId, templateType));
+        else localStorage.setItem(storageKey(companyId, templateType), next);
+      } catch {
+        /* private mode — non-fatal */
+      }
+    },
+    [companyId, templateType],
+  );
 
   // A remembered template that no longer exists (deleted) resets to Auto so the
   // picker never shows a phantom selection.
@@ -101,14 +121,14 @@ export function usePrintTemplates(templateType) {
 
   const selectedTemplate = useMemo(
     () => (selectedId === "" ? null : templates.find((t) => String(t.id) === selectedId) || null),
-    [templates, selectedId]
+    [templates, selectedId],
   );
 
   // Slug -> URL for the active company's stamps, so {{stamp}} can be resolved
   // without another fetch. CompanyContext already holds this list.
   const stampsBySlug = useMemo(
     () => Object.fromEntries((companyStamps || []).map((s) => [s.slug, s.url])),
-    [companyStamps]
+    [companyStamps],
   );
 
   // Explicit pick wins; Auto (or a not-yet-validated stale pick) falls back to
@@ -121,7 +141,7 @@ export function usePrintTemplates(templateType) {
   // wrap in place when porting — it is what makes the feature branch-portable.
   const resolveTemplate = useCallback(
     (_doc) => withStamp(selectedTemplate || resolveAuto(), stampsBySlug),
-    [selectedTemplate, resolveAuto, stampsBySlug]
+    [selectedTemplate, resolveAuto, stampsBySlug],
   );
 
   return {

@@ -3,7 +3,6 @@
 // type: "SalesOrder" for all entries.
 
 export const orderStarters = [
-
   /* ─── 1. Classic Serif ─────────────────────────────────────────────────── */
   {
     id: "order-classic-serif",
@@ -743,7 +742,8 @@ tbody tr:nth-child(even) td.rem { background:#e8f0fe !important; }
     id: "order-left-sidebar",
     name: "Left Sidebar Strip",
     type: "SalesOrder",
-    description: "Vertical colored sidebar on the left carries company details — distinctive layout",
+    description:
+      "Vertical colored sidebar on the left carries company details — distinctive layout",
     html: `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Sales Order #{{salesOrderNumber}}</title>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
@@ -1284,7 +1284,8 @@ tbody tr:nth-child(even) td.rem { background:#d1fafa !important; }
     id: "order-big-letterhead",
     name: "Big Letterhead",
     type: "SalesOrder",
-    description: "Full-width prominent letterhead with large logo area — looks like official stationery",
+    description:
+      "Full-width prominent letterhead with large logo area — looks like official stationery",
     html: `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Sales Order #{{salesOrderNumber}}</title>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
@@ -1388,7 +1389,8 @@ tbody tr:nth-child(even) td.rem { background:#ffe0d8 !important; }
     id: "order-centered-watermark",
     name: "Centered / Watermark Title",
     type: "SalesOrder",
-    description: "Document title centered at the top as a large watermark-style text over the header",
+    description:
+      "Document title centered at the top as a large watermark-style text over the header",
     html: `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Sales Order #{{salesOrderNumber}}</title>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
@@ -1501,7 +1503,8 @@ tbody tr:nth-child(even) td.rem { background:#e8ecf5 !important; }
     id: "order-govt-grid",
     name: "Government-Form Grid",
     type: "SalesOrder",
-    description: "Government-ledger style with bordered header cells and grid everywhere — formal procurement look",
+    description:
+      "Government-ledger style with bordered header cells and grid everywhere — formal procurement look",
     html: `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Sales Order #{{salesOrderNumber}}</title>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
@@ -1614,5 +1617,4 @@ tbody tr:nth-child(even) td.rem { background:#fffbe0 !important; }
 </div>
 </body></html>`,
   },
-
 ];

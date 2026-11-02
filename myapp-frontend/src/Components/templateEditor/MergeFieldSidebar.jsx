@@ -77,8 +77,21 @@ export default function MergeFieldSidebar({ fields, onInsert, hint, stamps = [] 
               >
                 <img src={s.url} alt="" style={fieldStyles.stampThumb} />
                 <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-                  <span style={{ fontSize: "0.74rem", fontWeight: 600, color: colors.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
-                  <span style={{ ...fieldStyles.code, color: colors.blue }}>{`{{stamps.${s.slug}}}`}</span>
+                  <span
+                    style={{
+                      fontSize: "0.74rem",
+                      fontWeight: 600,
+                      color: colors.textPrimary,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {s.name}
+                  </span>
+                  <span
+                    style={{ ...fieldStyles.code, color: colors.blue }}
+                  >{`{{stamps.${s.slug}}}`}</span>
                 </span>
               </button>
             ))}

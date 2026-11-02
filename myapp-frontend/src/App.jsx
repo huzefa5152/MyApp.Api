@@ -125,11 +125,17 @@ export default function App() {
             <Route path="/accounting/dashboard" element={<AccountingDashboardPage />} />
             {/* The old Accounting → Overview address, kept so bookmarks land on
                 its replacement, Dashboards → Accounting. */}
-            <Route path="/accounting/overview" element={<Navigate to="/accounting/dashboard" replace />} />
+            <Route
+              path="/accounting/overview"
+              element={<Navigate to="/accounting/dashboard" replace />}
+            />
             <Route path="/help/accounting" element={<UserGuidePage />} />
             <Route path="/accounting/reports" element={<AccountingReportsPage />} />
             <Route path="/accounting/reports/catalog" element={<AccountingCatalogPage />} />
-            <Route path="/accounting/reports/catalog/:reportId" element={<AccountingCatalogPage />} />
+            <Route
+              path="/accounting/reports/catalog/:reportId"
+              element={<AccountingCatalogPage />}
+            />
             <Route path="/customer-portals" element={<CustomerPortalsPage />} />
             {/* Bills tab — pre-FBR data entry. No item-type column, no FBR
                 bulk actions, but shows a per-row "Submitted to FBR" badge so
@@ -146,8 +152,14 @@ export default function App() {
                 adjustments) — each tab lists ONLY its type, in its own
                 numbering sequence. Never mixed with Bills or Invoices.
                 The create screen lives at /credit-debit-notes?type=credit|debit. */}
-            <Route path="/credit-notes" element={<InvoicePage key="creditnotes" mode="creditnotes" />} />
-            <Route path="/debit-notes" element={<InvoicePage key="debitnotes" mode="debitnotes" />} />
+            <Route
+              path="/credit-notes"
+              element={<InvoicePage key="creditnotes" mode="creditnotes" />}
+            />
+            <Route
+              path="/debit-notes"
+              element={<InvoicePage key="debitnotes" mode="debitnotes" />}
+            />
             <Route path="/credit-debit-notes" element={<CreditDebitNotePage />} />
             <Route path="/item-rate-history" element={<ItemRateHistoryPage />} />
             <Route path="/supplier-payables" element={<SupplierPayablesPage />} />

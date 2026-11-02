@@ -1,10 +1,8 @@
 import httpClient from "./httpClient";
 
-export const getFbrProvinces = (companyId) =>
-  httpClient.get(`/fbr/provinces/${companyId}`);
+export const getFbrProvinces = (companyId) => httpClient.get(`/fbr/provinces/${companyId}`);
 
-export const getFbrDocTypes = (companyId) =>
-  httpClient.get(`/fbr/doctypes/${companyId}`);
+export const getFbrDocTypes = (companyId) => httpClient.get(`/fbr/doctypes/${companyId}`);
 
 export const getFbrHSCodes = (companyId, search, saleType, options = {}) =>
   httpClient.get(`/fbr/hscodes/${companyId}`, {
@@ -19,8 +17,7 @@ export const getFbrHSCodes = (companyId, search, saleType, options = {}) =>
 export const getFbrHsUom = (companyId, hsCode, annexureId = 3) =>
   httpClient.get(`/fbr/hsuom/${companyId}`, { params: { hsCode, annexureId } });
 
-export const getFbrUOMs = (companyId) =>
-  httpClient.get(`/fbr/uom/${companyId}`);
+export const getFbrUOMs = (companyId) => httpClient.get(`/fbr/uom/${companyId}`);
 
 export const getFbrTransactionTypes = (companyId) =>
   httpClient.get(`/fbr/transactiontypes/${companyId}`);
@@ -30,11 +27,9 @@ export const getFbrSaleTypeRates = (companyId, date, transTypeId, provinceId) =>
     params: { date, transTypeId, provinceId },
   });
 
-export const submitInvoiceToFbr = (invoiceId) =>
-  httpClient.post(`/fbr/${invoiceId}/submit`);
+export const submitInvoiceToFbr = (invoiceId) => httpClient.post(`/fbr/${invoiceId}/submit`);
 
-export const validateInvoiceWithFbr = (invoiceId) =>
-  httpClient.post(`/fbr/${invoiceId}/validate`);
+export const validateInvoiceWithFbr = (invoiceId) => httpClient.post(`/fbr/${invoiceId}/validate`);
 
 // Admin recovery for a bill locked in a non-resubmittable FBR state
 // ("Submitting" after a crash, or "Uncertain" after a timed-out submit).

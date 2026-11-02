@@ -7,7 +7,11 @@ import SupplierList from "../Components/SupplierList";
 import SupplierForm from "../Components/SupplierForm";
 import CommonSupplierForm from "../Components/CommonSupplierForm";
 import CopyToCompaniesDialog from "../Components/CopyToCompaniesDialog";
-import { getSuppliersByCompany, getCommonSuppliers, copySupplierToCompanies } from "../api/supplierApi";
+import {
+  getSuppliersByCompany,
+  getCommonSuppliers,
+  copySupplierToCompanies,
+} from "../api/supplierApi";
 import { notify } from "../utils/notify";
 import PartyToolbar from "../Components/party/PartyToolbar";
 import { matchesSearch, countByType } from "../Components/party/partyUtils";
@@ -24,7 +28,12 @@ const colors = {
 };
 
 export default function SuppliersPage() {
-  const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  const {
+    companies,
+    selectedCompany,
+    setSelectedCompany,
+    loading: loadingCompanies,
+  } = useCompany();
   const { has } = usePermissions();
   const canCreate = has("suppliers.manage.create");
   const [suppliers, setSuppliers] = useState([]);
@@ -52,11 +61,20 @@ export default function SuppliersPage() {
     if (!canSeePayables || !selectedCompany?.id) return;
     let active = true;
     supplierSummary(selectedCompany.id)
-      .then(({ data }) => { if (active) setPayables(new Map((data || []).map((r) => [r.supplierId, Number(r.netBalance) || 0]))); })
-      .catch(() => { if (active) setPayables(null); });
-    return () => { active = false; };
+      .then(({ data }) => {
+        if (active)
+          setPayables(new Map((data || []).map((r) => [r.supplierId, Number(r.netBalance) || 0])));
+      })
+      .catch(() => {
+        if (active) setPayables(null);
+      });
+    return () => {
+      active = false;
+    };
   }, [canSeePayables, selectedCompany?.id, suppliers]);
-  const totalPayable = payables ? [...payables.values()].reduce((sum, v) => sum + Math.max(0, v), 0) : 0;
+  const totalPayable = payables
+    ? [...payables.values()].reduce((sum, v) => sum + Math.max(0, v), 0)
+    : 0;
 
   // Common Supplier groups this company shares with others, by group id.
   // Every supplier is listed once; one whose group is here carries a
@@ -78,7 +96,9 @@ export default function SuppliersPage() {
         if (!cancelled) setCommonGroups(new Map());
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [selectedCompany, commonRefreshKey]);
 
   const fetchSuppliers = async (companyId) => {
@@ -100,17 +120,26 @@ export default function SuppliersPage() {
     else setSuppliers([]);
   }, [selectedCompany]);
 
-  const handleEdit = (s) => { setSelectedSupplier(s); setShowModal(true); };
-  const handleAdd = () => { setSelectedSupplier(null); setShowModal(true); };
+  const handleEdit = (s) => {
+    setSelectedSupplier(s);
+    setShowModal(true);
+  };
+  const handleAdd = () => {
+    setSelectedSupplier(null);
+    setShowModal(true);
+  };
 
   const isCommon = (s) => s.supplierGroupId != null && commonGroups.has(s.supplierGroupId);
   const commonCount = useMemo(() => suppliers.filter(isCommon).length, [suppliers, commonGroups]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const searched = suppliers.filter((s) => matchesSearch(s, search));
   const counts = { ...countByType(searched), common: searched.filter(isCommon).length };
-  const filtered = typeFilter === "all" ? searched
-    : typeFilter === "common" ? searched.filter(isCommon)
-    : searched.filter((s) => (s.registrationType || "None") === typeFilter);
+  const filtered =
+    typeFilter === "all"
+      ? searched
+      : typeFilter === "common"
+        ? searched.filter(isCommon)
+        : searched.filter((s) => (s.registrationType || "None") === typeFilter);
 
   return (
     <div>
@@ -131,10 +160,23 @@ export default function SuppliersPage() {
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
           {payables && (
-            <button type="button" style={styles.payableBtn} onClick={() => navigate("/supplier-payables")}
-              title="Open Supplier Payables to see and pay what each supplier is owed">
+            <button
+              type="button"
+              style={styles.payableBtn}
+              onClick={() => navigate("/supplier-payables")}
+              title="Open Supplier Payables to see and pay what each supplier is owed"
+            >
               <MdPayments size={18} />
-              <span>Total payable <strong>Rs. {totalPayable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
+              <span>
+                Total payable{" "}
+                <strong>
+                  Rs.{" "}
+                  {totalPayable.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </strong>
+              </span>
             </button>
           )}
           <ImportFromExcelButton sheet="suppliers" />
@@ -142,8 +184,12 @@ export default function SuppliersPage() {
             <button
               style={styles.addBtn}
               onClick={handleAdd}
-              onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.transform = ""; }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-2px)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "";
+              }}
             >
               <MdAdd size={18} /> New Supplier
             </button>
@@ -154,7 +200,9 @@ export default function SuppliersPage() {
       {loadingCompanies ? (
         <div style={styles.loadingContainer}>
           <div style={styles.spinner} />
-          <span style={{ color: colors.textSecondary, fontSize: "0.9rem" }}>Loading companies...</span>
+          <span style={{ color: colors.textSecondary, fontSize: "0.9rem" }}>
+            Loading companies...
+          </span>
         </div>
       ) : companies.length > 0 ? (
         <PartyToolbar
@@ -170,42 +218,55 @@ export default function SuppliersPage() {
         />
       ) : (
         <div className="pd-empty">
-          <span className="pd-empty__icon"><MdBusiness size={30} /></span>
+          <span className="pd-empty__icon">
+            <MdBusiness size={30} />
+          </span>
           <strong>No companies yet</strong>
           <p>Add a company first, then its suppliers will appear here.</p>
         </div>
       )}
 
-      <RecordsViewport label="Suppliers records">{loadingSuppliers ? (
-        <div className="pd-grid" aria-busy="true" aria-label="Loading suppliers">
-          {[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="pd-skeleton" />)}
-        </div>
-      ) : filtered.length === 0 && selectedCompany ? (
-        <div className="pd-empty">
-          <span className="pd-empty__icon">{suppliers.length === 0 ? <MdLocalShipping size={30} /> : <MdSearchOff size={30} />}</span>
-          <strong>{suppliers.length === 0 ? "No suppliers yet" : "No matching suppliers"}</strong>
-          <p>
-            {suppliers.length === 0
-              ? "Add your first supplier, or bring them in from an Excel file."
-              : "Try a different search or registration type."}
-          </p>
-          {suppliers.length === 0 && canCreate && (
-            <button type="button" className="pd-btn pd-btn--primary" style={{ flex: "none" }} onClick={handleAdd}>
-              <MdAdd size={18} /> New Supplier
-            </button>
-          )}
-        </div>
-      ) : (
-        <SupplierList
-          suppliers={filtered}
-          commonGroups={commonGroups}
-          onEdit={handleEdit}
-          onEditCommon={(groupId) => setEditingGroupId(groupId)}
-          onCopy={(s) => setCopyingSupplier(s)}
-          fetchSuppliers={() => fetchSuppliers(selectedCompany?.id)}
-          payables={payables}
-        />
-      )}</RecordsViewport>
+      <RecordsViewport label="Suppliers records">
+        {loadingSuppliers ? (
+          <div className="pd-grid" aria-busy="true" aria-label="Loading suppliers">
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="pd-skeleton" />
+            ))}
+          </div>
+        ) : filtered.length === 0 && selectedCompany ? (
+          <div className="pd-empty">
+            <span className="pd-empty__icon">
+              {suppliers.length === 0 ? <MdLocalShipping size={30} /> : <MdSearchOff size={30} />}
+            </span>
+            <strong>{suppliers.length === 0 ? "No suppliers yet" : "No matching suppliers"}</strong>
+            <p>
+              {suppliers.length === 0
+                ? "Add your first supplier, or bring them in from an Excel file."
+                : "Try a different search or registration type."}
+            </p>
+            {suppliers.length === 0 && canCreate && (
+              <button
+                type="button"
+                className="pd-btn pd-btn--primary"
+                style={{ flex: "none" }}
+                onClick={handleAdd}
+              >
+                <MdAdd size={18} /> New Supplier
+              </button>
+            )}
+          </div>
+        ) : (
+          <SupplierList
+            suppliers={filtered}
+            commonGroups={commonGroups}
+            onEdit={handleEdit}
+            onEditCommon={(groupId) => setEditingGroupId(groupId)}
+            onCopy={(s) => setCopyingSupplier(s)}
+            fetchSuppliers={() => fetchSuppliers(selectedCompany?.id)}
+            payables={payables}
+          />
+        )}
+      </RecordsViewport>
 
       {copyingSupplier && (
         <CopyToCompaniesDialog
@@ -222,8 +283,8 @@ export default function SuppliersPage() {
             if (createdCount > 0) {
               notify(
                 `Copied "${copyingSupplier.name}" into ${createdCount} ${createdCount === 1 ? "company" : "companies"}` +
-                (skipped.length > 0 ? ` (${skipped.length} skipped)` : "."),
-                "success"
+                  (skipped.length > 0 ? ` (${skipped.length} skipped)` : "."),
+                "success",
               );
             } else if (skipped.length > 0) {
               notify(`No copies made — ${skipped[0]}`, "warning");
@@ -275,12 +336,71 @@ export default function SuppliersPage() {
 }
 
 const styles = {
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem", marginBottom: "1.5rem" },
-  headerIcon: { width: 48, height: 48, borderRadius: 14, background: "linear-gradient(135deg, #0d47a1, #00897b)", boxShadow: "0 10px 22px -10px rgba(13,71,161,0.6)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  header: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: "1rem",
+    marginBottom: "1.5rem",
+  },
+  headerIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    background: "linear-gradient(135deg, #0d47a1, #00897b)",
+    boxShadow: "0 10px 22px -10px rgba(13,71,161,0.6)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
   pageTitle: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: colors.textPrimary },
   pageSubtitle: { margin: "0.15rem 0 0", fontSize: "0.88rem", color: colors.textSecondary },
-  payableBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.45rem", padding: "0.45rem 0.9rem", borderRadius: 10, border: "1px solid #f3c78a", background: "#fff8ec", color: "#92400e", fontSize: "0.86rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
-  addBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1.25rem", borderRadius: 10, border: "none", background: "linear-gradient(135deg, #0d47a1, #00897b)", color: "#fff", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer", transition: "filter 0.2s, transform 0.2s", boxShadow: "0 4px 14px rgba(13,71,161,0.25)" },
-  loadingContainer: { display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", padding: "3rem 0" },
-  spinner: { width: 28, height: 28, border: `3px solid ${colors.cardBorder}`, borderTopColor: colors.blue, borderRadius: "50%", animation: "spin 0.8s linear infinite" },
+  payableBtn: {
+    minHeight: 44,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.45rem",
+    padding: "0.45rem 0.9rem",
+    borderRadius: 10,
+    border: "1px solid #f3c78a",
+    background: "#fff8ec",
+    color: "#92400e",
+    fontSize: "0.86rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    boxShadow: "none",
+  },
+  addBtn: {
+    minHeight: 44,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    padding: "0.55rem 1.25rem",
+    borderRadius: 10,
+    border: "none",
+    background: "linear-gradient(135deg, #0d47a1, #00897b)",
+    color: "#fff",
+    fontSize: "0.9rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    transition: "filter 0.2s, transform 0.2s",
+    boxShadow: "0 4px 14px rgba(13,71,161,0.25)",
+  },
+  loadingContainer: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "0.75rem",
+    padding: "3rem 0",
+  },
+  spinner: {
+    width: 28,
+    height: 28,
+    border: `3px solid ${colors.cardBorder}`,
+    borderTopColor: colors.blue,
+    borderRadius: "50%",
+    animation: "spin 0.8s linear infinite",
+  },
 };

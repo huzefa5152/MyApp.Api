@@ -43,7 +43,13 @@ export function subscribeContinuity(fn) {
 
 function emit() {
   const state = getContinuityState();
-  listeners.forEach((fn) => { try { fn(state); } catch { /* a listener must not break the client */ } });
+  listeners.forEach((fn) => {
+    try {
+      fn(state);
+    } catch {
+      /* a listener must not break the client */
+    }
+  });
 }
 
 /** The offline page answered: IIS replied, the application never saw the request. */
@@ -56,8 +62,13 @@ export function isServicePause(error) {
 
 /** No answer at all: offline, DNS, the server going away mid-request. Not a timeout. */
 export function isConnectionDrop(error) {
-  return !!error && !error.response && !axios.isCancel(error) && error.code !== "ECONNABORTED"
-    && error.code !== "ETIMEDOUT";
+  return (
+    !!error &&
+    !error.response &&
+    !axios.isCancel(error) &&
+    error.code !== "ECONNABORTED" &&
+    error.code !== "ETIMEDOUT"
+  );
 }
 
 function isRead(config) {
@@ -71,7 +82,9 @@ function isFbrCall(config) {
 async function serviceAnswers() {
   try {
     const response = await axios.get(probeUrl, {
-      timeout: 8000, validateStatus: () => true, headers: { "Cache-Control": "no-store" },
+      timeout: 8000,
+      validateStatus: () => true,
+      headers: { "Cache-Control": "no-store" },
       params: { _: Date.now() },
     });
     const body = typeof response.data === "string" ? response.data : "";
@@ -84,7 +97,9 @@ async function serviceAnswers() {
 async function pollUntilBack() {
   let step = 0;
   while (paused) {
-    await new Promise((resolve) => setTimeout(resolve, POLL_STEPS_MS[Math.min(step, POLL_STEPS_MS.length - 1)]));
+    await new Promise((resolve) =>
+      setTimeout(resolve, POLL_STEPS_MS[Math.min(step, POLL_STEPS_MS.length - 1)]),
+    );
     step += 1;
     if (await serviceAnswers()) {
       paused = false;
@@ -112,8 +127,14 @@ export function whenServiceAvailable() {
 }
 
 function interruptedWriteError(error) {
-  const message = "The connection was interrupted before this could be confirmed. Check whether it was saved, then try again.";
-  error.response = { status: 0, data: { message, error: message }, headers: {}, config: error.config };
+  const message =
+    "The connection was interrupted before this could be confirmed. Check whether it was saved, then try again.";
+  error.response = {
+    status: 0,
+    data: { message, error: message },
+    headers: {},
+    config: error.config,
+  };
   error.message = message;
   return error;
 }
@@ -132,25 +153,28 @@ export function installServiceContinuity(client, { probePath }) {
     return config;
   });
 
-  client.interceptors.response.use((response) => response, async (error) => {
-    const config = error?.config;
-    if (!config) throw error;
-    const pausedReply = isServicePause(error);
-    const dropped = !pausedReply && isConnectionDrop(error);
-    if (!pausedReply && !dropped) throw error;
-    if (isFbrCall(config) && !isRead(config)) throw error;
+  client.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+      const config = error?.config;
+      if (!config) throw error;
+      const pausedReply = isServicePause(error);
+      const dropped = !pausedReply && isConnectionDrop(error);
+      if (!pausedReply && !dropped) throw error;
+      if (isFbrCall(config) && !isRead(config)) throw error;
 
-    enterPause();
-    await whenServiceAvailable();
+      enterPause();
+      await whenServiceAvailable();
 
-    const replays = config._continuityReplays || 0;
-    if (replays >= MAX_REPLAYS) throw error;
-    if (pausedReply || isRead(config)) {
-      config._continuityReplays = replays + 1;
-      return client.request(config);
-    }
-    throw interruptedWriteError(error);
-  });
+      const replays = config._continuityReplays || 0;
+      if (replays >= MAX_REPLAYS) throw error;
+      if (pausedReply || isRead(config)) {
+        config._continuityReplays = replays + 1;
+        return client.request(config);
+      }
+      throw interruptedWriteError(error);
+    },
+  );
 }
 
 // ── New versions ───────────────────────────────────────────────────────
@@ -161,7 +185,11 @@ let updateReady = false;
 
 async function readPublishedVersion() {
   try {
-    const response = await axios.get(VERSION_URL, { params: { _: Date.now() }, timeout: 8000, headers: { "Cache-Control": "no-store" } });
+    const response = await axios.get(VERSION_URL, {
+      params: { _: Date.now() },
+      timeout: 8000,
+      headers: { "Cache-Control": "no-store" },
+    });
     return typeof response.data?.version === "string" ? response.data.version : null;
   } catch {
     return null; // absent in development, or unreachable: nothing to compare
@@ -172,7 +200,10 @@ export async function checkForNewVersion() {
   if (updateReady) return;
   const published = await readPublishedVersion();
   if (!published) return;
-  if (loadedVersion == null) { loadedVersion = published; return; }
+  if (loadedVersion == null) {
+    loadedVersion = published;
+    return;
+  }
   if (published !== loadedVersion) updateReady = true;
 }
 
@@ -205,6 +236,8 @@ export function startVersionWatch() {
   checkForNewVersion();
   applyUpdateOnNextNavigation();
   recoverFailedScreenLoads();
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkForNewVersion(); });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") checkForNewVersion();
+  });
   setInterval(checkForNewVersion, 10 * 60 * 1000);
 }

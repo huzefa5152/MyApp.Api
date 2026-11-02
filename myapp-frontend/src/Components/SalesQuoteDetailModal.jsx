@@ -6,7 +6,13 @@ import { formStyles, modalSizes } from "../theme";
 import AttachmentManager from "./AttachmentManager";
 
 // Read-only view of a Sales Quote: header + meta + items + totals + notes.
-const colors = { blue: "#0d47a1", teal: "#00897b", textPrimary: "#1a2332", textSecondary: "#5f6d7e", cardBorder: "#e8edf3" };
+const colors = {
+  blue: "#0d47a1",
+  teal: "#00897b",
+  textPrimary: "#1a2332",
+  textSecondary: "#5f6d7e",
+  cardBorder: "#e8edf3",
+};
 const STATUS_COLORS = { Active: "#1565c0", Expired: "#f57c00", Accepted: "#28a745" };
 
 const fmtDate = (d) => {
@@ -30,7 +36,9 @@ const Meta = ({ label, value }) => (
 const NARROW = 640;
 
 export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPrint, onClose }) {
-  const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < NARROW);
+  const [isNarrow, setIsNarrow] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < NARROW,
+  );
   useEffect(() => {
     const onResize = () => setIsNarrow(window.innerWidth < NARROW);
     window.addEventListener("resize", onResize);
@@ -40,13 +48,35 @@ export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPr
   const items = quote.items || [];
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
-          <h5 style={{ ...formStyles.title, display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <h5
+            style={{
+              ...formStyles.title,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+            }}
+          >
             <MdRequestQuote size={20} /> Quote #{quote.quoteNumber}
-            <span style={{ ...st.badge, background: `${STATUS_COLORS[quote.status] || "#5f6d7e"}18`, color: STATUS_COLORS[quote.status] || "#5f6d7e" }}>{quote.status}</span>
+            <span
+              style={{
+                ...st.badge,
+                background: `${STATUS_COLORS[quote.status] || "#5f6d7e"}18`,
+                color: STATUS_COLORS[quote.status] || "#5f6d7e",
+              }}
+            >
+              {quote.status}
+            </span>
           </h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}><MdClose size={18} /></button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            <MdClose size={18} />
+          </button>
         </div>
 
         <div data-admin-body="" style={formStyles.body}>
@@ -56,12 +86,17 @@ export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPr
             <Meta label="Issue Date" value={fmtDate(quote.date)} />
             <Meta label="Valid Until" value={quote.validUntil ? fmtDate(quote.validUntil) : "—"} />
             <Meta label="Customer Enquiry" value={quote.customerEnquiryRef || "—"} />
-            <Meta label="Enquiry Date" value={quote.enquiryDate ? fmtDate(quote.enquiryDate) : "—"} />
+            <Meta
+              label="Enquiry Date"
+              value={quote.enquiryDate ? fmtDate(quote.enquiryDate) : "—"}
+            />
             <Meta label="GST Rate" value={`${quote.gstRate}%`} />
           </div>
 
           {quote.convertedToSalesOrderNumber && (
-            <div style={st.converted}>→ Converted to Sales Order #{quote.convertedToSalesOrderNumber}</div>
+            <div style={st.converted}>
+              → Converted to Sales Order #{quote.convertedToSalesOrderNumber}
+            </div>
           )}
 
           <div style={st.sectionTitle}>Items ({items.length})</div>
@@ -72,80 +107,174 @@ export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPr
                   <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                     <span style={st.cardNum}>{idx + 1}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      {i.imagePath && <img src={i.imagePath} alt={`Photo for line ${idx + 1}`} style={{ display: "block", maxWidth: 72, maxHeight: 72, objectFit: "contain", marginBottom: 6 }} />}
-                      <span style={st.desc}><RichText text={i.description} /></span>
-                      {i.discountAmount > 0 && <div style={st.discNote}>{discountNote(i.discountValue, i.discountIsPercent, i.discountAmount, i.discountReason)}</div>}
+                      {i.imagePath && (
+                        <img
+                          src={i.imagePath}
+                          alt={`Photo for line ${idx + 1}`}
+                          style={{
+                            display: "block",
+                            maxWidth: 72,
+                            maxHeight: 72,
+                            objectFit: "contain",
+                            marginBottom: 6,
+                          }}
+                        />
+                      )}
+                      <span style={st.desc}>
+                        <RichText text={i.description} />
+                      </span>
+                      {i.discountAmount > 0 && (
+                        <div style={st.discNote}>
+                          {discountNote(
+                            i.discountValue,
+                            i.discountIsPercent,
+                            i.discountAmount,
+                            i.discountReason,
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div style={st.cardFoot}>
-                    <span>{Number(i.quantity).toLocaleString()} {i.unit} × {money(i.unitPrice)}</span>
-                    <b style={{ whiteSpace: "nowrap", color: colors.textPrimary }}>{money(i.lineTotal)}</b>
+                    <span>
+                      {Number(i.quantity).toLocaleString()} {i.unit} × {money(i.unitPrice)}
+                    </span>
+                    <b style={{ whiteSpace: "nowrap", color: colors.textPrimary }}>
+                      {money(i.lineTotal)}
+                    </b>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-          <div data-admin-table-region="" style={st.tableWrap}>
-            <table style={st.table}>
-              <thead>
-                <tr>
-                  <th style={{ ...st.th, width: 28, textAlign: "center" }}>#</th>
-                  <th style={st.th}>Description</th>
-                  <th style={{ ...st.th, textAlign: "right" }}>Qty</th>
-                  <th style={st.th}>Unit</th>
-                  <th style={{ ...st.th, textAlign: "right" }}>Unit Price</th>
-                  <th style={{ ...st.th, textAlign: "right" }}>Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((i, idx) => (
-                  <tr key={i.id ?? idx}>
-                    <td style={{ ...st.td, textAlign: "center", color: colors.textSecondary }}>{idx + 1}</td>
-                    <td style={st.td}>{i.imagePath && <img src={i.imagePath} alt={`Photo for line ${idx + 1}`} style={{ display: "block", maxWidth: 72, maxHeight: 72, objectFit: "contain", marginBottom: 6 }} />}<span style={st.desc}><RichText text={i.description} /></span>{i.discountAmount > 0 && <div style={st.discNote}>{discountNote(i.discountValue, i.discountIsPercent, i.discountAmount, i.discountReason)}</div>}</td>
-                    <td style={{ ...st.td, textAlign: "right" }}>{Number(i.quantity).toLocaleString()}</td>
-                    <td style={st.td}>{i.unit}</td>
-                    <td style={{ ...st.td, textAlign: "right" }}>{money(i.unitPrice)}</td>
-                    <td style={{ ...st.td, textAlign: "right", fontWeight: 700 }}>{money(i.lineTotal)}</td>
+            <div data-admin-table-region="" style={st.tableWrap}>
+              <table style={st.table}>
+                <thead>
+                  <tr>
+                    <th style={{ ...st.th, width: 28, textAlign: "center" }}>#</th>
+                    <th style={st.th}>Description</th>
+                    <th style={{ ...st.th, textAlign: "right" }}>Qty</th>
+                    <th style={st.th}>Unit</th>
+                    <th style={{ ...st.th, textAlign: "right" }}>Unit Price</th>
+                    <th style={{ ...st.th, textAlign: "right" }}>Amount</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {items.map((i, idx) => (
+                    <tr key={i.id ?? idx}>
+                      <td style={{ ...st.td, textAlign: "center", color: colors.textSecondary }}>
+                        {idx + 1}
+                      </td>
+                      <td style={st.td}>
+                        {i.imagePath && (
+                          <img
+                            src={i.imagePath}
+                            alt={`Photo for line ${idx + 1}`}
+                            style={{
+                              display: "block",
+                              maxWidth: 72,
+                              maxHeight: 72,
+                              objectFit: "contain",
+                              marginBottom: 6,
+                            }}
+                          />
+                        )}
+                        <span style={st.desc}>
+                          <RichText text={i.description} />
+                        </span>
+                        {i.discountAmount > 0 && (
+                          <div style={st.discNote}>
+                            {discountNote(
+                              i.discountValue,
+                              i.discountIsPercent,
+                              i.discountAmount,
+                              i.discountReason,
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ ...st.td, textAlign: "right" }}>
+                        {Number(i.quantity).toLocaleString()}
+                      </td>
+                      <td style={st.td}>{i.unit}</td>
+                      <td style={{ ...st.td, textAlign: "right" }}>{money(i.unitPrice)}</td>
+                      <td style={{ ...st.td, textAlign: "right", fontWeight: 700 }}>
+                        {money(i.lineTotal)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
 
           <div style={st.totals}>
-            <div style={st.tRow}><span>Subtotal</span><span>{money(quote.subtotal)}</span></div>
+            <div style={st.tRow}>
+              <span>Subtotal</span>
+              <span>{money(quote.subtotal)}</span>
+            </div>
             {quote.discountAmount > 0 && (
               <div style={st.tRow}>
-                <span>Discount{quote.discountIsPercent ? ` (${quote.discountValue}%)` : ""}{quote.discountReason ? ` — ${quote.discountReason}` : ""}</span>
+                <span>
+                  Discount{quote.discountIsPercent ? ` (${quote.discountValue}%)` : ""}
+                  {quote.discountReason ? ` — ${quote.discountReason}` : ""}
+                </span>
                 <span style={{ whiteSpace: "nowrap" }}>− {money(quote.discountAmount)}</span>
               </div>
             )}
-            <div style={st.tRow}><span>GST @ {quote.gstRate}%</span><span>{money(quote.gstAmount)}</span></div>
-            <div style={{ ...st.tRow, ...st.grand }}><span>Grand Total</span><span>{money(quote.grandTotal)}</span></div>
+            <div style={st.tRow}>
+              <span>GST @ {quote.gstRate}%</span>
+              <span>{money(quote.gstAmount)}</span>
+            </div>
+            <div style={{ ...st.tRow, ...st.grand }}>
+              <span>Grand Total</span>
+              <span>{money(quote.grandTotal)}</span>
+            </div>
           </div>
 
           {quote.notes && (
             <>
               <div style={st.sectionTitle}>Notes</div>
-              <div style={st.notes}><RichText text={quote.notes} /></div>
+              <div style={st.notes}>
+                <RichText text={quote.notes} />
+              </div>
             </>
           )}
 
           {companyId && (
             <div style={{ marginTop: "1rem" }}>
-              <AttachmentManager companyId={companyId} entityType="SalesQuote" entityId={quote.id} mode="view" />
+              <AttachmentManager
+                companyId={companyId}
+                entityType="SalesQuote"
+                entityId={quote.id}
+                mode="view"
+              />
             </div>
           )}
         </div>
 
         <div data-admin-footer="" style={formStyles.footer}>
           {canPrint && (
-            <button style={{ ...formStyles.button, ...formStyles.cancel, display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => onPrint?.(quote)}>
+            <button
+              style={{
+                ...formStyles.button,
+                ...formStyles.cancel,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+              onClick={() => onPrint?.(quote)}
+            >
               <MdPrint size={16} /> Print
             </button>
           )}
-          <button data-admin-close="" style={{ ...formStyles.button, ...formStyles.submit }} onClick={onClose}>Close</button>
+          <button
+            data-admin-close=""
+            style={{ ...formStyles.button, ...formStyles.submit }}
+            onClick={onClose}
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>
@@ -153,26 +282,133 @@ export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPr
 }
 
 const st = {
-  badge: { fontSize: "0.7rem", fontWeight: 700, padding: "0.1rem 0.5rem", borderRadius: 20, background: "rgba(255,255,255,0.22)", color: "#fff", border: "1px solid rgba(255,255,255,0.4)" },
-  clientName: { fontSize: "1.05rem", fontWeight: 700, color: colors.textPrimary, marginBottom: "0.75rem" },
-  metaGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(150px, 100%), 1fr))", gap: "0.75rem", marginBottom: "1rem" },
+  badge: {
+    fontSize: "0.7rem",
+    fontWeight: 700,
+    padding: "0.1rem 0.5rem",
+    borderRadius: 20,
+    background: "rgba(255,255,255,0.22)",
+    color: "#fff",
+    border: "1px solid rgba(255,255,255,0.4)",
+  },
+  clientName: {
+    fontSize: "1.05rem",
+    fontWeight: 700,
+    color: colors.textPrimary,
+    marginBottom: "0.75rem",
+  },
+  metaGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(150px, 100%), 1fr))",
+    gap: "0.75rem",
+    marginBottom: "1rem",
+  },
   metaItem: {},
-  metaLabel: { fontSize: "0.68rem", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em" },
+  metaLabel: {
+    fontSize: "0.68rem",
+    fontWeight: 700,
+    color: colors.textSecondary,
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+  },
   metaValue: { fontSize: "0.9rem", color: colors.textPrimary, marginTop: "0.15rem" },
   converted: { fontSize: "0.82rem", color: colors.teal, fontWeight: 600, marginBottom: "0.75rem" },
-  sectionTitle: { display: "flex", alignItems: "center", gap: 6, marginTop: "1.25rem", marginBottom: "0.5rem", fontSize: "0.9rem", fontWeight: 700, color: colors.blue },
-  tableWrap: { maxHeight: 320, overflowY: "auto", overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 10 },
+  sectionTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    marginTop: "1.25rem",
+    marginBottom: "0.5rem",
+    fontSize: "0.9rem",
+    fontWeight: 700,
+    color: colors.blue,
+  },
+  tableWrap: {
+    maxHeight: 320,
+    overflowY: "auto",
+    overflowX: "auto",
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 10,
+  },
   table: { width: "100%", borderCollapse: "collapse" },
-  th: { textAlign: "left", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.02em", fontWeight: 700, color: colors.textSecondary, padding: "0.5rem 0.5rem", borderBottom: `2px solid ${colors.cardBorder}`, whiteSpace: "nowrap", background: "#fafbfc", position: "sticky", top: 0 },
-  td: { padding: "0.4rem 0.5rem", verticalAlign: "middle", borderBottom: `1px solid ${colors.cardBorder}`, fontSize: "0.88rem", color: colors.textPrimary },
+  th: {
+    textAlign: "left",
+    fontSize: "0.7rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.02em",
+    fontWeight: 700,
+    color: colors.textSecondary,
+    padding: "0.5rem 0.5rem",
+    borderBottom: `2px solid ${colors.cardBorder}`,
+    whiteSpace: "nowrap",
+    background: "#fafbfc",
+    position: "sticky",
+    top: 0,
+  },
+  td: {
+    padding: "0.4rem 0.5rem",
+    verticalAlign: "middle",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+    fontSize: "0.88rem",
+    color: colors.textPrimary,
+  },
   desc: { whiteSpace: "pre-wrap" },
   cards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
-  card: { border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.65rem 0.75rem", background: "#fff" },
-  cardNum: { flex: "0 0 auto", width: 24, height: 24, borderRadius: 7, background: "#f0f3f8", color: colors.textSecondary, display: "grid", placeItems: "center", fontSize: "0.78rem", fontWeight: 700 },
-  cardFoot: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginTop: "0.5rem", paddingTop: "0.45rem", borderTop: `1px dashed ${colors.cardBorder}`, fontSize: "0.85rem", color: colors.textSecondary },
+  card: {
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 12,
+    padding: "0.65rem 0.75rem",
+    background: "#fff",
+  },
+  cardNum: {
+    flex: "0 0 auto",
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    background: "#f0f3f8",
+    color: colors.textSecondary,
+    display: "grid",
+    placeItems: "center",
+    fontSize: "0.78rem",
+    fontWeight: 700,
+  },
+  cardFoot: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "0.75rem",
+    flexWrap: "wrap",
+    marginTop: "0.5rem",
+    paddingTop: "0.45rem",
+    borderTop: `1px dashed ${colors.cardBorder}`,
+    fontSize: "0.85rem",
+    color: colors.textSecondary,
+  },
   discNote: { marginTop: 4, fontSize: "0.78rem", fontWeight: 600, color: "#00897b" },
   totals: { marginTop: "1rem", marginLeft: "auto", width: 280 },
-  tRow: { display: "flex", justifyContent: "space-between", gap: "0.75rem", padding: "0.25rem 0", fontSize: "0.9rem", color: colors.textSecondary },
-  grand: { borderTop: `2px solid ${colors.blue}`, marginTop: 4, paddingTop: 8, fontWeight: 800, fontSize: "1rem", color: colors.blue },
-  notes: { fontSize: "0.86rem", color: colors.textPrimary, whiteSpace: "pre-wrap", background: "#fafbfc", border: `1px solid ${colors.cardBorder}`, borderRadius: 8, padding: "0.6rem 0.8rem" },
+  tRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "0.75rem",
+    padding: "0.25rem 0",
+    fontSize: "0.9rem",
+    color: colors.textSecondary,
+  },
+  grand: {
+    borderTop: `2px solid ${colors.blue}`,
+    marginTop: 4,
+    paddingTop: 8,
+    fontWeight: 800,
+    fontSize: "1rem",
+    color: colors.blue,
+  },
+  notes: {
+    fontSize: "0.86rem",
+    color: colors.textPrimary,
+    whiteSpace: "pre-wrap",
+    background: "#fafbfc",
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 8,
+    padding: "0.6rem 0.8rem",
+  },
 };

@@ -3,254 +3,278 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import httpClient from "../api/httpClient";
 
-export default function LookupAutocomplete({ companyId, label, endpoint, value, onChange, inputClassName, inputStyle, inputRef, autoFocus, onEnterKey, multiline = false }) {
-    const [suggestions, setSuggestions] = useState([]);
-    const [showDropdown, setShowDropdown] = useState(false);
-    const [inputValue, setInputValue] = useState(value || "");
-    const [loading, setLoading] = useState(false);
-    const [highlightIndex, setHighlightIndex] = useState(-1);
-    // Bumped on every scroll/resize event while the dropdown is open so the
-    // portal re-renders with fresh getBoundingClientRect coords. The
-    // dropdown is rendered via createPortal(document.body) using
-    // position:fixed in viewport coords; without this re-flow the dropdown
-    // would stay anchored to the input's initial viewport position and
-    // visually detach the moment the modal/page scrolls.
-    const [, setReflow] = useState(0);
-    const wrapperRef = useRef(null);
-    const debounceRef = useRef(null);
+export default function LookupAutocomplete({
+  companyId,
+  label,
+  endpoint,
+  value,
+  onChange,
+  inputClassName,
+  inputStyle,
+  inputRef,
+  autoFocus,
+  onEnterKey,
+  multiline = false,
+}) {
+  const [suggestions, setSuggestions] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [inputValue, setInputValue] = useState(value || "");
+  const [loading, setLoading] = useState(false);
+  const [highlightIndex, setHighlightIndex] = useState(-1);
+  // Bumped on every scroll/resize event while the dropdown is open so the
+  // portal re-renders with fresh getBoundingClientRect coords. The
+  // dropdown is rendered via createPortal(document.body) using
+  // position:fixed in viewport coords; without this re-flow the dropdown
+  // would stay anchored to the input's initial viewport position and
+  // visually detach the moment the modal/page scrolls.
+  const [, setReflow] = useState(0);
+  const wrapperRef = useRef(null);
+  const debounceRef = useRef(null);
 
-    // Close dropdown on outside click
-    useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
-                setShowDropdown(false);
-            }
-        };
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => {
-            document.removeEventListener("mousedown", handleClickOutside);
-            clearTimeout(debounceRef.current);
-        };
-    }, []);
-
-    // While the dropdown is open, follow scroll/resize so it stays glued
-    // to the input. Capture-phase scroll listener catches scrolls inside
-    // any ancestor (e.g. a modal body), not just the window.
-    useEffect(() => {
-        if (!showDropdown) return;
-        const reflow = () => setReflow((n) => n + 1);
-        window.addEventListener("scroll", reflow, true);
-        window.addEventListener("resize", reflow);
-        return () => {
-            window.removeEventListener("scroll", reflow, true);
-            window.removeEventListener("resize", reflow);
-        };
-    }, [showDropdown]);
-
-    // Update inputValue if parent value changes
-    useEffect(() => {
-        setInputValue(value || "");
-    }, [value]);
-
-    const fetchSuggestions = (query) => {
-        if (debounceRef.current) clearTimeout(debounceRef.current);
-
-        debounceRef.current = setTimeout(async () => {
-            const trimmedQuery = query.trim();
-            if (!trimmedQuery) {
-                setSuggestions([]);
-                return;
-            }
-
-            setLoading(true);
-            try {
-                const response = await httpClient.get(endpoint, { params: { query: trimmedQuery, companyId } });
-                setSuggestions(response.data || []);
-            } catch (err) {
-                console.error("Lookup fetch error:", err);
-                setSuggestions([]);
-            } finally {
-                setLoading(false);
-            }
-        }, 400);
-    };
-
-    const createEntry = async (val) => {
-        try {
-            const response = await httpClient.post(endpoint, { name: val }, { params: { companyId } });
-            // Refresh suggestions with the newly created entry
-            fetchSuggestions(val);
-            return response.data.name || val;
-        } catch (err) {
-            console.error("Lookup create error:", err);
-            return val;
-        }
-    };
-
-    const handleSelect = async (val) => {
-        let finalValue = val;
-        if (!suggestions.some((s) => s.name === val)) {
-            finalValue = await createEntry(val);
-        }
-        setInputValue(finalValue);
-        onChange(finalValue);
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
         setShowDropdown(false);
+      }
     };
-
-
-    const handleInputChange = (e) => {
-        const val = e.target.value;
-        setInputValue(val);
-        onChange(val);
-        fetchSuggestions(val);
-        setShowDropdown(true);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      clearTimeout(debounceRef.current);
     };
+  }, []);
 
-    const handleBlur = async () => {
-        if (inputValue && !suggestions.some((s) => s.name === inputValue)) {
-            const finalValue = await createEntry(inputValue);
-            setInputValue(finalValue);
-            onChange(finalValue);
-        }
-        setShowDropdown(false);
+  // While the dropdown is open, follow scroll/resize so it stays glued
+  // to the input. Capture-phase scroll listener catches scrolls inside
+  // any ancestor (e.g. a modal body), not just the window.
+  useEffect(() => {
+    if (!showDropdown) return;
+    const reflow = () => setReflow((n) => n + 1);
+    window.addEventListener("scroll", reflow, true);
+    window.addEventListener("resize", reflow);
+    return () => {
+      window.removeEventListener("scroll", reflow, true);
+      window.removeEventListener("resize", reflow);
     };
+  }, [showDropdown]);
 
-    const handleKeyDown = (e) => {
-        // Quick-add: when the caller wants Enter to commit the line (and the
-        // user isn't actively picking a suggestion), fire onEnterKey and stop
-        // the default form submit. Existing callers (no onEnterKey) are
-        // unaffected — the original dropdown-nav behaviour below still runs.
-        // Multi-line descriptions: a plain Enter inserts a line break. Ctrl/Cmd+
-        // Enter still commits the line for callers that want quick-add.
-        if (multiline && e.key === "Enter") {
-            if ((e.ctrlKey || e.metaKey) && onEnterKey) {
-                e.preventDefault();
-                onEnterKey();
+  // Update inputValue if parent value changes
+  useEffect(() => {
+    setInputValue(value || "");
+  }, [value]);
+
+  const fetchSuggestions = (query) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    debounceRef.current = setTimeout(async () => {
+      const trimmedQuery = query.trim();
+      if (!trimmedQuery) {
+        setSuggestions([]);
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const response = await httpClient.get(endpoint, {
+          params: { query: trimmedQuery, companyId },
+        });
+        setSuggestions(response.data || []);
+      } catch (err) {
+        console.error("Lookup fetch error:", err);
+        setSuggestions([]);
+      } finally {
+        setLoading(false);
+      }
+    }, 400);
+  };
+
+  const createEntry = async (val) => {
+    try {
+      const response = await httpClient.post(endpoint, { name: val }, { params: { companyId } });
+      // Refresh suggestions with the newly created entry
+      fetchSuggestions(val);
+      return response.data.name || val;
+    } catch (err) {
+      console.error("Lookup create error:", err);
+      return val;
+    }
+  };
+
+  const handleSelect = async (val) => {
+    let finalValue = val;
+    if (!suggestions.some((s) => s.name === val)) {
+      finalValue = await createEntry(val);
+    }
+    setInputValue(finalValue);
+    onChange(finalValue);
+    setShowDropdown(false);
+  };
+
+  const handleInputChange = (e) => {
+    const val = e.target.value;
+    setInputValue(val);
+    onChange(val);
+    fetchSuggestions(val);
+    setShowDropdown(true);
+  };
+
+  const handleBlur = async () => {
+    if (inputValue && !suggestions.some((s) => s.name === inputValue)) {
+      const finalValue = await createEntry(inputValue);
+      setInputValue(finalValue);
+      onChange(finalValue);
+    }
+    setShowDropdown(false);
+  };
+
+  const handleKeyDown = (e) => {
+    // Quick-add: when the caller wants Enter to commit the line (and the
+    // user isn't actively picking a suggestion), fire onEnterKey and stop
+    // the default form submit. Existing callers (no onEnterKey) are
+    // unaffected — the original dropdown-nav behaviour below still runs.
+    // Multi-line descriptions: a plain Enter inserts a line break. Ctrl/Cmd+
+    // Enter still commits the line for callers that want quick-add.
+    if (multiline && e.key === "Enter") {
+      if ((e.ctrlKey || e.metaKey) && onEnterKey) {
+        e.preventDefault();
+        onEnterKey();
+      }
+      return;
+    }
+
+    if (e.key === "Enter" && onEnterKey) {
+      const pickingSuggestion = showDropdown && suggestions.length > 0 && highlightIndex >= 0;
+      if (!pickingSuggestion) {
+        e.preventDefault();
+        onEnterKey();
+        return;
+      }
+    }
+
+    if (!showDropdown || suggestions.length === 0) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightIndex((prev) => (prev + 1) % suggestions.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightIndex((prev) => (prev <= 0 ? suggestions.length - 1 : prev - 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (highlightIndex >= 0) {
+        handleSelect(suggestions[highlightIndex].name);
+      } else if (valueExists) {
+        handleSelect(inputValue);
+      }
+    }
+  };
+
+  const valueExists = !suggestions.some((s) => s.name === inputValue) && inputValue.trim() !== "";
+
+  return (
+    <div className="position-relative" ref={wrapperRef}>
+      {multiline ? (
+        <textarea
+          ref={inputRef}
+          autoFocus={autoFocus}
+          className={inputClassName !== undefined ? inputClassName : "form-control"}
+          style={{ resize: "vertical", minHeight: 58, lineHeight: 1.4, ...inputStyle }}
+          placeholder={label}
+          value={inputValue}
+          rows={2}
+          onChange={handleInputChange}
+          onFocus={() => {
+            if (inputValue) {
+              setShowDropdown(true);
+              fetchSuggestions(inputValue);
             }
-            return;
-        }
-
-        if (e.key === "Enter" && onEnterKey) {
-            const pickingSuggestion = showDropdown && suggestions.length > 0 && highlightIndex >= 0;
-            if (!pickingSuggestion) {
-                e.preventDefault();
-                onEnterKey();
-                return;
+          }}
+          onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
+          autoComplete="off"
+        />
+      ) : (
+        <input
+          ref={inputRef}
+          autoFocus={autoFocus}
+          type="text"
+          className={inputClassName !== undefined ? inputClassName : "form-control"}
+          style={inputStyle}
+          placeholder={label}
+          value={inputValue}
+          onChange={handleInputChange}
+          onFocus={() => {
+            if (inputValue) {
+              setShowDropdown(true);
+              fetchSuggestions(inputValue);
             }
-        }
+          }}
+          onBlur={handleBlur}
+          onKeyDown={handleKeyDown} // 👈 added
+          autoComplete="off"
+        />
+      )}
 
-        if (!showDropdown || suggestions.length === 0) return;
+      {showDropdown &&
+        (() => {
+          // position:fixed in viewport coords so the dropdown stays
+          // glued to the input even when an ancestor (modal body, page
+          // root) scrolls. The reflow effect above re-renders this on
+          // scroll/resize so getBoundingClientRect() returns current
+          // viewport coords every time.
+          const rect = wrapperRef.current?.getBoundingClientRect();
+          if (!rect) return null;
+          const below = window.innerHeight - rect.bottom;
+          const above = rect.top;
+          const flipAbove = below < 180 && above > below;
+          const width = Math.min(rect.width, window.innerWidth - 16);
+          const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+          return createPortal(
+            <ul
+              data-admin-popup=""
+              className="list-group shadow-sm"
+              style={{
+                position: "fixed",
+                zIndex: 9999,
+                maxHeight: Math.max(60, Math.min(300, (flipAbove ? above : below) - 8)),
+                overflowY: "auto",
+                borderRadius: "0.375rem",
+                background: "#fff",
+                top: flipAbove ? undefined : rect.bottom,
+                bottom: flipAbove ? window.innerHeight - rect.top : undefined,
+                left,
+                width,
+              }}
+            >
+              {loading && <li className="list-group-item text-muted">Loading...</li>}
 
-        if (e.key === "ArrowDown") {
-            e.preventDefault();
-            setHighlightIndex((prev) => (prev + 1) % suggestions.length);
-        } else if (e.key === "ArrowUp") {
-            e.preventDefault();
-            setHighlightIndex((prev) =>
-                prev <= 0 ? suggestions.length - 1 : prev - 1
-            );
-        } else if (e.key === "Enter") {
-            e.preventDefault();
-            if (highlightIndex >= 0) {
-                handleSelect(suggestions[highlightIndex].name);
-            } else if (valueExists) {
-                handleSelect(inputValue);
-            }
-        }
-    };
+              {suggestions.map((s, idx) => (
+                <li
+                  key={s.id}
+                  className={`list-group-item list-group-item-action ${
+                    idx === highlightIndex ? "active" : ""
+                  }`}
+                  style={{ cursor: "pointer" }}
+                  onMouseDown={() => handleSelect(s.name)}
+                >
+                  {s.name}
+                </li>
+              ))}
 
-    const valueExists = !suggestions.some((s) => s.name === inputValue) && inputValue.trim() !== "";
-
-    return (
-        <div className="position-relative" ref={wrapperRef}>
-            {multiline ? (
-                <textarea
-                    ref={inputRef}
-                    autoFocus={autoFocus}
-                    className={inputClassName !== undefined ? inputClassName : "form-control"}
-                    style={{ resize: "vertical", minHeight: 58, lineHeight: 1.4, ...inputStyle }}
-                    placeholder={label}
-                    value={inputValue}
-                    rows={2}
-                    onChange={handleInputChange}
-                    onFocus={() => { if (inputValue) { setShowDropdown(true); fetchSuggestions(inputValue); } }}
-                    onBlur={handleBlur}
-                    onKeyDown={handleKeyDown}
-                    autoComplete="off"
-                />
-            ) : (
-                <input
-                    ref={inputRef}
-                    autoFocus={autoFocus}
-                    type="text"
-                    className={inputClassName !== undefined ? inputClassName : "form-control"}
-                    style={inputStyle}
-                    placeholder={label}
-                    value={inputValue}
-                    onChange={handleInputChange}
-                    onFocus={() => { if (inputValue) { setShowDropdown(true); fetchSuggestions(inputValue); } }}
-                    onBlur={handleBlur}
-                    onKeyDown={handleKeyDown}   // 👈 added
-                    autoComplete="off"
-                />
-            )}
-
-            {showDropdown && (() => {
-                // position:fixed in viewport coords so the dropdown stays
-                // glued to the input even when an ancestor (modal body, page
-                // root) scrolls. The reflow effect above re-renders this on
-                // scroll/resize so getBoundingClientRect() returns current
-                // viewport coords every time.
-                const rect = wrapperRef.current?.getBoundingClientRect();
-                if (!rect) return null;
-                const below = window.innerHeight - rect.bottom;
-                const above = rect.top;
-                const flipAbove = below < 180 && above > below;
-                const width = Math.min(rect.width, window.innerWidth - 16);
-                const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
-                return createPortal(
-                    <ul data-admin-popup=""
-                        className="list-group shadow-sm"
-                        style={{
-                            position: "fixed",
-                            zIndex: 9999,
-                            maxHeight: Math.max(60, Math.min(300, (flipAbove ? above : below) - 8)),
-                            overflowY: "auto",
-                            borderRadius: "0.375rem",
-                            background: "#fff",
-                            top: flipAbove ? undefined : rect.bottom,
-                            bottom: flipAbove ? window.innerHeight - rect.top : undefined,
-                            left,
-                            width
-                        }}
-                    >
-
-                        {loading && <li className="list-group-item text-muted">Loading...</li>}
-
-                        {suggestions.map((s, idx) => (
-                            <li
-                                key={s.id}
-                                className={`list-group-item list-group-item-action ${idx === highlightIndex ? "active" : ""
-                                    }`}
-                                style={{ cursor: "pointer" }}
-                                onMouseDown={() => handleSelect(s.name)}
-                            >
-                                {s.name}
-                            </li>
-                        ))}
-
-                        {valueExists && (
-                            <li
-                                className="list-group-item list-group-item-action text-success"
-                                style={{ cursor: "pointer", fontWeight: "bold" }}
-                                onMouseDown={() => handleSelect(inputValue)}
-                            >
-                                + Create new "{inputValue}"
-                            </li>
-                        )}
-                    </ul>,
-                    document.body);
-            })()}
-        </div>
-    );
+              {valueExists && (
+                <li
+                  className="list-group-item list-group-item-action text-success"
+                  style={{ cursor: "pointer", fontWeight: "bold" }}
+                  onMouseDown={() => handleSelect(inputValue)}
+                >
+                  + Create new "{inputValue}"
+                </li>
+              )}
+            </ul>,
+            document.body,
+          );
+        })()}
+    </div>
+  );
 }

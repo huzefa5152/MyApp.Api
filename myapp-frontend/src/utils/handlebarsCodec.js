@@ -24,7 +24,7 @@ export function encodeHandlebars(html) {
       // Use a safe placeholder for the original attribute
       const placeholder = attr === "src" ? "" : attr === "href" ? "#" : "";
       return `${space}${attr}="${placeholder}" data-hbs-attr-${attr}="${encoded}"`;
-    }
+    },
   );
 
   // Phase 2: Replace text-node Handlebars with <span> placeholders.
@@ -51,11 +51,10 @@ export function decodeHandlebars(html) {
         // Remove the data-hbs-attr-<name> first
         tag = tag.replace(new RegExp(`\\s*data-hbs-attr-${attrName}="[^"]+"`), "");
         // Replace the placeholder value of the real attribute
-        tag = tag.replace(
-          new RegExp(`(\\s)${attrName}="[^"]*?"`),
-          `$1${attrName}="${original}"`
-        );
-      } catch { /* ignore decode errors */ }
+        tag = tag.replace(new RegExp(`(\\s)${attrName}="[^"]*?"`), `$1${attrName}="${original}"`);
+      } catch {
+        /* ignore decode errors */
+      }
     }
     return tag;
   });

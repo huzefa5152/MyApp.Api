@@ -42,7 +42,8 @@ const styles = {
     color: "#5f6d7e",
     margin: 0,
   },
-  addBtn: { minHeight: 44,
+  addBtn: {
+    minHeight: 44,
     display: "inline-flex",
     alignItems: "center",
     gap: "0.4rem",
@@ -109,26 +110,32 @@ export default function CompanyPage() {
     setShowModal(true);
   };
 
-  const filtered = companies.filter((c) =>
-    c.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = companies.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div>
       <div data-admin-page-header="" style={styles.header}>
         <div style={styles.titleWrap}>
-          <div style={styles.titleIcon}><MdBusiness /></div>
+          <div style={styles.titleIcon}>
+            <MdBusiness />
+          </div>
           <div>
             <h2 style={styles.title}>Companies</h2>
-            <p style={styles.subtitle}>{companies.length} registered {companies.length === 1 ? "company" : "companies"}</p>
+            <p style={styles.subtitle}>
+              {companies.length} registered {companies.length === 1 ? "company" : "companies"}
+            </p>
           </div>
         </div>
         {canCreate && (
           <button
             style={styles.addBtn}
             onClick={handleAdd}
-            onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.transform = ""; }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "translateY(-2px)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "";
+            }}
           >
             <MdAdd /> New Company
           </button>
@@ -148,17 +155,17 @@ export default function CompanyPage() {
         </div>
       )}
 
-      <RecordsViewport label="Company records">{filtered.length === 0 ? (
-        <div style={styles.empty}>
-          {companies.length === 0 ? "No companies added yet. Click \"New Company\" to get started." : "No companies match your search."}
-        </div>
-      ) : (
-        <CompanyList
-          companies={filtered}
-          onEdit={handleEdit}
-          fetchCompanies={refreshCompanies}
-        />
-      )}</RecordsViewport>
+      <RecordsViewport label="Company records">
+        {filtered.length === 0 ? (
+          <div style={styles.empty}>
+            {companies.length === 0
+              ? 'No companies added yet. Click "New Company" to get started.'
+              : "No companies match your search."}
+          </div>
+        ) : (
+          <CompanyList companies={filtered} onEdit={handleEdit} fetchCompanies={refreshCompanies} />
+        )}
+      </RecordsViewport>
 
       {showModal && (
         <CompanyForm

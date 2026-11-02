@@ -14,13 +14,13 @@
  */
 
 export const debitNoteStarters = [
-
   // ─── 1. Classic Serif ────────────────────────────────────────
   {
     id: "debitnote-classic-serif",
     name: "Classic Serif",
     type: "DebitNote",
-    description: "Traditional Times New Roman layout with double-rule header, reference strip and FBR block",
+    description:
+      "Traditional Times New Roman layout with double-rule header, reference strip and FBR block",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Debit Note #{{invoiceNumber}}</title><style>
 @media print { @page { size: A4; margin: 8mm 10mm; } .footer { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -649,7 +649,8 @@ table.items th.left { text-align: left; }
     id: "debitnote-elegant-premium",
     name: "Elegant Premium",
     type: "DebitNote",
-    description: "Charcoal & gold luxury look with gold-rule reference row and FBR compliance block",
+    description:
+      "Charcoal & gold luxury look with gold-rule reference row and FBR compliance block",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Debit Note #{{invoiceNumber}}</title><style>
 @media print { @page { size: A4; margin: 0; } .footer { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -906,7 +907,8 @@ tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
     id: "debitnote-left-sidebar",
     name: "Left Sidebar Strip",
     type: "DebitNote",
-    description: "Vertical steel-blue sidebar carries supplier info and FBR QR, note body on the right",
+    description:
+      "Vertical steel-blue sidebar carries supplier info and FBR QR, note body on the right",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Debit Note #{{invoiceNumber}}</title><style>
 @media print { @page { size: A4; margin: 0; } .footer { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -1571,7 +1573,8 @@ tbody tr:nth-child(even) td { background: #e0f2f1 !important; }
     id: "debitnote-big-letterhead",
     name: "Big Letterhead",
     type: "DebitNote",
-    description: "Tall letterhead-style header with large logo space, blue full-bleed accent stripe",
+    description:
+      "Tall letterhead-style header with large logo space, blue full-bleed accent stripe",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Debit Note #{{invoiceNumber}}</title><style>
 @media print { @page { size: A4; margin: 0; } .footer { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -1845,7 +1848,8 @@ tbody tr:nth-child(even) td { background: #e8eaf6 !important; }
     id: "debitnote-govt-form-grid",
     name: "Government-Form Grid",
     type: "DebitNote",
-    description: "FBR-official government-form style: rigid grid with serials, reference cells and FBR block",
+    description:
+      "FBR-official government-form style: rigid grid with serials, reference cells and FBR block",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Debit Note #{{invoiceNumber}}</title><style>
 @media print { @page { size: A4; margin: 7mm 9mm; } .footer { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -2007,5 +2011,4 @@ tbody tr:nth-child(even) td { background: #f7f7f7 !important; }
 </div>
 </body></html>`,
   },
-
 ];

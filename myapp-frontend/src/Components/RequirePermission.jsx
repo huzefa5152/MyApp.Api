@@ -38,8 +38,18 @@ export default function RequirePermission() {
   if (loading || companyLoading) return null;
 
   // null = open to every signed-in user (e.g. the operator's own profile).
-  if (required === null) return <Suspense fallback={null}><Outlet key={selectedCompany?.id || "none"} /></Suspense>;
-  if (required !== undefined && has(required)) return <Suspense fallback={null}><Outlet key={selectedCompany?.id || "none"} /></Suspense>;
+  if (required === null)
+    return (
+      <Suspense fallback={null}>
+        <Outlet key={selectedCompany?.id || "none"} />
+      </Suspense>
+    );
+  if (required !== undefined && has(required))
+    return (
+      <Suspense fallback={null}>
+        <Outlet key={selectedCompany?.id || "none"} />
+      </Suspense>
+    );
 
   return <NoAccess permission={required} pathname={pathname} onRetry={reload} />;
 }
@@ -49,12 +59,16 @@ function NoAccess({ permission, pathname, onRetry }) {
   return (
     <div style={styles.wrap}>
       <div style={styles.card}>
-        <div style={styles.icon}><MdLock size={26} /></div>
+        <div style={styles.icon}>
+          <MdLock size={26} />
+        </div>
         <h2 style={styles.title}>You don't have access to this screen</h2>
         <p style={styles.body}>
           Your role doesn't include{" "}
           {permission ? (
-            <>the <code style={styles.code}>{permission}</code> permission, which is what</>
+            <>
+              the <code style={styles.code}>{permission}</code> permission, which is what
+            </>
           ) : (
             <>a permission for</>
           )}{" "}
@@ -62,8 +76,8 @@ function NoAccess({ permission, pathname, onRetry }) {
         </p>
         <p style={styles.body}>
           Ask whoever administers your account to add it under{" "}
-          <b>Administration &rarr; Roles &amp; Permissions</b>, or to move you
-          onto a role that already has it.
+          <b>Administration &rarr; Roles &amp; Permissions</b>, or to move you onto a role that
+          already has it.
         </p>
         <div style={styles.actions}>
           <Link to={has("dashboard.view") ? "/dashboard" : "/profile"} style={styles.primary}>

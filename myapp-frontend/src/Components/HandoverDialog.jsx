@@ -15,7 +15,13 @@ import { formStyles, modalSizes } from "../theme";
  * Uses the shared responsive formStyles (backdrop scrolls, modal caps at
  * 96vh) so it never clips on a phone — CLAUDE.md §3.
  */
-export default function HandoverDialog({ mode = "single", invoiceNumber, count = 0, onClose, onConfirm }) {
+export default function HandoverDialog({
+  mode = "single",
+  invoiceNumber,
+  count = 0,
+  onClose,
+  onConfirm,
+}) {
   const [remark, setRemark] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -35,25 +41,50 @@ export default function HandoverDialog({ mode = "single", invoiceNumber, count =
   };
 
   return (
-    <div data-admin-backdrop="" style={formStyles.backdrop} onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: modalSizes.sm }} onMouseDown={(e) => e.stopPropagation()}>
+    <div
+      data-admin-backdrop=""
+      style={formStyles.backdrop}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget && !busy) onClose();
+      }}
+    >
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: modalSizes.sm }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
           <h3 style={formStyles.title}>
             {isBulk
               ? `Mark ${count} invoice${count === 1 ? "" : "s"} delivered`
               : `Mark documents delivered · #${invoiceNumber}`}
           </h3>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} disabled={busy} aria-label="Close">
+          <button
+            data-admin-close=""
+            style={formStyles.closeButton}
+            onClick={onClose}
+            disabled={busy}
+            aria-label="Close"
+          >
             <MdClose size={18} />
           </button>
         </div>
 
         <div data-admin-body="" style={formStyles.body}>
-          <div style={{
-            display: "flex", gap: 10, alignItems: "flex-start",
-            background: "#e8f5e9", border: "1px solid #a5d6a7", color: "#2e7d32",
-            borderRadius: 10, padding: "0.7rem 0.85rem", marginBottom: "1rem", fontSize: "0.83rem",
-          }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              alignItems: "flex-start",
+              background: "#e8f5e9",
+              border: "1px solid #a5d6a7",
+              color: "#2e7d32",
+              borderRadius: 10,
+              padding: "0.7rem 0.85rem",
+              marginBottom: "1rem",
+              fontSize: "0.83rem",
+            }}
+          >
             <MdLocalShipping size={20} style={{ flexShrink: 0, marginTop: 1 }} />
             <span>
               {isBulk
@@ -78,11 +109,21 @@ export default function HandoverDialog({ mode = "single", invoiceNumber, count =
         </div>
 
         <div data-admin-footer="" style={formStyles.footer}>
-          <button data-admin-close="" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose} disabled={busy}>
+          <button
+            data-admin-close=""
+            style={{ ...formStyles.button, ...formStyles.cancel }}
+            onClick={onClose}
+            disabled={busy}
+          >
             Cancel
           </button>
           <button
-            style={{ ...formStyles.button, ...formStyles.submit, backgroundColor: "#2e7d32", opacity: busy ? 0.6 : 1 }}
+            style={{
+              ...formStyles.button,
+              ...formStyles.submit,
+              backgroundColor: "#2e7d32",
+              opacity: busy ? 0.6 : 1,
+            }}
             onClick={submit}
             disabled={busy}
           >

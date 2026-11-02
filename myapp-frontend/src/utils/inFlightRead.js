@@ -8,8 +8,14 @@ export function createInFlightRead(load, scope) {
       if (pending.get(key) === request) pending.delete(key);
     };
     const request = load(...args).then(
-      (value) => { clear(); return value; },
-      (error) => { clear(); throw error; },
+      (value) => {
+        clear();
+        return value;
+      },
+      (error) => {
+        clear();
+        throw error;
+      },
     );
     pending.set(key, request);
     return request;

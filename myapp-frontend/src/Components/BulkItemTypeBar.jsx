@@ -21,11 +21,20 @@ import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
  * `mode` is "all" | "empty" (fill only rows without an item type).
  */
 export default function BulkItemTypeBar({
-  itemTypes, nonInventoryItems = [],
+  itemTypes,
+  nonInventoryItems = [],
   // Array model
-  items, setItems, applyFields, applyNonInvFields, clearFields,
+  items,
+  setItems,
+  applyFields,
+  applyNonInvFields,
+  clearFields,
   // Callback model
-  itemCount, onApplyItemType, onApplyNonInv, onClearAll, anyTagged: anyTaggedProp,
+  itemCount,
+  onApplyItemType,
+  onApplyNonInv,
+  onClearAll,
+  anyTagged: anyTaggedProp,
   label = "Apply same Item Type to:",
 }) {
   const count = itemCount ?? (items?.length || 0);
@@ -33,10 +42,17 @@ export default function BulkItemTypeBar({
   // Retained bulk selection (so the dropdown shows what was applied).
   const [selId, setSelId] = useState("");
   const [selNonInv, setSelNonInv] = useState("");
-  const uniformItemTypeId = items?.length && items.every((row) => row.itemTypeId && row.itemTypeId === items[0].itemTypeId)
-    ? items[0].itemTypeId : "";
-  const uniformNonInvId = items?.length && items.every((row) => row.nonInventoryItemId && row.nonInventoryItemId === items[0].nonInventoryItemId)
-    ? items[0].nonInventoryItemId : "";
+  const uniformItemTypeId =
+    items?.length && items.every((row) => row.itemTypeId && row.itemTypeId === items[0].itemTypeId)
+      ? items[0].itemTypeId
+      : "";
+  const uniformNonInvId =
+    items?.length &&
+    items.every(
+      (row) => row.nonInventoryItemId && row.nonInventoryItemId === items[0].nonInventoryItemId,
+    )
+      ? items[0].nonInventoryItemId
+      : "";
 
   if (count < 2) return null;
 
@@ -44,35 +60,86 @@ export default function BulkItemTypeBar({
   const isEmpty = (r) => !r.itemTypeId && !r.nonInventoryItemId;
   const matchArr = (r) => mode === "all" || isEmpty(r);
   const arrApplyItemType = (id, picked) =>
-    setItems((prev) => prev.map((r) => (matchArr(r)
-      ? { ...r, itemTypeId: id, nonInventoryItemId: null, ...(applyFields ? applyFields(picked) : {}) } : r)));
+    setItems((prev) =>
+      prev.map((r) =>
+        matchArr(r)
+          ? {
+              ...r,
+              itemTypeId: id,
+              nonInventoryItemId: null,
+              ...(applyFields ? applyFields(picked) : {}),
+            }
+          : r,
+      ),
+    );
   const arrApplyNonInv = (n) =>
-    setItems((prev) => prev.map((r) => (matchArr(r)
-      ? { ...r, nonInventoryItemId: n.id, itemTypeId: null, ...(applyNonInvFields ? applyNonInvFields(n) : {}) } : r)));
+    setItems((prev) =>
+      prev.map((r) =>
+        matchArr(r)
+          ? {
+              ...r,
+              nonInventoryItemId: n.id,
+              itemTypeId: null,
+              ...(applyNonInvFields ? applyNonInvFields(n) : {}),
+            }
+          : r,
+      ),
+    );
   const arrClear = () =>
-    setItems((prev) => prev.map((r) => (matchArr(r)
-      ? { ...r, itemTypeId: null, nonInventoryItemId: null, ...(clearFields ? clearFields() : {}) } : r)));
+    setItems((prev) =>
+      prev.map((r) =>
+        matchArr(r)
+          ? {
+              ...r,
+              itemTypeId: null,
+              nonInventoryItemId: null,
+              ...(clearFields ? clearFields() : {}),
+            }
+          : r,
+      ),
+    );
   const arrAnyTagged = (items || []).some((r) => r.itemTypeId || r.nonInventoryItemId);
 
   const anyTagged = anyTaggedProp ?? arrAnyTagged;
 
-  const doClear = () => { if (onClearAll) onClearAll(mode); else arrClear(); };
+  const doClear = () => {
+    if (onClearAll) onClearAll(mode);
+    else arrClear();
+  };
 
   // ── Picker handlers (retain the selection) ──
   const handlePick = (newId, picked) => {
     // Clearing the picker (× icon) clears the item type from every row in
     // scope — same as the "Clear all" button.
-    if (!newId) { setSelId(""); setSelNonInv(""); doClear(); return; }
+    if (!newId) {
+      setSelId("");
+      setSelNonInv("");
+      doClear();
+      return;
+    }
     const id = parseInt(newId);
-    setSelId(id); setSelNonInv("");
-    if (onApplyItemType) onApplyItemType(id, picked, mode); else arrApplyItemType(id, picked);
+    setSelId(id);
+    setSelNonInv("");
+    if (onApplyItemType) onApplyItemType(id, picked, mode);
+    else arrApplyItemType(id, picked);
   };
   const handlePickNonInv = (n) => {
-    if (!n) { setSelId(""); setSelNonInv(""); doClear(); return; }
-    setSelNonInv(n.id); setSelId("");
-    if (onApplyNonInv) onApplyNonInv(n, mode); else arrApplyNonInv(n);
+    if (!n) {
+      setSelId("");
+      setSelNonInv("");
+      doClear();
+      return;
+    }
+    setSelNonInv(n.id);
+    setSelId("");
+    if (onApplyNonInv) onApplyNonInv(n, mode);
+    else arrApplyNonInv(n);
   };
-  const handleClear = () => { setSelId(""); setSelNonInv(""); doClear(); };
+  const handleClear = () => {
+    setSelId("");
+    setSelNonInv("");
+    doClear();
+  };
 
   return (
     <div style={styles.bar}>
@@ -109,20 +176,40 @@ export default function BulkItemTypeBar({
 const colors = { textPrimary: "#1a2332", cardBorder: "#e8edf3", danger: "#dc3545" };
 const styles = {
   bar: {
-    display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap",
-    padding: "0.55rem 0.85rem", marginBottom: "0.6rem", borderRadius: 8,
-    border: `1px solid ${colors.cardBorder}`, backgroundColor: "#f8faff",
+    display: "flex",
+    alignItems: "center",
+    gap: "0.65rem",
+    flexWrap: "wrap",
+    padding: "0.55rem 0.85rem",
+    marginBottom: "0.6rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.cardBorder}`,
+    backgroundColor: "#f8faff",
   },
   label: { fontSize: "0.82rem", color: colors.textPrimary, fontWeight: 600 },
   modeSel: {
-    padding: "0.35rem 0.5rem", fontSize: "0.8rem", maxWidth: 170,
-    borderRadius: 6, border: `1px solid #d0d7e2`, backgroundColor: "#fff", color: colors.textPrimary,
+    padding: "0.35rem 0.5rem",
+    fontSize: "0.8rem",
+    maxWidth: 170,
+    borderRadius: 6,
+    border: `1px solid #d0d7e2`,
+    backgroundColor: "#fff",
+    color: colors.textPrimary,
   },
   clearBtn: {
-    display: "inline-flex", alignItems: "center", gap: "0.3rem",
-    padding: "0.35rem 0.7rem", borderRadius: 6, border: `1px solid ${colors.danger}`,
-    backgroundColor: "#fff", color: colors.danger, fontSize: "0.78rem",
-    fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    padding: "0.35rem 0.7rem",
+    borderRadius: 6,
+    border: `1px solid ${colors.danger}`,
+    backgroundColor: "#fff",
+    color: colors.danger,
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    flexShrink: 0,
   },
   clearDisabled: { opacity: 0.45, cursor: "not-allowed" },
 };

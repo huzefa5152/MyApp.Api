@@ -13,9 +13,15 @@ export default function NotificationProvider({ children }) {
   const timerRef = useRef(null);
 
   const clearTimer = () => {
-    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
   };
-  const dismiss = useCallback(() => { clearTimer(); setToast(null); }, []);
+  const dismiss = useCallback(() => {
+    clearTimer();
+    setToast(null);
+  }, []);
 
   const showToast = useCallback(({ message, severity = "error" }) => {
     // Reset any in-flight timer so a new toast always gets its full duration
@@ -27,7 +33,10 @@ export default function NotificationProvider({ children }) {
     // read them. Applies APP-WIDE: every toast flows through this one surface
     // (utils/notify). Manual close (× button) still works any time.
     const ms = severity === "error" ? 15000 : severity === "warning" ? 10000 : 5000;
-    timerRef.current = setTimeout(() => { timerRef.current = null; setToast(null); }, ms);
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null;
+      setToast(null);
+    }, ms);
   }, []);
 
   useEffect(() => onNotify(showToast), [showToast]);
@@ -64,7 +73,8 @@ export default function NotificationProvider({ children }) {
         >
           <span style={{ fontWeight: 700, fontSize: "1.1rem", lineHeight: 1 }}>{s.icon}</span>
           <span style={{ flex: 1 }}>{toast.message}</span>
-          <button data-admin-close=""
+          <button
+            data-admin-close=""
             onClick={dismiss}
             style={{
               background: "none",

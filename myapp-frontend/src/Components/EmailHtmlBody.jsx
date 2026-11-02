@@ -14,13 +14,17 @@ import { FiImage } from "react-icons/fi";
  * Remote images are blocked until the operator asks for them, as Gmail does:
  * loading one tells the sender the email was opened, and from where.
  */
-const stripActive = html => String(html || "")
-  // A meta refresh would navigate the frame to the sender's page.
-  .replace(/<meta[^>]*http-equiv\s*=\s*["']?refresh[^>]*>/gi, "")
-  .replace(/<(script|iframe|object|embed|form)\b[\s\S]*?<\/\1\s*>/gi, "")
-  .replace(/<(script|iframe|object|embed|base)\b[^>]*>/gi, "");
+const stripActive = (html) =>
+  String(html || "")
+    // A meta refresh would navigate the frame to the sender's page.
+    .replace(/<meta[^>]*http-equiv\s*=\s*["']?refresh[^>]*>/gi, "")
+    .replace(/<(script|iframe|object|embed|form)\b[\s\S]*?<\/\1\s*>/gi, "")
+    .replace(/<(script|iframe|object|embed|base)\b[^>]*>/gi, "");
 
-const hasRemoteImages = html => /<img[^>]+src\s*=\s*["']?\s*(https?:)?\/\//i.test(html) || /url\(\s*['"]?\s*(https?:)?\/\//i.test(html) || /background\s*=\s*["']?\s*(https?:)?\/\//i.test(html);
+const hasRemoteImages = (html) =>
+  /<img[^>]+src\s*=\s*["']?\s*(https?:)?\/\//i.test(html) ||
+  /url\(\s*['"]?\s*(https?:)?\/\//i.test(html) ||
+  /background\s*=\s*["']?\s*(https?:)?\/\//i.test(html);
 
 export default function EmailHtmlBody({ html, title = "Email" }) {
   const frame = useRef(null);
@@ -28,7 +32,9 @@ export default function EmailHtmlBody({ html, title = "Email" }) {
   const [showImages, setShowImages] = useState(false);
   const clean = stripActive(html);
   const remote = hasRemoteImages(clean);
-  useEffect(() => { setShowImages(false); }, [html]);
+  useEffect(() => {
+    setShowImages(false);
+  }, [html]);
 
   const csp = `default-src 'none'; style-src 'unsafe-inline'; font-src data:; img-src data: blob:${showImages ? " https: http:" : ""}; form-action 'none'; frame-src 'none'`;
   const doc = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><base target="_blank"><style>
@@ -55,21 +61,44 @@ blockquote{margin:0 0 0 .8ex;padding-left:1ex;border-left:1px solid #ccc}
       if (!d) return;
       // Every link opens outside the app, and the opened page gets no handle
       // back to this window.
-      d.querySelectorAll("a[href]").forEach(a => { a.target = "_blank"; a.rel = "noopener noreferrer"; });
+      d.querySelectorAll("a[href]").forEach((a) => {
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+      });
       fit();
-      if (typeof ResizeObserver !== "undefined" && d.body) { observer = new ResizeObserver(fit); observer.observe(d.body); }
-      d.querySelectorAll("img").forEach(img => img.addEventListener("load", fit));
+      if (typeof ResizeObserver !== "undefined" && d.body) {
+        observer = new ResizeObserver(fit);
+        observer.observe(d.body);
+      }
+      d.querySelectorAll("img").forEach((img) => img.addEventListener("load", fit));
     };
     el.addEventListener("load", onLoad);
-    return () => { el.removeEventListener("load", onLoad); observer?.disconnect(); };
+    return () => {
+      el.removeEventListener("load", onLoad);
+      observer?.disconnect();
+    };
   }, [doc]);
 
-  return <div className="em-html">
-    {remote && !showImages && <div className="em-images-bar" role="note">
-      <FiImage aria-hidden="true" /><span>Images from the sender are hidden.</span>
-      <button type="button" onClick={() => setShowImages(true)}>Show images</button>
-    </div>}
-    <iframe ref={frame} title={title} className="em-html-frame" style={{ height }}
-      sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerPolicy="no-referrer" srcDoc={doc} />
-  </div>;
+  return (
+    <div className="em-html">
+      {remote && !showImages && (
+        <div className="em-images-bar" role="note">
+          <FiImage aria-hidden="true" />
+          <span>Images from the sender are hidden.</span>
+          <button type="button" onClick={() => setShowImages(true)}>
+            Show images
+          </button>
+        </div>
+      )}
+      <iframe
+        ref={frame}
+        title={title}
+        className="em-html-frame"
+        style={{ height }}
+        sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+        referrerPolicy="no-referrer"
+        srcDoc={doc}
+      />
+    </div>
+  );
 }

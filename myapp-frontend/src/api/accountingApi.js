@@ -26,8 +26,7 @@ export const getJournalEntriesPaged = (companyId, params = {}) =>
 
 export const getJournalEntry = (id) => httpClient.get(`/journal-entries/${id}`);
 
-export const getJournalEntryPrintData = (id) =>
-  httpClient.get(`/journal-entries/${id}/print`);
+export const getJournalEntryPrintData = (id) => httpClient.get(`/journal-entries/${id}/print`);
 
 export const createJournalEntry = (companyId, payload) =>
   httpClient.post(`/journal-entries/company/${companyId}`, payload);
@@ -42,8 +41,7 @@ export const getTransfersPaged = (companyId, params = {}) =>
 
 export const getTransfer = (id) => httpClient.get(`/account-transfers/${id}`);
 
-export const getTransferPrintData = (id) =>
-  httpClient.get(`/account-transfers/${id}/print`);
+export const getTransferPrintData = (id) => httpClient.get(`/account-transfers/${id}/print`);
 
 export const getBankReconSummary = (companyId) =>
   httpClient.get(`/bank-reconciliation/company/${companyId}/summary`);
@@ -67,7 +65,9 @@ export const importBankStatement = (companyId, payload) =>
   httpClient.post(`/bank-statements/company/${companyId}/import`, payload);
 
 export const getStatementLines = (accountId, status) =>
-  httpClient.get(`/bank-statements/account/${accountId}/lines`, { params: status ? { status } : {} });
+  httpClient.get(`/bank-statements/account/${accountId}/lines`, {
+    params: status ? { status } : {},
+  });
 
 export const categorizeStatementLine = (lineId, payload) =>
   httpClient.post(`/bank-statements/line/${lineId}/categorize`, payload);
@@ -78,8 +78,7 @@ export const ignoreStatementLine = (lineId) =>
 export const createTransfer = (companyId, payload) =>
   httpClient.post(`/account-transfers/company/${companyId}`, payload);
 
-export const updateTransfer = (id, payload) =>
-  httpClient.put(`/account-transfers/${id}`, payload);
+export const updateTransfer = (id, payload) => httpClient.put(`/account-transfers/${id}`, payload);
 
 export const deleteTransfer = (id) => httpClient.delete(`/account-transfers/${id}`);
 

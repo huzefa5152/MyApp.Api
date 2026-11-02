@@ -52,9 +52,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   // fulfilment flow (linkage + auto-close).
   const [openOrders, setOpenOrders] = useState([]);
   const [salesOrderId, setSalesOrderId] = useState("");
-  const [items, setItems] = useState([
-    { description: "", quantity: 1, unit: "" },
-  ]);
+  const [items, setItems] = useState([{ description: "", quantity: 1, unit: "" }]);
   // Units list with the AllowsDecimalQuantity flag — drives whether each
   // row's quantity input accepts decimals or only whole numbers. Loaded
   // once on mount; cheap (≤50 rows) and the operator can flip flags via
@@ -71,22 +69,34 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   const suppliers = useChallanSuppliers(companyId);
 
   useEffect(() => {
-    getAllUnits(companyId).then(({ data }) => setUnits(data)).catch(() => setUnits([]));
+    getAllUnits(companyId)
+      .then(({ data }) => setUnits(data))
+      .catch(() => setUnits([]));
   }, []);
 
   // Client list for the searchable picker (replaces the old fetch-inside-
   // SelectDropdown). The picked option is the full client row, so client.site
   // still drives the Site dropdown below.
   useEffect(() => {
-    if (!companyId) { setClients([]); return; }
-    getClientsByCompany(companyId).then(({ data }) => setClients(data || [])).catch(() => setClients([]));
+    if (!companyId) {
+      setClients([]);
+      return;
+    }
+    getClientsByCompany(companyId)
+      .then(({ data }) => setClients(data || []))
+      .catch(() => setClients([]));
   }, [companyId]);
 
   // Open sales orders (partial + undelivered) — powers the optional
   // "From Sales Order" picker. Only fetched when the user can see orders.
   useEffect(() => {
-    if (!canUseOrders || !companyId) { setOpenOrders([]); return; }
-    getOpenSalesOrdersByCompany(companyId).then(({ data }) => setOpenOrders(data || [])).catch(() => setOpenOrders([]));
+    if (!canUseOrders || !companyId) {
+      setOpenOrders([]);
+      return;
+    }
+    getOpenSalesOrdersByCompany(companyId)
+      .then(({ data }) => setOpenOrders(data || []))
+      .catch(() => setOpenOrders([]));
   }, [companyId, canUseOrders]);
 
   // Picking a Sales Order autofills the challan from it: client, PO, site, and
@@ -95,7 +105,10 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   const selectOrder = (id) => {
     setSalesOrderId(id || "");
     if (!id) {
-      setClient(null); setSite(""); setPoNumber(""); setPoDate("");
+      setClient(null);
+      setSite("");
+      setPoNumber("");
+      setPoDate("");
       setItems([{ description: "", quantity: 1, unit: "" }]);
       return;
     }
@@ -107,7 +120,12 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
     setPoDate(o.customerPoDate ? o.customerPoDate.slice(0, 10) : "");
     const lines = (o.items || [])
       .filter((i) => (i.remainingQuantity ?? 0) > 0)
-      .map((i) => ({ salesOrderItemId: i.id, description: i.description, quantity: i.remainingQuantity, unit: i.unit }));
+      .map((i) => ({
+        salesOrderItemId: i.id,
+        description: i.description,
+        quantity: i.remainingQuantity,
+        unit: i.unit,
+      }));
     setItems(lines.length ? lines : [{ description: "", quantity: 1, unit: "" }]);
   };
 
@@ -152,22 +170,22 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
     setSaving(true);
     try {
       const payloadItems = validItems.map((i) => ({
-          description: i.description,
-          unit: i.unit,
-          // Ties the delivered line back to its ordered line (SO fulfilment).
-          salesOrderItemId: i.salesOrderItemId ?? null,
-          // Item Type isn't captured on the challan side anymore — that
-          // happens on the Invoices tab during FBR classification. Send
-          // null so the backend stores DeliveryItem.ItemTypeId=null.
-          itemTypeId: null,
-          // parseFloat preserves decimals (12.5 KG, 0.0004 Carat). The
-          // QuantityInput already coerces correctly per UOM, this is just
-          // defensive in case a string slips through.
-          quantity: typeof i.quantity === "number" ? i.quantity : (parseFloat(i.quantity) || 1),
-          // Private procurement — never printed.
-          supplierId: i.supplierId || null,
-          actualUnitCost: i.actualUnitCost === "" ? null : i.actualUnitCost ?? null,
-        }));
+        description: i.description,
+        unit: i.unit,
+        // Ties the delivered line back to its ordered line (SO fulfilment).
+        salesOrderItemId: i.salesOrderItemId ?? null,
+        // Item Type isn't captured on the challan side anymore — that
+        // happens on the Invoices tab during FBR classification. Send
+        // null so the backend stores DeliveryItem.ItemTypeId=null.
+        itemTypeId: null,
+        // parseFloat preserves decimals (12.5 KG, 0.0004 Carat). The
+        // QuantityInput already coerces correctly per UOM, this is just
+        // defensive in case a string slips through.
+        quantity: typeof i.quantity === "number" ? i.quantity : parseFloat(i.quantity) || 1,
+        // Private procurement — never printed.
+        supplierId: i.supplierId || null,
+        actualUnitCost: i.actualUnitCost === "" ? null : (i.actualUnitCost ?? null),
+      }));
       const saved = await onSaved({
         // When set, the parent creates the challan through the sales-order
         // fulfilment flow (which links each line + auto-closes the order).
@@ -186,7 +204,13 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
       // Upload any files staged before the challan had an id. Best-effort —
       // the challan is already saved.
       const savedId = saved?.id;
-      if (savedId) { try { await attachmentRef.current?.flush(savedId); } catch { /* attachments best-effort */ } }
+      if (savedId) {
+        try {
+          await attachmentRef.current?.flush(savedId);
+        } catch {
+          /* attachments best-effort */
+        }
+      }
       if (saved?.purchaseWarning) notify(saved.purchaseWarning, "warning");
       onClose();
     } catch (err) {
@@ -196,7 +220,8 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
       // not user-facing, so we don't surface it.
       const serverMsg = err.response?.data?.error || err.response?.data?.message;
       if (serverMsg) setError(serverMsg);
-      else if (!err.response) setError("Could not reach the server. Please check your connection and try again.");
+      else if (!err.response)
+        setError("Could not reach the server. Please check your connection and try again.");
       else setError("Could not save the challan. Please try again or contact an administrator.");
       setSaving(false);
     }
@@ -209,44 +234,101 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   // header or the Cancel button to dismiss.
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>Create Delivery Challan</h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            &times;
+          </button>
         </div>
 
         <form onSubmit={handleSubmit}>
           <div data-admin-body="" style={formStyles.body}>
-            {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
+            {error && (
+              <div ref={errRef} style={styles.errorAlert}>
+                {error}
+              </div>
+            )}
 
             {/* One header row: number, the order it fulfils, and the copy
                 shortcut. Stacked, each took a full line of a wide dialog. The
                 copy panel takes the full row once it is opened. */}
             <div className="doc-header-row">
-              <div className="doc-header-row__number"><BillNumberField companyId={companyId} documentType="challan" clientId={client?.id} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
+              <div className="doc-header-row__number">
+                <BillNumberField
+                  companyId={companyId}
+                  documentType="challan"
+                  clientId={client?.id}
+                  mode={numberMode}
+                  onModeChange={setNumberMode}
+                  number={customNumber}
+                  onNumberChange={setCustomNumber}
+                  onValidityChange={setNumberValid}
+                  disabled={saving}
+                />
+              </div>
               {/* Optional: fulfil a Sales Order. Picking one autofills the client,
                   PO, site and the order's undelivered lines below, and links the
                   challan to the order (fulfilment tracking + auto-close). */}
               {canUseOrders && (
                 <div className="doc-header-row__grow">
                   <label style={styles.label}>
-                    From Sales Order <span style={{ color: colors.textSecondary, fontWeight: 400 }}>(optional — autofills the challan)</span>
+                    From Sales Order{" "}
+                    <span style={{ color: colors.textSecondary, fontWeight: 400 }}>
+                      (optional — autofills the challan)
+                    </span>
                   </label>
                   <SearchableSelect
-                    items={openOrders.map((o) => ({ id: o.id, label: `SO #${o.salesOrderNumber} — ${o.clientName}${o.customerPoNumber ? ` · PO ${o.customerPoNumber}` : ""}` }))}
+                    items={openOrders.map((o) => ({
+                      id: o.id,
+                      label: `SO #${o.salesOrderNumber} — ${o.clientName}${o.customerPoNumber ? ` · PO ${o.customerPoNumber}` : ""}`,
+                    }))}
                     value={salesOrderId}
                     onChange={(id) => selectOrder(id ? String(id) : "")}
                     labelKey="label"
-                    placeholder={openOrders.length ? "— not from an order —" : "No open sales orders for this company"}
+                    placeholder={
+                      openOrders.length
+                        ? "— not from an order —"
+                        : "No open sales orders for this company"
+                    }
                   />
                 </div>
               )}
               <div className="doc-header-row__copy">
-                <DocumentCopyPicker companyId={companyId} destination="Challan" allowDetails={true} disabled={!!salesOrderId}
-                  onCopy={(source,lines,details) => {
-                    setItems(prev => appendCopiedLines(details ? [] : prev, lines, () => ({description:"",quantity:1,unit:""})));
-                    if(details) { setClient(clients.find(c=>c.id===source.clientId) || {id:source.clientId,label:source.clientName});setSite(source.site||"");setNotes(source.notes||"");setPoNumber(source.poNumber||"");setPoDate(source.poDate?.slice(0,10)||"");setIndentNo(source.indentNo||"");setSalesOrderId("");setDeliveryDate(todayYmd()); }
-                  }} />
+                <DocumentCopyPicker
+                  companyId={companyId}
+                  destination="Challan"
+                  allowDetails={true}
+                  disabled={!!salesOrderId}
+                  onCopy={(source, lines, details) => {
+                    setItems((prev) =>
+                      appendCopiedLines(details ? [] : prev, lines, () => ({
+                        description: "",
+                        quantity: 1,
+                        unit: "",
+                      })),
+                    );
+                    if (details) {
+                      setClient(
+                        clients.find((c) => c.id === source.clientId) || {
+                          id: source.clientId,
+                          label: source.clientName,
+                        },
+                      );
+                      setSite(source.site || "");
+                      setNotes(source.notes || "");
+                      setPoNumber(source.poNumber || "");
+                      setPoDate(source.poDate?.slice(0, 10) || "");
+                      setIndentNo(source.indentNo || "");
+                      setSalesOrderId("");
+                      setDeliveryDate(todayYmd());
+                    }
+                  }}
+                />
               </div>
             </div>
 
@@ -254,116 +336,194 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                 Edit Challan so operators see identical shape on both flows.
                 Site is dropdown when the picked client has presets, free-text
                 otherwise so one-offs still work. */}
-            <section className="admin-details-panel" aria-label="Delivery details"><h6 className="admin-section-heading">Delivery details</h6><div data-admin-form-row="" style={styles.row}>
-              <div style={{ flex: 2, minWidth: 220 }}>
-                <label style={styles.label}>Client</label>
-                {/* New Client sits beside the picker rather than on a line of
+            <section className="admin-details-panel" aria-label="Delivery details">
+              <h6 className="admin-section-heading">Delivery details</h6>
+              <div data-admin-form-row="" style={styles.row}>
+                <div style={{ flex: 2, minWidth: 220 }}>
+                  <label style={styles.label}>Client</label>
+                  {/* New Client sits beside the picker rather than on a line of
                     its own under it. */}
-                <div style={{ display: "flex", gap: "0.5rem", alignItems: "stretch" }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <SearchableSelect
-                      items={clients}
-                      value={client?.id || ""}
-                      onChange={(id, item) => { setClient(item); setSite(""); }}
-                      placeholder="— Select Client —"
-                    />
+                  <div style={{ display: "flex", gap: "0.5rem", alignItems: "stretch" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <SearchableSelect
+                        items={clients}
+                        value={client?.id || ""}
+                        onChange={(id, item) => {
+                          setClient(item);
+                          setSite("");
+                        }}
+                        placeholder="— Select Client —"
+                      />
+                    </div>
+                    {canCreateClient && (
+                      <button
+                        type="button"
+                        style={{
+                          ...styles.inlineAddBtn,
+                          minHeight: 0,
+                          whiteSpace: "nowrap",
+                          flexShrink: 0,
+                        }}
+                        onClick={() => setShowAddClient(true)}
+                        title="Create a new client without leaving this form"
+                        aria-label="New client"
+                      >
+                        <MdPersonAdd size={15} /> New
+                      </button>
+                    )}
                   </div>
-                  {canCreateClient && (
-                    <button
-                      type="button"
-                      style={{ ...styles.inlineAddBtn, minHeight: 0, whiteSpace: "nowrap", flexShrink: 0 }}
-                      onClick={() => setShowAddClient(true)}
-                      title="Create a new client without leaving this form"
-                      aria-label="New client"
-                    >
-                      <MdPersonAdd size={15} /> New
-                    </button>
+                  {!canCreateClient && (
+                    <PermissionLackedHint perm="clients.manage.create" what="add a new client" />
                   )}
                 </div>
-                {!canCreateClient && <PermissionLackedHint perm="clients.manage.create" what="add a new client" />}
+                <div style={{ flex: 1.5, minWidth: 180 }}>
+                  <label style={styles.label}>Site / Department</label>
+                  {(() => {
+                    const clientSites = client?.site
+                      ? client.site
+                          .split(";")
+                          .map((s) => s.trim())
+                          .filter(Boolean)
+                      : [];
+                    return clientSites.length > 0 ? (
+                      <select
+                        style={styles.input}
+                        value={site}
+                        onChange={(e) => setSite(e.target.value)}
+                      >
+                        <option value="">(none)</option>
+                        {clientSites.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        style={styles.input}
+                        placeholder={client ? "Optional" : "Pick a client first"}
+                        value={site}
+                        onChange={(e) => setSite(e.target.value)}
+                        disabled={!client}
+                      />
+                    );
+                  })()}
+                </div>
+                <div style={{ flex: 1, minWidth: 150 }}>
+                  <label style={styles.label}>Delivery Date</label>
+                  <input
+                    type="date"
+                    style={styles.input}
+                    value={deliveryDate}
+                    onChange={(e) => setDeliveryDate(e.target.value)}
+                  />
+                </div>
               </div>
-              <div style={{ flex: 1.5, minWidth: 180 }}>
-                <label style={styles.label}>Site / Department</label>
-                {(() => {
-                  const clientSites = client?.site
-                    ? client.site.split(";").map((s) => s.trim()).filter(Boolean)
-                    : [];
-                  return clientSites.length > 0 ? (
-                    <select
-                      style={styles.input}
-                      value={site}
-                      onChange={(e) => setSite(e.target.value)}
-                    >
-                      <option value="">(none)</option>
-                      {clientSites.map((s) => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      style={styles.input}
-                      placeholder={client ? "Optional" : "Pick a client first"}
-                      value={site}
-                      onChange={(e) => setSite(e.target.value)}
-                      disabled={!client}
-                    />
-                  );
-                })()}
-              </div>
-              <div style={{ flex: 1, minWidth: 150 }}>
-                <label style={styles.label}>Delivery Date</label>
-                <input type="date" style={styles.input} value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
-              </div>
-            </div>
 
-            {/* PO row: Number + Date + Indent No — flex weights match
+              {/* PO row: Number + Date + Indent No — flex weights match
                 ChallanEditForm's PO row so Add and Edit look identical. */}
-            <div data-admin-form-row="" style={styles.row}>
-              <div style={{ flex: 1, minWidth: 180 }}>
-                <label style={styles.label}>PO Number{salesOrderId && <span style={{ color: colors.textSecondary, fontWeight: 400 }}> (from the order)</span>}</label>
-                <input type="text" style={{ ...styles.input, ...(salesOrderId ? { backgroundColor: "#eef1f5", cursor: "not-allowed" } : {}) }} value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Enter PO number" disabled={!!salesOrderId} />
+              <div data-admin-form-row="" style={styles.row}>
+                <div style={{ flex: 1, minWidth: 180 }}>
+                  <label style={styles.label}>
+                    PO Number
+                    {salesOrderId && (
+                      <span style={{ color: colors.textSecondary, fontWeight: 400 }}>
+                        {" "}
+                        (from the order)
+                      </span>
+                    )}
+                  </label>
+                  <input
+                    type="text"
+                    style={{
+                      ...styles.input,
+                      ...(salesOrderId
+                        ? { backgroundColor: "#eef1f5", cursor: "not-allowed" }
+                        : {}),
+                    }}
+                    value={poNumber}
+                    onChange={(e) => setPoNumber(e.target.value)}
+                    placeholder="Enter PO number"
+                    disabled={!!salesOrderId}
+                  />
+                </div>
+                <div style={{ flex: 1, minWidth: 140 }}>
+                  <label style={styles.label}>PO Date</label>
+                  <input
+                    type="date"
+                    style={{
+                      ...styles.input,
+                      ...(salesOrderId
+                        ? { backgroundColor: "#eef1f5", cursor: "not-allowed" }
+                        : {}),
+                    }}
+                    value={poDate}
+                    onChange={(e) => setPoDate(e.target.value)}
+                    disabled={!!salesOrderId}
+                  />
+                </div>
+                <div style={{ flex: 1, minWidth: 180 }}>
+                  <label style={styles.label}>
+                    Indent No <span style={{ color: "#5f6d7e", fontWeight: 400 }}>(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    style={styles.input}
+                    value={indentNo}
+                    onChange={(e) => setIndentNo(e.target.value)}
+                    placeholder="Enter indent number"
+                  />
+                </div>
               </div>
-              <div style={{ flex: 1, minWidth: 140 }}>
-                <label style={styles.label}>PO Date</label>
-                <input type="date" style={{ ...styles.input, ...(salesOrderId ? { backgroundColor: "#eef1f5", cursor: "not-allowed" } : {}) }} value={poDate} onChange={(e) => setPoDate(e.target.value)} disabled={!!salesOrderId} />
-              </div>
-              <div style={{ flex: 1, minWidth: 180 }}>
-                <label style={styles.label}>
-                  Indent No <span style={{ color: "#5f6d7e", fontWeight: 400 }}>(optional)</span>
-                </label>
-                <input
-                  type="text"
-                  style={styles.input}
-                  value={indentNo}
-                  onChange={(e) => setIndentNo(e.target.value)}
-                  placeholder="Enter indent number"
-                />
-              </div>
-            </div></section>
+            </section>
 
             <div style={{ marginTop: "0.25rem" }}>
-              <LineItemsEditor companyId={companyId}
+              <LineItemsEditor
+                companyId={companyId}
                 items={items}
                 onItemsChange={setItems}
                 makeBlankItem={() => ({ description: "", quantity: 1, unit: "" })}
                 units={units}
                 itemsLabel="Items"
               />
-              <ChallanPrivateCosts companyId={companyId} items={items} onItemsChange={setItems} suppliers={suppliers} />
+              <ChallanPrivateCosts
+                companyId={companyId}
+                items={items}
+                onItemsChange={setItems}
+                suppliers={suppliers}
+              />
             </div>
-
 
             <DocumentNotesEditor value={notes} onChange={setNotes} />
 
             <div style={{ marginTop: "1rem" }}>
-              <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="DeliveryChallan" entityId={null} mode="edit" />
+              <AttachmentManager
+                ref={attachmentRef}
+                companyId={companyId}
+                entityType="DeliveryChallan"
+                entityId={null}
+                mode="edit"
+              />
             </div>
           </div>
 
           <div data-admin-footer="" style={formStyles.footer}>
-            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
-            <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: isDisabled ? 0.6 : 1 }} disabled={isDisabled}>{saving ? "Saving..." : "Save Challan"}</button>
+            <button
+              data-admin-close=""
+              type="button"
+              style={{ ...formStyles.button, ...formStyles.cancel }}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              style={{ ...formStyles.button, ...formStyles.submit, opacity: isDisabled ? 0.6 : 1 }}
+              disabled={isDisabled}
+            >
+              {saving ? "Saving..." : "Save Challan"}
+            </button>
           </div>
         </form>
       </div>
@@ -382,8 +542,13 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
             setShowAddClient(false);
             const { data } = await getClientsByCompany(companyId).catch(() => ({ data: [] }));
             setClients(data || []);
-            if (created?.id) setClient((data || []).find((c) => String(c.id) === String(created.id))
-              || { id: created.id, label: created.name });
+            if (created?.id)
+              setClient(
+                (data || []).find((c) => String(c.id) === String(created.id)) || {
+                  id: created.id,
+                  label: created.name,
+                },
+              );
           }}
         />
       )}
@@ -392,14 +557,107 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
 }
 
 const styles = {
-  inlineAddBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.4rem 0.7rem", borderRadius: 6, border: `1px solid ${colors.teal}`, backgroundColor: "#fff", color: colors.teal, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
+  inlineAddBtn: {
+    minHeight: 44,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    padding: "0.4rem 0.7rem",
+    borderRadius: 6,
+    border: `1px solid ${colors.teal}`,
+    backgroundColor: "#fff",
+    color: colors.teal,
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
   row: { display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" },
-  label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
-  input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", transition: "border-color 0.25s", boxSizing: "border-box" },
-  errorAlert: { backgroundColor: colors.dangerLight, color: colors.danger, padding: "0.65rem 1rem", borderRadius: 8, marginBottom: "1rem", fontWeight: 500, border: `1px solid ${colors.danger}30`, fontSize: "0.85rem" },
-  itemsContainer: { display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: 220, overflowY: "auto", overflowX: "hidden", paddingRight: 4 },
-  itemRow: { display: "flex", gap: "0.4rem", alignItems: "flex-start", padding: "0.5rem", borderRadius: 10, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#fafbfc", minWidth: 0 },
-  itemIndex: { width: 22, paddingTop: "0.55rem", fontWeight: 700, fontSize: "0.82rem", color: colors.textSecondary, textAlign: "center", flexShrink: 0 },
-  removeBtn: { display: "flex", alignItems: "center", justifyContent: "center", padding: "0.4rem", marginTop: "0.3rem", borderRadius: 8, border: `1px solid ${colors.danger}25`, backgroundColor: colors.dangerLight, color: colors.danger, cursor: "pointer", transition: "background-color 0.2s", flexShrink: 0 },
-  addItemBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.3rem", marginTop: "0.6rem", padding: "0.4rem 0.9rem", borderRadius: 8, border: "none", backgroundColor: `${colors.teal}14`, color: colors.teal, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", transition: "background-color 0.2s" },
+  label: {
+    display: "block",
+    marginBottom: "0.35rem",
+    fontWeight: 600,
+    fontSize: "0.85rem",
+    color: colors.textSecondary,
+  },
+  input: {
+    width: "100%",
+    padding: "0.55rem 0.75rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    fontSize: "0.9rem",
+    backgroundColor: colors.inputBg,
+    color: colors.textPrimary,
+    outline: "none",
+    transition: "border-color 0.25s",
+    boxSizing: "border-box",
+  },
+  errorAlert: {
+    backgroundColor: colors.dangerLight,
+    color: colors.danger,
+    padding: "0.65rem 1rem",
+    borderRadius: 8,
+    marginBottom: "1rem",
+    fontWeight: 500,
+    border: `1px solid ${colors.danger}30`,
+    fontSize: "0.85rem",
+  },
+  itemsContainer: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.5rem",
+    maxHeight: 220,
+    overflowY: "auto",
+    overflowX: "hidden",
+    paddingRight: 4,
+  },
+  itemRow: {
+    display: "flex",
+    gap: "0.4rem",
+    alignItems: "flex-start",
+    padding: "0.5rem",
+    borderRadius: 10,
+    border: `1px solid ${colors.cardBorder}`,
+    backgroundColor: "#fafbfc",
+    minWidth: 0,
+  },
+  itemIndex: {
+    width: 22,
+    paddingTop: "0.55rem",
+    fontWeight: 700,
+    fontSize: "0.82rem",
+    color: colors.textSecondary,
+    textAlign: "center",
+    flexShrink: 0,
+  },
+  removeBtn: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "0.4rem",
+    marginTop: "0.3rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.danger}25`,
+    backgroundColor: colors.dangerLight,
+    color: colors.danger,
+    cursor: "pointer",
+    transition: "background-color 0.2s",
+    flexShrink: 0,
+  },
+  addItemBtn: {
+    minHeight: 44,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    marginTop: "0.6rem",
+    padding: "0.4rem 0.9rem",
+    borderRadius: 8,
+    border: "none",
+    backgroundColor: `${colors.teal}14`,
+    color: colors.teal,
+    fontSize: "0.82rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    transition: "background-color 0.2s",
+  },
 };

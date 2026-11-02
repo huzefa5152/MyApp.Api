@@ -63,7 +63,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   const [site, setSite] = useState(challan.site || "");
   const [notes, setNotes] = useState(challan.notes || "");
   const [deliveryDate, setDeliveryDate] = useState(
-    challan.deliveryDate ? challan.deliveryDate.substring(0, 10) : ""
+    challan.deliveryDate ? challan.deliveryDate.substring(0, 10) : "",
   );
   const [poNumber, setPoNumber] = useState(challan.poNumber || "");
   const [poDate, setPoDate] = useState(challan.poDate ? challan.poDate.substring(0, 10) : "");
@@ -85,7 +85,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
       supplierId: i.supplierId ?? null,
       actualUnitCost: i.actualUnitCost ?? null,
       lockedPurchaseQuantity: i.lockedPurchaseQuantity ?? 0,
-    }))
+    })),
   );
 
   // ── Lookups ──
@@ -103,9 +103,13 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   // Load lookups once
   useEffect(() => {
     if (challan.companyId) {
-      getClientsByCompany(challan.companyId).then(({ data }) => setClients(data)).catch(() => {});
+      getClientsByCompany(challan.companyId)
+        .then(({ data }) => setClients(data))
+        .catch(() => {});
     }
-    getAllUnits(challan.companyId).then(({ data }) => setUnits(data)).catch(() => setUnits([]));
+    getAllUnits(challan.companyId)
+      .then(({ data }) => setUnits(data))
+      .catch(() => setUnits([]));
   }, [challan.companyId]);
 
   // Derive the site options from the selected client's semicolon-separated list.
@@ -113,14 +117,17 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   // input so operator can still type a one-off site.
   const selectedClient = useMemo(
     () => clients.find((c) => String(c.id) === String(clientId)),
-    [clients, clientId]
+    [clients, clientId],
   );
   const clientSites = useMemo(
     () =>
       selectedClient?.site
-        ? selectedClient.site.split(";").map((s) => s.trim()).filter(Boolean)
+        ? selectedClient.site
+            .split(";")
+            .map((s) => s.trim())
+            .filter(Boolean)
         : [],
-    [selectedClient]
+    [selectedClient],
   );
 
   // If user switches client, clear any site that doesn't belong to the new
@@ -160,7 +167,8 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
     // ones use "Pending". Setup Required is possible but the preview just
     // shows the ready state optimistically; the backend corrects if not FBR-ready.
     const readyLabel = challan.isImported ? "Imported" : "Pending";
-    if (challan.status === "Setup Required") return hasPo ? `${readyLabel} (if FBR-ready)` : "No PO";
+    if (challan.status === "Setup Required")
+      return hasPo ? `${readyLabel} (if FBR-ready)` : "No PO";
     return hasPo ? readyLabel : "No PO";
   }, [poNumber, challan.status, challan.isImported]);
 
@@ -172,11 +180,23 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
     if (saving || !numberValid) return;
     setError("");
 
-    if (!clientId) { setError("Client is required."); return; }
-    if (!deliveryDate) { setError("Delivery date is required."); return; }
+    if (!clientId) {
+      setError("Client is required.");
+      return;
+    }
+    if (!deliveryDate) {
+      setError("Delivery date is required.");
+      return;
+    }
     const validItems = items.filter((i) => i.description.trim());
-    if (validItems.length === 0) { setError("At least one item is required."); return; }
-    if (validItems.some((i) => i.quantity <= 0)) { setError("All items must have a quantity > 0."); return; }
+    if (validItems.length === 0) {
+      setError("At least one item is required.");
+      return;
+    }
+    if (validItems.some((i) => i.quantity <= 0)) {
+      setError("All items must have a quantity > 0.");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -205,7 +225,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
           quantity: parseFloat(i.quantity) || 1,
           unit: (i.unit || "").trim(),
           supplierId: i.supplierId || null,
-          actualUnitCost: i.actualUnitCost === "" ? null : i.actualUnitCost ?? null,
+          actualUnitCost: i.actualUnitCost === "" ? null : (i.actualUnitCost ?? null),
           itemTypeName: "",
         })),
       });
@@ -221,28 +241,79 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   // click. Dismiss via the X in the header or the Cancel button.
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>
             {isDuplicate ? "Edit Duplicate Challan" : "Edit Challan"} #{challan.challanNumber}
           </h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            &times;
+          </button>
         </div>
         <form onSubmit={handleSubmit}>
           <div data-admin-body="" style={formStyles.body}>
-            {challan.invoiceId && <p role="status" style={{ background: "#eff6ff", padding: 12, borderRadius: 8 }}>Saving changes updates bill #{challan.invoiceNumber || challan.invoiceId}, its totals and linked order delivery figures. Consultant review will be required before FBR validation. New items start without a rate: open the bill to price them. To cancel or remove a whole challan, use its order management actions or Bills → Manage challans.</p>}
-            {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
+            {challan.invoiceId && (
+              <p role="status" style={{ background: "#eff6ff", padding: 12, borderRadius: 8 }}>
+                Saving changes updates bill #{challan.invoiceNumber || challan.invoiceId}, its
+                totals and linked order delivery figures. Consultant review will be required before
+                FBR validation. New items start without a rate: open the bill to price them. To
+                cancel or remove a whole challan, use its order management actions or Bills → Manage
+                challans.
+              </p>
+            )}
+            {error && (
+              <div ref={errRef} style={styles.errorAlert}>
+                {error}
+              </div>
+            )}
 
             {/* Number and the copy shortcut share one row; the copy panel takes
                 the full row once it is opened. */}
             <div className="doc-header-row">
-              <div className="doc-header-row__number"><BillNumberField companyId={challan.companyId} documentType="challan" clientId={clientId} currentClientId={challan.clientId} variant="edit" currentNumber={challan.challanNumber} editRecordId={challan.id} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} lockedReason={isDuplicate ? "Duplicate challan numbers are inherited and cannot be changed." : undefined} disabled={saving} /></div>
+              <div className="doc-header-row__number">
+                <BillNumberField
+                  companyId={challan.companyId}
+                  documentType="challan"
+                  clientId={clientId}
+                  currentClientId={challan.clientId}
+                  variant="edit"
+                  currentNumber={challan.challanNumber}
+                  editRecordId={challan.id}
+                  number={customNumber}
+                  onNumberChange={setCustomNumber}
+                  onValidityChange={setNumberValid}
+                  lockedReason={
+                    isDuplicate
+                      ? "Duplicate challan numbers are inherited and cannot be changed."
+                      : undefined
+                  }
+                  disabled={saving}
+                />
+              </div>
               <div className="doc-header-row__copy">
-                <DocumentCopyPicker companyId={challan.companyId} destination="Challan" allowDetails={false} disabled={!!challan.salesOrderId || !!challan.invoiceId}
-                  onCopy={(source,lines,details) => {
-                    setItems(prev => appendCopiedLines(details ? [] : prev, lines, () => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""})));
-                    if(details) {  }
-                  }} />
+                <DocumentCopyPicker
+                  companyId={challan.companyId}
+                  destination="Challan"
+                  allowDetails={false}
+                  disabled={!!challan.salesOrderId || !!challan.invoiceId}
+                  onCopy={(source, lines, details) => {
+                    setItems((prev) =>
+                      appendCopiedLines(details ? [] : prev, lines, () => ({
+                        id: 0,
+                        itemTypeId: null,
+                        description: "",
+                        quantity: 1,
+                        unit: "",
+                      })),
+                    );
+                    if (details) {
+                    }
+                  }}
+                />
               </div>
             </div>
 
@@ -253,23 +324,44 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
                 <MdContentCopy size={16} />
                 <span>
                   This is a <strong>duplicate</strong>
-                  {challan.duplicatedFromChallanNumber
-                    ? <> of <strong>Challan #{challan.duplicatedFromChallanNumber}</strong></>
-                    : null}
-                  . Only <strong>PO Number</strong>, <strong>PO Date</strong>, and <strong>Items</strong> can be changed —
-                  Client, Site, Delivery Date, and Indent No are inherited from the original.
+                  {challan.duplicatedFromChallanNumber ? (
+                    <>
+                      {" "}
+                      of <strong>Challan #{challan.duplicatedFromChallanNumber}</strong>
+                    </>
+                  ) : null}
+                  . Only <strong>PO Number</strong>, <strong>PO Date</strong>, and{" "}
+                  <strong>Items</strong> can be changed — Client, Site, Delivery Date, and Indent No
+                  are inherited from the original.
                 </span>
               </div>
             )}
 
             {/* Status preview banner — shows what the Save click will do to
                 the challan's status. Especially useful when clearing the PO. */}
-            <div style={{ ...styles.statusBanner, backgroundColor: statusWillChange ? colors.warningLight : "#eef4fb", borderColor: statusWillChange ? "#ffcc80" : "#90caf9", color: statusWillChange ? "#e65100" : colors.blue }}>
+            <div
+              style={{
+                ...styles.statusBanner,
+                backgroundColor: statusWillChange ? colors.warningLight : "#eef4fb",
+                borderColor: statusWillChange ? "#ffcc80" : "#90caf9",
+                color: statusWillChange ? "#e65100" : colors.blue,
+              }}
+            >
               <MdInfo size={16} />
               <span>
                 Status: <strong>{challan.status}</strong>
-                {statusWillChange && <> → will become <strong>{previewStatus}</strong> after save</>}
-                {!statusWillChange && <> (will stay <strong>{previewStatus}</strong>)</>}
+                {statusWillChange && (
+                  <>
+                    {" "}
+                    → will become <strong>{previewStatus}</strong> after save
+                  </>
+                )}
+                {!statusWillChange && (
+                  <>
+                    {" "}
+                    (will stay <strong>{previewStatus}</strong>)
+                  </>
+                )}
               </span>
             </div>
 
@@ -302,7 +394,11 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
                     disabled={isDuplicate}
                   >
                     <option value="">(none)</option>
-                    {clientSites.map((s) => <option key={s} value={s}>{s}</option>)}
+                    {clientSites.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
                   </select>
                 ) : (
                   <input
@@ -317,8 +413,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
               </div>
               <div style={{ flex: 1, minWidth: 150 }}>
                 <label style={styles.label}>
-                  Delivery Date *
-                  {isDuplicate && <span style={styles.lockedHint}> (locked)</span>}
+                  Delivery Date *{isDuplicate && <span style={styles.lockedHint}> (locked)</span>}
                 </label>
                 <input
                   type="date"
@@ -363,9 +458,11 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
               <div style={{ flex: 1, minWidth: 180 }}>
                 <label style={styles.label}>
                   Indent No
-                  {isDuplicate
-                    ? <span style={styles.lockedHint}> (locked)</span>
-                    : <span style={styles.labelHint}> (optional)</span>}
+                  {isDuplicate ? (
+                    <span style={styles.lockedHint}> (locked)</span>
+                  ) : (
+                    <span style={styles.labelHint}> (optional)</span>
+                  )}
                 </label>
                 <input
                   type="text"
@@ -379,14 +476,26 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
             </div>
 
             {/* ── Items ── */}
-            <LineItemsEditor companyId={challan.companyId}
+            <LineItemsEditor
+              companyId={challan.companyId}
               items={items}
               onItemsChange={setItems}
-              makeBlankItem={() => ({ id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" })}
+              makeBlankItem={() => ({
+                id: 0,
+                itemTypeId: null,
+                description: "",
+                quantity: 1,
+                unit: "",
+              })}
               units={units}
               itemsLabel="Items *"
             />
-            <ChallanPrivateCosts companyId={challan.companyId} items={items} onItemsChange={setItems} suppliers={suppliers} />
+            <ChallanPrivateCosts
+              companyId={challan.companyId}
+              items={items}
+              onItemsChange={setItems}
+              suppliers={suppliers}
+            />
 
             <DocumentNotesEditor value={notes} onChange={setNotes} />
 
@@ -395,11 +504,21 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
                 The challan already exists here (edit), so uploads attach
                 immediately to its id; no staging/flush needed. */}
             <div style={{ marginTop: "1rem" }}>
-              <AttachmentManager companyId={challan.companyId} entityType="DeliveryChallan" entityId={challan.id} mode="edit" />
+              <AttachmentManager
+                companyId={challan.companyId}
+                entityType="DeliveryChallan"
+                entityId={challan.id}
+                mode="edit"
+              />
             </div>
           </div>
           <div data-admin-footer="" style={formStyles.footer}>
-            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>
+            <button
+              data-admin-close=""
+              type="button"
+              style={{ ...formStyles.button, ...formStyles.cancel }}
+              onClick={onClose}
+            >
               Cancel
             </button>
             <button
@@ -530,7 +649,8 @@ const styles = {
     color: colors.danger,
     cursor: "pointer",
   },
-  addItemBtn: { minHeight: 44,
+  addItemBtn: {
+    minHeight: 44,
     display: "inline-flex",
     alignItems: "center",
     gap: "0.3rem",

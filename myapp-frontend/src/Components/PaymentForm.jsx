@@ -42,7 +42,14 @@ const METHODS = ["Cash", "Bank Transfer", "Cheque", "Online", "Other"];
  * which account the other side of the entry lands on. The server derives the
  * double entry (see Services/Implementations/PostingService.PostPaymentAsync).
  */
-export default function PaymentForm({ mode, companyId, preset, editPayment = null, onClose, onSaved }) {
+export default function PaymentForm({
+  mode,
+  companyId,
+  preset,
+  editPayment = null,
+  onClose,
+  onSaved,
+}) {
   const isReceipt = mode === "receipts";
   const isEdit = !!editPayment?.id;
   const docLabel = isReceipt ? "Invoice" : "Bill";
@@ -52,13 +59,17 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   // direction, which is the common case, but either is allowed: a refund to a
   // customer is a Payment with a Client payee.
   const [payeeType, setPayeeType] = useState(
-    editPayment?.contactType || preset?.contactType || (isReceipt ? "Client" : "Supplier"));
+    editPayment?.contactType || preset?.contactType || (isReceipt ? "Client" : "Supplier"),
+  );
   const [payeeName, setPayeeName] = useState(
-    (editPayment?.contactType === "Other" && editPayment?.contactName) || "");
-  const contactLabel = payeeType === "Client" ? "Client" : payeeType === "Supplier" ? "Supplier" : "Payee";
+    (editPayment?.contactType === "Other" && editPayment?.contactName) || "",
+  );
+  const contactLabel =
+    payeeType === "Client" ? "Client" : payeeType === "Supplier" ? "Supplier" : "Payee";
   // Settling documents only makes sense for the party that owns them, and only
   // in the matching direction (a receipt can't settle a purchase bill).
-  const canSettle = (isReceipt && payeeType === "Client") || (!isReceipt && payeeType === "Supplier");
+  const canSettle =
+    (isReceipt && payeeType === "Client") || (!isReceipt && payeeType === "Supplier");
 
   const today = todayYmd();
   const [date, setDate] = useState(editPayment?.date ? editPayment.date.slice(0, 10) : today);
@@ -71,25 +82,35 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   // stays usable until the operator sets up their accounts.
   const [hasBankAccounts, setHasBankAccounts] = useState(false);
   const [bankStatus, setBankStatus] = useState("loading");
-  const [bankAccountId, setBankAccountId] = useState(editPayment?.bankAccountId ? String(editPayment.bankAccountId) : "");
+  const [bankAccountId, setBankAccountId] = useState(
+    editPayment?.bankAccountId ? String(editPayment.bankAccountId) : "",
+  );
   const [bankAccountName, setBankAccountName] = useState(editPayment?.bankAccountName || "");
   const [description, setDescription] = useState(editPayment?.description || "");
   const [notes, setNotes] = useState(editPayment?.notes || "");
   const [chequeNumber, setChequeNumber] = useState(editPayment?.chequeNumber || "");
-  const [chequeDate, setChequeDate] = useState(editPayment?.chequeDate ? editPayment.chequeDate.slice(0, 10) : "");
+  const [chequeDate, setChequeDate] = useState(
+    editPayment?.chequeDate ? editPayment.chequeDate.slice(0, 10) : "",
+  );
 
   const [contacts, setContacts] = useState([]);
   const [contactId, setContactId] = useState(
-    editPayment?.contactId ? String(editPayment.contactId) : (preset?.contactId ? String(preset.contactId) : ""));
+    editPayment?.contactId
+      ? String(editPayment.contactId)
+      : preset?.contactId
+        ? String(preset.contactId)
+        : "",
+  );
   // What this money is for. Derived on open from the record being edited: a
   // saved payment's first line already says which shape it is.
   const [purpose, setPurpose] = useState(() => {
     const k = editPayment?.allocations?.[0]?.kind;
-    if ((editPayment?.allocations || []).some(a => a.invoiceId || a.purchaseBillId)) return "settle";
+    if ((editPayment?.allocations || []).some((a) => a.invoiceId || a.purchaseBillId))
+      return "settle";
     if (k === "Account") return "expense";
     if (k === "OnAccount") return "advance";
     if (editPayment) return "settle";
-    return preset?.documentId ? "settle" : (isReceipt ? "settle" : "settle");
+    return preset?.documentId ? "settle" : isReceipt ? "settle" : "settle";
   });
 
   // Income/expense lines for purpose === "expense". Amount is GROSS (what left
@@ -112,15 +133,24 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   });
 
   const [remainderAmount, setRemainderAmount] = useState(() =>
-    String((editPayment?.allocations || []).filter(a => a.kind === "OnAccount").reduce((sum, a) => sum + Number(a.amount || 0), 0) || ""));
-  const [chequeStatus, setChequeStatus] = useState(editPayment?.chequeStatus && editPayment.chequeStatus !== "None" ? editPayment.chequeStatus : "Pending");
+    String(
+      (editPayment?.allocations || [])
+        .filter((a) => a.kind === "OnAccount")
+        .reduce((sum, a) => sum + Number(a.amount || 0), 0) || "",
+    ),
+  );
+  const [chequeStatus, setChequeStatus] = useState(
+    editPayment?.chequeStatus && editPayment.chequeStatus !== "None"
+      ? editPayment.chequeStatus
+      : "Pending",
+  );
   const [documentSearch, setDocumentSearch] = useState("");
   const [showApplied, setShowApplied] = useState(true);
   const appliedRegionId = useId();
   const [docsError, setDocsError] = useState("");
   const [contactsLoading, setContactsLoading] = useState(false);
   const [contactsError, setContactsError] = useState("");
-  const [docs, setDocs] = useState([]);          // open documents for the contact
+  const [docs, setDocs] = useState([]); // open documents for the contact
   // alloc[docId] = { cash: "30000", adj: "0.50", adjMode: "none"|"discount"|
   //                  "writeoff"|"other", adjAccountId: <id|null> }
   // cash = money actually received/paid (drives Payment.Amount); adj = the
@@ -132,7 +162,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   // resolution and the "Other" account picker. Empty when GL is off / unseeded,
   // in which case adjustments still work but post no account (server sends null).
   const [accounts, setAccounts] = useState([]);
-  const accountsRef = useRef([]);                 // latest accounts for async closures
+  const accountsRef = useRef([]); // latest accounts for async closures
 
   const [error, setError] = useState("");
   const errRef = useScrollToError(error);
@@ -144,15 +174,33 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   // Load the list that matches the chosen payee type. "Other" has no master
   // list — the operator just types the name.
   useEffect(() => {
-    if (payeeType === "Other") { setContacts([]); return; }
+    if (payeeType === "Other") {
+      setContacts([]);
+      return;
+    }
     let cancelled = false;
     const load = payeeType === "Client" ? getClientsByCompany : getSuppliersByCompany;
-    setContactsLoading(true); setContactsError(""); setContacts([]);
+    setContactsLoading(true);
+    setContactsError("");
+    setContacts([]);
     load(companyId)
-      .then(({ data }) => { if (!cancelled) setContacts(data || []); })
-      .catch(() => { if (!cancelled) { setContacts([]); setContactsError("Could not load clients or suppliers. Close and reopen this form to retry."); } })
-      .finally(() => { if (!cancelled) setContactsLoading(false); });
-    return () => { cancelled = true; };
+      .then(({ data }) => {
+        if (!cancelled) setContacts(data || []);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setContacts([]);
+          setContactsError(
+            "Could not load clients or suppliers. Close and reopen this form to retry.",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setContactsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [companyId, payeeType]);
 
   // Switching payee type invalidates the selected party and, when the new type
@@ -175,11 +223,19 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   useEffect(() => {
     let cancelled = false;
     getAccountsFlat(companyId)
-      .then(({ data }) => { if (!cancelled) setAccounts(data || []); })
-      .catch(() => { if (!cancelled) setAccounts([]); });
-    return () => { cancelled = true; };
+      .then(({ data }) => {
+        if (!cancelled) setAccounts(data || []);
+      })
+      .catch(() => {
+        if (!cancelled) setAccounts([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [companyId]);
-  useEffect(() => { accountsRef.current = accounts; }, [accounts]);
+  useEffect(() => {
+    accountsRef.current = accounts;
+  }, [accounts]);
 
   // The company runs GL when it has any accounts. Adjustments must carry an
   // account only when GL is on (mirrors the server's glEnabled rule).
@@ -195,17 +251,21 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   };
   const discountAccId = useMemo(
     () => ctrlId(accounts, isReceipt ? "DiscountAllowed" : "DiscountReceived"),
-    [accounts, isReceipt]);
+    [accounts, isReceipt],
+  );
   const writeoffAccId = useMemo(
     () => ctrlId(accounts, isReceipt ? "BadDebtWriteOff" : "WriteBackIncome"),
-    [accounts, isReceipt]);
+    [accounts, isReceipt],
+  );
   // The quick-pick pills offered under a short line. When GL is off there are no
   // accounts to route to, so a single "Write off" pill just clears the balance.
   const quickPicks = useMemo(() => {
     if (!glOn) return [{ mode: "writeoff", label: "Write off", accId: null }];
     const picks = [];
-    if (discountAccId != null) picks.push({ mode: "discount", label: "Discount", accId: discountAccId });
-    if (writeoffAccId != null) picks.push({ mode: "writeoff", label: "Write-off", accId: writeoffAccId });
+    if (discountAccId != null)
+      picks.push({ mode: "discount", label: "Discount", accId: discountAccId });
+    if (writeoffAccId != null)
+      picks.push({ mode: "writeoff", label: "Write-off", accId: writeoffAccId });
     picks.push({ mode: "other", label: "Other", accId: null });
     return picks;
   }, [glOn, discountAccId, writeoffAccId]);
@@ -214,28 +274,53 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   // When a contact is picked, fetch their open documents (balance due > 0).
   // Only for the "settle" purpose — an expense or an advance has no document.
   useEffect(() => {
-    if (purpose !== "settle" || !canSettle) { setDocs([]); setAlloc({}); return; }
-    if (!contactId) { setDocs([]); setAlloc({}); return; }
+    if (purpose !== "settle" || !canSettle) {
+      setDocs([]);
+      setAlloc({});
+      return;
+    }
+    if (!contactId) {
+      setDocs([]);
+      setAlloc({});
+      return;
+    }
     let cancelled = false;
-    setLoadingDocs(true); setDocumentSearch(""); setShowApplied(true); setDocsError(""); setDocs([]); setAlloc({});
-    const fetchPage = page => isReceipt
-      ? getPagedInvoicesByCompany(companyId, { clientId: contactId, pageSize: 100, page })
-      : getPurchaseBillsByCompanyPaged(companyId, { supplierId: contactId, pageSize: 100, page });
+    setLoadingDocs(true);
+    setDocumentSearch("");
+    setShowApplied(true);
+    setDocsError("");
+    setDocs([]);
+    setAlloc({});
+    const fetchPage = (page) =>
+      isReceipt
+        ? getPagedInvoicesByCompany(companyId, { clientId: contactId, pageSize: 100, page })
+        : getPurchaseBillsByCompanyPaged(companyId, { supplierId: contactId, pageSize: 100, page });
     const fetcher = (async () => {
       const first = await fetchPage(1);
       const items = [...(first.data.items || [])];
       for (let page = 2; page <= (first.data.totalPages || 1) && !cancelled; page++) {
-        const next = await fetchPage(page); items.push(...(next.data.items || []));
+        const next = await fetchPage(page);
+        items.push(...(next.data.items || []));
       }
       // Retain existing allocations even when their document is outside the party list.
-      if (editPayment && String(editPayment.contactId) === String(contactId) && editPayment.contactType === payeeType) {
-        const existingIds = [...new Set((editPayment.allocations || [])
-          .map(a => isReceipt ? a.invoiceId : a.purchaseBillId).filter(Boolean))];
+      if (
+        editPayment &&
+        String(editPayment.contactId) === String(contactId) &&
+        editPayment.contactType === payeeType
+      ) {
+        const existingIds = [
+          ...new Set(
+            (editPayment.allocations || [])
+              .map((a) => (isReceipt ? a.invoiceId : a.purchaseBillId))
+              .filter(Boolean),
+          ),
+        ];
         for (const id of existingIds) {
           if (cancelled) break;
-          if (!items.some(d => d.id === id)) {
+          if (!items.some((d) => d.id === id)) {
             const result = await (isReceipt ? getInvoiceById(id) : getPurchaseBillById(id));
-            if (!result.data || result.data.companyId !== Number(companyId)) throw new Error("Cannot load allocated document");
+            if (!result.data || result.data.companyId !== Number(companyId))
+              throw new Error("Cannot load allocated document");
             items.push(result.data);
           }
         }
@@ -248,8 +333,12 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
         // When editing, this payment's own allocations (cash AND adjustment)
         // free up headroom on the docs it settled — show them (even if now
         // fully paid) with available = balanceDue + own, and pre-fill.
-        const ownRaw = {};   // docId -> { cash, adj, adjAccountId }
-        if (editPayment && String(editPayment.contactId) === String(contactId) && editPayment.contactType === payeeType) {
+        const ownRaw = {}; // docId -> { cash, adj, adjAccountId }
+        if (
+          editPayment &&
+          String(editPayment.contactId) === String(contactId) &&
+          editPayment.contactType === payeeType
+        ) {
           for (const a of editPayment.allocations || []) {
             const docId = isReceipt ? a.invoiceId : a.purchaseBillId;
             if (!docId) continue;
@@ -264,19 +353,21 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
           .filter((d) => !d.isCancelled || ownRaw[d.id])
           .map((d) => {
             const gross = isReceipt
-              ? (d.commercialTotal ?? ((d.grandTotal || 0) + (d.freightCharges || 0)))
+              ? (d.commercialTotal ?? (d.grandTotal || 0) + (d.freightCharges || 0))
               : d.grandTotal;
-            const balanceDue = d.balanceDue ?? (isReceipt
-              ? Math.max(0, gross - (d.withholdingTaxAmount || 0) - (d.amountPaid || 0))
-              : d.grandTotal - (d.amountPaid || 0));
-            const own = ownRaw[d.id] ? (ownRaw[d.id].cash + ownRaw[d.id].adj) : 0;
+            const balanceDue =
+              d.balanceDue ??
+              (isReceipt
+                ? Math.max(0, gross - (d.withholdingTaxAmount || 0) - (d.amountPaid || 0))
+                : d.grandTotal - (d.amountPaid || 0));
+            const own = ownRaw[d.id] ? ownRaw[d.id].cash + ownRaw[d.id].adj : 0;
             return {
               id: d.id,
               number: isReceipt ? d.invoiceNumber : d.purchaseBillNumber,
               date: d.date,
               grandTotal: gross,
               balanceDue,
-              available: balanceDue + own,   // headroom this payment can settle
+              available: balanceDue + own, // headroom this payment can settle
               previouslyApplied: !!ownRaw[d.id],
               originalCash: ownRaw[d.id]?.cash || 0,
               originalAdjustment: ownRaw[d.id]?.adj || 0,
@@ -303,32 +394,68 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
             // if accounts haven't loaded yet and this falls back to "other").
             let adjMode = "none";
             if (adjAmt > 0) {
-              const disc = ctrlId(accountsRef.current, isReceipt ? "DiscountAllowed" : "DiscountReceived");
-              const wo = ctrlId(accountsRef.current, isReceipt ? "BadDebtWriteOff" : "WriteBackIncome");
+              const disc = ctrlId(
+                accountsRef.current,
+                isReceipt ? "DiscountAllowed" : "DiscountReceived",
+              );
+              const wo = ctrlId(
+                accountsRef.current,
+                isReceipt ? "BadDebtWriteOff" : "WriteBackIncome",
+              );
               if (adjAccountId != null && adjAccountId === disc) adjMode = "discount";
               else if (adjAccountId != null && adjAccountId === wo) adjMode = "writeoff";
               else if (adjAccountId != null) adjMode = "other";
-              else adjMode = "writeoff";   // GL off — no account was recorded
+              else adjMode = "writeoff"; // GL off — no account was recorded
             }
             pre[d.id] = { cash: String(own.cash || 0), adj: String(adjAmt), adjMode, adjAccountId };
           }
           setAlloc(pre);
         } else if (preset?.documentId) {
           const target = shown.find((d) => d.id === preset.documentId);
-          if (target) setAlloc({ [target.id]: { cash: String(target.available), adj: "0", adjMode: "none", adjAccountId: null } });
+          if (target)
+            setAlloc({
+              [target.id]: {
+                cash: String(target.available),
+                adj: "0",
+                adjMode: "none",
+                adjAccountId: null,
+              },
+            });
         }
       })
-      .catch(() => { if (!cancelled) { setDocs([]); setAlloc({}); setDocsError("Could not load all documents. Close and reopen this form to retry before saving."); } })
-      .finally(() => { if (!cancelled) setLoadingDocs(false); });
-    return () => { cancelled = true; };
-  }, [contactId, companyId, isReceipt, purpose, canSettle, payeeType, preset?.documentId, editPayment?.id]);
+      .catch(() => {
+        if (!cancelled) {
+          setDocs([]);
+          setAlloc({});
+          setDocsError(
+            "Could not load all documents. Close and reopen this form to retry before saving.",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingDocs(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    contactId,
+    companyId,
+    isReceipt,
+    purpose,
+    canSettle,
+    payeeType,
+    preset?.documentId,
+    editPayment?.id,
+  ]);
 
   const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
   // ── Income/expense lines (purpose === "expense") ───────────────────────────
   const patchExp = (i, patch) =>
     setExpLines((prev) => prev.map((r, ix) => (ix === i ? { ...r, ...patch } : r)));
-  const addExpLine = () => setExpLines((prev) => [...prev, { accountId: null, amount: "", taxRate: "" }]);
+  const addExpLine = () =>
+    setExpLines((prev) => [...prev, { accountId: null, amount: "", taxRate: "" }]);
   const removeExpLine = (i) =>
     setExpLines((prev) => (prev.length === 1 ? prev : prev.filter((_, ix) => ix !== i)));
 
@@ -342,7 +469,9 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
     return { gross, rate, tax, net: round2(gross - tax) };
   };
   const expTotal = useMemo(
-    () => expLines.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0), [expLines]);
+    () => expLines.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0),
+    [expLines],
+  );
   const advanceNum = parseFloat(advanceAmount) || 0;
   const EMPTY_ROW = { cash: "", adj: "0", adjMode: "none", adjAccountId: null };
 
@@ -351,15 +480,23 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
 
   const setCash = (docId, value) => patchRow(docId, { cash: value });
   const setAdjAmount = (docId, value) => patchRow(docId, { adj: value });
-  const setAdjAccount = (docId, id) => patchRow(docId, { adjAccountId: id != null ? Number(id) : null });
+  const setAdjAccount = (docId, id) =>
+    patchRow(docId, { adjAccountId: id != null ? Number(id) : null });
 
   // "Max" = settle the whole balance in cash (drops any adjustment).
-  const appliedDocs = docs.filter(d => d.previouslyApplied);
-  const remainingDocs = docs.filter(d => !d.previouslyApplied);
-  const visibleDocs = docs.filter(d => String(d.number ?? "").toLowerCase().includes(documentSearch.trim().toLowerCase()));
+  const appliedDocs = docs.filter((d) => d.previouslyApplied);
+  const remainingDocs = docs.filter((d) => !d.previouslyApplied);
+  const visibleDocs = docs.filter((d) =>
+    String(d.number ?? "")
+      .toLowerCase()
+      .includes(documentSearch.trim().toLowerCase()),
+  );
 
   const fillBalance = (doc) =>
-    setAlloc((prev) => ({ ...prev, [doc.id]: { cash: String(doc.available), adj: "0", adjMode: "none", adjAccountId: null } }));
+    setAlloc((prev) => ({
+      ...prev,
+      [doc.id]: { cash: String(doc.available), adj: "0", adjMode: "none", adjAccountId: null },
+    }));
 
   // Clicking a quick-pick sets the mode, auto-fills the gap and (for
   // Discount/Write-off) the resolved control account; "Other" starts with no
@@ -368,7 +505,10 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
     setAlloc((prev) => {
       const row = prev[doc.id] || EMPTY_ROW;
       const gap = Math.max(0, round2(doc.available - (parseFloat(row.cash) || 0)));
-      return { ...prev, [doc.id]: { ...row, adjMode: pick.mode, adj: String(gap), adjAccountId: pick.accId } };
+      return {
+        ...prev,
+        [doc.id]: { ...row, adjMode: pick.mode, adj: String(gap), adjAccountId: pick.accId },
+      };
     });
 
   const clearAdj = (doc) => patchRow(doc.id, { adj: "0", adjMode: "none", adjAccountId: null });
@@ -377,7 +517,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   const rowCalc = (d) => {
     const row = alloc[d.id] || EMPTY_ROW;
     const cashNum = parseFloat(row.cash) || 0;
-    const adjNum = row.adjMode === "none" ? 0 : (parseFloat(row.adj) || 0);
+    const adjNum = row.adjMode === "none" ? 0 : parseFloat(row.adj) || 0;
     const settled = round2(cashNum + adjNum);
     const gap = round2(d.available - cashNum);
     const over = settled > d.available + 0.005;
@@ -388,18 +528,23 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
 
   // Cash total = the receipt/payment money (backend derives Payment.Amount from
   // Σ cash). Adjustments are the non-cash gaps that also clear the docs.
-  const cashTotal = useMemo(
-    () => {
-      if (purpose === "expense") return expTotal;
-      if (purpose === "advance") return advanceNum;
-      return Object.values(alloc).reduce((s, r) => s + (parseFloat(r?.cash) || 0), 0) + (parseFloat(remainderAmount) || 0);
-    },
-    [alloc, purpose, expTotal, advanceNum, remainderAmount]
-  );
+  const cashTotal = useMemo(() => {
+    if (purpose === "expense") return expTotal;
+    if (purpose === "advance") return advanceNum;
+    return (
+      Object.values(alloc).reduce((s, r) => s + (parseFloat(r?.cash) || 0), 0) +
+      (parseFloat(remainderAmount) || 0)
+    );
+  }, [alloc, purpose, expTotal, advanceNum, remainderAmount]);
   const adjTotal = useMemo(
-    () => (purpose !== "settle" ? 0
-      : Object.values(alloc).reduce((s, r) => s + (r?.adjMode !== "none" ? (parseFloat(r?.adj) || 0) : 0), 0)),
-    [alloc, purpose]
+    () =>
+      purpose !== "settle"
+        ? 0
+        : Object.values(alloc).reduce(
+            (s, r) => s + (r?.adjMode !== "none" ? parseFloat(r?.adj) || 0 : 0),
+            0,
+          ),
+    [alloc, purpose],
   );
 
   // Settle-remainder affordance for one document row (shared desktop + mobile).
@@ -408,8 +553,13 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
     const { row, cashNum, settled, gap, over, isSettled, needsAccount } = c;
     if (row.adjMode === "none") {
       // Pure cash over-payment (no adjustment) — flag it inline too.
-      if (over) return <div style={adjWrap}><span style={adjError}>Cash exceeds the balance due.</span></div>;
-      if (!(cashNum > 0 && gap > 0.005)) return null;   // no positive shortfall
+      if (over)
+        return (
+          <div style={adjWrap}>
+            <span style={adjError}>Cash exceeds the balance due.</span>
+          </div>
+        );
+      if (!(cashNum > 0 && gap > 0.005)) return null; // no positive shortfall
       return (
         <div style={adjWrap}>
           <div style={adjPromptRow}>
@@ -434,22 +584,29 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
     return (
       <div style={adjWrap}>
         <div style={adjActiveRow}>
-          {isSettled
-            ? <span style={settledBadge}>✓ Settled</span>
-            : <span style={adjModeBadge}>{MODE_LABEL[row.adjMode] || "Adjustment"}</span>}
+          {isSettled ? (
+            <span style={settledBadge}>✓ Settled</span>
+          ) : (
+            <span style={adjModeBadge}>{MODE_LABEL[row.adjMode] || "Adjustment"}</span>
+          )}
           <span style={adjMiniLabel}>Adjust</span>
           <input
-            type="number" min="0" step="0.01"
+            type="number"
+            min="0"
+            step="0.01"
             style={{ ...adjInput, ...(isNarrow ? adjInputNarrow : null) }}
             value={row.adj}
             onChange={(e) => setAdjAmount(d.id, e.target.value)}
           />
-          <button data-admin-close=""
+          <button
+            data-admin-close=""
             type="button"
             style={{ ...clearX, ...(isNarrow ? clearXNarrow : null) }}
             title="Remove adjustment"
             onClick={() => clearAdj(d)}
-          >×</button>
+          >
+            ×
+          </button>
         </div>
         {row.adjMode === "other" && glOn && (
           <div style={{ marginTop: 6 }}>
@@ -462,9 +619,11 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
             />
           </div>
         )}
-        {(row.adjMode === "discount" || row.adjMode === "writeoff") && glOn && row.adjAccountId != null && (
-          <span style={adjAcctHint}>Posts to {accountName(row.adjAccountId)}</span>
-        )}
+        {(row.adjMode === "discount" || row.adjMode === "writeoff") &&
+          glOn &&
+          row.adjAccountId != null && (
+            <span style={adjAcctHint}>Posts to {accountName(row.adjAccountId)}</span>
+          )}
         {needsAccount && <span style={adjError}>Choose an account for the adjustment.</span>}
         {over && <span style={adjError}>Cash + adjustment exceeds the balance due.</span>}
         {!over && !isSettled && remaining > 0.005 && (
@@ -481,7 +640,10 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
 
     // Who the money went to / came from.
     if (payeeType === "Other") {
-      if (!payeeName.trim()) { setError("Enter who this payment was made to."); return; }
+      if (!payeeName.trim()) {
+        setError("Enter who this payment was made to.");
+        return;
+      }
     } else if (!contactId) {
       setError(`Select the ${contactLabel.toLowerCase()}.`);
       return;
@@ -494,13 +656,25 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
       const rows = expLines
         .map((r) => ({ ...r, ...expCalc(r) }))
         .filter((r) => r.accountId != null || r.gross > 0);
-      if (rows.length === 0) { setError("Add at least one line: what the money was for, and how much."); return; }
+      if (rows.length === 0) {
+        setError("Add at least one line: what the money was for, and how much.");
+        return;
+      }
       const noAccount = rows.find((r) => r.accountId == null);
-      if (noAccount) { setError("Choose what each line was for (an income or expense account)."); return; }
+      if (noAccount) {
+        setError("Choose what each line was for (an income or expense account).");
+        return;
+      }
       const badAmount = rows.find((r) => !(r.gross > 0));
-      if (badAmount) { setError("Enter an amount greater than zero on every line."); return; }
+      if (badAmount) {
+        setError("Enter an amount greater than zero on every line.");
+        return;
+      }
       const badRate = rows.find((r) => r.rate < 0 || r.rate > 100);
-      if (badRate) { setError("Tax rate must be between 0 and 100."); return; }
+      if (badRate) {
+        setError("Tax rate must be between 0 and 100.");
+        return;
+      }
       allocLines = rows.map((r) => ({
         kind: "Account",
         accountId: Number(r.accountId),
@@ -511,22 +685,37 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
         adjustmentAccountId: null,
       }));
     } else if (purpose === "advance") {
-      if (!(advanceNum > 0)) { setError("Enter the advance amount."); return; }
-      if (payeeType === "Other") {
-        setError("An advance has to be against a client or a supplier. Pick one, or record this as an expense.");
+      if (!(advanceNum > 0)) {
+        setError("Enter the advance amount.");
         return;
       }
-      allocLines = [{
-        kind: "OnAccount",
-        amount: round2(advanceNum),
-        adjustmentAmount: 0,
-        adjustmentAccountId: null,
-      }];
+      if (payeeType === "Other") {
+        setError(
+          "An advance has to be against a client or a supplier. Pick one, or record this as an expense.",
+        );
+        return;
+      }
+      allocLines = [
+        {
+          kind: "OnAccount",
+          amount: round2(advanceNum),
+          adjustmentAmount: 0,
+          adjustmentAccountId: null,
+        },
+      ];
     } else {
       const allocations = docs
         .map((d) => {
           const c = rowCalc(d);
-          return { doc: d, cash: c.cashNum, adj: c.adjNum, adjMode: c.row.adjMode, adjAccountId: c.row.adjAccountId, over: c.over, needsAccount: c.needsAccount };
+          return {
+            doc: d,
+            cash: c.cashNum,
+            adj: c.adjNum,
+            adjMode: c.row.adjMode,
+            adjAccountId: c.row.adjAccountId,
+            over: c.over,
+            needsAccount: c.needsAccount,
+          };
         })
         .filter((x) => x.cash > 0 || x.adj > 0);
 
@@ -538,30 +727,41 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
       // (= balance due + this payment's own settlement when editing).
       const over = allocations.find((x) => x.over);
       if (over) {
-        setError(`${docLabel} #${over.doc.number}: cash + adjustment exceeds the balance due (${over.doc.available.toLocaleString()}).`);
+        setError(
+          `${docLabel} #${over.doc.number}: cash + adjustment exceeds the balance due (${over.doc.available.toLocaleString()}).`,
+        );
         return;
       }
       // An adjustment must land in an account when the ledger is on (server 400s otherwise).
       const missingAcct = allocations.find((x) => x.needsAccount);
       if (missingAcct) {
-        setError(`${docLabel} #${missingAcct.doc.number}: choose an account for the settle-remainder adjustment.`);
+        setError(
+          `${docLabel} #${missingAcct.doc.number}: choose an account for the settle-remainder adjustment.`,
+        );
         return;
       }
       allocLines = allocations.map((x) => ({
         kind: "Document",
         invoiceId: isReceipt ? x.doc.id : null,
         purchaseBillId: isReceipt ? null : x.doc.id,
-        amount: round2(x.cash),                                  // cash applied
+        amount: round2(x.cash), // cash applied
         adjustmentAmount: x.adjMode === "none" ? 0 : round2(x.adj),
         adjustmentAccountId: x.adjMode === "none" ? null : (x.adjAccountId ?? null),
       }));
     }
     if (purpose === "settle") {
       const remainder = Number(remainderAmount || 0);
-      if (!Number.isFinite(remainder) || remainder < 0) { setError("Enter a valid on-account remainder."); return; }
-      if (remainder > 0) allocLines.push({ kind: "OnAccount", amount: round2(remainder), adjustmentAmount: 0 });
+      if (!Number.isFinite(remainder) || remainder < 0) {
+        setError("Enter a valid on-account remainder.");
+        return;
+      }
+      if (remainder > 0)
+        allocLines.push({ kind: "OnAccount", amount: round2(remainder), adjustmentAmount: 0 });
     }
-    if (bankStatus !== "ready") { setError("Load bank/cash accounts before saving."); return; }
+    if (bankStatus !== "ready") {
+      setError("Load bank/cash accounts before saving.");
+      return;
+    }
     if (method === "Cheque" && !chequeNumber.trim()) {
       setError("Enter the cheque number.");
       return;
@@ -570,7 +770,9 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
     // is mandatory — it's the account the money lands in / comes from. A pure
     // write-off (no cash) doesn't touch a bank account, so it's not required.
     if (hasBankAccounts && !bankAccountId && cashTotal > 0) {
-      setError(`Select the bank/cash account the money was ${isReceipt ? "received in" : "paid from"}.`);
+      setError(
+        `Select the bank/cash account the money was ${isReceipt ? "received in" : "paid from"}.`,
+      );
       return;
     }
 
@@ -580,7 +782,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
         direction: isReceipt ? "Receipt" : "Payment",
         date: new Date(date).toISOString(),
         contactType: payeeType,
-        contactId: payeeType === "Other" ? null : (contactId ? Number(contactId) : null),
+        contactId: payeeType === "Other" ? null : contactId ? Number(contactId) : null,
         contactName: payeeType === "Other" ? payeeName.trim() : null,
         bankAccountId: bankAccountId ? Number(bankAccountId) : null,
         bankAccountName: bankAccountName.trim() || null,
@@ -600,119 +802,226 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
       try {
         const savedId = saved?.id ?? editPayment?.id;
         if (savedId) await attachmentRef.current?.flush(savedId);
-      } catch { /* attachments are best-effort — the payment is already saved */ }
+      } catch {
+        /* attachments are best-effort — the payment is already saved */
+      }
       onSaved?.();
       onClose?.();
     } catch (err) {
-      setError(err.response?.data?.error || `Could not save the ${isReceipt ? "receipt" : "payment"}.`);
+      setError(
+        err.response?.data?.error || `Could not save the ${isReceipt ? "receipt" : "payment"}.`,
+      );
       setSaving(false);
     }
   };
 
-  const renderDocumentList = (groupDocs) => groupDocs.length === 0
-    ? <p role="status">No matching {docLabel.toLowerCase()} number in this section.</p>
-    : isNarrow ? (
-                /* Phone (<768px): one card per open document so the amount
+  const renderDocumentList = (groupDocs) =>
+    groupDocs.length === 0 ? (
+      <p role="status">No matching {docLabel.toLowerCase()} number in this section.</p>
+    ) : isNarrow ? (
+      /* Phone (<768px): one card per open document so the amount
                    input + Max button get full-width tap targets instead of a
                    5-column table squeezed into ~340px. */
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                  {groupDocs.map((d) => {
-                    const c = rowCalc(d);
-                    return (
-                      <div key={d.id} style={allocCard}>
-                        <div style={allocCardHead}>
-                          <strong>#{d.number}</strong>
-                          {d.previouslyApplied && <span style={originalAllocation}>Originally {isReceipt ? "received" : "paid"}: Rs {d.originalCash.toLocaleString()}{d.originalAdjustment > 0 ? ` + Rs ${d.originalAdjustment.toLocaleString()} adjustment` : ""}</span>}
-                          <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>{d.date ? new Date(d.date).toLocaleDateString() : "—"}</span>
-                        </div>
-                        <div style={allocCardMeta}>
-                          <div><span style={allocMetaLabel}>Total</span><span style={allocMetaValue}>{d.grandTotal.toLocaleString()}</span></div>
-                          <div><span style={allocMetaLabel}>{isEdit ? "Available to allocate" : "Balance due"}</span><span style={allocMetaValue}>{d.available.toLocaleString()}</span></div>
-                        </div>
-                        <div>
-                          <span style={allocMetaLabel}>{isReceipt ? "Received" : "Paid"} (cash)</span>
-                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                            <input
-                              type="number" min="0" step="0.01" style={{ ...formStyles.input, textAlign: "right", flex: 1, minHeight: 44 }}
-                              aria-label={`${isReceipt ? "Received" : "Paid"} for ${docLabel.toLowerCase()} #${d.number}`}
-                              value={c.row.cash ?? ""}
-                              onChange={(e) => setCash(d.id, e.target.value)}
-                            />
-                            <button type="button" style={{ ...fillBtn, minHeight: 44, padding: "0.5rem 0.85rem", boxShadow: "none" }} onClick={() => fillBalance(d)} title="Pay full balance in cash">Max</button>
-                          </div>
-                          {renderAdjust(d, c)}
-                        </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+        {groupDocs.map((d) => {
+          const c = rowCalc(d);
+          return (
+            <div key={d.id} style={allocCard}>
+              <div style={allocCardHead}>
+                <strong>#{d.number}</strong>
+                {d.previouslyApplied && (
+                  <span style={originalAllocation}>
+                    Originally {isReceipt ? "received" : "paid"}: Rs{" "}
+                    {d.originalCash.toLocaleString()}
+                    {d.originalAdjustment > 0
+                      ? ` + Rs ${d.originalAdjustment.toLocaleString()} adjustment`
+                      : ""}
+                  </span>
+                )}
+                <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>
+                  {d.date ? new Date(d.date).toLocaleDateString() : "—"}
+                </span>
+              </div>
+              <div style={allocCardMeta}>
+                <div>
+                  <span style={allocMetaLabel}>Total</span>
+                  <span style={allocMetaValue}>{d.grandTotal.toLocaleString()}</span>
+                </div>
+                <div>
+                  <span style={allocMetaLabel}>
+                    {isEdit ? "Available to allocate" : "Balance due"}
+                  </span>
+                  <span style={allocMetaValue}>{d.available.toLocaleString()}</span>
+                </div>
+              </div>
+              <div>
+                <span style={allocMetaLabel}>{isReceipt ? "Received" : "Paid"} (cash)</span>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    style={{ ...formStyles.input, textAlign: "right", flex: 1, minHeight: 44 }}
+                    aria-label={`${isReceipt ? "Received" : "Paid"} for ${docLabel.toLowerCase()} #${d.number}`}
+                    value={c.row.cash ?? ""}
+                    onChange={(e) => setCash(d.id, e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    style={{
+                      ...fillBtn,
+                      minHeight: 44,
+                      padding: "0.5rem 0.85rem",
+                      boxShadow: "none",
+                    }}
+                    onClick={() => fillBalance(d)}
+                    title="Pay full balance in cash"
+                  >
+                    Max
+                  </button>
+                </div>
+                {renderAdjust(d, c)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    ) : (
+      <div data-admin-table-region="" style={{ overflowX: "auto" }}>
+        <table style={tbl}>
+          <thead>
+            <tr>
+              <th style={th}>{docLabel} #</th>
+              <th style={th}>Date</th>
+              <th style={{ ...th, textAlign: "right" }}>Total</th>
+              <th style={{ ...th, textAlign: "right" }}>
+                {isEdit ? "Available to allocate" : "Balance due"}
+              </th>
+              <th style={{ ...th, textAlign: "right", width: 160 }}>
+                {isReceipt ? "Received" : "Paid"}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {groupDocs.map((d) => {
+              const c = rowCalc(d);
+              const adjNode = renderAdjust(d, c);
+              // Drop the main row's bottom border when an adjustment
+              // sub-row follows, so the two read as one unit.
+              const cellTd = adjNode ? { ...td, borderBottom: "none" } : td;
+              return (
+                <Fragment key={d.id}>
+                  <tr>
+                    <td style={cellTd}>
+                      <strong>#{d.number}</strong>
+                      {d.previouslyApplied && (
+                        <span style={originalAllocation}>
+                          Originally {isReceipt ? "received" : "paid"}: Rs{" "}
+                          {d.originalCash.toLocaleString()}
+                          {d.originalAdjustment > 0
+                            ? ` + Rs ${d.originalAdjustment.toLocaleString()} adjustment`
+                            : ""}
+                        </span>
+                      )}
+                    </td>
+                    <td style={cellTd}>{d.date ? new Date(d.date).toLocaleDateString() : "—"}</td>
+                    <td style={{ ...cellTd, textAlign: "right" }}>
+                      {d.grandTotal.toLocaleString()}
+                    </td>
+                    <td style={{ ...cellTd, textAlign: "right" }}>
+                      {d.available.toLocaleString()}
+                    </td>
+                    <td style={{ ...cellTd, textAlign: "right" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 4,
+                          alignItems: "center",
+                          justifyContent: "flex-end",
+                        }}
+                      >
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          style={{
+                            ...formStyles.input,
+                            textAlign: "right",
+                            padding: "0.35rem 0.5rem",
+                            width: 110,
+                          }}
+                          aria-label={`${isReceipt ? "Received" : "Paid"} for ${docLabel.toLowerCase()} #${d.number}`}
+                          value={c.row.cash ?? ""}
+                          onChange={(e) => setCash(d.id, e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          style={fillBtn}
+                          onClick={() => fillBalance(d)}
+                          title="Pay full balance in cash"
+                        >
+                          Max
+                        </button>
                       </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div data-admin-table-region="" style={{ overflowX: "auto" }}>
-                  <table style={tbl}>
-                    <thead>
-                      <tr>
-                        <th style={th}>{docLabel} #</th>
-                        <th style={th}>Date</th>
-                        <th style={{ ...th, textAlign: "right" }}>Total</th>
-                        <th style={{ ...th, textAlign: "right" }}>{isEdit ? "Available to allocate" : "Balance due"}</th>
-                        <th style={{ ...th, textAlign: "right", width: 160 }}>{isReceipt ? "Received" : "Paid"}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {groupDocs.map((d) => {
-                        const c = rowCalc(d);
-                        const adjNode = renderAdjust(d, c);
-                        // Drop the main row's bottom border when an adjustment
-                        // sub-row follows, so the two read as one unit.
-                        const cellTd = adjNode ? { ...td, borderBottom: "none" } : td;
-                        return (
-                          <Fragment key={d.id}>
-                            <tr>
-                              <td style={cellTd}><strong>#{d.number}</strong>
-                          {d.previouslyApplied && <span style={originalAllocation}>Originally {isReceipt ? "received" : "paid"}: Rs {d.originalCash.toLocaleString()}{d.originalAdjustment > 0 ? ` + Rs ${d.originalAdjustment.toLocaleString()} adjustment` : ""}</span>}</td>
-                              <td style={cellTd}>{d.date ? new Date(d.date).toLocaleDateString() : "—"}</td>
-                              <td style={{ ...cellTd, textAlign: "right" }}>{d.grandTotal.toLocaleString()}</td>
-                              <td style={{ ...cellTd, textAlign: "right" }}>{d.available.toLocaleString()}</td>
-                              <td style={{ ...cellTd, textAlign: "right" }}>
-                                <div style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "flex-end" }}>
-                                  <input
-                                    type="number" min="0" step="0.01" style={{ ...formStyles.input, textAlign: "right", padding: "0.35rem 0.5rem", width: 110 }}
-                                    aria-label={`${isReceipt ? "Received" : "Paid"} for ${docLabel.toLowerCase()} #${d.number}`}
-                              value={c.row.cash ?? ""}
-                                    onChange={(e) => setCash(d.id, e.target.value)}
-                                  />
-                                  <button type="button" style={fillBtn} onClick={() => fillBalance(d)} title="Pay full balance in cash">Max</button>
-                                </div>
-                              </td>
-                            </tr>
-                            {adjNode && (
-                              <tr>
-                                <td colSpan={5} style={{ ...td, paddingTop: 0 }}>{adjNode}</td>
-                              </tr>
-                            )}
-                          </Fragment>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                    </td>
+                  </tr>
+                  {adjNode && (
+                    <tr>
+                      <td colSpan={5} style={{ ...td, paddingTop: 0 }}>
+                        {adjNode}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop} onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-label={isEdit ? "Edit payment" : isReceipt ? "Record receipt" : "Record payment"} className="payment-dialog" data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={isEdit ? "Edit payment" : isReceipt ? "Record receipt" : "Record payment"}
+        className="payment-dialog"
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
-          <h5 style={formStyles.title}>{isEdit ? `Edit ${editPayment.reference || (isReceipt ? "Receipt" : "Payment")}` : (isReceipt ? "Record Receipt" : "Record Payment")}</h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
+          <h5 style={formStyles.title}>
+            {isEdit
+              ? `Edit ${editPayment.reference || (isReceipt ? "Receipt" : "Payment")}`
+              : isReceipt
+                ? "Record Receipt"
+                : "Record Payment"}
+          </h5>
+          <button
+            data-admin-close=""
+            style={formStyles.closeButton}
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <MdClose size={18} />
+          </button>
         </div>
         <form onSubmit={handleSubmit}>
           <div data-admin-body="" style={formStyles.body}>
-            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
+            {error && (
+              <div ref={errRef} style={formStyles.error}>
+                {error}
+              </div>
+            )}
 
             {/* Question 1: who. Plain language on purpose — the operator should
                 never have to think about contact "types" or subledgers. */}
             <div data-admin-field="" style={formStyles.formGroup}>
-              <label style={formStyles.label}>{isReceipt ? "Who paid you?" : "Who are you paying?"}</label>
+              <label style={formStyles.label}>
+                {isReceipt ? "Who paid you?" : "Who are you paying?"}
+              </label>
               <div className="payment-party-tabs" style={payeeTabs}>
                 {[
                   { key: "Client", label: "Client" },
@@ -722,7 +1031,8 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                   <button
                     type="button"
                     key={t.key}
-                    aria-pressed={payeeType === t.key} onClick={() => changePayeeType(t.key)}
+                    aria-pressed={payeeType === t.key}
+                    onClick={() => changePayeeType(t.key)}
                     style={{ ...payeeTab, ...(payeeType === t.key ? payeeTabActive : null) }}
                   >
                     {t.label}
@@ -759,7 +1069,9 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
             {/* Question 2: what for. Decides which account the other side of the
                 entry lands on; the operator picks a purpose, not a debit. */}
             <div data-admin-field="" style={formStyles.formGroup}>
-              <label style={formStyles.label}>What is this {isReceipt ? "money" : "payment"} for?</label>
+              <label style={formStyles.label}>
+                What is this {isReceipt ? "money" : "payment"} for?
+              </label>
               <div style={payeeTabs}>
                 {[
                   canSettle && {
@@ -770,79 +1082,161 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                   {
                     key: "expense",
                     label: isReceipt ? "Other income" : "An expense",
-                    hint: isReceipt ? "Money in that isn't against an invoice" : "Rent, electricity, supplies…",
+                    hint: isReceipt
+                      ? "Money in that isn't against an invoice"
+                      : "Rent, electricity, supplies…",
                   },
                   payeeType !== "Other" && {
                     key: "advance",
                     label: "Advance / on account",
                     hint: "No document yet — sits against their balance",
                   },
-                ].filter(Boolean).map((t) => (
-                  <button
-                    type="button"
-                    key={t.key}
-                    title={t.hint}
-                    onClick={() => { setPurpose(t.key); setError(""); }}
-                    style={{ ...payeeTab, ...(purpose === t.key ? payeeTabActive : null) }}
-                  >
-                    {t.label}
-                  </button>
-                ))}
+                ]
+                  .filter(Boolean)
+                  .map((t) => (
+                    <button
+                      type="button"
+                      key={t.key}
+                      title={t.hint}
+                      onClick={() => {
+                        setPurpose(t.key);
+                        setError("");
+                      }}
+                      style={{ ...payeeTab, ...(purpose === t.key ? payeeTabActive : null) }}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
+                gap: "0.75rem",
+              }}
+            >
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Date</label>
-                <input type="date" style={formStyles.input} value={date} onChange={(e) => setDate(e.target.value)} max={today} />
-                <span style={payeeHint}>Actual receipt/payment date; entry time is recorded separately.</span>
+                <input
+                  type="date"
+                  style={formStyles.input}
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  max={today}
+                />
+                <span style={payeeHint}>
+                  Actual receipt/payment date; entry time is recorded separately.
+                </span>
               </div>
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Method</label>
-                <select style={{ ...dropdownStyles.base, width: "100%" }} value={method} onChange={(e) => setMethod(e.target.value)}>
-                  {METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+                <select
+                  style={{ ...dropdownStyles.base, width: "100%" }}
+                  value={method}
+                  onChange={(e) => setMethod(e.target.value)}
+                >
+                  {METHODS.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
                 </select>
               </div>
               <BankCashSelect
                 companyId={companyId}
                 value={bankAccountId}
                 name={bankAccountName}
-                onChange={(id, nm) => { setBankAccountId(id ? String(id) : ""); setBankAccountName(nm || ""); }}
+                onChange={(id, nm) => {
+                  setBankAccountId(id ? String(id) : "");
+                  setBankAccountName(nm || "");
+                }}
                 onLoaded={(list) => setHasBankAccounts(list.length > 0)}
-                  onStatusChange={setBankStatus}
-                  onCreated={() => getAccountsFlat(companyId).then(({ data }) => setAccounts(data || [])).catch(() => {})}
-                includeAccount={editPayment?.bankAccountId ? { id: editPayment.bankAccountId, name: editPayment.bankAccountName } : null}
+                onStatusChange={setBankStatus}
+                onCreated={() =>
+                  getAccountsFlat(companyId)
+                    .then(({ data }) => setAccounts(data || []))
+                    .catch(() => {})
+                }
+                includeAccount={
+                  editPayment?.bankAccountId
+                    ? { id: editPayment.bankAccountId, name: editPayment.bankAccountName }
+                    : null
+                }
                 autoSelectSingle={!isEdit}
                 label={isReceipt ? "Received in (bank/cash)" : "Paid from (bank/cash)"}
               />
             </div>
 
             {method === "Cheque" && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
+                  gap: "0.75rem",
+                }}
+              >
                 <div data-admin-field="" style={formStyles.formGroup}>
                   <label style={formStyles.label}>Cheque #</label>
-                  <input style={formStyles.input} value={chequeNumber} onChange={(e) => setChequeNumber(e.target.value)} />
+                  <input
+                    style={formStyles.input}
+                    value={chequeNumber}
+                    onChange={(e) => setChequeNumber(e.target.value)}
+                  />
                 </div>
                 <div data-admin-field="" style={formStyles.formGroup}>
-                  <label style={formStyles.label}>Cheque date <span style={{ color: colors.textSecondary, fontWeight: 400 }}>(future = post-dated)</span></label>
-                  <input type="date" style={formStyles.input} value={chequeDate} onChange={(e) => setChequeDate(e.target.value)} />
+                  <label style={formStyles.label}>
+                    Cheque date{" "}
+                    <span style={{ color: colors.textSecondary, fontWeight: 400 }}>
+                      (future = post-dated)
+                    </span>
+                  </label>
+                  <input
+                    type="date"
+                    style={formStyles.input}
+                    value={chequeDate}
+                    onChange={(e) => setChequeDate(e.target.value)}
+                  />
                 </div>
               </div>
             )}
 
-            {method === "Cheque" && <div data-admin-field="" style={formStyles.formGroup}>
-              <label style={formStyles.label}>Cheque status</label>
-              <select aria-label="Cheque status" style={dropdownStyles.base} value={chequeStatus} onChange={e => setChequeStatus(e.target.value)}>
-                {["Pending", "Deposited", "Cleared", "Bounced"].map(s => <option key={s}>{s}</option>)}
-              </select>
-              <span style={payeeHint}>Pending cheques are not cleared bank funds. A bounced cheque restores the outstanding balance.</span>
-            </div>}
+            {method === "Cheque" && (
+              <div data-admin-field="" style={formStyles.formGroup}>
+                <label style={formStyles.label}>Cheque status</label>
+                <select
+                  aria-label="Cheque status"
+                  style={dropdownStyles.base}
+                  value={chequeStatus}
+                  onChange={(e) => setChequeStatus(e.target.value)}
+                >
+                  {["Pending", "Deposited", "Cleared", "Bounced"].map((s) => (
+                    <option key={s}>{s}</option>
+                  ))}
+                </select>
+                <span style={payeeHint}>
+                  Pending cheques are not cleared bank funds. A bounced cheque restores the
+                  outstanding balance.
+                </span>
+              </div>
+            )}
             <div data-admin-field="" style={formStyles.formGroup}>
               <label style={formStyles.label}>Description (optional)</label>
-              <input style={formStyles.input} value={description} onChange={(e) => setDescription(e.target.value)} />
-              <span style={payeeHint}>Choose your receiving/paying account above. Use the description for the other party's bank or reference details.</span>
+              <input
+                style={formStyles.input}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+              <span style={payeeHint}>
+                Choose your receiving/paying account above. Use the description for the other
+                party's bank or reference details.
+              </span>
             </div>
-            <details className="payment-notes"><summary>Notes (optional)</summary><DocumentNotesEditor value={notes} onChange={setNotes} /></details>
+            <details className="payment-notes">
+              <summary>Notes (optional)</summary>
+              <DocumentNotesEditor value={notes} onChange={setNotes} />
+            </details>
 
             {/* Income/expense lines — the everyday "paid the electricity bill".
                 Amount is what left the bank; the tax rate carves the recoverable
@@ -850,7 +1244,12 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
             {purpose === "expense" && (
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>
-                  What was it for? {glOn && <span style={{ fontWeight: 400, color: colors.textSecondary }}>(from your Chart of Accounts)</span>}
+                  What was it for?{" "}
+                  {glOn && (
+                    <span style={{ fontWeight: 400, color: colors.textSecondary }}>
+                      (from your Chart of Accounts)
+                    </span>
+                  )}
                 </label>
                 {accounts.length === 0 ? (
                   <div style={hintBox}>
@@ -867,14 +1266,22 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                             <AccountSelect
                               accounts={activeAccounts}
                               value={row.accountId}
-                              onChange={(id) => patchExp(i, { accountId: id != null ? Number(id) : null })}
+                              onChange={(id) =>
+                                patchExp(i, { accountId: id != null ? Number(id) : null })
+                              }
                               side={isReceipt ? "credit" : "debit"}
-                              placeholder={isReceipt ? "Income account — e.g. Other income" : "Expense account — e.g. Electricity"}
+                              placeholder={
+                                isReceipt
+                                  ? "Income account — e.g. Other income"
+                                  : "Expense account — e.g. Electricity"
+                              }
                             />
                           </div>
                           <div style={expAmountCell}>
                             <input
-                              type="number" min="0" step="0.01"
+                              type="number"
+                              min="0"
+                              step="0.01"
                               style={formStyles.input}
                               value={row.amount}
                               onChange={(e) => patchExp(i, { amount: e.target.value })}
@@ -883,30 +1290,39 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                           </div>
                           <div style={expTaxCell}>
                             <input
-                              type="number" min="0" max="100" step="0.01"
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.01"
                               style={formStyles.input}
                               value={row.taxRate}
                               onChange={(e) => patchExp(i, { taxRate: e.target.value })}
                               placeholder="Tax %"
                             />
                           </div>
-                          <button data-admin-close=""
+                          <button
+                            data-admin-close=""
                             type="button"
                             style={expRemove}
                             title="Remove this line"
                             disabled={expLines.length === 1}
                             onClick={() => removeExpLine(i)}
-                          >×</button>
+                          >
+                            ×
+                          </button>
                           {c.tax > 0 && (
                             <div style={expTaxHint}>
-                              Includes Rs {c.tax.toLocaleString()} {isReceipt ? "sales tax" : "input tax"} —
-                              Rs {c.net.toLocaleString()} goes to {accountName(row.accountId) || "the account"}.
+                              Includes Rs {c.tax.toLocaleString()}{" "}
+                              {isReceipt ? "sales tax" : "input tax"} — Rs {c.net.toLocaleString()}{" "}
+                              goes to {accountName(row.accountId) || "the account"}.
                             </div>
                           )}
                         </div>
                       );
                     })}
-                    <button type="button" style={expAddBtn} onClick={addExpLine}>+ Add another line</button>
+                    <button type="button" style={expAddBtn} onClick={addExpLine}>
+                      + Add another line
+                    </button>
                     <span style={payeeHint}>
                       Enter the amount as it appears on the bill — including tax. Leave Tax % blank
                       when there is no recoverable tax.
@@ -916,18 +1332,34 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
               </div>
             )}
 
-            {purpose === "settle" && <div data-admin-field="" style={formStyles.formGroup}>
-              <label style={formStyles.label}>Additional amount on account</label>
-              <input aria-label="Additional amount on account" type="number" min="0" step="0.01" style={formStyles.input}
-                value={remainderAmount} onChange={e => setRemainderAmount(e.target.value)} placeholder="0.00" />
-              <span style={payeeHint}>The rest of this receipt/payment, against the selected party's balance. Confirm historical invoices are already covered by their opening balance.</span>
-            </div>}
+            {purpose === "settle" && (
+              <div data-admin-field="" style={formStyles.formGroup}>
+                <label style={formStyles.label}>Additional amount on account</label>
+                <input
+                  aria-label="Additional amount on account"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  style={formStyles.input}
+                  value={remainderAmount}
+                  onChange={(e) => setRemainderAmount(e.target.value)}
+                  placeholder="0.00"
+                />
+                <span style={payeeHint}>
+                  The rest of this receipt/payment, against the selected party's balance. Confirm
+                  historical invoices are already covered by their opening balance.
+                </span>
+              </div>
+            )}
             {/* Advance / on account — one figure, no document. */}
             {purpose === "advance" && (
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Advance amount</label>
-                <input aria-label="Advance amount"
-                  type="number" min="0" step="0.01"
+                <input
+                  aria-label="Advance amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
                   style={formStyles.input}
                   value={advanceAmount}
                   onChange={(e) => setAdvanceAmount(e.target.value)}
@@ -945,42 +1377,106 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
 
             {/* Allocation against open documents */}
             {purpose === "settle" && (
-            <div data-admin-field="" style={formStyles.formGroup}>
-              <label style={formStyles.label}>Allocate to {docLabel.toLowerCase()}s</label>
-              {contactId && !loadingDocs && docs.length > 0 && <div className="payment-doc-search"><label>Search {docLabel.toLowerCase()} number<input type="search" value={documentSearch} onChange={e => setDocumentSearch(e.target.value)} placeholder={`Find ${docLabel.toLowerCase()} #`} style={formStyles.input} /></label><span>{visibleDocs.length} of {docs.length} available {docLabel.toLowerCase()}s</span></div>}
-              {contactId && !loadingDocs && docs.length > 0 && visibleDocs.length === 0 && <p role="status">No matching {docLabel.toLowerCase()} number. Clear search to see all available documents.</p>}
-              {!contactId ? (
-                <div style={hintBox}>Select a {contactLabel.toLowerCase()} to see their unpaid {docLabel.toLowerCase()}s.</div>
-              ) : loadingDocs ? (
-                <div style={hintBox}>Loading…</div>
-              ) : docsError ? (
-                <div role="alert" style={hintBox}>{docsError}</div>
-              ) : docs.length === 0 ? (
-                <div style={hintBox}>No open {docLabel.toLowerCase()}s with a balance due for this {contactLabel.toLowerCase()}.</div>
-              ) : (
-                <>
-                  {isEdit && appliedDocs.length > 0 && (
-                    <section className="payment-applied-docs" aria-label={`Already allocated ${docLabel.toLowerCase()}s`}>
-                      <button type="button" className="payment-doc-toggle" aria-expanded={showApplied} aria-controls={appliedRegionId} onClick={() => setShowApplied(value => !value)}>
-                        <span>{showApplied ? <MdExpandMore size={20} aria-hidden="true" /> : <MdChevronRight size={20} aria-hidden="true" />} {docLabel}s already allocated to this {isReceipt ? "receipt" : "payment"} ({appliedDocs.length})</span>
-                        <span>Rs {appliedDocs.reduce((sum, d) => sum + d.originalCash, 0).toLocaleString()} {isReceipt ? "received" : "paid"}</span>
-                      </button>
-                      <div id={appliedRegionId} hidden={!showApplied}>
-                        <p style={payeeHint}>These are the saved allocations, including fully paid documents. Changing an amount updates this {isReceipt ? "receipt" : "payment"}.</p>
-                        {renderDocumentList(visibleDocs.filter(d => d.previouslyApplied))}
-                      </div>
+              <div data-admin-field="" style={formStyles.formGroup}>
+                <label style={formStyles.label}>Allocate to {docLabel.toLowerCase()}s</label>
+                {contactId && !loadingDocs && docs.length > 0 && (
+                  <div className="payment-doc-search">
+                    <label>
+                      Search {docLabel.toLowerCase()} number
+                      <input
+                        type="search"
+                        value={documentSearch}
+                        onChange={(e) => setDocumentSearch(e.target.value)}
+                        placeholder={`Find ${docLabel.toLowerCase()} #`}
+                        style={formStyles.input}
+                      />
+                    </label>
+                    <span>
+                      {visibleDocs.length} of {docs.length} available {docLabel.toLowerCase()}s
+                    </span>
+                  </div>
+                )}
+                {contactId && !loadingDocs && docs.length > 0 && visibleDocs.length === 0 && (
+                  <p role="status">
+                    No matching {docLabel.toLowerCase()} number. Clear search to see all available
+                    documents.
+                  </p>
+                )}
+                {!contactId ? (
+                  <div style={hintBox}>
+                    Select a {contactLabel.toLowerCase()} to see their unpaid{" "}
+                    {docLabel.toLowerCase()}s.
+                  </div>
+                ) : loadingDocs ? (
+                  <div style={hintBox}>Loading…</div>
+                ) : docsError ? (
+                  <div role="alert" style={hintBox}>
+                    {docsError}
+                  </div>
+                ) : docs.length === 0 ? (
+                  <div style={hintBox}>
+                    No open {docLabel.toLowerCase()}s with a balance due for this{" "}
+                    {contactLabel.toLowerCase()}.
+                  </div>
+                ) : (
+                  <>
+                    {isEdit && appliedDocs.length > 0 && (
+                      <section
+                        className="payment-applied-docs"
+                        aria-label={`Already allocated ${docLabel.toLowerCase()}s`}
+                      >
+                        <button
+                          type="button"
+                          className="payment-doc-toggle"
+                          aria-expanded={showApplied}
+                          aria-controls={appliedRegionId}
+                          onClick={() => setShowApplied((value) => !value)}
+                        >
+                          <span>
+                            {showApplied ? (
+                              <MdExpandMore size={20} aria-hidden="true" />
+                            ) : (
+                              <MdChevronRight size={20} aria-hidden="true" />
+                            )}{" "}
+                            {docLabel}s already allocated to this{" "}
+                            {isReceipt ? "receipt" : "payment"} ({appliedDocs.length})
+                          </span>
+                          <span>
+                            Rs{" "}
+                            {appliedDocs
+                              .reduce((sum, d) => sum + d.originalCash, 0)
+                              .toLocaleString()}{" "}
+                            {isReceipt ? "received" : "paid"}
+                          </span>
+                        </button>
+                        <div id={appliedRegionId} hidden={!showApplied}>
+                          <p style={payeeHint}>
+                            These are the saved allocations, including fully paid documents.
+                            Changing an amount updates this {isReceipt ? "receipt" : "payment"}.
+                          </p>
+                          {renderDocumentList(visibleDocs.filter((d) => d.previouslyApplied))}
+                        </div>
+                      </section>
+                    )}
+                    <section
+                      aria-label={`${isEdit ? "Remaining unpaid" : "Unpaid"} ${docLabel.toLowerCase()}s`}
+                    >
+                      <h3 style={documentSectionHeading}>
+                        {isEdit ? "Remaining unpaid" : "Unpaid"} {docLabel.toLowerCase()}s (
+                        {remainingDocs.length})
+                      </h3>
+                      {remainingDocs.length === 0 ? (
+                        <p style={payeeHint}>
+                          No remaining unpaid {docLabel.toLowerCase()}s for this{" "}
+                          {contactLabel.toLowerCase()}.
+                        </p>
+                      ) : (
+                        renderDocumentList(visibleDocs.filter((d) => !d.previouslyApplied))
+                      )}
                     </section>
-                  )}
-                  <section aria-label={`${isEdit ? "Remaining unpaid" : "Unpaid"} ${docLabel.toLowerCase()}s`}>
-                    <h3 style={documentSectionHeading}>{isEdit ? "Remaining unpaid" : "Unpaid"} {docLabel.toLowerCase()}s ({remainingDocs.length})</h3>
-                    {remainingDocs.length === 0
-                      ? <p style={payeeHint}>No remaining unpaid {docLabel.toLowerCase()}s for this {contactLabel.toLowerCase()}.</p>
-                      : renderDocumentList(visibleDocs.filter(d => !d.previouslyApplied))}
-                  </section>
-                </>
-
-              )}
-            </div>
+                  </>
+                )}
+              </div>
             )}
 
             <div style={summaryWrap}>
@@ -1014,15 +1510,37 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
           </div>
 
           <div data-admin-footer="" style={formStyles.footer}>
-            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            <button
+              data-admin-close=""
+              type="button"
+              style={{ ...formStyles.button, ...formStyles.cancel }}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
             {(() => {
               const bankMissing = hasBankAccounts && !bankAccountId && cashTotal > 0;
               // Allow submit when there's any settlement — cash and/or a pure
               // write-off adjustment (Σ cash + Σ adjustment > 0).
-              const blocked = saving || (purpose === "settle" && (loadingDocs || !!docsError)) || bankStatus !== "ready" || (cashTotal + adjTotal) <= 0 || bankMissing;
+              const blocked =
+                saving ||
+                (purpose === "settle" && (loadingDocs || !!docsError)) ||
+                bankStatus !== "ready" ||
+                cashTotal + adjTotal <= 0 ||
+                bankMissing;
               return (
-                <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: blocked ? 0.6 : 1 }} disabled={blocked}>
-                  {saving ? "Saving…" : isEdit ? "Save Changes" : isReceipt ? "Save Receipt" : "Save Payment"}
+                <button
+                  type="submit"
+                  style={{ ...formStyles.button, ...formStyles.submit, opacity: blocked ? 0.6 : 1 }}
+                  disabled={blocked}
+                >
+                  {saving
+                    ? "Saving…"
+                    : isEdit
+                      ? "Save Changes"
+                      : isReceipt
+                        ? "Save Receipt"
+                        : "Save Payment"}
                 </button>
               );
             })()}
@@ -1033,18 +1551,81 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   );
 }
 
-const originalAllocation = { display: "block", fontSize: "0.78rem", color: colors.textSecondary, fontWeight: 400 };
-const documentSectionHeading = { fontSize: "0.95rem", fontWeight: 700, margin: "1rem 0 0.5rem", color: colors.textPrimary };
-const hintBox = { padding: "0.75rem", background: colors.inputBg, border: `1px dashed ${colors.inputBorder}`, borderRadius: 8, color: colors.textSecondary, fontSize: "0.85rem" };
+const originalAllocation = {
+  display: "block",
+  fontSize: "0.78rem",
+  color: colors.textSecondary,
+  fontWeight: 400,
+};
+const documentSectionHeading = {
+  fontSize: "0.95rem",
+  fontWeight: 700,
+  margin: "1rem 0 0.5rem",
+  color: colors.textPrimary,
+};
+const hintBox = {
+  padding: "0.75rem",
+  background: colors.inputBg,
+  border: `1px dashed ${colors.inputBorder}`,
+  borderRadius: 8,
+  color: colors.textSecondary,
+  fontSize: "0.85rem",
+};
 const tbl = { width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" };
-const th = { textAlign: "left", padding: "0.4rem 0.5rem", borderBottom: `1px solid ${colors.cardBorder}`, color: colors.textSecondary, fontWeight: 700, whiteSpace: "nowrap" };
-const td = { padding: "0.4rem 0.5rem", borderBottom: `1px solid ${colors.cardBorder}`, color: colors.textPrimary };
-const fillBtn = { padding: "0.3rem 0.5rem", fontSize: "0.7rem", fontWeight: 700, borderRadius: 6, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, cursor: "pointer" };
+const th = {
+  textAlign: "left",
+  padding: "0.4rem 0.5rem",
+  borderBottom: `1px solid ${colors.cardBorder}`,
+  color: colors.textSecondary,
+  fontWeight: 700,
+  whiteSpace: "nowrap",
+};
+const td = {
+  padding: "0.4rem 0.5rem",
+  borderBottom: `1px solid ${colors.cardBorder}`,
+  color: colors.textPrimary,
+};
+const fillBtn = {
+  padding: "0.3rem 0.5rem",
+  fontSize: "0.7rem",
+  fontWeight: 700,
+  borderRadius: 6,
+  border: `1px solid ${colors.inputBorder}`,
+  background: "#fff",
+  color: colors.blue,
+  cursor: "pointer",
+};
 // Mobile (<768px) allocation cards.
-const allocCard = { border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: "0.7rem 0.8rem", background: "#fff", display: "flex", flexDirection: "column", gap: "0.5rem" };
-const allocCardHead = { display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: "0.5rem" };
-const allocCardMeta = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(120px, 100%), 1fr))", gap: "0.4rem 1rem" };
-const allocMetaLabel = { display: "block", fontSize: "0.66rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: colors.textSecondary, marginBottom: 2 };
+const allocCard = {
+  border: `1px solid ${colors.cardBorder}`,
+  borderRadius: 10,
+  padding: "0.7rem 0.8rem",
+  background: "#fff",
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.5rem",
+};
+const allocCardHead = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "baseline",
+  flexWrap: "wrap",
+  gap: "0.5rem",
+};
+const allocCardMeta = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(120px, 100%), 1fr))",
+  gap: "0.4rem 1rem",
+};
+const allocMetaLabel = {
+  display: "block",
+  fontSize: "0.66rem",
+  fontWeight: 700,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+  color: colors.textSecondary,
+  marginBottom: 2,
+};
 const allocMetaValue = { fontSize: "0.9rem", fontWeight: 600, color: colors.textPrimary };
 
 // ── Settle-remainder adjustment affordance ──────────────────────────────
@@ -1053,55 +1634,155 @@ const adjWrap = { marginTop: 6, display: "flex", flexDirection: "column", gap: 6
 const adjPromptRow = { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 };
 const adjShortText = { fontSize: "0.72rem", color: colors.textSecondary, fontWeight: 600 };
 const pillGroup = { display: "flex", flexWrap: "wrap", gap: 4 };
-const pill = { padding: "0.25rem 0.6rem", fontSize: "0.72rem", fontWeight: 700, borderRadius: 999, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, cursor: "pointer", minHeight: 30, lineHeight: 1, boxShadow: "none" };
+const pill = {
+  padding: "0.25rem 0.6rem",
+  fontSize: "0.72rem",
+  fontWeight: 700,
+  borderRadius: 999,
+  border: `1px solid ${colors.inputBorder}`,
+  background: "#fff",
+  color: colors.blue,
+  cursor: "pointer",
+  minHeight: 30,
+  lineHeight: 1,
+  boxShadow: "none",
+};
 const pillNarrow = { minHeight: 44, padding: "0.5rem 0.95rem", fontSize: "0.82rem" };
 const adjActiveRow = { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 };
-const settledBadge = { display: "inline-flex", alignItems: "center", gap: 4, padding: "0.2rem 0.5rem", fontSize: "0.7rem", fontWeight: 800, borderRadius: 6, background: "#e8f5e9", color: colors.success, border: `1px solid ${colors.success}40` };
-const adjModeBadge = { display: "inline-flex", alignItems: "center", padding: "0.2rem 0.5rem", fontSize: "0.7rem", fontWeight: 700, borderRadius: 6, background: colors.inputBg, color: colors.textSecondary, border: `1px solid ${colors.inputBorder}` };
-const adjMiniLabel = { fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.03em", color: colors.textSecondary };
-const adjInput = { width: 110, padding: "0.3rem 0.5rem", borderRadius: 6, border: `1px solid ${colors.inputBorder}`, background: colors.inputBg, color: colors.textPrimary, fontSize: "0.82rem", textAlign: "right", outline: "none" };
+const settledBadge = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 4,
+  padding: "0.2rem 0.5rem",
+  fontSize: "0.7rem",
+  fontWeight: 800,
+  borderRadius: 6,
+  background: "#e8f5e9",
+  color: colors.success,
+  border: `1px solid ${colors.success}40`,
+};
+const adjModeBadge = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "0.2rem 0.5rem",
+  fontSize: "0.7rem",
+  fontWeight: 700,
+  borderRadius: 6,
+  background: colors.inputBg,
+  color: colors.textSecondary,
+  border: `1px solid ${colors.inputBorder}`,
+};
+const adjMiniLabel = {
+  fontSize: "0.68rem",
+  fontWeight: 700,
+  textTransform: "uppercase",
+  letterSpacing: "0.03em",
+  color: colors.textSecondary,
+};
+const adjInput = {
+  width: 110,
+  padding: "0.3rem 0.5rem",
+  borderRadius: 6,
+  border: `1px solid ${colors.inputBorder}`,
+  background: colors.inputBg,
+  color: colors.textPrimary,
+  fontSize: "0.82rem",
+  textAlign: "right",
+  outline: "none",
+};
 const adjInputNarrow = { flex: 1, minWidth: 90, minHeight: 44, fontSize: "0.95rem" };
-const clearX = { width: 28, height: 28, minWidth: 28, display: "grid", placeItems: "center", borderRadius: 6, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.danger, cursor: "pointer", fontSize: "1rem", lineHeight: 1, padding: 0, boxShadow: "none" };
+const clearX = {
+  width: 28,
+  height: 28,
+  minWidth: 28,
+  display: "grid",
+  placeItems: "center",
+  borderRadius: 6,
+  border: `1px solid ${colors.inputBorder}`,
+  background: "#fff",
+  color: colors.danger,
+  cursor: "pointer",
+  fontSize: "1rem",
+  lineHeight: 1,
+  padding: 0,
+  boxShadow: "none",
+};
 const clearXNarrow = { width: 44, height: 44, minWidth: 44, fontSize: "1.2rem" };
 const adjAcctHint = { fontSize: "0.72rem", color: colors.textSecondary, fontStyle: "italic" };
 const adjError = { fontSize: "0.72rem", color: colors.danger, fontWeight: 600 };
 const adjRemainHint = { fontSize: "0.72rem", color: colors.textSecondary };
 // Footer money summary.
 const summaryWrap = { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 };
-const summaryLine = { display: "flex", justifyContent: "flex-end", alignItems: "baseline", flexWrap: "wrap", gap: "0.5rem" };
+const summaryLine = {
+  display: "flex",
+  justifyContent: "flex-end",
+  alignItems: "baseline",
+  flexWrap: "wrap",
+  gap: "0.5rem",
+};
 const summaryLabel = { color: colors.textSecondary, fontSize: "0.85rem", fontWeight: 600 };
 // ── Payee / purpose selectors ────────────────────────────────────────────────
 // Wraps instead of scrolling, so three or four choices stack on a phone rather
 // than hiding behind an edge (CLAUDE.md §3: no media queries needed).
 const payeeTabs = { display: "flex", flexWrap: "wrap", gap: "0.4rem" };
 const payeeTab = {
-  flex: "1 1 auto", minWidth: 110, minHeight: 44, padding: "0.5rem 0.75rem",
-  border: `1px solid ${colors.inputBorder}`, borderRadius: 8, background: colors.inputBg,
-  color: colors.textSecondary, fontSize: "0.85rem", fontWeight: 600, cursor: "pointer",
+  flex: "1 1 auto",
+  minWidth: 110,
+  minHeight: 44,
+  padding: "0.5rem 0.75rem",
+  border: `1px solid ${colors.inputBorder}`,
+  borderRadius: 8,
+  background: colors.inputBg,
+  color: colors.textSecondary,
+  fontSize: "0.85rem",
+  fontWeight: 600,
+  cursor: "pointer",
 };
 const payeeTabActive = { background: colors.blue, borderColor: colors.blue, color: "#fff" };
-const payeeHint = { display: "block", marginTop: "0.35rem", color: colors.textSecondary, fontSize: "0.78rem" };
+const payeeHint = {
+  display: "block",
+  marginTop: "0.35rem",
+  color: colors.textSecondary,
+  fontSize: "0.78rem",
+};
 
 // ── Income/expense line editor ───────────────────────────────────────────────
 // Account takes the room it needs; amount and tax stay side by side. Collapses
 // to a single column on a phone.
 const expRow = {
-  display: "grid", gap: "0.4rem", alignItems: "start", marginBottom: "0.5rem",
+  display: "grid",
+  gap: "0.4rem",
+  alignItems: "start",
+  marginBottom: "0.5rem",
   gridTemplateColumns: "minmax(min(240px, 100%), 3fr) minmax(110px, 1fr) minmax(80px, 0.6fr) 44px",
 };
 const expAccountCell = { minWidth: 0 };
 const expAmountCell = { minWidth: 0 };
 const expTaxCell = { minWidth: 0 };
 const expRemove = {
-  display: "grid", placeItems: "center", width: 44, height: 44, padding: 0,
-  border: `1px solid ${colors.inputBorder}`, borderRadius: 8, background: colors.inputBg,
-  color: colors.textSecondary, fontSize: "1.1rem", cursor: "pointer",
+  display: "grid",
+  placeItems: "center",
+  width: 44,
+  height: 44,
+  padding: 0,
+  border: `1px solid ${colors.inputBorder}`,
+  borderRadius: 8,
+  background: colors.inputBg,
+  color: colors.textSecondary,
+  fontSize: "1.1rem",
+  cursor: "pointer",
 };
 const expTaxHint = { gridColumn: "1 / -1", color: colors.textSecondary, fontSize: "0.78rem" };
 const expAddBtn = {
-  minHeight: 44, padding: "0.5rem 0.9rem", border: `1px dashed ${colors.inputBorder}`,
-  borderRadius: 8, background: "transparent", color: colors.blue,
-  fontSize: "0.85rem", fontWeight: 600, cursor: "pointer",
+  minHeight: 44,
+  padding: "0.5rem 0.9rem",
+  border: `1px dashed ${colors.inputBorder}`,
+  borderRadius: 8,
+  background: "transparent",
+  color: colors.blue,
+  fontSize: "0.85rem",
+  fontWeight: 600,
+  cursor: "pointer",
 };
 
 const summaryStrong = { fontSize: "1.05rem", fontWeight: 700, color: colors.blue };

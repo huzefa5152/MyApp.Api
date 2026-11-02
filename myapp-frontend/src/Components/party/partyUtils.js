@@ -12,7 +12,11 @@ const AVATAR_GRADIENTS = [
 ];
 
 export function initials(name) {
-  const words = (name || "").replace(/[^\p{L}\p{N}\s]/gu, " ").trim().split(/\s+/).filter(Boolean);
+  const words = (name || "")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
   if (words.length === 0) return "?";
   return (words.length === 1 ? words[0].slice(0, 2) : words[0][0] + words[1][0]).toUpperCase();
 }
@@ -41,8 +45,9 @@ export function missingFbrDetails(p) {
 export function matchesSearch(p, q) {
   if (!q) return true;
   const needle = q.trim().toLowerCase();
-  return [p.name, p.email, p.phone, p.ntn, p.strn, p.cnic, p.address, p.contactPerson, p.site]
-    .some((v) => (v || "").toString().toLowerCase().includes(needle));
+  return [p.name, p.email, p.phone, p.ntn, p.strn, p.cnic, p.address, p.contactPerson, p.site].some(
+    (v) => (v || "").toString().toLowerCase().includes(needle),
+  );
 }
 
 export function countByType(rows) {

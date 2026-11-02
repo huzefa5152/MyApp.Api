@@ -11,13 +11,13 @@
  */
 
 export const withholdingTaxStarters = [
-
   // ─── 1. Classic Serif (double-border frame) — DEFAULT ────────────────────────
   {
     id: "wht-classic-serif",
     name: "Classic Serif",
     type: "WithholdingTaxReceipt",
-    description: "Formal Times New Roman certificate with a double-border frame, official and clean — the default",
+    description:
+      "Formal Times New Roman certificate with a double-border frame, official and clean — the default",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Withholding Tax Receipt #{{receiptNumber}}</title><style>
 @media print { @page { size: A4; margin: 12mm; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -214,7 +214,8 @@ body { font-family: Calibri, "Segoe UI", Arial, sans-serif; padding: 14mm; color
     id: "wht-official-seal",
     name: "Official Seal",
     type: "WithholdingTaxReceipt",
-    description: "Formal government-style certificate with a double-border frame, corner OFFICIAL seal and watermark",
+    description:
+      "Formal government-style certificate with a double-border frame, corner OFFICIAL seal and watermark",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Withholding Tax Receipt #{{receiptNumber}}</title><style>
 @media print { @page { size: A4; margin: 10mm; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -321,7 +322,8 @@ body { font-family: "Times New Roman", Times, serif; padding: 8mm; color: #1a1a1
     id: "wht-monochrome-ink",
     name: "Monochrome Ink-Saver",
     type: "WithholdingTaxReceipt",
-    description: "Pure black-and-white certificate with hairline borders and no fills for minimum toner use",
+    description:
+      "Pure black-and-white certificate with hairline borders and no fills for minimum toner use",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Withholding Tax Receipt #{{receiptNumber}}</title><style>
 @media print { @page { size: A4; margin: 14mm; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -410,5 +412,4 @@ body { font-family: Arial, "Helvetica Neue", sans-serif; padding: 12mm; color: #
 </div>
 </body></html>`,
   },
-
 ];

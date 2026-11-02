@@ -50,7 +50,11 @@ export function CompanyPicker({ icon, companies, selectedCompany, onChange }) {
         value={selectedCompany?.id || ""}
         onChange={(e) => onChange(companies.find((c) => String(c.id) === e.target.value))}
       >
-        {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
+        {companies.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.brandName || c.name}
+          </option>
+        ))}
       </select>
     </label>
   );
@@ -60,11 +64,25 @@ export function CompanyPicker({ icon, companies, selectedCompany, onChange }) {
 export function PrintPdfButtons({ onPrint, onPdf, busy, disabled }) {
   return (
     <>
-      <button type="button" className="rw-btn" onClick={onPrint} disabled={disabled || !!busy} title="Print this report on the company letterhead">
-        <MdPrint size={17} /><span>Print</span>
+      <button
+        type="button"
+        className="rw-btn"
+        onClick={onPrint}
+        disabled={disabled || !!busy}
+        title="Print this report on the company letterhead"
+      >
+        <MdPrint size={17} />
+        <span>Print</span>
       </button>
-      <button type="button" className="rw-btn rw-btn--primary" onClick={onPdf} disabled={disabled || !!busy} title="Save this report as a PDF on the company letterhead">
-        <MdPictureAsPdf size={17} /><span>{busy === "pdf" ? "Building…" : "PDF"}</span>
+      <button
+        type="button"
+        className="rw-btn rw-btn--primary"
+        onClick={onPdf}
+        disabled={disabled || !!busy}
+        title="Save this report as a PDF on the company letterhead"
+      >
+        <MdPictureAsPdf size={17} />
+        <span>{busy === "pdf" ? "Building…" : "PDF"}</span>
       </button>
     </>
   );
@@ -72,7 +90,9 @@ export function PrintPdfButtons({ onPrint, onPdf, busy, disabled }) {
 
 export const Dot = ({ children }) => (
   <>
-    <span className="rw-meta__dot" aria-hidden="true">·</span>
+    <span className="rw-meta__dot" aria-hidden="true">
+      ·
+    </span>
     <span>{children}</span>
   </>
 );

@@ -423,7 +423,8 @@ table.items tbody tr:nth-child(even) td { background: #fff7ed !important; }
     id: "purchasebill-monochrome-ink",
     name: "Monochrome Ink-Saver",
     type: "PurchaseBill",
-    description: "Pure black and white, no background fills — optimized for laser printing on plain paper",
+    description:
+      "Pure black and white, no background fills — optimized for laser printing on plain paper",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Purchase Bill #{{purchaseBillNumber}}</title><style>
 @media print { @page { size: A4; margin: 10mm 12mm; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -524,7 +525,8 @@ table.items th.l { text-align: left; }
     id: "purchasebill-elegant-premium",
     name: "Elegant Premium",
     type: "PurchaseBill",
-    description: "Charcoal and gold palette with fine rules and italic serif accents for high-end stationery",
+    description:
+      "Charcoal and gold palette with fine rules and italic serif accents for high-end stationery",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Purchase Bill #{{purchaseBillNumber}}</title><style>
 @media print { @page { size: A4; margin: 10mm; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -637,7 +639,8 @@ table.items tbody tr:nth-child(even) td { background: #f9f6ef !important; }
     id: "purchasebill-compact-dense",
     name: "Compact Dense",
     type: "PurchaseBill",
-    description: "Tight row heights and small font for high line-count purchase bills that must fit on one A4 sheet",
+    description:
+      "Tight row heights and small font for high line-count purchase bills that must fit on one A4 sheet",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Purchase Bill #{{purchaseBillNumber}}</title><style>
 @media print { @page { size: A4; margin: 6mm 8mm; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -727,7 +730,8 @@ table.items tbody tr:nth-child(even) td { background: #eef2fa !important; }
     id: "purchasebill-left-sidebar",
     name: "Left Sidebar Strip",
     type: "PurchaseBill",
-    description: "Vertical navy sidebar on the left carries company identity; content flows to the right",
+    description:
+      "Vertical navy sidebar on the left carries company identity; content flows to the right",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Purchase Bill #{{purchaseBillNumber}}</title><style>
 @media print { @page { size: A4; margin: 0; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -838,7 +842,8 @@ table.items tbody tr:nth-child(even) td { background: #edf1f7 !important; }
     id: "purchasebill-boxed-traditional",
     name: "Boxed Traditional",
     type: "PurchaseBill",
-    description: "Every section enclosed in a ruled box — classic Pakistani wholesale purchase voucher look",
+    description:
+      "Every section enclosed in a ruled box — classic Pakistani wholesale purchase voucher look",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Purchase Bill #{{purchaseBillNumber}}</title><style>
 @media print { @page { size: A4; margin: 8mm 10mm; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -950,7 +955,8 @@ table.items tbody tr:nth-child(even) td { background: #f4f4f4 !important; }
     id: "purchasebill-bismillah-header",
     name: "Bismillah Header",
     type: "PurchaseBill",
-    description: "Opens with centered Arabic Bismillah calligraphy above the company header — traditional Islamic business stationery",
+    description:
+      "Opens with centered Arabic Bismillah calligraphy above the company header — traditional Islamic business stationery",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Purchase Bill #{{purchaseBillNumber}}</title><style>
 @media print { @page { size: A4; margin: 8mm 10mm; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -1061,7 +1067,8 @@ table.items tbody tr:nth-child(even) td { background: #f0fdf4 !important; }
     id: "purchasebill-green-gold",
     name: "Green & Gold",
     type: "PurchaseBill",
-    description: "Forest green header with gold accents — popular palette for Pakistani textile traders",
+    description:
+      "Forest green header with gold accents — popular palette for Pakistani textile traders",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Purchase Bill #{{purchaseBillNumber}}</title><style>
 @media print { @page { size: A4; margin: 0; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -1282,7 +1289,8 @@ table.items tbody tr:nth-child(even) td { background: #f0fdfa !important; }
     id: "purchasebill-big-letterhead",
     name: "Big Letterhead",
     type: "PurchaseBill",
-    description: "Large centred logo + company name letterhead at top, then purchase bill content below — for branded stationery",
+    description:
+      "Large centred logo + company name letterhead at top, then purchase bill content below — for branded stationery",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Purchase Bill #{{purchaseBillNumber}}</title><style>
 @media print { @page { size: A4; margin: 8mm 10mm; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -1482,7 +1490,8 @@ table.items tbody tr:nth-child(even) td { background: #eff6ff !important; }
     id: "purchasebill-govt-form-grid",
     name: "Government-Form Grid",
     type: "PurchaseBill",
-    description: "Heavy grid with labelled cell blocks mimicking official Pakistani government printed forms",
+    description:
+      "Heavy grid with labelled cell blocks mimicking official Pakistani government printed forms",
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Purchase Bill #{{purchaseBillNumber}}</title><style>
 @media print { @page { size: A4; margin: 8mm 10mm; } thead { display: table-header-group; } .no-break { page-break-inside: avoid; } }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }

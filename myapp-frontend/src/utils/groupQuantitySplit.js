@@ -39,11 +39,19 @@
 // keeps echoing back into the input); `minimum` is the smallest total that
 // gives every line a unit.
 
-export function splitGroupQuantity(total, weights, { allowDecimal = false, decimalOk = null } = {}) {
+export function splitGroupQuantity(
+  total,
+  weights,
+  { allowDecimal = false, decimalOk = null } = {},
+) {
   // Per-line capability wins over the group-wide flag when it is supplied, and
   // collapses to one of the two simple modes when every line agrees.
-  if (Array.isArray(decimalOk) && Array.isArray(weights) && decimalOk.length === weights.length
-      && weights.length > 0) {
+  if (
+    Array.isArray(decimalOk) &&
+    Array.isArray(weights) &&
+    decimalOk.length === weights.length &&
+    weights.length > 0
+  ) {
     const anyDecimal = decimalOk.some(Boolean);
     const allDecimal = decimalOk.every(Boolean);
     // A WHOLE total still splits into whole lines, whatever the units allow.
@@ -82,7 +90,7 @@ function splitMixed(total, weights, decimalOk) {
 
   const w = weights.map((x) => (Number(x) > 0 ? Number(x) : 0));
   const wTotal = w.reduce((a, b) => a + b, 0) || n;
-  const weightOf = (k) => (w[k] > 0 ? w[k] : (wTotal === n ? 1 : 0));
+  const weightOf = (k) => (w[k] > 0 ? w[k] : wTotal === n ? 1 : 0);
 
   // The integer lines take their proportional share, floored, but never zero —
   // a line at zero is the failure this module exists to prevent.
@@ -107,7 +115,7 @@ function splitMixed(total, weights, decimalOk) {
     if (j === decIdx.length - 1) {
       shares[k] = Math.round(Math.max(0, remaining - handedOut) * 10000) / 10000;
     } else {
-      const q = Math.round((remaining * weightOf(k)) / decWeightTotal * 10000) / 10000;
+      const q = Math.round(((remaining * weightOf(k)) / decWeightTotal) * 10000) / 10000;
       shares[k] = q;
       handedOut += q;
     }
@@ -126,7 +134,10 @@ function splitPlain(total, weights, { allowDecimal = false } = {}) {
 
   let w = weights.map((x) => (Number(x) > 0 ? Number(x) : 0));
   let wTotal = w.reduce((a, b) => a + b, 0);
-  if (wTotal <= 0) { w = weights.map(() => 1); wTotal = n; }
+  if (wTotal <= 0) {
+    w = weights.map(() => 1);
+    wTotal = n;
+  }
 
   if (allowDecimal || !Number.isInteger(target)) {
     const shares = new Array(n);
@@ -135,7 +146,7 @@ function splitPlain(total, weights, { allowDecimal = false } = {}) {
       if (k === n - 1) {
         shares[k] = Math.round(Math.max(0, remaining) * 10000) / 10000;
       } else {
-        const q = Math.round((target * w[k]) / wTotal * 10000) / 10000;
+        const q = Math.round(((target * w[k]) / wTotal) * 10000) / 10000;
         shares[k] = q;
         remaining -= q;
       }
@@ -159,7 +170,8 @@ function splitPlain(total, weights, { allowDecimal = false } = {}) {
     for (let k = 0; k < n; k++) {
       if (shares[k] > 0) continue;
       let donor = -1;
-      for (let d = 0; d < n; d++) if (shares[d] > 1 && (donor < 0 || shares[d] > shares[donor])) donor = d;
+      for (let d = 0; d < n; d++)
+        if (shares[d] > 1 && (donor < 0 || shares[d] > shares[donor])) donor = d;
       if (donor < 0) break; // cannot happen when target >= n, kept for safety
       shares[donor] -= 1;
       shares[k] = 1;
@@ -175,5 +187,9 @@ function splitPlain(total, weights, { allowDecimal = false } = {}) {
 export function splitConsultantQuantity(total, weights) {
   const ticks = Math.round(Number(total) * 10000);
   const result = splitGroupQuantity(ticks, weights);
-  return { ...result, shares: result.shares.map(q => q / 10000), minimum: weights.length / 10000 };
+  return {
+    ...result,
+    shares: result.shares.map((q) => q / 10000),
+    minimum: weights.length / 10000,
+  };
 }

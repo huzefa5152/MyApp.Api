@@ -2,7 +2,15 @@ import ListFilters from "../Components/ListFilters";
 import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import RichText from "../Components/RichText";
-import { MdHistory, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdInsights, MdVisibility } from "react-icons/md";
+import {
+  MdHistory,
+  MdBusiness,
+  MdSearch,
+  MdChevronLeft,
+  MdChevronRight,
+  MdInsights,
+  MdVisibility,
+} from "react-icons/md";
 import { getItemRateHistory } from "../api/invoiceApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getClientsByCompany } from "../api/clientApi";
@@ -27,7 +35,12 @@ const colors = {
 };
 
 export default function ItemRateHistoryPage() {
-  const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  const {
+    companies,
+    selectedCompany,
+    setSelectedCompany,
+    loading: loadingCompanies,
+  } = useCompany();
   const { has } = usePermissions();
   // Client-filter dropdown calls /api/clients/company/{id}. View-only
   // roles that lack clients.manage.view would 403 — skip both the fetch
@@ -57,7 +70,7 @@ export default function ItemRateHistoryPage() {
   const [totalCount, setTotalCount] = useState(0);
   const totalPages = useMemo(
     () => (pageSize && pageSize > 0 ? Math.ceil(totalCount / pageSize) : 0),
-    [totalCount, pageSize]
+    [totalCount, pageSize],
   );
 
   useEffect(() => {
@@ -175,89 +188,100 @@ export default function ItemRateHistoryPage() {
       ) : companies.length > 0 ? (
         <>
           {/* Company picker */}
-          {companies.length > 1 && (<div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <MdBusiness size={20} color={colors.blue} />
-            <select
-              style={dropdownStyles.base}
-              value={selectedCompany?.id || ""}
-              onChange={(e) =>
-                setSelectedCompany(
-                  companies.find((c) => parseInt(c.id) === parseInt(e.target.value))
-                )
-              }
+          {companies.length > 1 && (
+            <div
+              style={{
+                marginBottom: "1rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.75rem",
+              }}
             >
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.brandName || c.name}
-                </option>
-              ))}
-            </select>
-          </div>)}
-
-          {/* Filters */}
-          {selectedCompany && (
-            <ListFilters><div className="filters-row">
-              <div className="filter-search-wrap filter-search-wrap--wide">
-                <MdSearch size={15} className="filter-search-icon" />
-                <input
-                  type="text"
-                  placeholder="Search by item description..."
-                  className="filter-search-input"
-                  value={search}
-                  onChange={handleSearchChange}
-                />
-              </div>
+              <MdBusiness size={20} color={colors.blue} />
               <select
-                className="filter-select"
-                value={itemTypeId}
-                onChange={handleItemTypeChange}
-                title="Pick an item from the catalog (exact match)"
+                style={dropdownStyles.base}
+                value={selectedCompany?.id || ""}
+                onChange={(e) =>
+                  setSelectedCompany(
+                    companies.find((c) => parseInt(c.id) === parseInt(e.target.value)),
+                  )
+                }
               >
-                <option value="">All catalog items</option>
-                {itemTypes.map((it) => (
-                  <option key={it.id} value={it.id}>
-                    {it.name}
-                    {it.hsCode ? ` — ${it.hsCode}` : ""}
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.brandName || c.name}
                   </option>
                 ))}
               </select>
-              {canViewClients && (
+            </div>
+          )}
+
+          {/* Filters */}
+          {selectedCompany && (
+            <ListFilters>
+              <div className="filters-row">
+                <div className="filter-search-wrap filter-search-wrap--wide">
+                  <MdSearch size={15} className="filter-search-icon" />
+                  <input
+                    type="text"
+                    placeholder="Search by item description..."
+                    className="filter-search-input"
+                    value={search}
+                    onChange={handleSearchChange}
+                  />
+                </div>
                 <select
                   className="filter-select"
-                  value={clientId}
-                  onChange={handleFilterChange(setClientId)}
+                  value={itemTypeId}
+                  onChange={handleItemTypeChange}
+                  title="Pick an item from the catalog (exact match)"
                 >
-                  <option value="">All Clients</option>
-                  {clients.map((cl) => (
-                    <option key={cl.id} value={cl.id}>
-                      {cl.name}
+                  <option value="">All catalog items</option>
+                  {itemTypes.map((it) => (
+                    <option key={it.id} value={it.id}>
+                      {it.name}
+                      {it.hsCode ? ` — ${it.hsCode}` : ""}
                     </option>
                   ))}
                 </select>
-              )}
-              <div className="filter-date-group">
-                <input
-                  type="date"
-                  className="filter-date-input"
-                  value={dateFrom}
-                  onChange={handleFilterChange(setDateFrom)}
-                  title="From date"
-                />
-                <span className="filter-date-sep">–</span>
-                <input
-                  type="date"
-                  className="filter-date-input"
-                  value={dateTo}
-                  onChange={handleFilterChange(setDateTo)}
-                  title="To date"
-                />
+                {canViewClients && (
+                  <select
+                    className="filter-select"
+                    value={clientId}
+                    onChange={handleFilterChange(setClientId)}
+                  >
+                    <option value="">All Clients</option>
+                    {clients.map((cl) => (
+                      <option key={cl.id} value={cl.id}>
+                        {cl.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <div className="filter-date-group">
+                  <input
+                    type="date"
+                    className="filter-date-input"
+                    value={dateFrom}
+                    onChange={handleFilterChange(setDateFrom)}
+                    title="From date"
+                  />
+                  <span className="filter-date-sep">–</span>
+                  <input
+                    type="date"
+                    className="filter-date-input"
+                    value={dateTo}
+                    onChange={handleFilterChange(setDateTo)}
+                    title="To date"
+                  />
+                </div>
+                {hasFilters && (
+                  <button className="filter-clear-btn" onClick={resetFilters}>
+                    Clear
+                  </button>
+                )}
               </div>
-              {hasFilters && (
-                <button className="filter-clear-btn" onClick={resetFilters}>
-                  Clear
-                </button>
-              )}
-            </div></ListFilters>
+            </ListFilters>
           )}
 
           {/* Summary band — avg / min / max across the FULL filtered set */}
@@ -284,154 +308,168 @@ export default function ItemRateHistoryPage() {
           )}
 
           {/* Grid */}
-          <RecordsViewport label="Item Rate History records">{loading ? (
-            <div style={styles.loadingContainer}>
-              <div style={styles.spinner} />
-            </div>
-          ) : selectedCompany && rows.length === 0 ? (
-            <div style={styles.emptyState}>
-              <MdHistory size={40} color={colors.cardBorder} />
-              <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>
-                {hasFilters
-                  ? "No bill lines match the current filters."
-                  : "Type an item name above to see past rates."}
-              </p>
-            </div>
-          ) : selectedCompany ? (
-            <>
-              {/* Desktop / tablet — table */}
-              <div data-admin-table-region="" className="irh-table" style={styles.tableWrap}>
-                <table style={styles.table}>
-                  <thead>
-                    <tr>
-                      <th style={styles.th}>Bill #</th>
-                      <th style={styles.th}>Date</th>
-                      <th style={styles.th}>Client</th>
-                      <th style={styles.th}>Description</th>
-                      <th style={{ ...styles.th, textAlign: "right" }}>Qty</th>
-                      <th style={{ ...styles.th, textAlign: "right" }}>Unit Price</th>
-                      <th style={{ ...styles.th, textAlign: "right" }}>Line Total</th>
-                      <th style={{ ...styles.th, width: 60 }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((r, idx) => (
-                      <tr
-                        key={r.invoiceItemId}
-                        style={{
-                          backgroundColor: idx % 2 === 0 ? "#fff" : colors.rowAlt,
-                        }}
-                      >
-                        <td style={styles.td}>
-                          <strong style={{ color: colors.blue }}>#{r.invoiceNumber}</strong>
-                        </td>
-                        <td style={styles.td}>{new Date(r.date).toLocaleDateString()}</td>
-                        <td style={styles.td}>{r.clientName}</td>
-                        <td style={{ ...styles.td, maxWidth: 360 }}>
-                          <div style={{ fontSize: "0.85rem" }}><RichText text={r.description} /></div>
-                          {r.itemTypeName && (
-                            <div
-                              style={{
-                                fontSize: "0.72rem",
-                                color: colors.textSecondary,
-                                marginTop: 2,
-                              }}
-                            >
-                              {r.itemTypeName}
-                            </div>
-                          )}
-                        </td>
-                        <td style={{ ...styles.td, textAlign: "right" }}>
-                          {r.quantity}
-                          {r.uom ? <span style={{ color: colors.textSecondary, fontSize: "0.75rem" }}> {r.uom}</span> : null}
-                        </td>
-                        <td style={{ ...styles.td, textAlign: "right", fontWeight: 600 }}>
-                          Rs. {fmt(r.unitPrice)}
-                        </td>
-                        <td style={{ ...styles.td, textAlign: "right" }}>
-                          Rs. {fmt(r.lineTotal)}
-                        </td>
-                        <td style={{ ...styles.td, textAlign: "center" }}>
-                          <button
-                            style={styles.viewBtn}
-                            onClick={() => setViewingId(r.invoiceId)}
-                            title="View this bill"
-                          >
-                            <MdVisibility size={14} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          <RecordsViewport label="Item Rate History records">
+            {loading ? (
+              <div style={styles.loadingContainer}>
+                <div style={styles.spinner} />
               </div>
+            ) : selectedCompany && rows.length === 0 ? (
+              <div style={styles.emptyState}>
+                <MdHistory size={40} color={colors.cardBorder} />
+                <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>
+                  {hasFilters
+                    ? "No bill lines match the current filters."
+                    : "Type an item name above to see past rates."}
+                </p>
+              </div>
+            ) : selectedCompany ? (
+              <>
+                {/* Desktop / tablet — table */}
+                <div data-admin-table-region="" className="irh-table" style={styles.tableWrap}>
+                  <table style={styles.table}>
+                    <thead>
+                      <tr>
+                        <th style={styles.th}>Bill #</th>
+                        <th style={styles.th}>Date</th>
+                        <th style={styles.th}>Client</th>
+                        <th style={styles.th}>Description</th>
+                        <th style={{ ...styles.th, textAlign: "right" }}>Qty</th>
+                        <th style={{ ...styles.th, textAlign: "right" }}>Unit Price</th>
+                        <th style={{ ...styles.th, textAlign: "right" }}>Line Total</th>
+                        <th style={{ ...styles.th, width: 60 }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((r, idx) => (
+                        <tr
+                          key={r.invoiceItemId}
+                          style={{
+                            backgroundColor: idx % 2 === 0 ? "#fff" : colors.rowAlt,
+                          }}
+                        >
+                          <td style={styles.td}>
+                            <strong style={{ color: colors.blue }}>#{r.invoiceNumber}</strong>
+                          </td>
+                          <td style={styles.td}>{new Date(r.date).toLocaleDateString()}</td>
+                          <td style={styles.td}>{r.clientName}</td>
+                          <td style={{ ...styles.td, maxWidth: 360 }}>
+                            <div style={{ fontSize: "0.85rem" }}>
+                              <RichText text={r.description} />
+                            </div>
+                            {r.itemTypeName && (
+                              <div
+                                style={{
+                                  fontSize: "0.72rem",
+                                  color: colors.textSecondary,
+                                  marginTop: 2,
+                                }}
+                              >
+                                {r.itemTypeName}
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ ...styles.td, textAlign: "right" }}>
+                            {r.quantity}
+                            {r.uom ? (
+                              <span style={{ color: colors.textSecondary, fontSize: "0.75rem" }}>
+                                {" "}
+                                {r.uom}
+                              </span>
+                            ) : null}
+                          </td>
+                          <td style={{ ...styles.td, textAlign: "right", fontWeight: 600 }}>
+                            Rs. {fmt(r.unitPrice)}
+                          </td>
+                          <td style={{ ...styles.td, textAlign: "right" }}>
+                            Rs. {fmt(r.lineTotal)}
+                          </td>
+                          <td style={{ ...styles.td, textAlign: "center" }}>
+                            <button
+                              style={styles.viewBtn}
+                              onClick={() => setViewingId(r.invoiceId)}
+                              title="View this bill"
+                            >
+                              <MdVisibility size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-              {/* Mobile — stacked cards. Same data, prioritised differently:
+                {/* Mobile — stacked cards. Same data, prioritised differently:
                   Unit Price is the answer this page exists to surface, so it
                   goes top-right, large + bold. Description carries the visual
                   weight in the middle since that's how operators recognise
                   the line. Footer = qty, line total, view button. */}
-              <div className="irh-cards">
-                {rows.map((r) => (
-                  <div key={r.invoiceItemId} className="irh-card">
-                    <div className="irh-card__top">
-                      <div className="irh-card__top-left">
-                        <span className="irh-card__bill">#{r.invoiceNumber}</span>
-                        <span className="irh-card__date">{new Date(r.date).toLocaleDateString()}</span>
+                <div className="irh-cards">
+                  {rows.map((r) => (
+                    <div key={r.invoiceItemId} className="irh-card">
+                      <div className="irh-card__top">
+                        <div className="irh-card__top-left">
+                          <span className="irh-card__bill">#{r.invoiceNumber}</span>
+                          <span className="irh-card__date">
+                            {new Date(r.date).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div className="irh-card__rate">
+                          <span className="irh-card__rate-label">Rate</span>
+                          <span className="irh-card__rate-value">Rs. {fmt(r.unitPrice)}</span>
+                        </div>
                       </div>
-                      <div className="irh-card__rate">
-                        <span className="irh-card__rate-label">Rate</span>
-                        <span className="irh-card__rate-value">Rs. {fmt(r.unitPrice)}</span>
+
+                      <div className="irh-card__client">{r.clientName}</div>
+                      <div className="irh-card__desc">
+                        <RichText text={r.description} />
+                      </div>
+                      {r.itemTypeName && <div className="irh-card__itemtype">{r.itemTypeName}</div>}
+
+                      <div className="irh-card__footer">
+                        <div className="irh-card__qty">
+                          <span className="irh-card__field-label">Qty</span>
+                          <span className="irh-card__field-value">
+                            {r.quantity}
+                            {r.uom ? <span className="irh-card__uom"> {r.uom}</span> : null}
+                          </span>
+                        </div>
+                        <div className="irh-card__total">
+                          <span className="irh-card__field-label">Line Total</span>
+                          <span className="irh-card__field-value">Rs. {fmt(r.lineTotal)}</span>
+                        </div>
+                        <button
+                          className="irh-card__view-btn"
+                          onClick={() => setViewingId(r.invoiceId)}
+                          aria-label="View this bill"
+                        >
+                          <MdVisibility size={16} />
+                          <span>View</span>
+                        </button>
                       </div>
                     </div>
+                  ))}
+                </div>
 
-                    <div className="irh-card__client">{r.clientName}</div>
-                    <div className="irh-card__desc"><RichText text={r.description} /></div>
-                    {r.itemTypeName && (
-                      <div className="irh-card__itemtype">{r.itemTypeName}</div>
-                    )}
-
-                    <div className="irh-card__footer">
-                      <div className="irh-card__qty">
-                        <span className="irh-card__field-label">Qty</span>
-                        <span className="irh-card__field-value">
-                          {r.quantity}
-                          {r.uom ? <span className="irh-card__uom"> {r.uom}</span> : null}
-                        </span>
-                      </div>
-                      <div className="irh-card__total">
-                        <span className="irh-card__field-label">Line Total</span>
-                        <span className="irh-card__field-value">Rs. {fmt(r.lineTotal)}</span>
-                      </div>
-                      <button
-                        className="irh-card__view-btn"
-                        onClick={() => setViewingId(r.invoiceId)}
-                        aria-label="View this bill"
-                      >
-                        <MdVisibility size={16} />
-                        <span>View</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                {totalCount > PAGE_SIZE_OPTIONS[0] && (
+                  <Pagination
+                    page={page}
+                    totalPages={totalPages}
+                    total={totalCount}
+                    onPage={setPage}
+                    pageSize={userPageSize ?? pageSize}
+                    onPageSize={(n) => {
+                      setUserPageSize(n);
+                      setPage(1);
+                    }}
+                  />
+                )}
+              </>
+            ) : (
+              <div style={styles.emptyState}>
+                <p style={{ color: colors.textSecondary }}>Select a company to begin.</p>
               </div>
-
-              {totalCount > PAGE_SIZE_OPTIONS[0] && (
-                <Pagination
-                  page={page}
-                  totalPages={totalPages}
-                  total={totalCount}
-                  onPage={setPage}
-                  pageSize={userPageSize ?? pageSize}
-                  onPageSize={(n) => { setUserPageSize(n); setPage(1); }}
-                />
-              )}
-            </>
-          ) : (
-            <div style={styles.emptyState}>
-              <p style={{ color: colors.textSecondary }}>Select a company to begin.</p>
-            </div>
-          )}</RecordsViewport>
+            )}
+          </RecordsViewport>
         </>
       ) : (
         <div style={styles.emptyState}>

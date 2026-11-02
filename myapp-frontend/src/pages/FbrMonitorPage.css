@@ -93,12 +93,18 @@
 }
 
 /* ---------- List: desktop row vs mobile card ---------- */
-.fbr-mon-list-header { display: flex; }
-.fbr-mon-row-card-meta { display: none; }
+.fbr-mon-list-header {
+  display: flex;
+}
+.fbr-mon-row-card-meta {
+  display: none;
+}
 
 @media (max-width: 767.98px) {
   /* Hide the desktop column header — cards have their own labels. */
-  .fbr-mon-list-header { display: none !important; }
+  .fbr-mon-list-header {
+    display: none !important;
+  }
 
   /* Reshape the row button into a stacked card. We can't restructure
      the DOM (inline children stay) so we drive layout via CSS Grid
@@ -115,7 +121,9 @@
     padding: 0.6rem 0.7rem !important;
     border-bottom: 1px solid #f0f3f8 !important;
   }
-  .fbr-mon-row > * { width: auto !important; }
+  .fbr-mon-row > * {
+    width: auto !important;
+  }
 
   .fbr-mon-row__ts {
     grid-area: ts;

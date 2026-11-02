@@ -2,8 +2,14 @@ import ListFilters from "../Components/ListFilters";
 import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
-  MdAssessment, MdBusiness, MdDownload, MdWarning, MdCheckCircle, MdRefresh,
-  MdPrint, MdPictureAsPdf,
+  MdAssessment,
+  MdBusiness,
+  MdDownload,
+  MdWarning,
+  MdCheckCircle,
+  MdRefresh,
+  MdPrint,
+  MdPictureAsPdf,
 } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -17,8 +23,13 @@ import { buildTraderAccountingReport } from "../utils/traderAccountingReportPrin
 import { downloadAccountingReportPdf } from "../utils/accountingReportPdf";
 import { writeAndPrint } from "../utils/printDocument";
 import {
-  getBalanceSheet, getProfitAndLoss, getAgedReceivables, getAgedPayables,
-  getCashBook, getExpenseReport, getTaxControl,
+  getBalanceSheet,
+  getProfitAndLoss,
+  getAgedReceivables,
+  getAgedPayables,
+  getCashBook,
+  getExpenseReport,
+  getTaxControl,
 } from "../api/accountingReportApi";
 
 const money = (n) => {
@@ -29,7 +40,9 @@ const money = (n) => {
     : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 const fmtDate = (d) =>
-  d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+  d
+    ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+    : "—";
 
 const isoYearStart = () => `${new Date().getFullYear()}-01-01`;
 
@@ -77,8 +90,12 @@ export default function AccountingReportsPage() {
 
   const load = useCallback(async () => {
     const sequence = ++requestSequence.current;
-    if (!companyId) { setData(null); return; }
-    setLoading(true); setError("");
+    if (!companyId) {
+      setData(null);
+      return;
+    }
+    setLoading(true);
+    setError("");
     try {
       const fetchers = {
         "balance-sheet": () => getBalanceSheet(companyId, to),
@@ -86,7 +103,7 @@ export default function AccountingReportsPage() {
         "aged-receivables": () => getAgedReceivables(companyId, to),
         "aged-payables": () => getAgedPayables(companyId, to),
         "cash-book": () => getCashBook(companyId, from, to),
-        "expenses": () => getExpenseReport(companyId, from, to),
+        expenses: () => getExpenseReport(companyId, from, to),
         "tax-control": () => getTaxControl(companyId, from, to),
       };
       const { data: d } = await fetchers[tab]();
@@ -97,29 +114,53 @@ export default function AccountingReportsPage() {
       if (sequence !== requestSequence.current) return;
       setData(null);
       setError(err.response?.data?.error || "Could not load this report.");
-    } finally { if (sequence === requestSequence.current) setLoading(false); }
+    } finally {
+      if (sequence === requestSequence.current) setLoading(false);
+    }
   }, [companyId, tab, from, to]);
 
-  useEffect(() => { load(); return () => { requestSequence.current++; }; }, [load]);
+  useEffect(() => {
+    load();
+    return () => {
+      requestSequence.current++;
+    };
+  }, [load]);
 
   const exportReport = async (mode) => {
     const popup = mode === "print" ? window.open("", "_blank") : null;
-    setPrintBusy(mode); setPrintError("");
+    setPrintBusy(mode);
+    setPrintError("");
     try {
       if (!ready) throw new Error("Report scope changed");
       if (mode === "print" && !popup) throw new Error("Popup blocked");
       const company = { ...selectedCompany };
       const { data: layout } = await getAccountingReportInvoiceLayout(company.id);
       const template = selectReportInvoiceTemplate(layout ? [layout] : [], company.id);
-      const period = current.period === "asOf" ? `As at ${fmtDate(to)}` : `${fmtDate(from)} – ${fmtDate(to)}`;
-      const html = await buildTraderAccountingReport(tab, data, company, template, current.label, period);
+      const period =
+        current.period === "asOf" ? `As at ${fmtDate(to)}` : `${fmtDate(from)} – ${fmtDate(to)}`;
+      const html = await buildTraderAccountingReport(
+        tab,
+        data,
+        company,
+        template,
+        current.label,
+        period,
+      );
       if (mode === "print") writeAndPrint(popup, html);
-      else await downloadAccountingReportPdf(html, `${tab}-${to}`,
-        ["balance-sheet", "profit-and-loss", "expenses"].includes(tab) ? "portrait" : "landscape");
+      else
+        await downloadAccountingReportPdf(
+          html,
+          `${tab}-${to}`,
+          ["balance-sheet", "profit-and-loss", "expenses"].includes(tab) ? "portrait" : "landscape",
+        );
     } catch {
       popup?.close();
-      setPrintError("Could not prepare the report. Check your connection and allow print popups, then try again.");
-    } finally { setPrintBusy(""); }
+      setPrintError(
+        "Could not prepare the report. Check your connection and allow print popups, then try again.",
+      );
+    } finally {
+      setPrintBusy("");
+    }
   };
 
   const exportCsv = () => {
@@ -127,30 +168,74 @@ export default function AccountingReportsPage() {
     const name = `${current.label.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-${to}`;
     if (tab === "balance-sheet") {
       const rows = [];
-      [["Assets", data.assets], ["Liabilities", data.liabilities], ["Equity", data.equity]]
-        .forEach(([side, sections]) => (sections || []).forEach((s) =>
-          s.lines.forEach((l) => rows.push([side, s.name, l.code || "", l.name, l.amount]))));
+      [
+        ["Assets", data.assets],
+        ["Liabilities", data.liabilities],
+        ["Equity", data.equity],
+      ].forEach(([side, sections]) =>
+        (sections || []).forEach((s) =>
+          s.lines.forEach((l) => rows.push([side, s.name, l.code || "", l.name, l.amount])),
+        ),
+      );
       rows.push(["Equity", "", "", "Current-Year Earnings", data.currentEarnings]);
       downloadCsv(name, ["Side", "Group", "Code", "Account", "Amount"], rows);
     } else if (tab === "profit-and-loss") {
       const rows = [];
-      [["Income", data.income], ["Expenses", data.expenses]]
-        .forEach(([side, sections]) => (sections || []).forEach((s) =>
-          s.lines.forEach((l) => rows.push([side, s.name, l.name, l.amount]))));
+      [
+        ["Income", data.income],
+        ["Expenses", data.expenses],
+      ].forEach(([side, sections]) =>
+        (sections || []).forEach((s) =>
+          s.lines.forEach((l) => rows.push([side, s.name, l.name, l.amount])),
+        ),
+      );
       downloadCsv(name, ["Side", "Group", "Account", "Amount"], rows);
     } else if (tab === "aged-receivables" || tab === "aged-payables") {
-      downloadCsv(name, ["Party", "Open documents", "Current", "1-30", "31-60", "61-90", "90+", "Total"],
-        (data.rows || []).map((r) => [r.name, r.openDocuments, r.current, r.days1To30,
-          r.days31To60, r.days61To90, r.over90, r.total]));
+      downloadCsv(
+        name,
+        ["Party", "Open documents", "Current", "1-30", "31-60", "61-90", "90+", "Total"],
+        (data.rows || []).map((r) => [
+          r.name,
+          r.openDocuments,
+          r.current,
+          r.days1To30,
+          r.days31To60,
+          r.days61To90,
+          r.over90,
+          r.total,
+        ]),
+      );
     } else if (tab === "cash-book") {
-      downloadCsv(name, ["Account", "Code", "Opening", "Money in", "Money out", "Closing"],
-        (data.accounts || []).map((a) => [a.name, a.code || "", a.opening, a.moneyIn, a.moneyOut, a.closing]));
+      downloadCsv(
+        name,
+        ["Account", "Code", "Opening", "Money in", "Money out", "Closing"],
+        (data.accounts || []).map((a) => [
+          a.name,
+          a.code || "",
+          a.opening,
+          a.moneyIn,
+          a.moneyOut,
+          a.closing,
+        ]),
+      );
     } else if (tab === "expenses") {
-      downloadCsv(name, ["Account", "Group", "Amount", "Share %"],
-        (data.rows || []).map((r) => [r.name, r.groupName, r.amount, r.percent]));
+      downloadCsv(
+        name,
+        ["Account", "Group", "Amount", "Share %"],
+        (data.rows || []).map((r) => [r.name, r.groupName, r.amount, r.percent]),
+      );
     } else if (tab === "tax-control") {
-      downloadCsv(name, ["Tax", "Account", "Per ledger", "Per documents", "Difference"],
-        (data.rows || []).map((r) => [r.role, r.accountName, r.perLedger, r.perDocuments, r.difference]));
+      downloadCsv(
+        name,
+        ["Tax", "Account", "Per ledger", "Per documents", "Difference"],
+        (data.rows || []).map((r) => [
+          r.role,
+          r.accountName,
+          r.perLedger,
+          r.perDocuments,
+          r.difference,
+        ]),
+      );
     }
   };
 
@@ -166,17 +251,27 @@ export default function AccountingReportsPage() {
     <div data-admin-table-region="" style={{ overflowX: "auto" }}>
       <table style={st.table}>
         <thead>
-          <tr>{head.map((h, i) => (
-            <th key={i} style={{ ...st.th, textAlign: i === 0 ? "left" : "right" }}>{h}</th>
-          ))}</tr>
+          <tr>
+            {head.map((h, i) => (
+              <th key={i} style={{ ...st.th, textAlign: i === 0 ? "left" : "right" }}>
+                {h}
+              </th>
+            ))}
+          </tr>
         </thead>
         <tbody>
           {rows.map((r, i) => (
             <tr key={i} style={r.__strong ? st.strongRow : undefined}>
               {r.cells.map((c, j) => (
-                <td key={j} style={{ ...st.td, textAlign: j === 0 ? "left" : "right",
-                  ...(r.__strong ? { fontWeight: 800 } : null),
-                  ...(j === 0 ? { overflowWrap: "anywhere" } : { whiteSpace: "nowrap" }) }}>
+                <td
+                  key={j}
+                  style={{
+                    ...st.td,
+                    textAlign: j === 0 ? "left" : "right",
+                    ...(r.__strong ? { fontWeight: 800 } : null),
+                    ...(j === 0 ? { overflowWrap: "anywhere" } : { whiteSpace: "nowrap" }),
+                  }}
+                >
                   {c}
                 </td>
               ))}
@@ -185,7 +280,12 @@ export default function AccountingReportsPage() {
           {foot && (
             <tr style={st.footRow}>
               {foot.map((c, j) => (
-                <td key={j} style={{ ...st.td, ...st.footCell, textAlign: j === 0 ? "left" : "right" }}>{c}</td>
+                <td
+                  key={j}
+                  style={{ ...st.td, ...st.footCell, textAlign: j === 0 ? "left" : "right" }}
+                >
+                  {c}
+                </td>
               ))}
             </tr>
           )}
@@ -198,7 +298,9 @@ export default function AccountingReportsPage() {
     const rows = [];
     (sections || []).forEach((s) => {
       rows.push({ __strong: true, cells: [s.name, money(s.total)] });
-      s.lines.forEach((l) => rows.push({ cells: [`   ${l.code ? `${l.code} · ` : ""}${l.name}`, money(l.amount)] }));
+      s.lines.forEach((l) =>
+        rows.push({ cells: [`   ${l.code ? `${l.code} · ` : ""}${l.name}`, money(l.amount)] }),
+      );
     });
     return rows;
   };
@@ -216,28 +318,42 @@ export default function AccountingReportsPage() {
               colour alone — and it is stated at the top, because every figure
               below it is suspect until it is fixed. */}
           <div style={data.isBalanced ? st.okBanner : st.warnBanner}>
-            {data.isBalanced
-              ? <><MdCheckCircle size={16} style={{ verticalAlign: "-3px", marginRight: 6 }} />
-                  Balanced — assets equal liabilities plus equity.</>
-              : <><MdWarning size={16} style={{ verticalAlign: "-3px", marginRight: 6 }} />
-                  Does not balance. Assets {money(data.totalAssets)} against liabilities plus
-                  equity {money(data.totalLiabilities + data.totalEquity)}.</>}
+            {data.isBalanced ? (
+              <>
+                <MdCheckCircle size={16} style={{ verticalAlign: "-3px", marginRight: 6 }} />
+                Balanced — assets equal liabilities plus equity.
+              </>
+            ) : (
+              <>
+                <MdWarning size={16} style={{ verticalAlign: "-3px", marginRight: 6 }} />
+                Does not balance. Assets {money(data.totalAssets)} against liabilities plus equity{" "}
+                {money(data.totalLiabilities + data.totalEquity)}.
+              </>
+            )}
           </div>
           <div style={st.twoCol}>
             <div style={st.panel}>
               <div style={st.panelHead}>Assets</div>
-              <Table head={["Account", "Amount"]} rows={statementRows(data.assets)}
-                foot={["Total assets", money(data.totalAssets)]} />
+              <Table
+                head={["Account", "Amount"]}
+                rows={statementRows(data.assets)}
+                foot={["Total assets", money(data.totalAssets)]}
+              />
             </div>
             <div style={st.panel}>
               <div style={st.panelHead}>Liabilities &amp; Equity</div>
-              <Table head={["Account", "Amount"]}
+              <Table
+                head={["Account", "Amount"]}
                 rows={[
                   ...statementRows(data.liabilities),
                   ...statementRows(data.equity),
                   { cells: ["   Current-Year Earnings", money(data.currentEarnings)] },
                 ]}
-                foot={["Total liabilities & equity", money(data.totalLiabilities + data.totalEquity)]} />
+                foot={[
+                  "Total liabilities & equity",
+                  money(data.totalLiabilities + data.totalEquity),
+                ]}
+              />
             </div>
           </div>
         </>
@@ -250,13 +366,19 @@ export default function AccountingReportsPage() {
           <div style={st.twoCol}>
             <div style={st.panel}>
               <div style={st.panelHead}>Income</div>
-              <Table head={["Account", "Amount"]} rows={statementRows(data.income)}
-                foot={["Total income", money(data.totalIncome)]} />
+              <Table
+                head={["Account", "Amount"]}
+                rows={statementRows(data.income)}
+                foot={["Total income", money(data.totalIncome)]}
+              />
             </div>
             <div style={st.panel}>
               <div style={st.panelHead}>Expenses</div>
-              <Table head={["Account", "Amount"]} rows={statementRows(data.expenses)}
-                foot={["Total expenses", money(data.totalExpenses)]} />
+              <Table
+                head={["Account", "Amount"]}
+                rows={statementRows(data.expenses)}
+                foot={["Total expenses", money(data.totalExpenses)]}
+              />
             </div>
           </div>
           <div style={st.netBox}>
@@ -278,11 +400,27 @@ export default function AccountingReportsPage() {
           <Table
             head={["Party", "Docs", "Current", "1–30", "31–60", "61–90", "90+", "Total"]}
             rows={(data.rows || []).map((r) => ({
-              cells: [r.name, r.openDocuments, money(r.current), money(r.days1To30),
-                money(r.days31To60), money(r.days61To90), money(r.over90), money(r.total)],
+              cells: [
+                r.name,
+                r.openDocuments,
+                money(r.current),
+                money(r.days1To30),
+                money(r.days31To60),
+                money(r.days61To90),
+                money(r.over90),
+                money(r.total),
+              ],
             }))}
-            foot={["Total", "", money(data.current), money(data.days1To30), money(data.days31To60),
-              money(data.days61To90), money(data.over90), money(data.total)]}
+            foot={[
+              "Total",
+              "",
+              money(data.current),
+              money(data.days1To30),
+              money(data.days31To60),
+              money(data.days61To90),
+              money(data.over90),
+              money(data.total),
+            ]}
           />
         </div>
       );
@@ -295,9 +433,21 @@ export default function AccountingReportsPage() {
           <Table
             head={["Account", "Opening", "Money in", "Money out", "Closing"]}
             rows={(data.accounts || []).map((a) => ({
-              cells: [a.name, money(a.opening), money(a.moneyIn), money(a.moneyOut), money(a.closing)],
+              cells: [
+                a.name,
+                money(a.opening),
+                money(a.moneyIn),
+                money(a.moneyOut),
+                money(a.closing),
+              ],
             }))}
-            foot={["Total", money(data.opening), money(data.moneyIn), money(data.moneyOut), money(data.closing)]}
+            foot={[
+              "Total",
+              money(data.opening),
+              money(data.moneyIn),
+              money(data.moneyOut),
+              money(data.closing),
+            ]}
           />
         </div>
       );
@@ -310,7 +460,12 @@ export default function AccountingReportsPage() {
           <Table
             head={["Account", "Group", "Amount", "Share"]}
             rows={(data.rows || []).map((r) => ({
-              cells: [r.name, r.groupName, money(r.amount), `${Number(r.percent || 0).toFixed(1)}%`],
+              cells: [
+                r.name,
+                r.groupName,
+                money(r.amount),
+                `${Number(r.percent || 0).toFixed(1)}%`,
+              ],
             }))}
             foot={["Total", "", money(data.total), "100.0%"]}
           />
@@ -322,12 +477,18 @@ export default function AccountingReportsPage() {
       return (
         <div style={st.panel}>
           <div style={data.allReconcile ? st.okBanner : st.warnBanner}>
-            {data.allReconcile
-              ? <><MdCheckCircle size={16} style={{ verticalAlign: "-3px", marginRight: 6 }} />
-                  Every tax account agrees with the documents behind it.</>
-              : <><MdWarning size={16} style={{ verticalAlign: "-3px", marginRight: 6 }} />
-                  A tax account disagrees with the documents. Worth resolving before filing on
-                  these figures — the two columns are computed separately on purpose.</>}
+            {data.allReconcile ? (
+              <>
+                <MdCheckCircle size={16} style={{ verticalAlign: "-3px", marginRight: 6 }} />
+                Every tax account agrees with the documents behind it.
+              </>
+            ) : (
+              <>
+                <MdWarning size={16} style={{ verticalAlign: "-3px", marginRight: 6 }} />A tax
+                account disagrees with the documents. Worth resolving before filing on these figures
+                — the two columns are computed separately on purpose.
+              </>
+            )}
           </div>
           <Table
             head={["Tax", "Account", "Per ledger", "Per documents", "Difference"]}
@@ -358,43 +519,77 @@ export default function AccountingReportsPage() {
           <button style={st.secondaryBtn} onClick={load} disabled={!companyId}>
             <MdRefresh size={16} /> Refresh
           </button>
-          {canExport && <button style={st.primaryBtn} onClick={exportCsv} disabled={!ready}>
-            <MdDownload size={16} /> Export CSV
-          </button>}
-          {canExport && <button style={st.secondaryBtn} onClick={() => exportReport("print")} disabled={!ready || !!printBusy}>
-            <MdPrint size={18} /> {printBusy === "print" ? "Preparing…" : "Print"}
-          </button>}
-          {canExport && <button style={st.secondaryBtn} onClick={() => exportReport("pdf")} disabled={!ready || !!printBusy}>
-            <MdPictureAsPdf size={18} /> {printBusy === "pdf" ? "Building…" : "PDF"}
-          </button>}
+          {canExport && (
+            <button style={st.primaryBtn} onClick={exportCsv} disabled={!ready}>
+              <MdDownload size={16} /> Export CSV
+            </button>
+          )}
+          {canExport && (
+            <button
+              style={st.secondaryBtn}
+              onClick={() => exportReport("print")}
+              disabled={!ready || !!printBusy}
+            >
+              <MdPrint size={18} /> {printBusy === "print" ? "Preparing…" : "Print"}
+            </button>
+          )}
+          {canExport && (
+            <button
+              style={st.secondaryBtn}
+              onClick={() => exportReport("pdf")}
+              disabled={!ready || !!printBusy}
+            >
+              <MdPictureAsPdf size={18} /> {printBusy === "pdf" ? "Building…" : "PDF"}
+            </button>
+          )}
         </div>
       </div>
 
-      <ListFilters><div style={st.controls}>
-        {companies.length > 0 && (
-          companies.length > 1 && (<span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <MdBusiness size={20} color={colors.blue} />
-            <select
-              style={dropdownStyles.base}
-              aria-label="Company"
-              value={selectedCompany?.id || ""}
-              onChange={(e) => setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))}
-            >
-              {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
-            </select>
-          </span>)
-        )}
-        {current?.period === "range" && (
+      <ListFilters>
+        <div style={st.controls}>
+          {companies.length > 0 && companies.length > 1 && (
+            <span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <MdBusiness size={20} color={colors.blue} />
+              <select
+                style={dropdownStyles.base}
+                aria-label="Company"
+                value={selectedCompany?.id || ""}
+                onChange={(e) =>
+                  setSelectedCompany(
+                    companies.find((c) => parseInt(c.id) === parseInt(e.target.value)),
+                  )
+                }
+              >
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.brandName || c.name}
+                  </option>
+                ))}
+              </select>
+            </span>
+          )}
+          {current?.period === "range" && (
+            <label style={st.dateLabel}>
+              From
+              <input
+                type="date"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+                style={formStyles.input}
+              />
+            </label>
+          )}
           <label style={st.dateLabel}>
-            From
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={formStyles.input} />
+            {current?.period === "asOf" ? "As at" : "To"}
+            <input
+              type="date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              style={formStyles.input}
+            />
           </label>
-        )}
-        <label style={st.dateLabel}>
-          {current?.period === "asOf" ? "As at" : "To"}
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={formStyles.input} />
-        </label>
-      </div></ListFilters>
+        </div>
+      </ListFilters>
 
       {/* The tab strip scrolls sideways on a phone rather than wrapping into a
           block that pushes the report off the screen. */}
@@ -410,33 +605,170 @@ export default function AccountingReportsPage() {
         ))}
       </div>
 
-      {printError && <div role="alert" style={formStyles.error}>{printError}</div>}
+      {printError && (
+        <div role="alert" style={formStyles.error}>
+          {printError}
+        </div>
+      )}
       <RecordsViewport label="Accounting report records">{body()}</RecordsViewport>
     </div>
   );
 }
 
 const st = {
-  headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1rem" },
+  headerRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "0.75rem",
+    flexWrap: "wrap",
+    marginBottom: "1rem",
+  },
   h2: { margin: 0, fontSize: "1.4rem", color: colors.textPrimary },
-  primaryBtn: { display: "inline-flex", alignItems: "center", gap: 6, padding: "0 1rem", height: 44, borderRadius: 8, border: "none", background: colors.blue, color: "#fff", fontWeight: 700, cursor: "pointer", boxShadow: "none" },
-  secondaryBtn: { display: "inline-flex", alignItems: "center", gap: 6, padding: "0 1rem", height: 44, borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, fontWeight: 700, cursor: "pointer", boxShadow: "none" },
-  controls: { display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "0.6rem", marginBottom: "0.9rem" },
-  dateLabel: { display: "flex", flexDirection: "column", gap: 4, fontSize: "0.78rem", fontWeight: 600, color: colors.textSecondary, flex: "0 1 170px", minWidth: 0 },
-  tabs: { display: "flex", flexWrap: "wrap", gap: "0.4rem", marginBottom: "1rem", paddingBottom: 2 },
-  tab: { padding: "0 0.9rem", height: 44, borderRadius: 999, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.textSecondary, fontSize: "0.82rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", boxShadow: "none", flexShrink: 0 },
+  primaryBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "0 1rem",
+    height: 44,
+    borderRadius: 8,
+    border: "none",
+    background: colors.blue,
+    color: "#fff",
+    fontWeight: 700,
+    cursor: "pointer",
+    boxShadow: "none",
+  },
+  secondaryBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "0 1rem",
+    height: 44,
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    background: "#fff",
+    color: colors.blue,
+    fontWeight: 700,
+    cursor: "pointer",
+    boxShadow: "none",
+  },
+  controls: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "flex-end",
+    gap: "0.6rem",
+    marginBottom: "0.9rem",
+  },
+  dateLabel: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    color: colors.textSecondary,
+    flex: "0 1 170px",
+    minWidth: 0,
+  },
+  tabs: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "0.4rem",
+    marginBottom: "1rem",
+    paddingBottom: 2,
+  },
+  tab: {
+    padding: "0 0.9rem",
+    height: 44,
+    borderRadius: 999,
+    border: `1px solid ${colors.inputBorder}`,
+    background: "#fff",
+    color: colors.textSecondary,
+    fontSize: "0.82rem",
+    fontWeight: 700,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    boxShadow: "none",
+    flexShrink: 0,
+  },
   tabActive: { background: colors.blue, borderColor: colors.blue, color: "#fff" },
-  twoCol: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(340px, 100%), 1fr))", gap: "1rem", alignItems: "start" },
-  panel: { background: colors.cardBg, border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.9rem", boxShadow: "0 2px 10px rgba(0,0,0,0.05)", minWidth: 0 },
-  panelHead: { fontSize: "0.8rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: colors.blue, borderBottom: `2px solid ${colors.cardBorder}`, paddingBottom: 6, marginBottom: 8 },
+  twoCol: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(340px, 100%), 1fr))",
+    gap: "1rem",
+    alignItems: "start",
+  },
+  panel: {
+    background: colors.cardBg,
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 12,
+    padding: "0.9rem",
+    boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+    minWidth: 0,
+  },
+  panelHead: {
+    fontSize: "0.8rem",
+    fontWeight: 800,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: colors.blue,
+    borderBottom: `2px solid ${colors.cardBorder}`,
+    paddingBottom: 6,
+    marginBottom: 8,
+  },
   table: { width: "100%", borderCollapse: "collapse", minWidth: 320 },
-  th: { padding: "0.45rem 0.5rem", fontSize: "0.68rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.04em", color: colors.textSecondary, borderBottom: `1px solid ${colors.cardBorder}`, whiteSpace: "nowrap" },
-  td: { padding: "0.38rem 0.5rem", fontSize: "0.83rem", borderBottom: `1px solid ${colors.cardBorder}`, color: colors.textPrimary },
+  th: {
+    padding: "0.45rem 0.5rem",
+    fontSize: "0.68rem",
+    fontWeight: 800,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    color: colors.textSecondary,
+    borderBottom: `1px solid ${colors.cardBorder}`,
+    whiteSpace: "nowrap",
+  },
+  td: {
+    padding: "0.38rem 0.5rem",
+    fontSize: "0.83rem",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+    color: colors.textPrimary,
+  },
   strongRow: { background: colors.inputBg },
   footRow: { background: colors.inputBg },
   footCell: { fontWeight: 800, borderTop: `2px solid ${colors.cardBorder}`, borderBottom: "none" },
-  netBox: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: "1rem", padding: "0.8rem 1rem", background: colors.cardBg, border: `1px solid ${colors.cardBorder}`, borderRadius: 12, fontSize: "1rem", fontWeight: 700, color: colors.textPrimary },
-  okBanner: { padding: "0.55rem 0.8rem", borderRadius: 8, marginBottom: "0.8rem", background: "#e8f5e9", border: "1px solid #c8e6c9", color: "#1b5e20", fontSize: "0.82rem", fontWeight: 600 },
-  warnBanner: { padding: "0.55rem 0.8rem", borderRadius: 8, marginBottom: "0.8rem", background: "#ffebee", border: "1px solid #ffcdd2", color: "#b71c1c", fontSize: "0.82rem", fontWeight: 600 },
+  netBox: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10,
+    marginTop: "1rem",
+    padding: "0.8rem 1rem",
+    background: colors.cardBg,
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 12,
+    fontSize: "1rem",
+    fontWeight: 700,
+    color: colors.textPrimary,
+  },
+  okBanner: {
+    padding: "0.55rem 0.8rem",
+    borderRadius: 8,
+    marginBottom: "0.8rem",
+    background: "#e8f5e9",
+    border: "1px solid #c8e6c9",
+    color: "#1b5e20",
+    fontSize: "0.82rem",
+    fontWeight: 600,
+  },
+  warnBanner: {
+    padding: "0.55rem 0.8rem",
+    borderRadius: 8,
+    marginBottom: "0.8rem",
+    background: "#ffebee",
+    border: "1px solid #ffcdd2",
+    color: "#b71c1c",
+    fontSize: "0.82rem",
+    fontWeight: 600,
+  },
   empty: { padding: "2rem", textAlign: "center", color: colors.textSecondary },
 };

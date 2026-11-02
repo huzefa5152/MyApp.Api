@@ -53,7 +53,10 @@ export default function Pagination({
           <span className="pagination-info">
             Page {page} of {totalPages}
             {total != null && (
-              <span className="pagination-info__count"> ({total.toLocaleString()} {unit})</span>
+              <span className="pagination-info__count">
+                {" "}
+                ({total.toLocaleString()} {unit})
+              </span>
             )}
           </span>
           <button

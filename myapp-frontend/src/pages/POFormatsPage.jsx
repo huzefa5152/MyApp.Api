@@ -27,18 +27,48 @@ const colors = {
 
 export default function POFormatsPage() {
   const { companies, selectedCompany, setSelectedCompany } = useCompany();
-  return <>
-    {companies.length > 1 && (<div style={{ ...styles.companyRow, padding: "1rem 1.5rem 0", maxWidth: 1200, margin: "0 auto" }}>
-      <label htmlFor="po-format-company">Company</label>
-      <select id="po-format-company" style={{ padding: "0.5rem 0.75rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 8, background: "white", maxWidth: "100%" }} value={selectedCompany?.id ?? ""}
-        onChange={e => setSelectedCompany(companies.find(c => c.id === Number(e.target.value)) || null)}>
-        {!selectedCompany && <option value="">Select company</option>}
-        {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-      </select>
-    </div>)}
-    {selectedCompany ? <CompanyPOFormats key={selectedCompany.id} company={selectedCompany} />
-      : <p style={styles.page}>No company access is configured for your account.</p>}
-  </>;
+  return (
+    <>
+      {companies.length > 1 && (
+        <div
+          style={{
+            ...styles.companyRow,
+            padding: "1rem 1.5rem 0",
+            maxWidth: 1200,
+            margin: "0 auto",
+          }}
+        >
+          <label htmlFor="po-format-company">Company</label>
+          <select
+            id="po-format-company"
+            style={{
+              padding: "0.5rem 0.75rem",
+              border: `1px solid ${colors.cardBorder}`,
+              borderRadius: 8,
+              background: "white",
+              maxWidth: "100%",
+            }}
+            value={selectedCompany?.id ?? ""}
+            onChange={(e) =>
+              setSelectedCompany(companies.find((c) => c.id === Number(e.target.value)) || null)
+            }
+          >
+            {!selectedCompany && <option value="">Select company</option>}
+            {companies.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      {selectedCompany ? (
+        <CompanyPOFormats key={selectedCompany.id} company={selectedCompany} />
+      ) : (
+        <p style={styles.page}>No company access is configured for your account.</p>
+      )}
+    </>
+  );
 }
 
 function CompanyPOFormats({ company }) {
@@ -48,7 +78,12 @@ function CompanyPOFormats({ company }) {
   const canUpdate = has("poformats.manage.update");
   const canDelete = has("poformats.manage.delete");
   const mounted = useRef(true);
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const [formats, setFormats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -62,7 +97,9 @@ function CompanyPOFormats({ company }) {
       const res = await listPoFormats({ companyId: company.id });
       if (mounted.current) setFormats(res.data);
     } catch (err) {
-      setError(err.response?.data?.error || err.response?.data?.message || "Failed to load PO formats.");
+      setError(
+        err.response?.data?.error || err.response?.data?.message || "Failed to load PO formats.",
+      );
     } finally {
       setLoading(false);
     }
@@ -75,7 +112,8 @@ function CompanyPOFormats({ company }) {
   const handleDelete = async (format) => {
     const ok = await confirm({
       title: `Delete PO format "${format.name}"?`,
-      message: "Future PDFs with this layout will no longer auto-parse — they'll need a fresh format wizard run.",
+      message:
+        "Future PDFs with this layout will no longer auto-parse — they'll need a fresh format wizard run.",
       variant: "danger",
       confirmText: "Delete",
     });
@@ -98,7 +136,9 @@ function CompanyPOFormats({ company }) {
       setEditing(data);
       setShowForm(true);
     } catch (err) {
-      setError(err.response?.data?.error || err.response?.data?.message || "Failed to load format.");
+      setError(
+        err.response?.data?.error || err.response?.data?.message || "Failed to load format.",
+      );
     }
   };
 
@@ -119,7 +159,8 @@ function CompanyPOFormats({ company }) {
         <div className="pof-header__title-block">
           <h1 className="pof-header__title">Customer Document Formats</h1>
           <p className="pof-header__subtitle">
-            Multiple named customer formats in {company.name}. Formats and PDF matching are private to this company.
+            Multiple named customer formats in {company.name}. Formats and PDF matching are private
+            to this company.
           </p>
         </div>
         {canCreate && (
@@ -135,136 +176,158 @@ function CompanyPOFormats({ company }) {
         </div>
       )}
 
-      <RecordsViewport label="POFormats records">{loading ? (
-        <div style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>Loading…</div>
-      ) : formats.length === 0 ? (
-        <div style={styles.emptyCard}>
-          <MdDescription size={36} color={colors.textSecondary} />
-          <h3 style={{ margin: "0.75rem 0 0.25rem", color: colors.textPrimary }}>No PO formats yet</h3>
-          <p style={{ margin: "0 0 1rem", color: colors.textSecondary, fontSize: "0.9rem" }}>
-            Add a format for each of your clients. You'll need a sample PDF and the column header names.
-          </p>
-          {canCreate && (
-            <button style={styles.addBtn} onClick={handleAdd}>
-              <MdAdd size={18} /> Add your first PO format
-            </button>
-          )}
-        </div>
-      ) : (
-        <>
-          {/* Desktop / tablet — table */}
-          <div data-admin-table-region="" className="pof-table" style={styles.card}>
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th style={styles.th}>Name</th>
-                  <th style={styles.th}>Client</th>
-                  <th style={styles.th}>Status</th>
-                  <th style={styles.th}>Last updated</th>
-                  <th style={{ ...styles.th, textAlign: "right" }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {formats.map((f) => (
-                  <tr key={f.id}>
-                    <td style={styles.td}>
-                      <div style={{ fontWeight: 600, color: colors.textPrimary }}>{f.name}</div>
-                      <div style={{ fontSize: "0.75rem", color: colors.textSecondary }}>v{f.currentVersion}</div>
-                    </td>
-                    <td style={styles.td}>
-                      {f.clientName ? (
-                        <span style={styles.chip}>{f.clientName}</span>
-                      ) : (
-                        <span style={{ ...styles.chip, ...styles.chipMuted }}>Unassigned</span>
-                      )}
-                    </td>
-                    <td style={styles.td}>
-                      {f.isActive ? (
-                        <span style={{ ...styles.chip, ...styles.chipSuccess }}>Active</span>
-                      ) : (
-                        <span style={{ ...styles.chip, ...styles.chipMuted }}>Inactive</span>
-                      )}
-                    </td>
-                    <td style={{ ...styles.td, color: colors.textSecondary, fontSize: "0.85rem" }}>
-                      {new Date(f.updatedAt).toLocaleDateString()}
-                    </td>
-                    <td style={{ ...styles.td, textAlign: "right" }}>
-                      {canUpdate && (
-                        <button style={styles.iconBtn} onClick={() => handleEdit(f)} title="Edit"><MdEdit size={16} /></button>
-                      )}
-                      {canDelete && (
-                        <button style={{ ...styles.iconBtn, ...styles.iconBtnDanger }} onClick={() => handleDelete(f)} title="Delete"><MdDelete size={16} /></button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <RecordsViewport label="POFormats records">
+        {loading ? (
+          <div style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>
+            Loading…
           </div>
+        ) : formats.length === 0 ? (
+          <div style={styles.emptyCard}>
+            <MdDescription size={36} color={colors.textSecondary} />
+            <h3 style={{ margin: "0.75rem 0 0.25rem", color: colors.textPrimary }}>
+              No PO formats yet
+            </h3>
+            <p style={{ margin: "0 0 1rem", color: colors.textSecondary, fontSize: "0.9rem" }}>
+              Add a format for each of your clients. You'll need a sample PDF and the column header
+              names.
+            </p>
+            {canCreate && (
+              <button style={styles.addBtn} onClick={handleAdd}>
+                <MdAdd size={18} /> Add your first PO format
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
+            {/* Desktop / tablet — table */}
+            <div data-admin-table-region="" className="pof-table" style={styles.card}>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={styles.th}>Name</th>
+                    <th style={styles.th}>Client</th>
+                    <th style={styles.th}>Status</th>
+                    <th style={styles.th}>Last updated</th>
+                    <th style={{ ...styles.th, textAlign: "right" }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {formats.map((f) => (
+                    <tr key={f.id}>
+                      <td style={styles.td}>
+                        <div style={{ fontWeight: 600, color: colors.textPrimary }}>{f.name}</div>
+                        <div style={{ fontSize: "0.75rem", color: colors.textSecondary }}>
+                          v{f.currentVersion}
+                        </div>
+                      </td>
+                      <td style={styles.td}>
+                        {f.clientName ? (
+                          <span style={styles.chip}>{f.clientName}</span>
+                        ) : (
+                          <span style={{ ...styles.chip, ...styles.chipMuted }}>Unassigned</span>
+                        )}
+                      </td>
+                      <td style={styles.td}>
+                        {f.isActive ? (
+                          <span style={{ ...styles.chip, ...styles.chipSuccess }}>Active</span>
+                        ) : (
+                          <span style={{ ...styles.chip, ...styles.chipMuted }}>Inactive</span>
+                        )}
+                      </td>
+                      <td
+                        style={{ ...styles.td, color: colors.textSecondary, fontSize: "0.85rem" }}
+                      >
+                        {new Date(f.updatedAt).toLocaleDateString()}
+                      </td>
+                      <td style={{ ...styles.td, textAlign: "right" }}>
+                        {canUpdate && (
+                          <button style={styles.iconBtn} onClick={() => handleEdit(f)} title="Edit">
+                            <MdEdit size={16} />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            style={{ ...styles.iconBtn, ...styles.iconBtnDanger }}
+                            onClick={() => handleDelete(f)}
+                            title="Delete"
+                          >
+                            <MdDelete size={16} />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-          {/* Mobile — stacked cards */}
-          <div className="pof-cards">
-            {formats.map((f) => {
-              const clientLabel = f.clientName;
-              return (
-                <div key={f.id} className="pof-card">
-                  <div className="pof-card__top">
-                    <div className="pof-card__title">
-                      <div className="pof-card__name">{f.name}</div>
-                      <div className="pof-card__version">v{f.currentVersion}</div>
+            {/* Mobile — stacked cards */}
+            <div className="pof-cards">
+              {formats.map((f) => {
+                const clientLabel = f.clientName;
+                return (
+                  <div key={f.id} className="pof-card">
+                    <div className="pof-card__top">
+                      <div className="pof-card__title">
+                        <div className="pof-card__name">{f.name}</div>
+                        <div className="pof-card__version">v{f.currentVersion}</div>
+                      </div>
+                      {f.isActive ? (
+                        <span className="pof-card__status pof-card__status--active">Active</span>
+                      ) : (
+                        <span className="pof-card__status pof-card__status--muted">Inactive</span>
+                      )}
                     </div>
-                    {f.isActive ? (
-                      <span className="pof-card__status pof-card__status--active">Active</span>
-                    ) : (
-                      <span className="pof-card__status pof-card__status--muted">Inactive</span>
+
+                    <div className="pof-card__meta">
+                      <div className="pof-card__field">
+                        <span className="pof-card__field-label">Client</span>
+                        {clientLabel ? (
+                          <span className="pof-card__chip">{clientLabel}</span>
+                        ) : (
+                          <span className="pof-card__chip pof-card__chip--muted">Unassigned</span>
+                        )}
+                      </div>
+                      <div className="pof-card__field">
+                        <span className="pof-card__field-label">Updated</span>
+                        <span className="pof-card__field-value">
+                          {new Date(f.updatedAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+
+                    {(canUpdate || canDelete) && (
+                      <div className="pof-card__actions">
+                        {canUpdate && (
+                          <button className="pof-card__edit" onClick={() => handleEdit(f)}>
+                            <MdEdit size={14} /> Edit
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button className="pof-card__delete" onClick={() => handleDelete(f)}>
+                            <MdDelete size={14} /> Delete
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
+                );
+              })}
+            </div>
+          </>
+        )}
 
-                  <div className="pof-card__meta">
-                    <div className="pof-card__field">
-                      <span className="pof-card__field-label">Client</span>
-                      {clientLabel ? (
-                        <span className="pof-card__chip">{clientLabel}</span>
-                      ) : (
-                        <span className="pof-card__chip pof-card__chip--muted">Unassigned</span>
-                      )}
-                    </div>
-                    <div className="pof-card__field">
-                      <span className="pof-card__field-label">Updated</span>
-                      <span className="pof-card__field-value">
-                        {new Date(f.updatedAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-
-                  {(canUpdate || canDelete) && (
-                    <div className="pof-card__actions">
-                      {canUpdate && (
-                        <button className="pof-card__edit" onClick={() => handleEdit(f)}>
-                          <MdEdit size={14} /> Edit
-                        </button>
-                      )}
-                      {canDelete && (
-                        <button className="pof-card__delete" onClick={() => handleDelete(f)}>
-                          <MdDelete size={14} /> Delete
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
-
-      {has("poformats.import.viewArchive") && <CustomerImportArchive companyId={company.id} />}</RecordsViewport>
+        {has("poformats.import.viewArchive") && <CustomerImportArchive companyId={company.id} />}
+      </RecordsViewport>
       {showForm && (
         <POFormatForm
           format={editing}
           companyId={company.id}
           companyName={company.name}
-          onClose={() => { setShowForm(false); setEditing(null); }}
+          onClose={() => {
+            setShowForm(false);
+            setEditing(null);
+          }}
           onSaved={handleSaved}
         />
       )}
@@ -274,23 +337,112 @@ function CompanyPOFormats({ company }) {
 
 const styles = {
   page: { padding: 0, maxWidth: 1200, margin: "0 auto" },
-  header: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" },
+  header: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: "1rem",
+    marginBottom: "1.5rem",
+    flexWrap: "wrap",
+  },
   title: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: colors.textPrimary },
-  companyRow: { display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap" },
-  subtitle: { margin: "0.25rem 0 0", color: colors.textSecondary, fontSize: "0.9rem", maxWidth: 720 },
-  addBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.6rem 1rem", borderRadius: 8, border: "none", backgroundColor: colors.primary, color: "white", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer" },
+  companyRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.75rem",
+    marginBottom: "1rem",
+    flexWrap: "wrap",
+  },
+  subtitle: {
+    margin: "0.25rem 0 0",
+    color: colors.textSecondary,
+    fontSize: "0.9rem",
+    maxWidth: 720,
+  },
+  addBtn: {
+    minHeight: 44,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    padding: "0.6rem 1rem",
+    borderRadius: 8,
+    border: "none",
+    backgroundColor: colors.primary,
+    color: "white",
+    fontSize: "0.9rem",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
   // Card wraps the PO formats table; overflowX makes the 5-column
   // grid (Name / Client / Status / Last updated / Actions) scroll
   // horizontally on mobile instead of getting cut off.
-  card: { backgroundColor: "white", borderRadius: 10, border: `1px solid ${colors.cardBorder}`, overflowX: "auto", WebkitOverflowScrolling: "touch" },
+  card: {
+    backgroundColor: "white",
+    borderRadius: 10,
+    border: `1px solid ${colors.cardBorder}`,
+    overflowX: "auto",
+    WebkitOverflowScrolling: "touch",
+  },
   table: { width: "100%", borderCollapse: "collapse" },
-  th: { textAlign: "left", padding: "0.75rem 1rem", borderBottom: `1px solid ${colors.cardBorder}`, fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary, fontWeight: 600, backgroundColor: colors.inputBg },
-  td: { padding: "0.85rem 1rem", borderBottom: `1px solid ${colors.cardBorder}`, fontSize: "0.9rem", color: colors.textPrimary, verticalAlign: "top" },
-  chip: { display: "inline-block", padding: "0.2rem 0.6rem", borderRadius: 12, fontSize: "0.78rem", fontWeight: 600, backgroundColor: colors.primaryLight, color: colors.primary },
+  th: {
+    textAlign: "left",
+    padding: "0.75rem 1rem",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+    fontSize: "0.78rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: colors.textSecondary,
+    fontWeight: 600,
+    backgroundColor: colors.inputBg,
+  },
+  td: {
+    padding: "0.85rem 1rem",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+    fontSize: "0.9rem",
+    color: colors.textPrimary,
+    verticalAlign: "top",
+  },
+  chip: {
+    display: "inline-block",
+    padding: "0.2rem 0.6rem",
+    borderRadius: 12,
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    backgroundColor: colors.primaryLight,
+    color: colors.primary,
+  },
   chipSuccess: { backgroundColor: colors.successLight, color: colors.success },
   chipMuted: { backgroundColor: "#f2f4f7", color: colors.textSecondary },
-  iconBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0.4rem", borderRadius: 6, border: "none", backgroundColor: "transparent", color: colors.textSecondary, cursor: "pointer", marginLeft: "0.25rem" },
+  iconBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "0.4rem",
+    borderRadius: 6,
+    border: "none",
+    backgroundColor: "transparent",
+    color: colors.textSecondary,
+    cursor: "pointer",
+    marginLeft: "0.25rem",
+  },
   iconBtnDanger: { color: colors.danger },
-  emptyCard: { backgroundColor: "white", border: `2px dashed ${colors.cardBorder}`, borderRadius: 10, padding: "3rem 2rem", textAlign: "center" },
-  errorAlert: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.75rem 1rem", borderRadius: 8, backgroundColor: colors.dangerLight, color: colors.danger, marginBottom: "1rem", fontSize: "0.88rem", fontWeight: 500 },
+  emptyCard: {
+    backgroundColor: "white",
+    border: `2px dashed ${colors.cardBorder}`,
+    borderRadius: 10,
+    padding: "3rem 2rem",
+    textAlign: "center",
+  },
+  errorAlert: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    padding: "0.75rem 1rem",
+    borderRadius: 8,
+    backgroundColor: colors.dangerLight,
+    color: colors.danger,
+    marginBottom: "1rem",
+    fontSize: "0.88rem",
+    fontWeight: 500,
+  },
 };

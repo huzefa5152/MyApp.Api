@@ -116,7 +116,12 @@ export default function UsersPage() {
 
   const openEdit = (u) => {
     setEditUser(u);
-    setForm({ username: u.username, fullName: u.fullName, password: "", role: u.role || defaultRoleName() });
+    setForm({
+      username: u.username,
+      fullName: u.fullName,
+      password: "",
+      role: u.role || defaultRoleName(),
+    });
     setMsg(null);
     setShowModal(true);
   };
@@ -142,13 +147,17 @@ export default function UsersPage() {
         // wasn't). Mirrors what the Create branch already does.
         // MCP grants are managed in the profile and survive normal role edits.
         const matchingRole = availableRoles.find(
-          (r) => r.name?.toLowerCase() === form.role?.toLowerCase());
+          (r) => r.name?.toLowerCase() === form.role?.toLowerCase(),
+        );
         if (matchingRole?.id && canAssignRoles) {
           try {
             const { data: existing } = await getUserRoles(editUser.id);
             const mcpIds = existing.roles.filter(isMcpRole).map((role) => role.id);
             await assignUserRoles(editUser.id, [...new Set([matchingRole.id, ...mcpIds])]);
-            setMsg({ type: "success", text: `User updated and role "${matchingRole.name}" applied.` });
+            setMsg({
+              type: "success",
+              text: `User updated and role "${matchingRole.name}" applied.`,
+            });
           } catch {
             setMsg({
               type: "warn",
@@ -167,7 +176,8 @@ export default function UsersPage() {
         // — they just won't have permissions until an admin assigns them.
         const { data: newUser } = await createUser(form);
         const matchingRole = availableRoles.find(
-          (r) => r.name?.toLowerCase() === form.role?.toLowerCase());
+          (r) => r.name?.toLowerCase() === form.role?.toLowerCase(),
+        );
         if (newUser?.id && matchingRole?.id && canAssignRoles) {
           try {
             await assignUserRoles(newUser.id, [matchingRole.id]);
@@ -239,7 +249,9 @@ export default function UsersPage() {
     setRolesMsg(null);
     try {
       const { data: current } = await getUserRoles(rolesModalUser.id);
-      const normalIds = allRoles.filter((role) => assignedRoleIds.has(role.id)).map((role) => role.id);
+      const normalIds = allRoles
+        .filter((role) => assignedRoleIds.has(role.id))
+        .map((role) => role.id);
       const mcpIds = current.roles.filter(isMcpRole).map((role) => role.id);
       await assignUserRoles(rolesModalUser.id, [...new Set([...normalIds, ...mcpIds])]);
       setRolesMsg({ type: "success", text: "Roles updated" });
@@ -259,24 +271,32 @@ export default function UsersPage() {
     const timer = setInterval(() => setLockClock(Date.now()), 10000);
     return () => clearInterval(timer);
   }, []);
-  const isBlocked = u => u.id !== seedAdminUserId && u.lockoutUntil
-    && new Date(u.lockoutUntil.endsWith("Z") ? u.lockoutUntil : `${u.lockoutUntil}Z`).getTime() > lockClock;
+  const isBlocked = (u) =>
+    u.id !== seedAdminUserId &&
+    u.lockoutUntil &&
+    new Date(u.lockoutUntil.endsWith("Z") ? u.lockoutUntil : `${u.lockoutUntil}Z`).getTime() >
+      lockClock;
   const blockedCount = users.filter(isBlocked).length;
-  const handleUnlock = async u => {
+  const handleUnlock = async (u) => {
     setUnlocking(u.id);
     try {
       await unlockUser(u.id);
       notify(`${u.fullName} (@${u.username}) is unlocked.`, "success");
       await fetchUsers();
-    } catch (err) { notify(err.response?.data?.message || "Could not unlock this account.", "error"); }
-    finally { setUnlocking(null); }
+    } catch (err) {
+      notify(err.response?.data?.message || "Could not unlock this account.", "error");
+    } finally {
+      setUnlocking(null);
+    }
   };
 
-  const filtered = users.filter(u => !isSeedAdmin || !blockedOnly || isBlocked(u)).filter(
-    (u) =>
-      u.username.toLowerCase().includes(search.toLowerCase()) ||
-      u.fullName.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = users
+    .filter((u) => !isSeedAdmin || !blockedOnly || isBlocked(u))
+    .filter(
+      (u) =>
+        u.username.toLowerCase().includes(search.toLowerCase()) ||
+        u.fullName.toLowerCase().includes(search.toLowerCase()),
+    );
 
   const getInitials = (name) => {
     if (!name) return "?";
@@ -312,120 +332,197 @@ export default function UsersPage() {
       {/* Tabs — Sessions & devices exists for the primary admin only */}
       {isSeedAdmin && (
         <div role="tablist" aria-label="User management sections" style={styles.tabs}>
-          {[["users", "Users", MdPeople], ["sessions", "Sessions & devices", MdDevices]].map(([key, label, Icon]) => (
-            <button key={key} role="tab" id={`users-tab-${key}`} aria-selected={tab === key} aria-controls={`users-panel-${key}`}
-              style={{ ...styles.tab, ...(tab === key ? styles.tabActive : {}) }} onClick={() => setTab(key)}>
-              <Icon style={{ fontSize: "1.1rem" }} aria-hidden />{label}
+          {[
+            ["users", "Users", MdPeople],
+            ["sessions", "Sessions & devices", MdDevices],
+          ].map(([key, label, Icon]) => (
+            <button
+              key={key}
+              role="tab"
+              id={`users-tab-${key}`}
+              aria-selected={tab === key}
+              aria-controls={`users-panel-${key}`}
+              style={{ ...styles.tab, ...(tab === key ? styles.tabActive : {}) }}
+              onClick={() => setTab(key)}
+            >
+              <Icon style={{ fontSize: "1.1rem" }} aria-hidden />
+              {label}
             </button>
           ))}
         </div>
       )}
 
       {isSeedAdmin && tab === "sessions" && (
-        <div role="tabpanel" id="users-panel-sessions" aria-labelledby="users-tab-sessions"><UserSessionsPanel /></div>
+        <div role="tabpanel" id="users-panel-sessions" aria-labelledby="users-tab-sessions">
+          <UserSessionsPanel />
+        </div>
       )}
 
       <div role="tabpanel" id="users-panel-users" hidden={isSeedAdmin && tab !== "users"}>
-      {isSeedAdmin && <div role="status" style={{ display:"flex", gap:12, alignItems:"center", flexWrap:"wrap", marginBottom:16 }}>
-        <strong>{blockedCount} blocked {blockedCount === 1 ? "user" : "users"}</strong>
-        <label style={{ display:"flex", gap:8, alignItems:"center", minHeight:44 }}><input type="checkbox" checked={blockedOnly} onChange={e => setBlockedOnly(e.target.checked)} />Show blocked users only</label>
-        <span>Seed admin is exempt from automatic lockout.</span>
-      </div>}
+        {isSeedAdmin && (
+          <div
+            role="status"
+            style={{
+              display: "flex",
+              gap: 12,
+              alignItems: "center",
+              flexWrap: "wrap",
+              marginBottom: 16,
+            }}
+          >
+            <strong>
+              {blockedCount} blocked {blockedCount === 1 ? "user" : "users"}
+            </strong>
+            <label style={{ display: "flex", gap: 8, alignItems: "center", minHeight: 44 }}>
+              <input
+                type="checkbox"
+                checked={blockedOnly}
+                onChange={(e) => setBlockedOnly(e.target.checked)}
+              />
+              Show blocked users only
+            </label>
+            <span>Seed admin is exempt from automatic lockout.</span>
+          </div>
+        )}
 
-      {/* Search */}
-      <div style={styles.searchWrap}>
-        <MdSearch style={{ color: colors.textSecondary, fontSize: "1.25rem" }} />
-        <input
-          style={styles.searchInput}
-          type="text"
-          placeholder="Search users..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
+        {/* Search */}
+        <div style={styles.searchWrap}>
+          <MdSearch style={{ color: colors.textSecondary, fontSize: "1.25rem" }} />
+          <input
+            style={styles.searchInput}
+            type="text"
+            placeholder="Search users..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
 
-      {/* Users List */}
-      <div>
-        <RecordsViewport label="Users records" enabled={!(isSeedAdmin && tab !== "users")}>{loading ? (
-          <p style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>
-            Loading users...
-          </p>
-        ) : filtered.length === 0 ? (
-          <p style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>
-            {search ? "No users match your search" : "No users found"}
-          </p>
-        ) : (
-          <div className="user-cards-grid">
-            {filtered.map((u) => (
-              <div key={u.id} style={styles.userCard}>
-                <div style={styles.userCardTop}>
-                  {u.avatarPath ? (
-                    <img src={u.avatarPath} alt={u.fullName} style={styles.avatar} />
-                  ) : (
-                    <div style={styles.avatarFallback}>
-                      {getInitials(u.fullName)}
+        {/* Users List */}
+        <div>
+          <RecordsViewport label="Users records" enabled={!(isSeedAdmin && tab !== "users")}>
+            {loading ? (
+              <p style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>
+                Loading users...
+              </p>
+            ) : filtered.length === 0 ? (
+              <p style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>
+                {search ? "No users match your search" : "No users found"}
+              </p>
+            ) : (
+              <div className="user-cards-grid">
+                {filtered.map((u) => (
+                  <div key={u.id} style={styles.userCard}>
+                    <div style={styles.userCardTop}>
+                      {u.avatarPath ? (
+                        <img src={u.avatarPath} alt={u.fullName} style={styles.avatar} />
+                      ) : (
+                        <div style={styles.avatarFallback}>{getInitials(u.fullName)}</div>
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontWeight: 600,
+                            color: colors.textPrimary,
+                            fontSize: "0.95rem",
+                          }}
+                        >
+                          {u.fullName}
+                        </div>
+                        <div style={{ color: colors.textSecondary, fontSize: "0.84rem" }}>
+                          @{u.username}
+                          {isSeedAdmin && isBlocked(u) && (
+                            <div style={{ color: colors.danger, fontWeight: 600 }}>Blocked</div>
+                          )}
+                        </div>
+                      </div>
+                      <span style={styles.roleBadge}>{u.role}</span>
                     </div>
-                  )}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, color: colors.textPrimary, fontSize: "0.95rem" }}>
-                      {u.fullName}
-                    </div>
-                    <div style={{ color: colors.textSecondary, fontSize: "0.84rem" }}>
-                      @{u.username}
-                      {isSeedAdmin && isBlocked(u) && <div style={{ color:colors.danger, fontWeight:600 }}>Blocked</div>}
+                    <div style={styles.userCardMeta}>
+                      <span style={{ color: colors.textSecondary, fontSize: "0.82rem" }}>
+                        Joined {new Date(u.createdAt).toLocaleDateString()}
+                      </span>
+                      {currentUser?.isSeedAdmin === true && (
+                        <button
+                          style={{ ...styles.rolesBtn, minHeight: 44 }}
+                          onClick={() => navigate(`/profile?tab=mcp-catalog&userId=${u.id}`)}
+                          title={`MCP access for ${u.fullName}`}
+                        >
+                          <MdSmartToy aria-hidden style={{ fontSize: "1rem" }} />
+                          <span>MCP access</span>
+                        </button>
+                      )}
+                      {isSeedAdmin && isBlocked(u) && (
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 8,
+                            flexWrap: "wrap",
+                            alignItems: "center",
+                          }}
+                        >
+                          <span>
+                            Unlocks{" "}
+                            {new Date(
+                              u.lockoutUntil.endsWith("Z") ? u.lockoutUntil : `${u.lockoutUntil}Z`,
+                            ).toLocaleString()}
+                          </span>
+                          {canUpdate && (
+                            <button
+                              style={{ ...styles.editBtn, minHeight: 44 }}
+                              disabled={unlocking !== null}
+                              onClick={() => handleUnlock(u)}
+                            >
+                              Unlock @{u.username}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      {u.id !== seedAdminUserId && (canAssignRoles || canUpdate || canDelete) && (
+                        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                          {canAssignRoles && (
+                            <button
+                              style={styles.rolesBtn}
+                              onClick={() => openRolesModal(u)}
+                              title="Manage roles"
+                            >
+                              <MdAdminPanelSettings style={{ fontSize: "1rem" }} />
+                              <span>Roles</span>
+                            </button>
+                          )}
+                          {canUpdate && (
+                            <button
+                              style={styles.editBtn}
+                              onClick={() => openEdit(u)}
+                              title="Edit user"
+                            >
+                              <MdEdit style={{ fontSize: "1rem" }} />
+                              <span>Edit</span>
+                            </button>
+                          )}
+                          {canDelete && (
+                            <button
+                              style={styles.deleteBtn}
+                              onClick={() => setDeleteConfirm(u)}
+                              title="Delete user"
+                            >
+                              <MdDelete style={{ fontSize: "1rem" }} />
+                              <span>Delete</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <span style={styles.roleBadge}>{u.role}</span>
-
-                </div>
-                <div style={styles.userCardMeta}>
-                  <span style={{ color: colors.textSecondary, fontSize: "0.82rem" }}>
-                    Joined {new Date(u.createdAt).toLocaleDateString()}
-                  </span>
-                  {currentUser?.isSeedAdmin === true && (
-                    <button style={{ ...styles.rolesBtn, minHeight: 44 }}
-                      onClick={() => navigate(`/profile?tab=mcp-catalog&userId=${u.id}`)} title={`MCP access for ${u.fullName}`}>
-                      <MdSmartToy aria-hidden style={{ fontSize: "1rem" }} />
-                      <span>MCP access</span>
-                    </button>
-                  )}
-                  {isSeedAdmin && isBlocked(u) && <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
-                    <span>Unlocks {new Date(u.lockoutUntil.endsWith("Z") ? u.lockoutUntil : `${u.lockoutUntil}Z`).toLocaleString()}</span>
-                    {canUpdate && <button style={{...styles.editBtn, minHeight:44}} disabled={unlocking !== null} onClick={() => handleUnlock(u)}>Unlock @{u.username}</button>}
-                  </div>}
-                  {u.id !== seedAdminUserId && (canAssignRoles || canUpdate || canDelete) && (
-                    <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                      {canAssignRoles && (
-                        <button style={styles.rolesBtn} onClick={() => openRolesModal(u)} title="Manage roles">
-                          <MdAdminPanelSettings style={{ fontSize: "1rem" }} />
-                          <span>Roles</span>
-                        </button>
-                      )}
-                      {canUpdate && (
-                        <button style={styles.editBtn} onClick={() => openEdit(u)} title="Edit user">
-                          <MdEdit style={{ fontSize: "1rem" }} />
-                          <span>Edit</span>
-                        </button>
-                      )}
-                      {canDelete && (
-                        <button style={styles.deleteBtn} onClick={() => setDeleteConfirm(u)} title="Delete user">
-                          <MdDelete style={{ fontSize: "1rem" }} />
-                          <span>Delete</span>
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}</RecordsViewport>
-      </div>
+            )}
+          </RecordsViewport>
+        </div>
 
-      {/* Summary */}
-      <p style={{ color: colors.textSecondary, fontSize: "0.85rem", marginTop: "1rem" }}>
-        {filtered.length} user{filtered.length !== 1 ? "s" : ""} total
-      </p>
+        {/* Summary */}
+        <p style={{ color: colors.textSecondary, fontSize: "0.85rem", marginTop: "1rem" }}>
+          {filtered.length} user{filtered.length !== 1 ? "s" : ""} total
+        </p>
       </div>
 
       {/* ---- Create/Edit Modal ---- */}
@@ -435,9 +532,7 @@ export default function UsersPage() {
         <div data-admin-backdrop="" style={styles.overlay}>
           <div data-admin-dialog="" style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div data-admin-header="" style={styles.modalHeader}>
-              <h3 style={formStyles.title}>
-                {editUser ? "Edit User" : "Add New User"}
-              </h3>
+              <h3 style={formStyles.title}>{editUser ? "Edit User" : "Add New User"}</h3>
               <button style={styles.modalClose} onClick={closeModal}>
                 <MdClose style={{ fontSize: "1.25rem" }} />
               </button>
@@ -445,13 +540,7 @@ export default function UsersPage() {
 
             <div data-admin-body="" style={styles.modalBody}>
               {msg && (
-                <div
-                  style={
-                    msg.type === "success"
-                      ? styles.successMsg
-                      : styles.errorMsg
-                  }
-                >
+                <div style={msg.type === "success" ? styles.successMsg : styles.errorMsg}>
                   {msg.text}
                 </div>
               )}
@@ -490,16 +579,17 @@ export default function UsersPage() {
               </label>
               {editUser && editUser.id === currentUser?.id ? (
                 <p style={{ margin: "0 0 0.75rem", fontSize: "0.85rem", color: "#5f6d7e" }}>
-                  Change your own password from <Link to="/profile">My Profile</Link>, where your current password is asked for.
+                  Change your own password from <Link to="/profile">My Profile</Link>, where your
+                  current password is asked for.
                 </p>
               ) : (
-              <input
-                style={styles.input}
-                type="password"
-                placeholder={editUser ? "Leave blank to keep current" : "Min. 6 characters"}
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-              />
+                <input
+                  style={styles.input}
+                  type="password"
+                  placeholder={editUser ? "Leave blank to keep current" : "Min. 6 characters"}
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                />
               )}
 
               {/* Role */}
@@ -512,12 +602,11 @@ export default function UsersPage() {
                 value={form.role}
                 onChange={(e) => setForm({ ...form, role: e.target.value })}
               >
-                {availableRoles.length === 0 && (
-                  <option value="Admin">Admin</option>
-                )}
+                {availableRoles.length === 0 && <option value="Admin">Admin</option>}
                 {availableRoles.map((r) => (
                   <option key={r.id} value={r.name}>
-                    {r.name}{r.isSystemRole ? " (system)" : ""}
+                    {r.name}
+                    {r.isSystemRole ? " (system)" : ""}
                   </option>
                 ))}
               </select>
@@ -532,11 +621,7 @@ export default function UsersPage() {
               <button data-admin-close="" style={styles.cancelBtn} onClick={closeModal}>
                 Cancel
               </button>
-              <button
-                style={styles.saveBtn}
-                onClick={handleSave}
-                disabled={saving}
-              >
+              <button style={styles.saveBtn} onClick={handleSave} disabled={saving}>
                 <MdSave style={{ fontSize: "1.1rem" }} />
                 {saving ? "Saving..." : editUser ? "Update" : "Create"}
               </button>
@@ -551,9 +636,7 @@ export default function UsersPage() {
         <div data-admin-backdrop="" style={styles.overlay}>
           <div data-admin-dialog="" style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div data-admin-header="" style={styles.modalHeader}>
-              <h3 style={formStyles.title}>
-                Manage roles — {rolesModalUser.fullName}
-              </h3>
+              <h3 style={formStyles.title}>Manage roles — {rolesModalUser.fullName}</h3>
               <button style={styles.modalClose} onClick={closeRolesModal}>
                 <MdClose style={{ fontSize: "1.25rem" }} />
               </button>
@@ -566,9 +649,11 @@ export default function UsersPage() {
                 </div>
               )}
 
-              <p style={{ margin: "0 0 0.75rem", color: colors.textSecondary, fontSize: "0.85rem" }}>
-                Select the roles this user should have. Their permissions are the union
-                of everything granted by their assigned roles.
+              <p
+                style={{ margin: "0 0 0.75rem", color: colors.textSecondary, fontSize: "0.85rem" }}
+              >
+                Select the roles this user should have. Their permissions are the union of
+                everything granted by their assigned roles.
               </p>
 
               {rolesLoading ? (
@@ -577,7 +662,8 @@ export default function UsersPage() {
                 </p>
               ) : allRoles.length === 0 ? (
                 <p style={{ padding: "1.5rem", textAlign: "center", color: colors.textSecondary }}>
-                  No roles defined yet. Go to <strong>Roles &amp; Permissions</strong> to create one.
+                  No roles defined yet. Go to <strong>Roles &amp; Permissions</strong> to create
+                  one.
                 </p>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
@@ -605,8 +691,21 @@ export default function UsersPage() {
                           style={{ accentColor: colors.blue, marginTop: 3 }}
                         />
                         <div style={{ flex: 1 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                            <span style={{ fontWeight: 600, color: colors.textPrimary, fontSize: "0.92rem" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontWeight: 600,
+                                color: colors.textPrimary,
+                                fontSize: "0.92rem",
+                              }}
+                            >
                               {role.name}
                             </span>
                             {role.isSystemRole && (
@@ -626,13 +725,25 @@ export default function UsersPage() {
                                 System
                               </span>
                             )}
-                            <span style={{ marginLeft: "auto", fontSize: "0.78rem", color: colors.textSecondary }}>
+                            <span
+                              style={{
+                                marginLeft: "auto",
+                                fontSize: "0.78rem",
+                                color: colors.textSecondary,
+                              }}
+                            >
                               {role.permissionKeys.length} permission
                               {role.permissionKeys.length !== 1 ? "s" : ""}
                             </span>
                           </div>
                           {role.description && (
-                            <p style={{ margin: "0.25rem 0 0", color: colors.textSecondary, fontSize: "0.82rem" }}>
+                            <p
+                              style={{
+                                margin: "0.25rem 0 0",
+                                color: colors.textSecondary,
+                                fontSize: "0.82rem",
+                              }}
+                            >
                               {role.description}
                             </p>
                           )}
@@ -645,10 +756,19 @@ export default function UsersPage() {
             </div>
 
             <div data-admin-footer="" style={styles.modalFooter}>
-              <button data-admin-close="" style={styles.cancelBtn} onClick={closeRolesModal} disabled={rolesSaving}>
+              <button
+                data-admin-close=""
+                style={styles.cancelBtn}
+                onClick={closeRolesModal}
+                disabled={rolesSaving}
+              >
                 Cancel
               </button>
-              <button style={styles.saveBtn} onClick={handleSaveRoles} disabled={rolesSaving || rolesLoading}>
+              <button
+                style={styles.saveBtn}
+                onClick={handleSaveRoles}
+                disabled={rolesSaving || rolesLoading}
+              >
                 <MdSave style={{ fontSize: "1.1rem" }} />
                 {rolesSaving ? "Saving..." : "Save roles"}
               </button>
@@ -664,15 +784,14 @@ export default function UsersPage() {
         <div data-admin-backdrop="" style={styles.overlay}>
           <div data-admin-dialog="" style={styles.deleteModal} onClick={(e) => e.stopPropagation()}>
             <MdDelete style={{ fontSize: "2.5rem", color: colors.danger }} />
-            <h3 style={{ margin: "0.75rem 0 0.5rem", color: colors.textPrimary }}>
-              Delete User?
-            </h3>
+            <h3 style={{ margin: "0.75rem 0 0.5rem", color: colors.textPrimary }}>Delete User?</h3>
             <p style={{ margin: 0, color: colors.textSecondary, fontSize: "0.9rem" }}>
-              Are you sure you want to delete <strong>{deleteConfirm.fullName}</strong>?
-              This action cannot be undone.
+              Are you sure you want to delete <strong>{deleteConfirm.fullName}</strong>? This action
+              cannot be undone.
             </p>
             <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.5rem" }}>
-              <button data-admin-close=""
+              <button
+                data-admin-close=""
                 style={styles.cancelBtn}
                 onClick={() => setDeleteConfirm(null)}
               >
@@ -722,7 +841,8 @@ const styles = {
     fontSize: "0.88rem",
     color: colors.textSecondary,
   },
-  addBtn: { minHeight: 44,
+  addBtn: {
+    minHeight: 44,
     display: "flex",
     alignItems: "center",
     gap: "0.4rem",

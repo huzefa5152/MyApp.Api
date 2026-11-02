@@ -48,7 +48,10 @@ export default function ParserFeedback({ value, onChange, disabled = false }) {
         {option("Correct", "Yes, everything looks correct.")}
         {option("Incorrect", "No, I had to fix parser mistakes.")}
       </div>
-      <div style={styles.hint}>Optional — your answer helps us improve the parser. It won&apos;t block creating the document.</div>
+      <div style={styles.hint}>
+        Optional — your answer helps us improve the parser. It won&apos;t block creating the
+        document.
+      </div>
     </div>
   );
 }

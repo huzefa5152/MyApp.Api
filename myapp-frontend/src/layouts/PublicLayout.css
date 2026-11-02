@@ -9,7 +9,7 @@
   --pl-ink-0: #04070d;
   --pl-ink-1: #070d18;
   --pl-ink-2: #0c1424;
-  --pl-line: rgba(151, 191, 255, 0.10);
+  --pl-line: rgba(151, 191, 255, 0.1);
   --pl-line-strong: rgba(151, 191, 255, 0.22);
   --pl-cyan: #22e0ff;
   --pl-cyan-soft: #9ef2ff;
@@ -141,7 +141,9 @@
   height: 2px;
   background: var(--pl-grad);
   border-radius: 1px;
-  transition: width 0.35s var(--pl-ease), left 0.35s var(--pl-ease);
+  transition:
+    width 0.35s var(--pl-ease),
+    left 0.35s var(--pl-ease);
 }
 
 .pl-navbar__link:hover {
@@ -215,7 +217,9 @@
   cursor: pointer;
   padding: 0;
   box-shadow: none;
-  transition: background-color 0.3s var(--pl-ease), border-color 0.3s var(--pl-ease);
+  transition:
+    background-color 0.3s var(--pl-ease),
+    border-color 0.3s var(--pl-ease);
 }
 
 .pl-navbar__hamburger:hover {
@@ -278,7 +282,9 @@
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.45s var(--pl-ease), visibility 0.45s var(--pl-ease);
+  transition:
+    opacity 0.45s var(--pl-ease),
+    visibility 0.45s var(--pl-ease);
 }
 
 .pl-drawer--open {
@@ -292,11 +298,15 @@
   inset: 0;
   pointer-events: none;
   background-image:
-    radial-gradient(45% 35% at 85% 8%, rgba(34, 224, 255, 0.10) 0%, transparent 70%),
-    radial-gradient(40% 35% at 8% 95%, rgba(20, 184, 166, 0.10) 0%, transparent 70%),
+    radial-gradient(45% 35% at 85% 8%, rgba(34, 224, 255, 0.1) 0%, transparent 70%),
+    radial-gradient(40% 35% at 8% 95%, rgba(20, 184, 166, 0.1) 0%, transparent 70%),
     linear-gradient(to right, rgba(140, 175, 255, 0.04) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(140, 175, 255, 0.04) 1px, transparent 1px);
-  background-size: auto, auto, 56px 56px, 56px 56px;
+  background-size:
+    auto,
+    auto,
+    56px 56px,
+    56px 56px;
 }
 
 .pl-drawer__header {
@@ -336,7 +346,9 @@
   letter-spacing: 0.16em;
   text-transform: uppercase;
   box-shadow: none;
-  transition: color 0.3s ease, background-color 0.3s ease;
+  transition:
+    color 0.3s ease,
+    background-color 0.3s ease;
 }
 
 .pl-drawer__close:hover {
@@ -380,7 +392,9 @@
   font-weight: 600;
   letter-spacing: -0.01em;
   border-bottom: 1px solid var(--pl-line);
-  transition: color 0.3s ease, padding-left 0.3s ease;
+  transition:
+    color 0.3s ease,
+    padding-left 0.3s ease;
   /* staggered entrance */
   opacity: 0;
   transform: translateY(18px);
@@ -396,12 +410,24 @@
     padding-left 0.3s ease;
 }
 
-.pl-drawer--open .pl-drawer__link:nth-child(1) { transition-delay: 0.07s; }
-.pl-drawer--open .pl-drawer__link:nth-child(2) { transition-delay: 0.12s; }
-.pl-drawer--open .pl-drawer__link:nth-child(3) { transition-delay: 0.17s; }
-.pl-drawer--open .pl-drawer__link:nth-child(4) { transition-delay: 0.22s; }
-.pl-drawer--open .pl-drawer__link:nth-child(5) { transition-delay: 0.27s; }
-.pl-drawer--open .pl-drawer__link:nth-child(6) { transition-delay: 0.32s; }
+.pl-drawer--open .pl-drawer__link:nth-child(1) {
+  transition-delay: 0.07s;
+}
+.pl-drawer--open .pl-drawer__link:nth-child(2) {
+  transition-delay: 0.12s;
+}
+.pl-drawer--open .pl-drawer__link:nth-child(3) {
+  transition-delay: 0.17s;
+}
+.pl-drawer--open .pl-drawer__link:nth-child(4) {
+  transition-delay: 0.22s;
+}
+.pl-drawer--open .pl-drawer__link:nth-child(5) {
+  transition-delay: 0.27s;
+}
+.pl-drawer--open .pl-drawer__link:nth-child(6) {
+  transition-delay: 0.32s;
+}
 
 .pl-drawer__link-num {
   font-family: var(--pl-font-mono);
@@ -575,7 +601,9 @@
   color: var(--pl-mute);
   text-decoration: none;
   font-size: 0.9rem;
-  transition: color 0.3s var(--pl-ease), padding-left 0.3s var(--pl-ease);
+  transition:
+    color 0.3s var(--pl-ease),
+    padding-left 0.3s var(--pl-ease);
   display: inline-block;
 }
 
@@ -680,7 +708,10 @@
   position: absolute;
   inset: -4px;
   border-radius: 50%;
-  background: conic-gradient(var(--pl-cyan) calc(var(--sp, 0) * 1turn), rgba(151, 191, 255, 0.12) 0);
+  background: conic-gradient(
+    var(--pl-cyan) calc(var(--sp, 0) * 1turn),
+    rgba(151, 191, 255, 0.12) 0
+  );
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #fff calc(100% - 2px));
   mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #fff calc(100% - 2px));
   pointer-events: none;

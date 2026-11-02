@@ -1,8 +1,7 @@
 import httpClient from "./httpClient";
 
 // Company stamps — images usable in print templates as {{stamps.<slug>}}.
-export const getCompanyStamps = (companyId) =>
-  httpClient.get(`/companies/${companyId}/stamps`);
+export const getCompanyStamps = (companyId) => httpClient.get(`/companies/${companyId}/stamps`);
 
 export const uploadStamp = (companyId, file, name) => {
   const form = new FormData();

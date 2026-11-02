@@ -1,16 +1,22 @@
 import httpClient from "./httpClient";
 import { createInFlightRead } from "../utils/inFlightRead";
 
-const invalidateReads = (request) => request.then(
-  (response) => { getTemplatesByCompany.clear(); return response; },
-  (error) => { getTemplatesByCompany.clear(); throw error; },
-);
+const invalidateReads = (request) =>
+  request.then(
+    (response) => {
+      getTemplatesByCompany.clear();
+      return response;
+    },
+    (error) => {
+      getTemplatesByCompany.clear();
+      throw error;
+    },
+  );
 const templateWrites = {
   post: (...args) => invalidateReads(httpClient.post(...args)),
   put: (...args) => invalidateReads(httpClient.put(...args)),
   delete: (...args) => invalidateReads(httpClient.delete(...args)),
 };
-
 
 export const getTemplatesByCompany = createInFlightRead(
   (companyId) => httpClient.get(`/printtemplates/company/${companyId}`),
@@ -57,8 +63,7 @@ export const updateTemplateById = (id, payload) =>
     editorMode: payload.editorMode || null,
   });
 
-export const setDefaultTemplate = (id) =>
-  templateWrites.put(`/printtemplates/${id}/default`);
+export const setDefaultTemplate = (id) => templateWrites.put(`/printtemplates/${id}/default`);
 
 // Seed one default template per document type for a company (idempotent —
 // types that already have a template are skipped). `defaults` is an array of
@@ -67,8 +72,7 @@ export const setDefaultTemplate = (id) =>
 export const seedDefaultTemplates = (companyId, defaults) =>
   templateWrites.post(`/printtemplates/company/${companyId}/seed-defaults`, defaults);
 
-export const deleteTemplate = (id) =>
-  templateWrites.delete(`/printtemplates/${id}`);
+export const deleteTemplate = (id) => templateWrites.delete(`/printtemplates/${id}`);
 
 // Apply a starter design onto an EXISTING template.
 // mode: "html" (replace body HTML, keep layout+metadata) | "all" (replace layout too).
@@ -79,8 +83,7 @@ export const applyStarterToTemplate = (id, { htmlContent, mode = "html", starter
     starterName: starterName || null,
   });
 
-export const getMergeFields = (templateType) =>
-  httpClient.get(`/mergefields/${templateType}`);
+export const getMergeFields = (templateType) => httpClient.get(`/mergefields/${templateType}`);
 
 // ── Excel Template APIs (legacy, company-default) ──
 
@@ -91,14 +94,14 @@ export const uploadExcelTemplate = (companyId, templateType, file, sheetName) =>
   return templateWrites.post(
     `/printtemplates/company/${companyId}/${templateType}/excel-template`,
     form,
-    { headers: { "Content-Type": "multipart/form-data" } }
+    { headers: { "Content-Type": "multipart/form-data" } },
   );
 };
 
 export const setExcelSheetName = (companyId, templateType, sheetName) =>
   templateWrites.put(
     `/printtemplates/company/${companyId}/${templateType}/excel-template/sheet-name`,
-    { sheetName: sheetName || null }
+    { sheetName: sheetName || null },
   );
 
 export const deleteExcelTemplate = (companyId, templateType) =>
@@ -111,7 +114,7 @@ export const exportExcel = (companyId, templateType, printData) =>
   templateWrites.post(
     `/printtemplates/company/${companyId}/${templateType}/export-excel`,
     printData,
-    { responseType: "blob" }
+    { responseType: "blob" },
   );
 
 // ── Excel APIs (id-based, for the multi-template editor) ──

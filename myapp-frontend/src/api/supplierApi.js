@@ -16,15 +16,12 @@ export const getSuppliersCount = (companyId) =>
 export const getCommonSuppliers = (companyId) =>
   http.get("/suppliers/common", { params: { companyId } });
 export const getAllSupplierGroups = () => http.get("/suppliers/groups");
-export const getCommonSupplierById = (groupId) =>
-  http.get(`/suppliers/common/${groupId}`);
+export const getCommonSupplierById = (groupId) => http.get(`/suppliers/common/${groupId}`);
 export const updateCommonSupplier = (groupId, payload) =>
   http.put(`/suppliers/common/${groupId}`, payload);
-export const deleteCommonSupplier = (groupId) =>
-  http.delete(`/suppliers/common/${groupId}`);
+export const deleteCommonSupplier = (groupId) => http.delete(`/suppliers/common/${groupId}`);
 // Multi-company create: { ...supplierFields, companyIds: [1, 2] }
-export const createSupplierBatch = (payload) =>
-  http.post("/suppliers/batch", payload);
+export const createSupplierBatch = (payload) => http.post("/suppliers/batch", payload);
 // Copy an existing supplier into one or more target companies. Mirror
 // of copyClientToCompanies — see clientApi.js for the response shape.
 export const copySupplierToCompanies = (id, companyIds) =>

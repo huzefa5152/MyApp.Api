@@ -42,7 +42,9 @@ export default function ByCounterpartyCard({
   // Map row index to the colour the donut will use for the
   // matching segment. Rows beyond topN share the "Others" colour.
   const rowColors = useMemo(() => {
-    return list.map((_, i) => i < topN ? DONUT_PALETTE[i % DONUT_PALETTE.length] : DONUT_OTHERS_COLOR);
+    return list.map((_, i) =>
+      i < topN ? DONUT_PALETTE[i % DONUT_PALETTE.length] : DONUT_OTHERS_COLOR,
+    );
   }, [list, topN]);
 
   const shell = {
@@ -57,7 +59,15 @@ export default function ByCounterpartyCard({
     return (
       <section className="dash-card" style={{ ...shell, "--acc": accent }}>
         <Header title={title} subtitle={subtitle} accent={accent} />
-        <div style={{ fontSize: "0.85rem", color: "#69788f", fontStyle: "italic", padding: "1.25rem 0", textAlign: "center" }}>
+        <div
+          style={{
+            fontSize: "0.85rem",
+            color: "#69788f",
+            fontStyle: "italic",
+            padding: "1.25rem 0",
+            textAlign: "center",
+          }}
+        >
           {emptyText}
         </div>
       </section>
@@ -72,13 +82,16 @@ export default function ByCounterpartyCard({
           auto-fit split left the names ~40px between the percent and the
           amount, so "SOORTY ENTERPRISES" read as "S O...". Phones stack the
           two via .dash-cp-grid in DashboardPage.css. */}
-      <div className="dash-cp-grid" style={{
-        display: "grid",
-        gridTemplateColumns: "minmax(170px, 210px) minmax(0, 1fr)",
-        gap: "1rem",
-        padding: "0.85rem 1rem 1rem",
-        alignItems: "center",
-      }}>
+      <div
+        className="dash-cp-grid"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(170px, 210px) minmax(0, 1fr)",
+          gap: "1rem",
+          padding: "0.85rem 1rem 1rem",
+          alignItems: "center",
+        }}
+      >
         {/* Donut */}
         <div className="dash-cp-donut-wrap" style={{ minWidth: 0 }}>
           <DonutChart
@@ -89,22 +102,27 @@ export default function ByCounterpartyCard({
             onSegmentClick={(idx) => setHighlight((cur) => (cur === idx ? null : idx))}
             size={220}
             centerLabel="Total"
-            formatValue={(v) => `Rs. ${Number(v || 0).toLocaleString("en-PK", { maximumFractionDigits: 0 })}`}
+            formatValue={(v) =>
+              `Rs. ${Number(v || 0).toLocaleString("en-PK", { maximumFractionDigits: 0 })}`
+            }
           />
         </div>
 
         {/* List */}
-        <div className="dash-cp-list" style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.4rem",
-          maxHeight: 330,
-          overflowY: "auto",
-          // Custom thin scrollbar to match the rest of the app
-          scrollbarWidth: "thin",
-          scrollbarColor: `${accent}aa #f1f1f1`,
-          paddingRight: "0.25rem",
-        }}>
+        <div
+          className="dash-cp-list"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.4rem",
+            maxHeight: 330,
+            overflowY: "auto",
+            // Custom thin scrollbar to match the rest of the app
+            scrollbarWidth: "thin",
+            scrollbarColor: `${accent}aa #f1f1f1`,
+            paddingRight: "0.25rem",
+          }}
+        >
           {list.map((it, idx) => {
             // Rows beyond topN map to the synthetic Others bucket
             // (originalIndex = -1 in the donut). We highlight every
@@ -119,10 +137,12 @@ export default function ByCounterpartyCard({
                 className="dash-cp-row"
                 onMouseEnter={() => setHighlight(isOthers ? -1 : idx)}
                 onMouseLeave={() => setHighlight(null)}
-                onClick={() => setHighlight((cur) => {
-                  const target = isOthers ? -1 : idx;
-                  return cur === target ? null : target;
-                })}
+                onClick={() =>
+                  setHighlight((cur) => {
+                    const target = isOthers ? -1 : idx;
+                    return cur === target ? null : target;
+                  })
+                }
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -139,53 +159,78 @@ export default function ByCounterpartyCard({
                 }}
                 title={`${it.name}: Rs. ${Number(it.value).toLocaleString("en-PK", { maximumFractionDigits: 0 })} (${pct.toFixed(1)}%)`}
               >
-                <span style={{
-                  width: 10, height: 10, borderRadius: 2,
-                  backgroundColor: rowColors[idx],
-                  flexShrink: 0,
-                }} aria-hidden="true" />
-                <span className="dash-cp-row__name" style={{
-                  flex: 1, minWidth: 0,
-                  fontSize: "0.83rem",
-                  fontWeight: 600,
-                  color: "#1a2332",
-                  // Bug 2026-05-13: nowrap + ellipsis collapsed names
-                  // like "NORTHSIDE FABRICS (Pvt) Ltd." and "NORTHSIDE DENIM
-                  // MILLS (Pvt) Ltd." to identical-looking "NORTHSIDE ..." on the
-                  // narrow list column, making distinct clients look
-                  // like duplicates. Allow up to 2 lines so the
-                  // disambiguating word stays visible without forcing
-                  // a wider layout.
-                  overflow: "hidden",
-                  display: "-webkit-box",
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: "vertical",
-                  lineHeight: 1.25,
-                  wordBreak: "break-word",
-                }}>
-                  <span style={{ color: "#5f6d7e", fontSize: "0.75rem", marginRight: "0.4rem" }}>#{idx + 1}</span>
+                <span
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: 2,
+                    backgroundColor: rowColors[idx],
+                    flexShrink: 0,
+                  }}
+                  aria-hidden="true"
+                />
+                <span
+                  className="dash-cp-row__name"
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    fontSize: "0.83rem",
+                    fontWeight: 600,
+                    color: "#1a2332",
+                    // Bug 2026-05-13: nowrap + ellipsis collapsed names
+                    // like "NORTHSIDE FABRICS (Pvt) Ltd." and "NORTHSIDE DENIM
+                    // MILLS (Pvt) Ltd." to identical-looking "NORTHSIDE ..." on the
+                    // narrow list column, making distinct clients look
+                    // like duplicates. Allow up to 2 lines so the
+                    // disambiguating word stays visible without forcing
+                    // a wider layout.
+                    overflow: "hidden",
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                    lineHeight: 1.25,
+                    wordBreak: "break-word",
+                  }}
+                >
+                  <span style={{ color: "#5f6d7e", fontSize: "0.75rem", marginRight: "0.4rem" }}>
+                    #{idx + 1}
+                  </span>
                   {it.name || "(unknown)"}
                 </span>
                 {/* Amount over percent in one right-hand column: side by side
                     they took ~160px and left the client name ~60px. */}
-                <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0, lineHeight: 1.2 }}>
-                  <span className="dash-cp-row__value" style={{
-                    fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
-                    fontVariantNumeric: "tabular-nums",
-                    fontSize: "0.82rem",
-                    fontWeight: 600,
-                    color: "#0c1830",
-                    whiteSpace: "nowrap",
-                  }}>
+                <span
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "flex-end",
+                    flexShrink: 0,
+                    lineHeight: 1.2,
+                  }}
+                >
+                  <span
+                    className="dash-cp-row__value"
+                    style={{
+                      fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
+                      fontVariantNumeric: "tabular-nums",
+                      fontSize: "0.82rem",
+                      fontWeight: 600,
+                      color: "#0c1830",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                     {formatPkr(it.value)}
                   </span>
-                  <span className="dash-cp-row__pct" style={{
-                    fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
-                    fontVariantNumeric: "tabular-nums",
-                    fontSize: "0.72rem",
-                    color: "#69788f",
-                    textAlign: "right",
-                  }}>
+                  <span
+                    className="dash-cp-row__pct"
+                    style={{
+                      fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
+                      fontVariantNumeric: "tabular-nums",
+                      fontSize: "0.72rem",
+                      color: "#69788f",
+                      textAlign: "right",
+                    }}
+                  >
                     {pct.toFixed(1)}%
                   </span>
                 </span>
@@ -200,24 +245,48 @@ export default function ByCounterpartyCard({
 
 function Header({ title, subtitle, accent }) {
   return (
-    <header style={{
-      padding: "0.85rem 1.15rem",
-      borderBottom: "1px solid #eef2f8",
-    }}>
-      <h2 style={{
-        margin: 0, fontSize: "1rem", fontWeight: 700, color: "#0c1830",
-        letterSpacing: "-0.01em", display: "flex", alignItems: "center", gap: "0.55rem",
-        fontFamily: '"Space Grotesk", "Inter", system-ui, sans-serif',
-      }}>
-        <span style={{
-          display: "inline-flex", width: 10, height: 10, borderRadius: 3,
-          background: accent, boxShadow: `0 0 0 4px ${accent}1a`,
-          flexShrink: 0,
-        }} aria-hidden="true" />
+    <header
+      style={{
+        padding: "0.85rem 1.15rem",
+        borderBottom: "1px solid #eef2f8",
+      }}
+    >
+      <h2
+        style={{
+          margin: 0,
+          fontSize: "1rem",
+          fontWeight: 700,
+          color: "#0c1830",
+          letterSpacing: "-0.01em",
+          display: "flex",
+          alignItems: "center",
+          gap: "0.55rem",
+          fontFamily: '"Space Grotesk", "Inter", system-ui, sans-serif',
+        }}
+      >
+        <span
+          style={{
+            display: "inline-flex",
+            width: 10,
+            height: 10,
+            borderRadius: 3,
+            background: accent,
+            boxShadow: `0 0 0 4px ${accent}1a`,
+            flexShrink: 0,
+          }}
+          aria-hidden="true"
+        />
         {title}
       </h2>
       {subtitle && (
-        <div style={{ fontSize: "0.74rem", color: "#69788f", marginTop: "0.3rem", marginLeft: "1.45rem" }}>
+        <div
+          style={{
+            fontSize: "0.74rem",
+            color: "#69788f",
+            marginTop: "0.3rem",
+            marginLeft: "1.45rem",
+          }}
+        >
           {subtitle}
         </div>
       )}

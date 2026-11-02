@@ -3,18 +3,18 @@
 // Pass `tone` for one of the presets, or `bg`/`color`/`border` to override.
 
 const tones = {
-  pending:    { bg: "#fff3e0", color: "#e65100", border: "#e6510030" },
-  imported:   { bg: "#f3e5f5", color: "#6a1b9a", border: "#6a1b9a30" },
-  info:       { bg: "#e3f2fd", color: "#0d47a1", border: "#0d47a130" },
-  success:    { bg: "#e8f5e9", color: "#2e7d32", border: "#2e7d3230" },
-  danger:     { bg: "#ffebee", color: "#c62828", border: "#c6282830" },
-  warning:    { bg: "#fff8e1", color: "#b26a00", border: "#b26a0030" },
-  neutral:    { bg: "#eceff1", color: "#546e7a", border: "#b0bec530" },
-  setup:      { bg: "#fce4ec", color: "#880e4f", border: "#880e4f30" },
-  duplicate:  { bg: "#ede7f6", color: "#4527a0", border: "#4527a040" },
-  submitted:  { bg: "#e8f5e9", color: "#1b5e20", border: "#1b5e2030" },
-  ready:      { bg: "#e3f2fd", color: "#0d47a1", border: "#0d47a130" },
-  excluded:   { bg: "#eceff1", color: "#455a64", border: "#45596430" },
+  pending: { bg: "#fff3e0", color: "#e65100", border: "#e6510030" },
+  imported: { bg: "#f3e5f5", color: "#6a1b9a", border: "#6a1b9a30" },
+  info: { bg: "#e3f2fd", color: "#0d47a1", border: "#0d47a130" },
+  success: { bg: "#e8f5e9", color: "#2e7d32", border: "#2e7d3230" },
+  danger: { bg: "#ffebee", color: "#c62828", border: "#c6282830" },
+  warning: { bg: "#fff8e1", color: "#b26a00", border: "#b26a0030" },
+  neutral: { bg: "#eceff1", color: "#546e7a", border: "#b0bec530" },
+  setup: { bg: "#fce4ec", color: "#880e4f", border: "#880e4f30" },
+  duplicate: { bg: "#ede7f6", color: "#4527a0", border: "#4527a040" },
+  submitted: { bg: "#e8f5e9", color: "#1b5e20", border: "#1b5e2030" },
+  ready: { bg: "#e3f2fd", color: "#0d47a1", border: "#0d47a130" },
+  excluded: { bg: "#eceff1", color: "#455a64", border: "#45596430" },
 };
 
 // Status string → tone — covers every server status name in this app.

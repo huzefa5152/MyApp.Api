@@ -12,33 +12,35 @@ export function withPrintCss(html) {
     ? ""
     : "@page{size:A4;margin:12mm;}thead{display:table-header-group;}";
   const printCss =
-    "<style>@media print{" + pageCss
-    + "tr,img,.no-break{page-break-inside:avoid;break-inside:avoid;}}</style>";
-  return /<\/head>/i.test(html)
-    ? html.replace(/<\/head>/i, printCss + "</head>")
-    : printCss + html;
+    "<style>@media print{" +
+    pageCss +
+    "tr,img,.no-break{page-break-inside:avoid;break-inside:avoid;}}</style>";
+  return /<\/head>/i.test(html) ? html.replace(/<\/head>/i, printCss + "</head>") : printCss + html;
 }
-
 
 // A big signature scan (multi-MB PNG) paints progressively in Chrome's print
 // preview, so the stamp prints as only its top strip. Re-encode anything large
 // to a small bitmap first; the printed size is a few mm, so nothing is lost.
 const MAX_PRINT_IMG_PX = 700;
 async function shrinkLargeImages(imgs) {
-  await Promise.all(imgs.map(async (img) => {
-    try {
-      if (img.decode) await img.decode();
-      const { naturalWidth: nw, naturalHeight: nh } = img;
-      if (!nw || !nh || Math.max(nw, nh) <= MAX_PRINT_IMG_PX) return;
-      const k = MAX_PRINT_IMG_PX / Math.max(nw, nh);
-      const c = img.ownerDocument.createElement("canvas");
-      c.width = Math.round(nw * k);
-      c.height = Math.round(nh * k);
-      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      img.src = c.toDataURL("image/png");
-      if (img.decode) await img.decode();
-    } catch { /* tainted or unreadable: print the original */ }
-  }));
+  await Promise.all(
+    imgs.map(async (img) => {
+      try {
+        if (img.decode) await img.decode();
+        const { naturalWidth: nw, naturalHeight: nh } = img;
+        if (!nw || !nh || Math.max(nw, nh) <= MAX_PRINT_IMG_PX) return;
+        const k = MAX_PRINT_IMG_PX / Math.max(nw, nh);
+        const c = img.ownerDocument.createElement("canvas");
+        c.width = Math.round(nw * k);
+        c.height = Math.round(nh * k);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        img.src = c.toDataURL("image/png");
+        if (img.decode) await img.decode();
+      } catch {
+        /* tainted or unreadable: print the original */
+      }
+    }),
+  );
 }
 
 /**
@@ -62,9 +64,14 @@ async function shrinkLargeImages(imgs) {
 export function writeAndPrint(w, html, { timeoutMs = 5000 } = {}) {
   if (!w || w.closed) return;
   if (/data-print-letterhead-top\s*=/i.test(html)) {
-    import("./exportUtils").then(({ prepareLetterheadPrint }) => prepareLetterheadPrint(html))
-      .then(prepared => writeAndPrint(w, prepared, { timeoutMs }))
-      .catch(() => { if (!w.closed) w.document.body.textContent = "This document could not fit the letterhead area. Adjust the template or shorten an oversized row and retry."; });
+    import("./exportUtils")
+      .then(({ prepareLetterheadPrint }) => prepareLetterheadPrint(html))
+      .then((prepared) => writeAndPrint(w, prepared, { timeoutMs }))
+      .catch(() => {
+        if (!w.closed)
+          w.document.body.textContent =
+            "This document could not fit the letterhead area. Adjust the template or shorten an oversized row and retry.";
+      });
     return;
   }
   html = withPrintCss(html);
@@ -84,9 +91,17 @@ export function writeAndPrint(w, html, { timeoutMs = 5000 } = {}) {
   if (pending.length === 0) {
     // `complete` can be true while a large image (the stamp) is only partly
     // decoded; printing then rasterises its top half. Wait for decode().
-    if (imgs.length === 0) { triggerPrint(); return; }
+    if (imgs.length === 0) {
+      triggerPrint();
+      return;
+    }
     let done = false;
-    const go = () => { if (!done) { done = true; triggerPrint(); } };
+    const go = () => {
+      if (!done) {
+        done = true;
+        triggerPrint();
+      }
+    };
     shrinkLargeImages(imgs).then(go);
     w.setTimeout(go, timeoutMs);
     return;
@@ -120,16 +135,23 @@ export function writeAndPrint(w, html, { timeoutMs = 5000 } = {}) {
  */
 export function printWhenImagesReady(w, { timeoutMs = 20000 } = {}) {
   const imgs = Array.from(w.document.images || []);
-  const loaded = Promise.all(imgs.map((img) => (
-    img.complete && img.naturalHeight !== 0
-      ? Promise.resolve()
-      : new Promise((resolve) => {
-          img.addEventListener("load", resolve, { once: true });
-          img.addEventListener("error", resolve, { once: true });
-        })
-  ))).then(() => shrinkLargeImages(imgs));
+  const loaded = Promise.all(
+    imgs.map((img) =>
+      img.complete && img.naturalHeight !== 0
+        ? Promise.resolve()
+        : new Promise((resolve) => {
+            img.addEventListener("load", resolve, { once: true });
+            img.addEventListener("error", resolve, { once: true });
+          }),
+    ),
+  ).then(() => shrinkLargeImages(imgs));
   const safety = new Promise((resolve) => setTimeout(resolve, timeoutMs));
   Promise.race([loaded, safety]).then(() => {
-    try { w.focus(); w.print(); } catch { /* popup already closed */ }
+    try {
+      w.focus();
+      w.print();
+    } catch {
+      /* popup already closed */
+    }
   });
 }

@@ -10,8 +10,10 @@ import axios from "axios";
 // and redirects nowhere.
 
 function apiBase() {
-  if (typeof window !== "undefined" && window._env_ && window._env_.API_URL) return window._env_.API_URL;
-  if (import.meta && import.meta.env && import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  if (typeof window !== "undefined" && window._env_ && window._env_.API_URL)
+    return window._env_.API_URL;
+  if (import.meta && import.meta.env && import.meta.env.VITE_API_URL)
+    return import.meta.env.VITE_API_URL;
   return "/api";
 }
 

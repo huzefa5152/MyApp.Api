@@ -25,13 +25,22 @@ body.admin-ui {
     transform var(--dl-fast) var(--dl-ease-out);
 }
 /* A nudge toward the content says "this goes somewhere". */
-.dl-subitem:hover { transform: translateX(3px); }
+.dl-subitem:hover {
+  transform: translateX(3px);
+}
 .dl-item__icon,
 .dl-group__icon,
-.dl-subitem__icon { transition: transform var(--dl-med) var(--dl-ease-spring), opacity var(--dl-fast); }
+.dl-subitem__icon {
+  transition:
+    transform var(--dl-med) var(--dl-ease-spring),
+    opacity var(--dl-fast);
+}
 .dl-item:hover .dl-item__icon,
 .dl-group__header:hover .dl-group__icon,
-.dl-subitem:hover .dl-subitem__icon { transform: scale(1.12); opacity: 1; }
+.dl-subitem:hover .dl-subitem__icon {
+  transform: scale(1.12);
+  opacity: 1;
+}
 
 /* The active marks grow in rather than appearing. */
 .dl-item--active::before,
@@ -39,28 +48,53 @@ body.admin-ui {
   animation: dlBarIn var(--dl-med) var(--dl-ease-out) both;
   transform-origin: center;
 }
-.dl-subitem--active::before { animation: dlDotIn var(--dl-med) var(--dl-ease-spring) both; }
+.dl-subitem--active::before {
+  animation: dlDotIn var(--dl-med) var(--dl-ease-spring) both;
+}
 
 /* Opening a group cascades its links in. */
 .dl-group--open > .dl-group__body .dl-subitem {
   animation: dlSubIn var(--dl-med) var(--dl-ease-out) backwards;
 }
-.dl-group--open > .dl-group__body .dl-subitem:nth-child(2) { animation-delay: 20ms; }
-.dl-group--open > .dl-group__body .dl-subitem:nth-child(3) { animation-delay: 40ms; }
-.dl-group--open > .dl-group__body .dl-subitem:nth-child(4) { animation-delay: 60ms; }
-.dl-group--open > .dl-group__body .dl-subitem:nth-child(5) { animation-delay: 80ms; }
-.dl-group--open > .dl-group__body .dl-subitem:nth-child(6) { animation-delay: 100ms; }
-.dl-group--open > .dl-group__body .dl-subitem:nth-child(n+7) { animation-delay: 120ms; }
+.dl-group--open > .dl-group__body .dl-subitem:nth-child(2) {
+  animation-delay: 20ms;
+}
+.dl-group--open > .dl-group__body .dl-subitem:nth-child(3) {
+  animation-delay: 40ms;
+}
+.dl-group--open > .dl-group__body .dl-subitem:nth-child(4) {
+  animation-delay: 60ms;
+}
+.dl-group--open > .dl-group__body .dl-subitem:nth-child(5) {
+  animation-delay: 80ms;
+}
+.dl-group--open > .dl-group__body .dl-subitem:nth-child(6) {
+  animation-delay: 100ms;
+}
+.dl-group--open > .dl-group__body .dl-subitem:nth-child(n + 7) {
+  animation-delay: 120ms;
+}
 
-.dl-group__chevron { transition: transform var(--dl-med) var(--dl-ease-spring) !important; }
-.dl-group__body { transition: grid-template-rows var(--dl-slow) var(--dl-ease-out) !important; }
+.dl-group__chevron {
+  transition: transform var(--dl-med) var(--dl-ease-spring) !important;
+}
+.dl-group__body {
+  transition: grid-template-rows var(--dl-slow) var(--dl-ease-out) !important;
+}
 
 /* Mobile drawer: a decelerating slide, the overlay fades with it. */
-.dl-sidebar { transition: transform var(--dl-slow) var(--dl-ease-out) !important; }
+.dl-sidebar {
+  transition: transform var(--dl-slow) var(--dl-ease-out) !important;
+}
 
 /* Top bar: the user menu drops in instead of popping. */
-.dl-user-menu { animation: dlDropIn var(--dl-med) var(--dl-ease-out) both; transform-origin: top right; }
-.dl-topbar__user-arrow { transition: transform var(--dl-med) var(--dl-ease-spring); }
+.dl-user-menu {
+  animation: dlDropIn var(--dl-med) var(--dl-ease-out) both;
+  transform-origin: top right;
+}
+.dl-topbar__user-arrow {
+  transition: transform var(--dl-med) var(--dl-ease-spring);
+}
 
 /* ---------- Controls ---------- */
 /* Press feedback. Disabled controls do not move: nothing is happening. */
@@ -74,10 +108,18 @@ body.admin-ui {
   outline-offset: 2px;
 }
 /* Inputs show focus with a soft ring rather than only a border colour. */
-:where(body.admin-ui) :is(input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea) {
-  transition: border-color var(--dl-fast) var(--dl-ease-out), box-shadow var(--dl-fast) var(--dl-ease-out);
+:where(body.admin-ui)
+  :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+  transition:
+    border-color var(--dl-fast) var(--dl-ease-out),
+    box-shadow var(--dl-fast) var(--dl-ease-out);
 }
-:where(body.admin-ui) :is(input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea):focus-visible {
+:where(body.admin-ui)
+  :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    select,
+    textarea
+  ):focus-visible {
   outline: none;
   border-color: var(--dl-focus);
   box-shadow: 0 0 0 3px rgba(13, 71, 161, 0.14);
@@ -86,18 +128,74 @@ body.admin-ui {
 /* ---------- Dialogs ---------- */
 /* Used by theme.js formStyles.backdrop / .modal, so every shared dialog
    gets the same entrance: the page dims, the panel rises into place. */
-@keyframes dlBackdropIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dlBackdropIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
 @keyframes dlModalIn {
-  from { opacity: 0; transform: translateY(12px) scale(0.98); }
-  to   { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* ---------- Keyframes ---------- */
-@keyframes dlBarIn  { from { transform: scaleY(0); opacity: 0; } to { transform: scaleY(1); opacity: 1; } }
-@keyframes dlDotIn  { from { transform: translateY(-50%) scale(0); } to { transform: translateY(-50%) scale(1); } }
-@keyframes dlSubIn  { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
-@keyframes dlDropIn { from { opacity: 0; transform: translateY(-6px) scale(0.97); } to { opacity: 1; transform: none; } }
-@keyframes dlFadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes dlBarIn {
+  from {
+    transform: scaleY(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+@keyframes dlDotIn {
+  from {
+    transform: translateY(-50%) scale(0);
+  }
+  to {
+    transform: translateY(-50%) scale(1);
+  }
+}
+@keyframes dlSubIn {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes dlDropIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes dlFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
 
 /* ---------- Reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
@@ -111,36 +209,71 @@ body.admin-ui {
 }
 
 /* ---------- CardActions menu ---------- */
-.card-actions-menu { animation: dlDropIn var(--dl-med) var(--dl-ease-out) both; transform-origin: top right; }
-.card-actions-menu--up { transform-origin: bottom right; }
-.card-actions-more { transition: background-color var(--dl-fast), border-color var(--dl-fast), color var(--dl-fast); }
-.card-actions-more:hover { border-color: #b8c4d4 !important; color: #1a2332 !important; }
+.card-actions-menu {
+  animation: dlDropIn var(--dl-med) var(--dl-ease-out) both;
+  transform-origin: top right;
+}
+.card-actions-menu--up {
+  transform-origin: bottom right;
+}
+.card-actions-more {
+  transition:
+    background-color var(--dl-fast),
+    border-color var(--dl-fast),
+    color var(--dl-fast);
+}
+.card-actions-more:hover {
+  border-color: #b8c4d4 !important;
+  color: #1a2332 !important;
+}
 /* Sized to sit among the small action chips with a mouse; a full 44px target
    on a touch screen. */
 @media (pointer: coarse) {
-  .card-actions-more { width: 44px !important; height: 44px !important; }
+  .card-actions-more {
+    width: 44px !important;
+    height: 44px !important;
+  }
 }
 
 /* Item-row Copy (CopyLineButton): a full, square tap target on a touch
    screen or a phone-width window (where the admin already makes buttons 44px tall). */
 @media (pointer: coarse), (max-width: 600px) {
-  .copy-line-btn { width: 44px !important; height: 44px !important; }
+  .copy-line-btn {
+    width: 44px !important;
+    height: 44px !important;
+  }
 }
 
 /* Document lines pill beside a page title: a full tap target on touch screens. */
 @media (pointer: coarse) {
-  .doc-lines-pill { min-height: 44px !important; padding: 0 14px !important; }
+  .doc-lines-pill {
+    min-height: 44px !important;
+    padding: 0 14px !important;
+  }
 }
 
 /* On a phone the pill would squeeze the page title; it drops onto its own
    short line beneath the title instead, so the title keeps the full width. */
 @media (max-width: 600px) {
-  .dl-main div:has(> .doc-lines-pill) { flex-wrap: wrap; row-gap: 4px; }
+  .dl-main div:has(> .doc-lines-pill) {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
   /* The title text shrinks beside its icon (never drops below it), so only the
      pill moves to the next line. */
-  .dl-main div:has(> .doc-lines-pill) > :nth-child(2) { flex: 1 1 0; min-width: 0; }
+  .dl-main div:has(> .doc-lines-pill) > :nth-child(2) {
+    flex: 1 1 0;
+    min-width: 0;
+  }
   /* A zero-height break, ordered between the title and the pill, starts the
      pill's own line while the pill keeps its natural width. */
-  .dl-main div:has(> .doc-lines-pill)::after { content: ""; order: 2; flex-basis: 100%; height: 0; }
-  .doc-lines-pill { order: 3; }
+  .dl-main div:has(> .doc-lines-pill)::after {
+    content: "";
+    order: 2;
+    flex-basis: 100%;
+    height: 0;
+  }
+  .doc-lines-pill {
+    order: 3;
+  }
 }
