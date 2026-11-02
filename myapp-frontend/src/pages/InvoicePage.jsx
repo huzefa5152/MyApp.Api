@@ -1,6 +1,6 @@
 import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
 import CardActions from "../Components/CardActions";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import useQueryAction from "../hooks/useQueryAction";
 import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments, MdUndo, MdPostAdd, MdCopyAll, MdDownload, MdAddLink, MdLinkOff } from "react-icons/md";
@@ -367,7 +367,11 @@ export default function InvoicePage({ mode = "invoices" }) {
     }
   }, [selectedCompany]);
 
+  // Re-fetch when filters or page change. Not on mount: the company effect above
+  // already loads page 1, and running both fetched the list twice on every open.
+  const filtersMountedRef = useRef(false);
   useEffect(() => {
+    if (!filtersMountedRef.current) { filtersMountedRef.current = true; return; }
     if (selectedCompany) fetchInvoices(selectedCompany.id, page);
   }, [page, size, search, clientFilter, divisionFilter, dateFrom, dateTo]);
 
