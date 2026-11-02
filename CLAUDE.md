@@ -353,6 +353,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
 | Line arithmetic — qty / unit price / line total derive each other (offline) | `node scripts/test_line_amount.mjs` | `35 passed, 0 failed` |
 | Grouped quantity spread — no bill line left at zero, fractions only where the unit allows (offline) | `node scripts/test_group_quantity_split.mjs` | `27 passed, 0 failed` |
+| Filing unit — the unit the consultant picks (KG or Packs on HS 3004.9099) is the unit View FBR files; a catalog name + id that disagree file the named unit (bill 3985) | `python scripts/test_filing_unit_choice.py --base <url> --db <MyApp_Trader_Test_ db>` | `20/20 filing unit checks passed` |
 | Invoice exact line total — the consultant's adjustment re-sums to the bill | `python scripts/test_invoice_exact_line_total.py` | `73/73 checks` |
 | Every screen is behind a permission (offline) | `node scripts/test_route_permissions.mjs` | `147 passed, 0 failed` |
 | Product editions + the no-escalation rule, proven end to end | `python scripts/test_edition_roles.py` | `80/80 checks` |
