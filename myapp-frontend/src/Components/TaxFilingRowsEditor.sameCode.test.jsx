@@ -29,20 +29,17 @@ it("a single original line shows what was billed and asks only for the code and 
   expect(screen.queryByRole("checkbox")).toBeNull();
   expect(screen.queryByText("Same HS code on several lines")).toBeNull();
 });
-// An original-lines company gives each bill line its own HS code (2026-10-31): no selecting lines for
-// one shared code, and a code already on one line is refused on another.
+// An original-lines company may give several bill lines one HS code: they file as one FBR row (the printed
+// invoice still shows each line), so the editor offers the same selection as a grouping company.
 const withCodes = (original, codes) => { const p = payload(codes.map(() => 2)); p.data.bill.taxInvoiceUseOriginalBillLines = original;
   p.data.rows = p.data.rows.map((r, i) => ({ ...r, hsCode: codes[i], uom: "Pcs" })); return p; };
-it("original lines: no line selection, and a code already on one line is refused on another", async () => {
+it("original lines: lines may share one code, with line selection and no repeat refusal", async () => {
   getTaxFiling.mockResolvedValueOnce(withCodes(true, ["8425.1100", "8204.1100", "8425.1100"]));
   render(<TaxFilingRowsEditor invoiceId={7} onClose={() => {}} />);
   await screen.findByTestId("hs-0");
-  expect(screen.queryByRole("checkbox")).toBeNull();
-  expect(screen.queryByRole("button", { name: /Apply to ticked/ })).toBeNull();
-  const alerts = screen.getAllByRole("alert");
-  expect(alerts).toHaveLength(1);
-  expect(alerts[0].textContent).toBe("HS code 8425.1100 is already in use on bill line 1. Each bill line needs its own HS code.");
-  expect(screen.getByRole("button", { name: "Save filing rows & complete review" }).disabled).toBe(true);
+  expect(screen.getAllByRole("checkbox")).toHaveLength(3);
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.getByRole("button", { name: "Save filing rows & complete review" }).disabled).toBe(false);
 });
 it("original lines: distinct codes save", async () => {
   getTaxFiling.mockResolvedValueOnce(withCodes(true, ["8425.1100", "8204.1100", "7318.1590"]));

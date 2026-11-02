@@ -123,10 +123,6 @@ public partial class InvoiceService
         if (dto.Version != TaxFilingProjection.EditVersion(bill))
             throw new InvalidOperationException("The bill or filing rows changed while you were editing. Reload and review the latest values.");
         TaxFilingProjection.ValidateCoverage(bill, dto.Rows);
-        // A company that prints its original bill lines files each line as its own row: the screen offers no
-        // Combine and MCP may not either. A row merged before that rule may stay until someone separates it.
-        if (OriginalLinesOnly(bill) && TaxFilingProjection.MergedRow(TaxFilingProjection.Plan(bill)?.Rows, dto.Rows) is { } merged)
-            throw new InvalidOperationException(merged);
         if (!allowNumericalChanges) {
             var baseline = TaxFilingProjection.Plan(bill)?.Rows ?? TaxFilingProjection.InitialRows(bill, perLine: OriginalLinesOnly(bill));
             var references = new List<TaxFilingRowDto>();
@@ -207,16 +203,12 @@ public partial class InvoiceService
             if (row.SaleType.Contains("3rd", StringComparison.OrdinalIgnoreCase) && row.RetailPrice <= 0)
                 throw new InvalidOperationException("Third-schedule goods need the original retail tax base. Keep this row separate and complete the bill's retail details first.");
         }
-        // An original-lines company gives each bill line its own HS code: a code may be on one line only.
-        if (OriginalLinesOnly(bill) && TaxFilingProjection.RepeatedHsCode(bill.Items, dto.Rows) is { } repeated)
-            throw new InvalidOperationException(repeated);
         // Two rows FBR cannot tell apart are refused here, where the consultant
         // can merge them, not at FBR (see FbrDuplicateItems). The description is
         // the one FBR receives: blank when the company omits it.
         var duplicate = FbrDuplicateItems.Message(dto.Rows.Select((r, n) => new FbrDuplicateItems.Item(
             n + 1, r.HSCode, bill.Company?.FbrOmitProductDescription == true ? "" : r.Description,
-            r.SaleType, r.FbrUOMId is int uom ? uom.ToString() : r.UOM, r.SroScheduleNo, r.SroItemSerialNo)),
-            canMerge: !OriginalLinesOnly(bill));
+            r.SaleType, r.FbrUOMId is int uom ? uom.ToString() : r.UOM, r.SroScheduleNo, r.SroItemSerialNo)));
         if (duplicate != null) throw new InvalidOperationException(duplicate);
         var taxBase = dto.Rows.Sum(r => r.SaleType!.Contains("3rd", StringComparison.OrdinalIgnoreCase)
             ? r.RetailPrice ?? 0m : r.ValueExclTax);

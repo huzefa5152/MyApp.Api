@@ -96,7 +96,7 @@ public partial class McpController
                 printsOriginalBillLines = editor.Bill.TaxInvoiceUseOriginalBillLines,
                 omitsFbrProductDescription = editor.Bill.FbrOmitProductDescription,
                 rows = editor.Bill.TaxInvoiceUseOriginalBillLines
-                    ? "One row per bill line; never combine lines. Several lines may share one item: FBR receives each line's own bill description."
+                    ? "Rows may combine bill lines that share an HS code, unit and tax treatment; the printed invoice keeps each line. FBR receives the row description (default: the item name)."
                     : "Rows may combine bill lines that share an item, unit and tax treatment. FBR receives the row description (default: the item name).",
             },
             lines = editor.Bill.Items.Select(i => new { i.Id, i.Description, i.Quantity, i.UOM, i.UnitPrice, i.LineTotal, i.ItemTypeId, i.ItemTypeName, i.HSCode }),
@@ -159,14 +159,6 @@ public partial class McpController
         if (types.Count != typeIds.Count) throw new ToolError("An item is outside this company's catalog.");
         if (types.Values.FirstOrDefault(i => string.IsNullOrWhiteSpace(i.HSCode) || i.IsHsCodePartial) is { } partial)
             throw new ToolError($"Item \"{partial.Name}\" has no complete HS code. Classify it first (prepare_item_type).");
-        // The save's own rules for a company that prints its original lines, answered now with their reason.
-        if (editor.Bill.TaxInvoiceUseOriginalBillLines)
-        {
-            var problem = TaxFilingProjection.MergedRow(editor.HasSavedRows ? editor.Rows : null, rows)
-                ?? TaxFilingProjection.RepeatedHsCode(editor.Bill.Items.Select(i => new MyApp.Api.Models.InvoiceItem { Id = i.Id, Description = i.Description }),
-                    rows.Select(r => new TaxFilingRowDto { SourceLineIds = r.SourceLineIds, HSCode = types[r.ItemTypeId!.Value].HSCode }));
-            if (problem != null) throw new ToolError(problem);
-        }
 
         var payload = new
         {
