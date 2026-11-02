@@ -262,24 +262,30 @@ builder.Services.AddAuthentication(options =>
             }
 
             var db = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
-            var currentStamp = await db.Users.AsNoTracking()
-                .Where(u => u.Id == userId).Select(u => u.SecurityStamp).FirstOrDefaultAsync();
-            if (currentStamp == null || !string.Equals(currentStamp, stamp, StringComparison.Ordinal))
+            var explicitSessionId = principal.FindFirstValue("sid");
+            var jti = principal.FindFirstValue(JwtRegisteredClaimNames.Jti);
+            var sessionId = explicitSessionId ?? "legacy:" + jti;
+            // Stamp and session in one round trip: this runs before every API call. The checks
+            // below keep their order (revoked stamp, then missing identity, then the session).
+            var auth = await db.Users.AsNoTracking().Where(u => u.Id == userId)
+                .Select(u => new
+                {
+                    u.SecurityStamp,
+                    Session = db.UserSessions.Where(s => s.Id == sessionId)
+                        .Select(s => new { s.UserId, s.SecurityStamp, s.IsRevoked, s.ExpiresAt, s.LastSeenAt }).FirstOrDefault(),
+                }).FirstOrDefaultAsync();
+            if (auth?.SecurityStamp == null || !string.Equals(auth.SecurityStamp, stamp, StringComparison.Ordinal))
             {
                 context.Fail("Token has been revoked");
                 return;
             }
-            var explicitSessionId = principal.FindFirstValue("sid");
-            var jti = principal.FindFirstValue(JwtRegisteredClaimNames.Jti);
             if (explicitSessionId == null && string.IsNullOrWhiteSpace(jti))
             {
                 context.Fail("Missing session identity");
                 return;
             }
-            var sessionId = explicitSessionId ?? "legacy:" + jti;
             var now = DateTime.UtcNow;
-            var session = await db.UserSessions.AsNoTracking().Where(s => s.Id == sessionId)
-                .Select(s => new { s.UserId, s.SecurityStamp, s.IsRevoked, s.ExpiresAt, s.LastSeenAt }).FirstOrDefaultAsync();
+            var session = auth.Session;
             if (session == null && explicitSessionId != null || session != null &&
                 (session.UserId != userId || session.SecurityStamp != stamp || session.IsRevoked || session.ExpiresAt <= now))
             {
