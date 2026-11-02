@@ -46,7 +46,10 @@ namespace MyApp.Api.Repositories.Implementations
             // Three disjoint document groups, each with its own numbering
             // sequence: sale bills (noteType null, default), Debit Notes
             // (9) and Credit Notes (10). A row is never in two lists.
+            // Read-only list: no tracking, and the two collections (lines, challans) load in their
+            // own queries instead of one join that repeats every bill per line per challan.
             var query = _context.Invoices
+                .AsNoTracking().AsSplitQuery()
                 .Include(i => i.Client)
                 .Include(i => i.Items)
                 .Include(i => i.DeliveryChallans)
