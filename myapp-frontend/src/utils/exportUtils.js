@@ -688,7 +688,6 @@ export async function exportToExcel(html, filename, sheetName) {
     const totalPages = Math.ceil(canvas.height / pageCanvasH);
     const rowHeight = 15;
     const totalWidthPx = colCount * colWidth * 7.5;
-    const pageRowSpan = Math.ceil((totalWidthPx * (297 / 210)) / rowHeight);
     let currentRow = 0;
 
     for (let p = 0; p < totalPages; p++) {

@@ -12,8 +12,6 @@ import {
   MdEdit,
   MdDelete,
   MdVisibility,
-  MdChevronLeft,
-  MdChevronRight,
   MdPrint,
   MdPictureAsPdf,
 } from "react-icons/md";
@@ -25,7 +23,6 @@ import {
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { dropdownStyles, cardStyles, cardHover } from "../theme";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
-import PageSizeSelect from "../Components/PageSizeSelect";
 import Pagination from "../Components/Pagination";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";

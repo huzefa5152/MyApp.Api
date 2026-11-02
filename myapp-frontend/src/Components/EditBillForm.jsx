@@ -1015,14 +1015,6 @@ function CommercialBillEditor({
   // Each line then carries its own exactLineTotal, and the SERVER derives the
   // unit price from it (see UpdateInvoiceItemTypeRow.ExactLineTotal) - the
   // price computed here is for display only.
-  // Split a whole group quantity into whole per-line quantities, proportional to
-  // a stable weight, remainder largest-fraction-first. Whole numbers because an
-  // exact line total has to be reproducible as quantity x rate, and the server
-  // refuses a fractional quantity on this path.
-  // The split itself lives in utils/groupQuantitySplit (shared with the plain
-  // Qty editor below, and pinned by scripts/test_group_quantity_split.mjs).
-  const splitWholeQty = (total, weights) => splitGroupQuantity(total, weights).shares;
-
   // Which of a group's lines may carry a fraction. One Item Type can cover a KG
   // line and a Nos line, and the answer belongs to the unit rather than to the
   // group, so it is asked per line and the split honours it (2026-09-23).
@@ -1196,15 +1188,6 @@ function CommercialBillEditor({
       };
     });
   }, [items]);
-
-  // Every line carries an Item Type → the grouped view is a faithful mirror
-  // of the FBR payload. When some lines aren't classified yet the grouped
-  // view still renders (unclassified lines appear as their own rows).
-  const allClassified = items.length > 0 && items.every((it) => !!it.itemTypeId);
-  // Grouping only collapses anything when at least one Item Type spans
-  // multiple lines. If every line is already its own group, grouped and
-  // line views render identically.
-  const groupingCollapses = itemGroups.length < items.length;
 
   // Set a uniform unit price on every line in a group and recompute each
   // line total. Every line in an FBR group ships under one grouped price

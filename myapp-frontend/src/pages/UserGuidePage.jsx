@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { MdSearch, MdMenuBook, MdClose } from "react-icons/md";
-import { colors, formStyles } from "../theme";
+import { colors } from "../theme";
 import { GUIDE_SECTIONS, GUIDE_GROUPS } from "../content/accountingGuide";
 import useIsNarrow from "../hooks/useIsNarrow";
 

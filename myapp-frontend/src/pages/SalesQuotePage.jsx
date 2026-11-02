@@ -9,8 +9,6 @@ import {
   MdAdd,
   MdBusiness,
   MdSearch,
-  MdChevronLeft,
-  MdChevronRight,
   MdPrint,
   MdPictureAsPdf,
   MdEdit,
@@ -46,7 +44,6 @@ import { usePrintTemplates } from "../hooks/usePrintTemplates";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { dropdownStyles } from "../theme";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
-import PageSizeSelect from "../Components/PageSizeSelect";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";

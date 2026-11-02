@@ -26,7 +26,7 @@ import {
   getPermissionTree,
 } from "../api/rbacApi";
 import { useAuth } from "../contexts/AuthContext";
-import { Can, usePermissions } from "../contexts/PermissionsContext";
+import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 // Shared modal baseline — gradient header, blurred backdrop, size tiers,
 // non-movable. See comment in theme.js modalSizes for tier guidance.

@@ -2,22 +2,13 @@ import ListFilters from "../Components/ListFilters";
 import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import RichText from "../Components/RichText";
-import {
-  MdHistory,
-  MdBusiness,
-  MdSearch,
-  MdChevronLeft,
-  MdChevronRight,
-  MdInsights,
-  MdVisibility,
-} from "react-icons/md";
+import { MdHistory, MdBusiness, MdSearch, MdInsights, MdVisibility } from "react-icons/md";
 import { getItemRateHistory } from "../api/invoiceApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getClientsByCompany } from "../api/clientApi";
 import EditBillForm from "../Components/EditBillForm";
 import { dropdownStyles } from "../theme";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
-import PageSizeSelect from "../Components/PageSizeSelect";
 import Pagination from "../Components/Pagination";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";

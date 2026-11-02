@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
-import React from "react";
 import { it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor, cleanup, within } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import StockDashboardPage from "./StockDashboardPage";
 import * as stock from "../api/stockApi";
 import { getItemTypes } from "../api/itemTypeApi";

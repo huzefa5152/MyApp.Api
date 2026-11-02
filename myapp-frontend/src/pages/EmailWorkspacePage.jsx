@@ -14,7 +14,6 @@ import {
   FiFileText,
   FiSave,
   FiPlus,
-  FiDownload,
   FiTrash2,
 } from "react-icons/fi";
 import http from "../api/httpClient";

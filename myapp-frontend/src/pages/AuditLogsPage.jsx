@@ -1,22 +1,12 @@
 import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback } from "react";
-import {
-  MdBugReport,
-  MdWarning,
-  MdInfo,
-  MdSearch,
-  MdChevronLeft,
-  MdChevronRight,
-  MdClose,
-  MdLock,
-} from "react-icons/md";
+import { MdBugReport, MdWarning, MdInfo, MdSearch, MdClose, MdLock } from "react-icons/md";
 import { getAuditLogs, getAuditSummary } from "../api/auditLogApi";
 import { usePermissions } from "../contexts/PermissionsContext";
 // Shared backdrop / modal so this audit-log detail dialog matches every
 // other popup (blurred backdrop, centered, non-movable).
 import { formStyles, modalSizes } from "../theme";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
-import PageSizeSelect from "../Components/PageSizeSelect";
 import Pagination from "../Components/Pagination";
 
 const colors = {
@@ -626,19 +616,3 @@ const thStyle = {
   whiteSpace: "nowrap",
 };
 const tdStyle = { padding: "10px 14px", color: "#1a2332" };
-const pgBtn = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: 32,
-  height: 32,
-  minWidth: 32,
-  flexShrink: 0,
-  borderRadius: 8,
-  border: "1px solid #d0d7e2",
-  background: "#fff",
-  color: "#1a2332",
-  padding: 0,
-  boxShadow: "none",
-  cursor: "pointer",
-};

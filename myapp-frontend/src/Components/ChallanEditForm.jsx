@@ -1,13 +1,12 @@
 import DocumentCopyPicker from "./DocumentCopyPicker";
 import { appendCopiedLines } from "../utils/documentCopy";
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { MdInfo, MdContentCopy } from "react-icons/md";
 import SearchableSelect from "./SearchableSelect";
 import LineItemsEditor from "./LineItemsEditor";
 import { updateChallan } from "../api/challanApi";
 import { getClientsByCompany } from "../api/clientApi";
-import { saveItemFbrDefaults } from "../api/lookupApi";
 import { getAllUnits } from "../api/unitsApi";
 import AttachmentManager from "./AttachmentManager";
 import { formStyles, modalSizes } from "../theme";
@@ -137,25 +136,6 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
       setSite("");
     }
   }, [clientId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Item handlers ──
-  const handleItemPick = (index, picked) => {
-    const next = [...items];
-    if (picked.name) next[index].description = picked.name;
-    if (picked.uom) next[index].unit = picked.uom;
-    setItems(next);
-
-    if (picked.name && (picked.hsCode || picked.saleType || picked.fbrUOMId)) {
-      saveItemFbrDefaults({
-        companyId: challan.companyId,
-        name: picked.name,
-        hsCode: picked.hsCode || null,
-        saleType: picked.saleType || null,
-        fbrUOMId: picked.fbrUOMId || null,
-        uom: picked.uom || null,
-      }).catch(() => {});
-    }
-  };
 
   // ── Preview the status the backend WILL set, so the operator sees the
   //    consequence of clearing the PO before they hit Save ──

@@ -41,26 +41,6 @@ const formatQty = (n) => {
   return num.toLocaleString(undefined, { maximumFractionDigits: 3 });
 };
 
-const SALE_TYPES = [
-  "Goods at standard rate (default)",
-  "Goods at Reduced Rate",
-  "Goods at zero-rate",
-  "Exempt goods",
-  "3rd Schedule Goods",
-  "Services",
-  "Services (FED in ST Mode)",
-  "Goods (FED in ST Mode)",
-  "Steel Melting and re-rolling",
-  "Toll Manufacturing",
-  "Mobile Phones",
-  "Petroleum Products",
-  "Electric Vehicle",
-  "Cement /Concrete Block",
-  "Processing/Conversion of Goods",
-  "Cotton Ginners",
-  "Non-Adjustable Supplies",
-];
-
 /**
  * Item Types = the user's curated FBR item catalog.
  *

@@ -1,5 +1,5 @@
 import RecordsViewport from "../Components/RecordsViewport";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { MdBusiness, MdAdd, MdSearch } from "react-icons/md";
 import CompanyList from "../Components/CompanyList";
 import CompanyForm from "../Components/CompanyForm";
@@ -94,8 +94,6 @@ export default function CompanyPage() {
   const { companies, refreshCompanies } = useCompany();
   const { has } = usePermissions();
   const canCreate = has("companies.manage.create");
-  const canUpdate = has("companies.manage.update");
-  const canDelete = has("companies.manage.delete");
   const [editingCompany, setEditingCompany] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");

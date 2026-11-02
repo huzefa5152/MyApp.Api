@@ -3,10 +3,8 @@ import DocumentCopyPicker from "./DocumentCopyPicker";
 import { appendCopiedLines } from "../utils/documentCopy";
 import { useState, useRef, useEffect } from "react";
 import { notify } from "../utils/notify";
-import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableSelect from "./SearchableSelect";
 import LineItemsEditor from "./LineItemsEditor";
-import { saveItemFbrDefaults } from "../api/lookupApi";
 import { getAllUnits } from "../api/unitsApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getOpenSalesOrdersByCompany } from "../api/salesOrderApi";
@@ -127,29 +125,6 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
         unit: i.unit,
       }));
     setItems(lines.length ? lines : [{ description: "", quantity: 1, unit: "" }]);
-  };
-
-  // Fires when user picks from the SmartItemAutocomplete dropdown
-  // (either a SAVED local item or an FBR catalog entry).
-  // Fills description + unit in one shot, and also remembers the HS code /
-  // sale type per description so the bill can auto-fill them later.
-  const handleItemPick = (index, picked) => {
-    const newItems = [...items];
-    if (picked.name) newItems[index].description = picked.name;
-    if (picked.uom) newItems[index].unit = picked.uom;
-    setItems(newItems);
-
-    // Remember FBR defaults for this description so future bills auto-fill
-    if (picked.name && (picked.hsCode || picked.saleType || picked.fbrUOMId)) {
-      saveItemFbrDefaults({
-        companyId: companyId,
-        name: picked.name,
-        hsCode: picked.hsCode || null,
-        saleType: picked.saleType || null,
-        fbrUOMId: picked.fbrUOMId || null,
-        uom: picked.uom || null,
-      }).catch(() => {});
-    }
   };
 
   const handleSubmit = async (e) => {

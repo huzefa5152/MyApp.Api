@@ -6,7 +6,6 @@ import {
   MdContentCopy,
   MdCheck,
   MdDelete,
-  MdBusiness,
   MdWarning,
   MdOpenInNew,
   MdToggleOn,

@@ -18,7 +18,6 @@ import {
   readWorkbook,
   getWorkbookFormats,
   saveWorkbookFormat,
-  linkImportSource,
   checkImportDuplicate,
   ensureLookups,
 } from "../api/poImportApi";
@@ -111,7 +110,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
   });
   const [showFormatSetup, setShowFormatSetup] = useState(false);
   const [warningsReviewed, setWarningsReviewed] = useState(false);
-  const [archiveId, setArchiveId] = useState(null);
+  const [, setArchiveId] = useState(null);
   const [importWarnings, setImportWarnings] = useState([]);
   const [gstRate, setGstRate] = useState(18);
   const [parsing, setParsing] = useState(false);

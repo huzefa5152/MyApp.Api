@@ -31,7 +31,7 @@ import { writeAndPrint } from "../utils/printDocument";
 import { mergeTemplate } from "../utils/templateEngine";
 import { exportToPdf } from "../utils/exportUtils";
 import { defaultDebitNoteTemplate } from "../utils/purchaseNoteDocTemplates";
-import { formStyles, modalSizes, dropdownStyles, cardStyles } from "../theme";
+import { formStyles, modalSizes, cardStyles } from "../theme";
 
 const colors = {
   blue: "#0d47a1",

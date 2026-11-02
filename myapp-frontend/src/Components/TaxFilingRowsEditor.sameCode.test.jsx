@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
-import React from "react";
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import TaxFilingRowsEditor from "./TaxFilingRowsEditor";
 import { getTaxFiling } from "../api/invoiceApi";
 vi.mock("../api/invoiceApi", () => ({ getTaxFiling: vi.fn(), saveTaxFiling: vi.fn() }));

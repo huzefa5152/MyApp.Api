@@ -1,28 +1,25 @@
 // @vitest-environment jsdom
-import React from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import TaxFilingRowsEditor from "./TaxFilingRowsEditor";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getTaxFiling } from "../api/invoiceApi";
 vi.mock("../api/invoiceApi", () => ({
-  getTaxFiling: vi
-    .fn()
-    .mockResolvedValue({
-      data: {
-        bill: { companyId: 1, invoiceNumber: 7, isEditable: true, subtotal: 100, items: [] },
-        rows: [
-          {
-            sourceLineIds: [],
-            quantity: 2,
-            valueExclTax: 100,
-            uom: "Pcs",
-            description: "Sample supply",
-          },
-        ],
-        initialRows: [],
-      },
-    }),
+  getTaxFiling: vi.fn().mockResolvedValue({
+    data: {
+      bill: { companyId: 1, invoiceNumber: 7, isEditable: true, subtotal: 100, items: [] },
+      rows: [
+        {
+          sourceLineIds: [],
+          quantity: 2,
+          valueExclTax: 100,
+          uom: "Pcs",
+          description: "Sample supply",
+        },
+      ],
+      initialRows: [],
+    },
+  }),
   saveTaxFiling: vi.fn(),
 }));
 vi.mock("../api/itemTypeApi", () => ({ getItemTypes: vi.fn().mockResolvedValue({ data: [] }) }));

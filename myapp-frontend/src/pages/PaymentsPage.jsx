@@ -3,8 +3,6 @@ import { useState, useEffect, useCallback } from "react";
 import {
   MdAdd,
   MdDelete,
-  MdChevronLeft,
-  MdChevronRight,
   MdReceiptLong,
   MdPayments,
   MdSearch,
@@ -26,7 +24,6 @@ import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
 import { colors, dropdownStyles } from "../theme";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
-import PageSizeSelect from "../Components/PageSizeSelect";
 import Pagination from "../Components/Pagination";
 import StatusBadge from "../Components/StatusBadge";
 import PaymentForm from "../Components/PaymentForm";

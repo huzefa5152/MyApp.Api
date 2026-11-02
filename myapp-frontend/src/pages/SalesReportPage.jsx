@@ -1258,16 +1258,6 @@ function Field({ label, icon, children }) {
   );
 }
 
-const th = {
-  padding: "6px 10px",
-  fontSize: "0.72rem",
-  textTransform: "uppercase",
-  letterSpacing: "0.02em",
-  color: colors.textSecondary,
-  whiteSpace: "nowrap",
-};
-const td = { padding: "6px 10px", color: colors.textPrimary, verticalAlign: "top" };
-const tdR = { ...td, textAlign: "right", whiteSpace: "nowrap" };
 const clamp2 = {
   display: "-webkit-box",
   WebkitLineClamp: 2,

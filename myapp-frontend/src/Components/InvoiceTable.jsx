@@ -9,8 +9,6 @@ import {
   MdDescription,
   MdCloudUpload,
   MdCheckCircle,
-  MdHourglassEmpty,
-  MdError,
   MdBlock,
   MdRestore,
   MdEdit,

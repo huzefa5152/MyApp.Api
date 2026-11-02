@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import React from "react";
 import { afterEach, it, expect, vi } from "vitest";
 import { cleanup, render, screen, fireEvent } from "@testing-library/react";
 import RecordsViewport from "./RecordsViewport";

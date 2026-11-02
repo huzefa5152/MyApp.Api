@@ -7,18 +7,9 @@ import DocumentLinesNavigation, {
   DocumentLinesHeaderLink,
 } from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { renderRichTextHtml } from "../utils/richText";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import useQueryAction from "../hooks/useQueryAction";
-import {
-  MdDescription,
-  MdAdd,
-  MdBusiness,
-  MdSearch,
-  MdChevronLeft,
-  MdChevronRight,
-  MdUploadFile,
-} from "react-icons/md";
+import { MdDescription, MdAdd, MdBusiness, MdSearch, MdUploadFile } from "react-icons/md";
 import ChallanList from "../Components/ChallanList";
 import ChallanTable from "../Components/ChallanTable";
 import ChallanForm from "../Components/ChallanForm";
@@ -52,7 +43,6 @@ import { exportToPdf, prepareLetterheadPrint } from "../utils/exportUtils";
 import { saveAs } from "file-saver";
 import { dropdownStyles } from "../theme";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
-import PageSizeSelect from "../Components/PageSizeSelect";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
@@ -84,8 +74,6 @@ export default function ChallanPage() {
   const { has } = usePermissions();
   const canCreate = has("challans.manage.create");
   const canUpdate = has("challans.manage.update");
-  const canDelete = has("challans.manage.delete");
-  const canPrint = has("challans.print.view");
   // Client-filter dropdown calls GET /api/clients/company/{id} which is
   // gated by clients.manage.view. View-only roles (e.g. tax consultant
   // with just challans.list.view) would 403 on that call AND see an
@@ -918,156 +906,6 @@ export default function ChallanPage() {
       </div>
     </DocumentLinesNavigation>
   );
-}
-
-function buildChallanPrintHtml(data) {
-  const MIN_ROWS = 15;
-  const nl2br = (s) => (s || "").replace(/\n/g, "<br>");
-  const fmtDate = (d) => {
-    if (!d) return "";
-    const dt = new Date(d);
-    const months = [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec",
-    ];
-    const dd = String(dt.getDate()).padStart(2, "0");
-    const mmm = months[dt.getMonth()];
-    const yy = String(dt.getFullYear()).slice(-2);
-    return `${dd}-${mmm}-${yy}`;
-  };
-
-  // Build item rows
-  let itemRows = data.items
-    .map(
-      (item) =>
-        `<tr>
-      <td class="cell qty">${item.quantity}</td>
-      <td class="cell item">${renderRichTextHtml(item.description)}</td>
-    </tr>`,
-    )
-    .join("");
-
-  // Pad with empty rows to reach minimum
-  const emptyCount = Math.max(0, MIN_ROWS - data.items.length);
-  for (let i = 0; i < emptyCount; i++) {
-    itemRows += `<tr><td class="cell qty">&nbsp;</td><td class="cell item">&nbsp;</td></tr>`;
-  }
-
-  const date = fmtDate(data.deliveryDate);
-
-  return `<!DOCTYPE html><html><head><title>DC #${data.challanNumber}</title>
-<style>
-  @media print {
-    @page { size: A4; margin: 10mm 0 0 0; }
-    @page:first { margin: 0; }
-    html, body { height: 100%; margin: 0; }
-    .footer-section { page-break-inside: avoid; }
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-      color-adjust: exact !important;
-  }
-  html, body { height: 100%; }
-  body { font-family: "Times New Roman", Times, serif; font-size: 16px; color: #000;
-         display: flex; flex-direction: column; min-height: 100vh;
-         padding: 10mm 12mm; }
-  .main-content { flex: 1; }
-  .footer-section { margin-top: auto; }
-
-  /* ---- Two-column header ---- */
-  .header-grid { display: flex; justify-content: space-between; }
-  .header-left { flex: 1; }
-  .header-right { text-align: right; white-space: nowrap; padding-left: 20px; }
-
-  /* Left: logo + name row */
-  .brand-row { display: flex; align-items: center; gap: 14px; }
-  .brand-row img { height: 75px; }
-  .company-name { font-size: 38px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; }
-  .company-address { font-size: 11.5px; color: #333; margin-top: 2px; line-height: 1.35; }
-  .company-contact { font-size: 12.5px; margin-top: 6px; line-height: 1.4; }
-
-  /* Right: DC label, date, DC number */
-  .dc-label { font-size: 22px; font-weight: 700; color: #1a5276; }
-  .dc-date { font-size: 17px; font-weight: 700; margin-top: 6px; }
-  .dc-number { font-size: 28px; font-weight: 900; margin-top: 14px; }
-
-  /* ---- Info lines (below header) ---- */
-  .info-section { margin-top: 18px; }
-  .info-line { font-size: 18px; margin-bottom: 5px; }
-  .info-line strong { font-weight: 700; }
-  .info-line .value { font-size: 20px; font-weight: 900; margin-left: 14px; }
-
-  /* ---- Table ---- */
-  table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-  thead { display: table-row-group; }
-  th { background-color: #2c3e50 !important; color: #fff !important; font-weight: 700; font-size: 12px; text-transform: uppercase; padding: 6px 14px; border: 1px solid #2c3e50; }
-  th.qty-head { width: 130px; text-align: center; }
-  .cell { border: 1px solid #888; padding: 8px 14px; font-size: 15px; height: 34px; }
-  .cell.qty { text-align: center; width: 130px; }
-  .cell.item { text-align: left; }
-  tbody tr:nth-child(odd) td { background-color: #ffffff !important; }
-  tbody tr:nth-child(even) td { background-color: #d9d9d9 !important; }
-
-  /* ---- Footer ---- */
-  .thank-you { text-align: center; font-size: 22px; font-weight: 700; font-style: italic; margin-top: 20px; }
-  .sig-row { display: flex; justify-content: space-between; margin-top: 50px; padding: 0 40px; }
-  .sig-block { text-align: center; }
-  .sig-block .line { width: 220px; border-top: 1.5px solid #4a90b8; margin-bottom: 1px; }
-  .sig-block .label { font-size: 13px; font-weight: normal; color: #000; }
-</style></head><body>
-
-<div class="main-content">
-<!-- Two-column header -->
-<div class="header-grid">
-  <div class="header-left">
-    <div class="brand-row">
-      ${data.companyLogoPath ? `<img src="${data.companyLogoPath}" />` : ""}
-      <span class="company-name">${data.companyBrandName}</span>
-    </div>
-    ${data.companyAddress ? `<div class="company-address">${nl2br(data.companyAddress)}</div>` : ""}
-    ${data.companyPhone ? `<div class="company-contact">${nl2br(data.companyPhone)}</div>` : ""}
-  </div>
-  <div class="header-right">
-    <div class="dc-label">Delivery Challan</div>
-    <div class="dc-date">${date}</div>
-    <div class="dc-number">DC # ${data.challanNumber}</div>
-  </div>
-</div>
-
-<!-- Info -->
-<div class="info-section">
-  <div class="info-line"><strong>Messers:</strong> <span class="value">${data.clientName}${data.clientAddress ? `, ${data.clientAddress}` : ""}</span></div>
-  <div class="info-line"><strong>Purchase Order:</strong> <span class="value">${data.poNumber || "\u2014"}</span></div>
-</div>
-
-<!-- Items Table -->
-<table>
-  <thead><tr><th class="qty-head">Quantity</th><th>Item</th></tr></thead>
-  <tbody>${itemRows}</tbody>
-</table>
-</div>
-
-<!-- Footer -->
-<div class="footer-section">
-  <div class="thank-you">Thank you for your business!</div>
-  <div class="sig-row">
-    <div class="sig-block"><div class="line"></div><div class="label">Signature and Stamp</div></div>
-    <div class="sig-block"><div class="line"></div><div class="label">Receiver Signature and Stamp</div></div>
-  </div>
-</div>
-
-</body></html>`;
 }
 
 const styles = {

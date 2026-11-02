@@ -1,15 +1,7 @@
 import BillTaxTreatmentField from "./BillTaxTreatmentField";
 import { defaultFurtherTaxRate } from "../utils/furtherTax";
 import { useState, useEffect, useMemo, useRef } from "react";
-import {
-  MdCheck,
-  MdInfo,
-  MdLock,
-  MdAdd,
-  MdPersonAdd,
-  MdExpandMore,
-  MdExpandLess,
-} from "react-icons/md";
+import { MdCheck, MdInfo, MdAdd, MdPersonAdd, MdExpandMore, MdExpandLess } from "react-icons/md";
 import { getPendingChallansByCompany } from "../api/challanApi";
 import {
   getSalesOrdersForPicker,
@@ -120,7 +112,7 @@ export default function InvoiceForm({
   // Inline create modals — same affordances StandaloneInvoiceForm has
   const [showAddClient, setShowAddClient] = useState(false);
   const [showAddItemType, setShowAddItemType] = useState(false);
-  const [pendingItemTypeRowId, setPendingItemTypeRowId] = useState(null);
+  const [, setPendingItemTypeRowId] = useState(null);
   const [allChallans, setAllChallans] = useState([]);
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
@@ -1675,7 +1667,6 @@ export default function InvoiceForm({
                         {isNarrow ? (
                           <div style={styles.mcards}>
                             {shownItems.map((item) => {
-                              const price = parseFloat(itemPrices[item.id]) || 0;
                               const displayUom = itemUoms[item.id] ?? item.unit;
                               const out = leftOutIds.includes(item.id);
                               return (
@@ -1977,7 +1968,6 @@ export default function InvoiceForm({
                               </thead>
                               <tbody>
                                 {shownItems.map((item) => {
-                                  const price = parseFloat(itemPrices[item.id]) || 0;
                                   const displayUom = itemUoms[item.id] ?? item.unit;
                                   const out = leftOutIds.includes(item.id);
                                   return (

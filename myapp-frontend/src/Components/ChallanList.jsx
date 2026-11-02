@@ -127,7 +127,6 @@ export default function ChallanList({
   const permDelete = has("challans.manage.delete");
   const permPrint = has("challans.print.view");
   const permCreateBill = has("bills.manage.create");
-  const permCreate = has("challans.manage.create");
   // 2026-05-08: Duplicate is gated by its own permission so a role can
   // be allowed to spawn copies without also being granted create-from-
   // scratch. The one-time migration in Program.cs auto-grants the new

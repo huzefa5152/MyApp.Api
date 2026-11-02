@@ -1,6 +1,6 @@
 import ListFilters from "../Components/ListFilters";
 import RecordsViewport from "../Components/RecordsViewport";
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   MdAssessment,
   MdBusiness,
