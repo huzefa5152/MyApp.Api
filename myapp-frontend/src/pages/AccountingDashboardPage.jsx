@@ -39,6 +39,8 @@ import {
   Hero, Section, Panel, HeadLink, Metric, MetricGrid, AgingBar, PartyTable, TrendChart,
   Skeleton, ErrorBanner, fmtMoney, fmtDate, ymd, reportHref,
 } from "../Components/dashboard/CommandCenter";
+import { Button, EmptyState } from "../ui/Kit";
+import useUi2 from "../ui2/useUi2";
 
 // ── Period presets ───────────────────────────────────────────────────────
 
@@ -69,6 +71,8 @@ export default function AccountingDashboardPage() {
   const { companies, selectedCompany, setSelectedCompany } = useCompany();
   const { has, loading: permsLoading } = usePermissions();
   const confirm = useConfirm();
+  // The workspace theme switches company in its top bar; no second picker here.
+  const topbarSwitcher = useUi2();
 
   const canView = has("accounting.dashboard.view");
   const canManageGl = has("accounting.gl.manage");
@@ -161,12 +165,11 @@ export default function AccountingDashboardPage() {
 
   if (permsLoading) return <div className="cc"><Skeleton /></div>;
   if (!canView) {
-    return <div className="cc"><p className="cc-empty" style={{ padding: "2rem" }}>You don't have permission to view the accounting dashboard.</p></div>;
+    return <div className="cc"><EmptyState icon={MdLock}>You don't have permission to view the accounting dashboard.</EmptyState></div>;
   }
 
   return (
     <div className="cc">
-      <style>{`@keyframes acctdash-spin { to { transform: rotate(360deg); } }`}</style>
       <Hero
         eyebrow="Accounting"
         title="Financial control centre"
@@ -174,7 +177,7 @@ export default function AccountingDashboardPage() {
           ? <>From the general ledger · <strong>{fmtDate(summary.from)} – {fmtDate(summary.to)}</strong></>
           : "Profit, cash, receivables and payables from the general ledger"}
       >
-        {companies.length > 1 && (
+        {!topbarSwitcher && companies.length > 1 && (
           <select className="cc-hero-select" aria-label="Company" value={selectedCompany?.id || ""}
             onChange={(e) => setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))}>
             {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
@@ -294,7 +297,7 @@ function Dashboard({ summary, suppliers, reportLink, canOpenReceipts, canOpenPay
         {summary.profitNotice && <p className="cc-note">{summary.profitNotice}</p>}
       </Section>
 
-      <div className="cc-split cc-split--wide" style={{ marginTop: "0.85rem" }}>
+      <div className="cc-split cc-split--wide cc-gap-top">
         <Panel title="Revenue, cost of sales and gross profit" kind="12 months to period end"
           action={<HeadLink to={canOpenReports ? reportHref("monthly-profit", { period: "custom", from: trend[0] ? ymd(summary.profitTrend[0].from) : summary.from, to: ymd(summary.to) }) : null}>Monthly profit</HeadLink>}>
           <TrendChart points={trend}
@@ -455,14 +458,14 @@ function CashPanel({ total, accounts, asAt, to }) {
   return (
     <Panel title="Cash & bank" kind={asAt} action={<HeadLink to={to}>Cash & bank summary</HeadLink>}>
       <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-        <span className="cc-metric__icon" style={{ color: "#00897b", background: "#00897b14", width: 34, height: 34 }}><MdAccountBalanceWallet size={18} /></span>
+        <span className="cc-metric__icon" style={{ color: "var(--k-teal)", background: "color-mix(in srgb, var(--k-teal) 8%, transparent)", width: 34, height: 34 }}><MdAccountBalanceWallet size={18} /></span>
         <span className={`cc-metric__value ${Number(total) < 0 ? "cc-tone--bad" : ""}`}>{fmtMoney(total)}</span>
       </div>
       <p className="cc-metric__sub" style={{ margin: "0.3rem 0 0" }}>Closing balance of every cash and bank account</p>
       {accounts.length > 0 && (
         <>
           <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} style={st.expandToggle}>
-            <MdExpandMore size={18} style={{ transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "none", color: "#00897b" }} />
+            <MdExpandMore size={18} style={{ transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "none", color: "var(--k-teal)" }} />
             {accounts.length} account{accounts.length !== 1 ? "s" : ""}
           </button>
           {open && (
@@ -486,14 +489,14 @@ function GlResultBanner({ result, onDismiss }) {
     ["Entries removed", result.removedEntries],
   ].filter(([, v]) => Number(v || 0) > 0);
   return (
-    <div style={st.resultBanner}>
+    <div className="cc-success">
       <MdCheckCircle size={20} style={{ color: "#2e7d32", flexShrink: 0 }} />
       <div style={{ flex: 1, minWidth: 200 }}>
-        <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>Ledger rebuilt</div>
+        <div style={{ fontWeight: 700, fontSize: "var(--k-font)" }}>Ledger rebuilt</div>
         <div style={st.resultChips}>
           {chips.length === 0
-            ? <span style={st.resultChip}>Nothing to post — ledger was already up to date</span>
-            : chips.map(([label, v]) => <span key={label} style={st.resultChip}>{label}: <strong>{v}</strong></span>)}
+            ? <span className="cc-chip">Nothing to post — ledger was already up to date</span>
+            : chips.map(([label, v]) => <span key={label} className="cc-chip">{label}: <strong>{v}</strong></span>)}
         </div>
       </div>
       <button type="button" style={st.dismissBtn} onClick={onDismiss} aria-label="Dismiss"><MdClose size={16} /></button>
@@ -508,7 +511,7 @@ function GlHealthFooter({ status, canManage, rebuilding, onRebuild }) {
       <MdBusiness size={14} aria-hidden />
       <span style={st.glFooterItem}>{Number(status.entryCount || 0).toLocaleString("en-PK")} journal entries</span>
       <span style={st.glFooterDot}>·</span>
-      <span style={{ ...st.glFooterItem, color: status.isBalanced ? "#2e7d32" : "#c62828" }}>
+      <span style={{ ...st.glFooterItem, color: status.isBalanced ? "#2e7d32" : "var(--k-danger)" }}>
         {status.isBalanced
           ? <><MdCheckCircle size={14} /> Σ Dr = Σ Cr ({fmtMoney(status.totalDebit)})</>
           : <><MdErrorOutline size={14} /> Out of balance — Dr {fmtMoney(status.totalDebit)} vs Cr {fmtMoney(status.totalCredit)}</>}
@@ -520,10 +523,10 @@ function GlHealthFooter({ status, canManage, rebuilding, onRebuild }) {
         </>
       )}
       {canManage && (
-        <button type="button" style={{ ...st.rebuildBtn, opacity: rebuilding ? 0.7 : 1 }} onClick={onRebuild} disabled={rebuilding}>
-          <MdAutorenew size={16} style={rebuilding ? { animation: "acctdash-spin 1s linear infinite" } : undefined} />
+        <Button variant="secondary" size="sm" style={{ marginLeft: "auto", minHeight: 44 }} onClick={onRebuild} disabled={rebuilding}>
+          <MdAutorenew size={16} aria-hidden style={rebuilding ? { animation: "k-spin 1s linear infinite" } : undefined} />
           {rebuilding ? "Rebuilding…" : "Rebuild ledger"}
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -532,29 +535,18 @@ function GlHealthFooter({ status, canManage, rebuilding, onRebuild }) {
 const st = {
   expandToggle: {
     display: "flex", alignItems: "center", gap: 5, width: "100%", minHeight: 44, marginTop: "0.5rem",
-    padding: "0.3rem 0", background: "none", border: "none", borderTop: "1px dashed #e6ecf4", boxShadow: "none",
-    cursor: "pointer", font: "inherit", fontSize: "0.82rem", fontWeight: 700, color: "#1a2332",
-  },
-  resultBanner: {
-    display: "flex", alignItems: "flex-start", gap: 10, padding: "0.8rem 1rem",
-    borderRadius: 12, border: "1px solid #2e7d3240", background: "#f0f9f1", marginBottom: "0.85rem",
+    padding: "0.3rem 0", background: "none", border: "none", borderTop: "1px dashed var(--k-line)", boxShadow: "none",
+    cursor: "pointer", font: "inherit", fontSize: "var(--k-font-sm)", fontWeight: 700, color: "var(--k-ink)",
   },
   resultChips: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 },
-  resultChip: { fontSize: "0.75rem", background: "#fff", border: "1px solid #e8edf3", borderRadius: 999, padding: "0.2rem 0.6rem" },
   dismissBtn: {
     display: "grid", placeItems: "center", width: 44, height: 44, minWidth: 44, padding: 0,
-    borderRadius: 8, border: "none", background: "transparent", color: "#5f6d7e", cursor: "pointer", boxShadow: "none", flexShrink: 0,
+    borderRadius: "var(--k-radius)", border: "none", background: "transparent", color: "var(--k-muted)", cursor: "pointer", boxShadow: "none", flexShrink: 0,
   },
   glFooter: {
     display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.35rem 0.6rem",
-    marginTop: "1.4rem", paddingTop: "0.85rem", borderTop: "1px dashed #e6ecf4", fontSize: "0.76rem", color: "#5f6d7e",
+    marginTop: "var(--k-gap)", paddingTop: "0.85rem", borderTop: "1px dashed var(--k-line)", fontSize: "var(--k-font-sm)", color: "var(--k-muted)",
   },
   glFooterItem: { display: "inline-flex", alignItems: "center", gap: 4, fontVariantNumeric: "tabular-nums" },
   glFooterDot: { opacity: 0.5 },
-  rebuildBtn: {
-    display: "inline-flex", alignItems: "center", gap: 6, marginLeft: "auto",
-    padding: "0.4rem 0.85rem", minHeight: 44, borderRadius: 8,
-    border: "1px solid #e8edf3", background: "#fff", color: "#5f6d7e",
-    fontSize: "0.78rem", fontWeight: 700, cursor: "pointer", boxShadow: "none",
-  },
 };

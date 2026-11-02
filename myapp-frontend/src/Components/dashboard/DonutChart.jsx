@@ -91,9 +91,9 @@ export default function DonutChart({
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem 0" }}>
         <svg width={size} height={size} viewBox="0 0 100 100" style={{ maxWidth: "100%" }}>
-          <circle cx="50" cy="50" r="38" fill="none" stroke="#eef2f7" strokeWidth="14" />
-          <text x="50" y="48" textAnchor="middle" fontSize="9" fill="#5f6d7e">No data</text>
-          <text x="50" y="58" textAnchor="middle" fontSize="6" fill="#9aa3ad">in this period</text>
+          <circle cx="50" cy="50" r="38" fill="none" stroke="#eef2f7" strokeWidth="14" style={{ stroke: "var(--k-surface-3, #eef2f7)" }} />
+          <text x="50" y="48" textAnchor="middle" fontSize="9" fill="#5f6d7e" style={{ fill: "var(--k-muted, #5f6d7e)" }}>No data</text>
+          <text x="50" y="58" textAnchor="middle" fontSize="6" fill="#9aa3ad" style={{ fill: "var(--k-faint, #9aa3ad)" }}>in this period</text>
         </svg>
       </div>
     );
@@ -132,7 +132,7 @@ export default function DonutChart({
               fillOpacity={isHighlighted ? 1 : 0.92}
               stroke={isHighlighted ? "#1a2332" : "#fff"}
               strokeWidth={isHighlighted ? 0.6 : 0.4}
-              style={{ cursor: onSegmentClick ? "pointer" : "default", transition: "fill-opacity 0.15s" }}
+              style={{ stroke: isHighlighted ? "var(--k-ink, #1a2332)" : "var(--k-surface, #fff)", cursor: onSegmentClick ? "pointer" : "default", transition: "fill-opacity 0.15s" }}
               onClick={() => onSegmentClick?.(segment.originalIndex)}
             >
               <title>{segment.name}: {formatValue(segment.value)} ({((segment.value / total) * 100).toFixed(1)}%)</title>
@@ -142,10 +142,10 @@ export default function DonutChart({
         {/* Center label — total + caption */}
         {/* Shrink a long total to fit the hole: at size 9 a monospace
             "Rs. 156,568" is wider than the ring's inner radius allows. */}
-        <text x={cx} y={cy - 1} textAnchor="middle" fontSize={Math.min(9, 44 / (String(formatValue(total)).length * 0.6))} fontWeight="800" fill="#1a2332" style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+        <text x={cx} y={cy - 1} textAnchor="middle" fontSize={Math.min(9, 44 / (String(formatValue(total)).length * 0.6))} fontWeight="800" fill="#1a2332" style={{ fill: "var(--k-ink, #1a2332)", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
           {formatValue(total)}
         </text>
-        <text x={cx} y={cy + 8} textAnchor="middle" fontSize="4.5" fill="#5f6d7e" style={{ textTransform: "uppercase", letterSpacing: "0.1em" }}>
+        <text x={cx} y={cy + 8} textAnchor="middle" fontSize="4.5" fill="#5f6d7e" style={{ fill: "var(--k-muted, #5f6d7e)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
           {centerLabel}
         </text>
       </svg>

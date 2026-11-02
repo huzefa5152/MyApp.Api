@@ -41,6 +41,7 @@ import {
   fmtMoney, fmtDate, ymd, daysSince, change, reportHref,
 } from "../Components/dashboard/CommandCenter";
 import useUi2 from "../ui2/useUi2";
+import { Card, EmptyState } from "../ui/Kit";
 import "./DashboardPage.css";
 
 const PERIOD_OPTIONS = [
@@ -141,7 +142,7 @@ export default function DashboardPage() {
   if (permsLoading) return <div className="cc"><Skeleton /></div>;
   if (!canViewPage) return <div className="cc"><AccessDeniedBanner displayName={displayName} reason="page" /></div>;
   if (!selectedCompany) {
-    return <div className="cc"><EmptyState heading="Pick a company" body="Use the company picker in the top bar to start." /></div>;
+    return <div className="cc"><EmptyState icon={MdInfo} title="Pick a company">Use the company picker in the top bar to start.</EmptyState></div>;
   }
 
   const flags = data?.permissions;
@@ -153,7 +154,7 @@ export default function DashboardPage() {
     <div className="cc">
       <Hero
         eyebrow="Overview"
-        title={<>Welcome back, <span style={{ color: "#9ef2ff" }}>{displayName}</span></>}
+        title={<>Welcome back, <span className="cc-hero__accent">{displayName}</span></>}
         subtitle={<>{selectedCompany?.name ? <><strong>{selectedCompany.name}</strong> · </> : null}Showing <strong>{periodLabel}</strong></>}
       >
         {showCompanyPicker && (
@@ -336,7 +337,7 @@ function CommandCentre({ data, has, periodLabel }) {
       )}
 
       {/* ── Trend + attention ───────────────────────────────────────── */}
-      <div className="cc-split cc-split--wide" style={{ marginTop: "1.25rem" }}>
+      <div className="cc-split cc-split--wide cc-gap-top--lg">
         {trendBars.length > 0 && (
           <Panel title="Sales and purchases" kind="Last 12 months">
             <TrendChart points={trend} bars={trendBars}
@@ -351,7 +352,7 @@ function CommandCentre({ data, has, periodLabel }) {
 
       {/* ── Who owes / whom you owe ─────────────────────────────────── */}
       {(receivables || payables) && (
-        <div className="cc-split" style={{ marginTop: "0.85rem" }}>
+        <div className="cc-split cc-gap-top">
           {receivables && (
             <Panel title="Largest customer balances" kind="Today" action={<HeadLink to={links.receivables}>Full aging</HeadLink>}>
               <PartyTable rows={receivables.top} hrefFor={customerHref} emptyText="No customer owes anything."
@@ -472,98 +473,60 @@ function attentionItems({ receivables, payables, work, fbr, links, oldestDays, c
 }
 
 // ── Gates and empty states ─────────────────────────────────────────────
+//
+// Kit EmptyState (boxed): surface, line, radius and type follow the theme.
 
 function WelcomeOnlyBanner({ displayName }) {
   return (
-    <div className="dash-card" style={{ ...styles.card, padding: "2.5rem 1.5rem", textAlign: "center" }}>
-      <span style={{
-        display: "inline-flex", alignItems: "center", justifyContent: "center",
-        width: 52, height: 52, borderRadius: 16, marginBottom: "0.8rem",
-        background: "rgba(13, 71, 161, 0.08)", border: "1px solid rgba(13, 71, 161, 0.18)",
-        color: "#0d47a1",
-      }}>
-        <MdInfo size={26} />
-      </span>
-      <h2 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 700, color: "#0c1830", fontFamily: '"Space Grotesk", "Inter", system-ui, sans-serif' }}>
-        Welcome back, {displayName}
-      </h2>
-      <p style={{ margin: "0.4rem auto 0", maxWidth: 480, fontSize: "0.9rem", color: "#5b6b86", lineHeight: 1.55 }}>
-        Your role doesn't include any dashboard KPI permissions yet. Ask an admin to grant Sales,
-        Purchases, FBR, or Inventory KPI access to see metrics here.
-      </p>
-    </div>
+    <EmptyState icon={MdInfo} title={`Welcome back, ${displayName}`}>
+      Your role doesn't include any dashboard KPI permissions yet. Ask an admin to grant Sales,
+      Purchases, FBR, or Inventory KPI access to see metrics here.
+    </EmptyState>
   );
 }
 
 function AccessDeniedBanner({ displayName }) {
   return (
-    <div style={{ ...styles.card, padding: "2.5rem 1.5rem", textAlign: "center" }}>
-      <MdLock size={48} color="#9e9e9e" style={{ marginBottom: "0.5rem" }} />
-      <h2 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, color: "#1a2332" }}>
-        No dashboard access
-      </h2>
-      <p style={{ margin: "0.4rem auto 0", maxWidth: 480, fontSize: "0.9rem", color: "#5f6d7e", lineHeight: 1.5 }}>
-        Hi {displayName}, your role doesn't have permission to view the dashboard.
-        Use the sidebar to navigate to a section you have access to.
-      </p>
-    </div>
-  );
-}
-
-function EmptyState({ heading, body, icon = MdInfo }) {
-  const Icon = icon;
-  return (
-    <div style={{ ...styles.card, padding: "2rem 1.5rem", textAlign: "center" }}>
-      <Icon size={36} color="#9e9e9e" />
-      <h3 style={{ margin: "0.5rem 0 0.25rem", fontSize: "1rem", fontWeight: 700, color: "#1a2332" }}>{heading}</h3>
-      <p style={{ margin: 0, fontSize: "0.85rem", color: "#5f6d7e" }}>{body}</p>
-    </div>
+    <EmptyState icon={MdLock} title="No dashboard access">
+      Hi {displayName}, your role doesn't have permission to view the dashboard.
+      Use the sidebar to navigate to a section you have access to.
+    </EmptyState>
   );
 }
 
 // ── Sections ───────────────────────────────────────────────────────
+//
+// Kit Card: surface, border, radius, shadow, head and body padding come from
+// the theme tokens. The accent only tints the icon tile and the Open link.
 
 function SectionCard({ title, accent, icon, children, headerExtra = null }) {
   const Icon = icon;
-  return (
-    <section className="dash-card" style={{ ...styles.card, "--acc": accent, padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-      <header className="dash-section-card__header" style={{
-        display: "flex",
+  const cardTitle = (
+    <>
+      <span className="dash-section-card__header-icon" style={{
+        display: "inline-flex",
         alignItems: "center",
-        gap: "0.65rem",
-        padding: "0.85rem 1.15rem",
-        borderBottom: "1px solid #eef2f8",
+        justifyContent: "center",
+        width: 32,
+        height: 32,
+        borderRadius: "var(--k-radius)",
+        background: `${accent}12`,
+        border: `1px solid ${accent}2e`,
+        color: accent,
+        flexShrink: 0,
       }}>
-        <span className="dash-section-card__header-icon" style={{
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: 32,
-          height: 32,
-          borderRadius: 10,
-          background: `${accent}12`,
-          border: `1px solid ${accent}2e`,
-          color: accent,
-          flexShrink: 0,
-        }}>
-          <Icon size={17} />
-        </span>
-        <h2 style={{
-          margin: 0,
-          fontSize: "1rem",
-          fontWeight: 700,
-          color: "#0c1830",
-          flex: 1,
-          letterSpacing: "-0.01em",
-          minWidth: 0,
-          fontFamily: '"Space Grotesk", "Inter", system-ui, sans-serif',
-        }}>{title}</h2>
-        {headerExtra}
-      </header>
-      <div className="dash-section-card__body" style={{ padding: "0.95rem 1.15rem 1.05rem", display: "flex", flexDirection: "column", gap: "0.9rem" }}>
+        <Icon size={17} />
+      </span>
+      {title}
+    </>
+  );
+  return (
+    <Card className="dash-card" title={cardTitle} actions={headerExtra}
+      style={{ "--acc": accent, marginTop: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
         {children}
       </div>
-    </section>
+    </Card>
   );
 }
 
@@ -620,7 +583,7 @@ function PurchasesSection({ data, canOpen = false }) {
 function FbrSection({ data }) {
   // FBR section visualises a small funnel — pending → validated →
   // submitted, with failed as a separate signal. Reconciliation is
-  // the bottom row.
+  // the bottom row. The stage colours are a status palette, not theme.
   return (
     <SectionCard title="FBR / Compliance" accent={accents.fbr} icon={MdCloudDone}>
       <div className="dash-funnel-grid" style={styles.fbrGrid}>
@@ -631,7 +594,7 @@ function FbrSection({ data }) {
       </div>
 
       {data.excluded > 0 && (
-        <div style={{ fontSize: "0.78rem", color: "#5f6d7e", paddingLeft: "0.25rem" }}>
+        <div style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)", paddingLeft: "0.25rem" }}>
           <strong>{data.excluded}</strong> bill{data.excluded !== 1 ? "s" : ""} excluded from bulk submit (operator marked as skip).
         </div>
       )}
@@ -678,17 +641,17 @@ function InventorySection({ data, canOpen = false }) {
           : (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
               {data.recentMovements.map((m, i) => (
-                <div key={`${m.id}-${i}`} className="dash-mov-row" style={{
-                  display: "flex", alignItems: "center", gap: "0.55rem", fontSize: "0.83rem",
-                  padding: "0.45rem 0.6rem", background: "#f8fafd",
-                  border: "1px solid #eef2f8", borderRadius: 10,
-                }}>
-                  <span style={{ ...styles.miniChip, color: m.direction === "In" ? "#15803d" : "#c62828", backgroundColor: m.direction === "In" ? "rgba(21,128,61,0.10)" : "rgba(198,40,40,0.09)" }}>
+                <div key={`${m.id}-${i}`} className="dash-mov-row" style={styles.listRow}>
+                  <span style={{
+                    ...styles.miniChip,
+                    color: m.direction === "In" ? "#15803d" : "var(--k-danger)",
+                    backgroundColor: m.direction === "In" ? "rgba(21,128,61,0.10)" : "color-mix(in srgb, var(--k-danger) 9%, transparent)",
+                  }}>
                     {m.direction}
                   </span>
-                  <span className="dash-mov-row__name" style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600, color: "#0c1830" }}>{m.itemTypeName}</span>
-                  <span className="dash-mov-row__qty" style={{ fontFamily: '"IBM Plex Mono", ui-monospace, monospace', fontVariantNumeric: "tabular-nums", fontWeight: 600, color: "#0c1830" }}>{m.quantity}</span>
-                  <span style={{ color: "#69788f", fontSize: "0.73rem" }}>{formatDate(m.date)}</span>
+                  <span className="dash-mov-row__name" style={styles.listName}>{m.itemTypeName}</span>
+                  <span className="dash-mov-row__qty" style={styles.listFigure}>{m.quantity}</span>
+                  <span style={styles.listMeta}>{formatDate(m.date)}</span>
                 </div>
               ))}
             </div>
@@ -706,7 +669,7 @@ function Stat({ label, value, highlight = false, warn = false }) {
       <div className="dash-stat-label" style={styles.statLabel}>{label}</div>
       <div className="dash-stat-value" style={{
         ...styles.statValue,
-        color: warn ? "#c62828" : highlight ? "#0c1830" : "#3b4a63",
+        color: warn ? "var(--k-danger)" : highlight ? "var(--k-ink)" : "var(--k-muted)",
         fontWeight: highlight ? 700 : 500,
       }}>{value ?? "—"}</div>
     </div>
@@ -722,20 +685,20 @@ function Funnel({ label, value, color, icon }) {
     }}>
       <div style={{
         display: "inline-flex", alignItems: "center", justifyContent: "center",
-        width: 28, height: 28, borderRadius: 8,
+        width: 28, height: 28, borderRadius: "calc(var(--k-radius) - 2px)",
         background: `${color}12`, border: `1px solid ${color}2e`, color,
       }}>
         <Icon size={15} />
       </div>
       <div style={{
-        fontSize: "0.64rem", color: "#69788f", textTransform: "uppercase",
+        fontSize: "0.64rem", color: "var(--k-muted)", textTransform: "uppercase",
         letterSpacing: "0.1em", fontWeight: 600,
-        fontFamily: '"IBM Plex Mono", ui-monospace, monospace',
+        fontFamily: MONO,
       }}>{label}</div>
       <div className="dash-funnel-card__value" style={{
-        fontFamily: '"IBM Plex Mono", ui-monospace, monospace',
+        fontFamily: MONO,
         fontVariantNumeric: "tabular-nums",
-        fontSize: "1.35rem", fontWeight: 600, color,
+        fontSize: "var(--k-stat-value)", fontWeight: 600, color,
       }}>
         {value || 0}
       </div>
@@ -746,8 +709,8 @@ function Funnel({ label, value, color, icon }) {
 function ReconChip({ label, value, color }) {
   return (
     <div style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem", padding: "0.3rem 0.75rem", borderRadius: 999, border: `1px solid ${color}40`, backgroundColor: `${color}0d` }}>
-      <span style={{ fontSize: "0.74rem", color: "#3b4a63", fontWeight: 600 }}>{label}</span>
-      <span style={{ fontFamily: '"IBM Plex Mono", ui-monospace, monospace', fontVariantNumeric: "tabular-nums", fontSize: "0.85rem", fontWeight: 600, color }}>{value || 0}</span>
+      <span style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)", fontWeight: 600 }}>{label}</span>
+      <span style={{ fontFamily: MONO, fontVariantNumeric: "tabular-nums", fontSize: "var(--k-td-font)", fontWeight: 600, color }}>{value || 0}</span>
     </div>
   );
 }
@@ -756,15 +719,11 @@ function RecentList({ rows }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
       {rows.map((r, i) => (
-        <div key={`${r.id}-${i}`} className="dash-recent-row" style={{
-          display: "flex", alignItems: "center", gap: "0.55rem", fontSize: "0.83rem",
-          flexWrap: "wrap", padding: "0.45rem 0.6rem", background: "#f8fafd",
-          border: "1px solid #eef2f8", borderRadius: 10,
-        }}>
-          <span className="dash-recent-row__number" style={{ fontFamily: '"IBM Plex Mono", ui-monospace, monospace', fontSize: "0.75rem", color: "#69788f", flexShrink: 0 }}>#{r.number}</span>
-          <span className="dash-recent-row__name" style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600, color: "#0c1830" }}>{r.counterpartyName || "(unknown)"}</span>
-          <span className="dash-recent-row__date" style={{ color: "#69788f", fontSize: "0.73rem", flexShrink: 0 }}>{formatDate(r.date)}</span>
-          <span className="dash-recent-row__amount" style={{ fontFamily: '"IBM Plex Mono", ui-monospace, monospace', fontVariantNumeric: "tabular-nums", fontWeight: 600, color: "#0c1830", flexShrink: 0 }}>{formatPkr(r.grandTotal)}</span>
+        <div key={`${r.id}-${i}`} className="dash-recent-row" style={{ ...styles.listRow, flexWrap: "wrap" }}>
+          <span className="dash-recent-row__number" style={{ ...styles.listMeta, fontFamily: MONO, fontSize: "0.75rem", flexShrink: 0 }}>#{r.number}</span>
+          <span className="dash-recent-row__name" style={styles.listName}>{r.counterpartyName || "(unknown)"}</span>
+          <span className="dash-recent-row__date" style={{ ...styles.listMeta, flexShrink: 0 }}>{formatDate(r.date)}</span>
+          <span className="dash-recent-row__amount" style={{ ...styles.listFigure, flexShrink: 0 }}>{formatPkr(r.grandTotal)}</span>
         </div>
       ))}
     </div>
@@ -772,138 +731,50 @@ function RecentList({ rows }) {
 }
 
 function EmptyLine({ children }) {
-  return <div style={{ fontSize: "0.83rem", color: "#5f6d7e", fontStyle: "italic" }}>{children}</div>;
+  return <div style={{ fontSize: "var(--k-font)", color: "var(--k-muted)", fontStyle: "italic" }}>{children}</div>;
 }
 
 // ── Styles ─────────────────────────────────────────────────────────
 //
 // Mobile-first: all grids use auto-fit/minmax so they collapse to one
-// column on small screens without needing media queries. clamp()
-// handles fluid font sizes / paddings.
+// column on small screens without needing media queries. Colours, radii,
+// borders and type sizes read the kit's --k-* tokens (ui/kit.css) so the
+// sections follow the selected theme; --cc-gap comes from CommandCenter.css.
+
+const MONO = '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace';
 
 const styles = {
-  heroBanner: {
-    position: "relative",
-    // Layer order: cyan glow (top-right) → teal glow (bottom-left) →
-    // blueprint grid lines → brand gradient base. Same visual language
-    // as the public landing/login, so the product feels like one piece.
-    background: `
-      radial-gradient(80% 160% at 100% 0%, rgba(34, 224, 255, 0.16) 0%, transparent 55%),
-      radial-gradient(60% 140% at 0% 100%, rgba(0, 137, 123, 0.30) 0%, transparent 60%),
-      linear-gradient(to right, rgba(160, 195, 255, 0.07) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(160, 195, 255, 0.07) 1px, transparent 1px),
-      linear-gradient(135deg, #0a2d66 0%, #0d47a1 48%, #0b6e62 100%)
-    `,
-    backgroundSize: "auto, auto, 44px 44px, 44px 44px, auto",
-    borderRadius: 18,
-    padding: "1.15rem 1.3rem",
-    color: "#fff",
-    display: "flex",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: "0.85rem",
-    marginBottom: "0.85rem",
-    boxShadow: "0 18px 40px -18px rgba(8, 34, 84, 0.55)",
-    overflow: "hidden",
-  },
-  heroEyebrow: {
-    margin: "0 0 0.25rem",
-    fontFamily: '"IBM Plex Mono", ui-monospace, monospace',
-    fontSize: "0.62rem",
-    fontWeight: 600,
-    letterSpacing: "0.24em",
-    textTransform: "uppercase",
-    color: "rgba(158, 242, 255, 0.85)",
-  },
-  heroHeading: {
-    margin: 0,
-    fontSize: "clamp(1.15rem, 3.5vw, 1.5rem)",
-    fontWeight: 700,
-    color: "#fff",
-    lineHeight: 1.2,
-    letterSpacing: "-0.01em",
-    fontFamily: '"Space Grotesk", "Inter", system-ui, sans-serif',
-  },
-  heroSubtitle: {
-    margin: "0.3rem 0 0",
-    fontSize: "0.84rem",
-    color: "rgba(222, 235, 255, 0.78)",
-  },
-  // Picker bar in the hero. The hero banner itself is flex-wrap, so
-  // this block sits inline next to the greeting on desktop and wraps
-  // to its own row on phones. flex-basis 240px keeps it from
-  // squeezing the greeting too thin.
-  heroPickers: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "0.5rem",
-    flex: "1 1 240px",
-    minWidth: 0,
-  },
-  // Glass pills on the gradient — option list colors are fixed in
-  // DashboardPage.css (white dropdown panel needs dark text).
-  heroSelect: {
-    background: "rgba(255, 255, 255, 0.12)",
-    color: "#fff",
-    border: "1px solid rgba(255, 255, 255, 0.28)",
-    borderRadius: 10,
-    padding: "0.5rem 0.85rem",
-    fontSize: "0.85rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    outline: "none",
-    flex: 1,
-    minWidth: 140,
-    // Cap on big screens — without this the company picker stretches
-    // to absorb all available width.
-    maxWidth: 260,
-    backdropFilter: "blur(6px)",
-    WebkitBackdropFilter: "blur(6px)",
-  },
-  heroGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
-    gap: "0.85rem",
-    marginBottom: "0.85rem",
-  },
   sectionGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))",
-    gap: "0.85rem",
-    marginTop: "0.85rem",
-  },
-  card: {
-    background: "#ffffff",
-    border: "1px solid #e6ecf4",
-    borderRadius: 16,
-    padding: "1rem 1.15rem",
-    boxShadow: "0 1px 2px rgba(12, 24, 48, 0.04), 0 10px 28px -18px rgba(12, 24, 48, 0.18)",
+    gap: "var(--cc-gap)",
+    marginTop: "var(--cc-gap)",
   },
   metaRow: {
     display: "flex",
     flexWrap: "wrap",
-    gap: "0.85rem",
+    gap: "var(--cc-gap)",
     paddingBottom: "0.6rem",
-    borderBottom: "1px dashed #e6ecf4",
+    borderBottom: "1px dashed var(--k-line)",
   },
   statLabel: {
-    fontFamily: '"IBM Plex Mono", ui-monospace, monospace',
+    fontFamily: MONO,
     fontSize: "0.62rem",
-    color: "#69788f",
+    color: "var(--k-muted)",
     textTransform: "uppercase",
     letterSpacing: "0.12em",
     fontWeight: 600,
     marginBottom: "0.2rem",
   },
   statValue: {
-    fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
+    fontFamily: MONO,
     fontVariantNumeric: "tabular-nums",
-    fontSize: "0.95rem",
+    fontSize: "var(--k-font)",
   },
   subHeading: {
-    fontFamily: '"IBM Plex Mono", ui-monospace, monospace',
+    fontFamily: MONO,
     fontSize: "0.66rem",
-    color: "#8593ab",
+    color: "var(--k-faint)",
     fontWeight: 600,
     textTransform: "uppercase",
     letterSpacing: "0.16em",
@@ -917,9 +788,9 @@ const styles = {
     gap: "0.55rem",
   },
   funnelCard: {
-    background: "#fafcff",
+    background: "var(--k-surface-2)",
     border: "1px solid",
-    borderRadius: 12,
+    borderRadius: "var(--k-radius)",
     padding: "0.7rem 0.6rem",
     display: "flex",
     flexDirection: "column",
@@ -940,16 +811,52 @@ const styles = {
     fontWeight: 700,
     flexShrink: 0,
   },
+  // One row of the Recent Invoices / Bills / Movements lists.
+  listRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.55rem",
+    fontSize: "var(--k-td-font)",
+    padding: "0.45rem 0.6rem",
+    background: "var(--k-surface-2)",
+    border: "1px solid var(--k-line)",
+    borderRadius: "var(--k-radius)",
+  },
+  // Counterparty / item names are user-supplied: 2-line clamp, never
+  // nowrap + ellipsis (similar-prefix names must stay distinguishable).
+  listName: {
+    flex: 1,
+    minWidth: 0,
+    fontWeight: 600,
+    color: "var(--k-ink)",
+    overflow: "hidden",
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    wordBreak: "break-word",
+    lineHeight: 1.3,
+  },
+  listFigure: {
+    fontFamily: MONO,
+    fontVariantNumeric: "tabular-nums",
+    fontWeight: 600,
+    color: "var(--k-ink)",
+  },
+  listMeta: {
+    color: "var(--k-muted)",
+    fontSize: "0.73rem",
+  },
   headerLink: {
     display: "inline-flex",
     alignItems: "center",
     gap: "0.25rem",
+    minHeight: 44,
     padding: "0.3rem 0.6rem",
-    borderRadius: 9,
-    border: "1px solid #dbe4f0",
-    color: "#0d47a1",
-    backgroundColor: "#fff",
-    fontSize: "0.75rem",
+    borderRadius: "var(--k-radius)",
+    border: "1px solid var(--k-line-strong)",
+    color: "var(--k-blue)",
+    backgroundColor: "var(--k-surface)",
+    fontSize: "var(--k-font-sm)",
     fontWeight: 600,
     textDecoration: "none",
     flexShrink: 0,

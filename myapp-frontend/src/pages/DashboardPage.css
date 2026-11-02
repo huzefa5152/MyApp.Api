@@ -51,7 +51,7 @@
 @media (hover: hover) {
   .dash-kpi-card:hover {
     transform: translateY(-3px);
-    border-color: #d8e2f2;
+    border-color: var(--k-line-strong);
     box-shadow:
       0 2px 4px rgba(12, 24, 48, 0.05),
       0 18px 40px -18px rgba(12, 24, 48, 0.26);
@@ -77,7 +77,7 @@
 }
 
 .dash-section-card__open:hover {
-  background-color: #f4f8fd !important;
+  background-color: var(--k-surface-2) !important;
   transform: translateY(-1px);
 }
 
@@ -241,7 +241,7 @@
     grid-template-rows: auto auto !important;
     gap: 0.15rem 0.4rem !important;
     padding: 0.4rem 0.5rem !important;
-    background: #f8fafd;
+    background: var(--k-surface-2);
     border-radius: 8px;
   }
   .dash-recent-row__number {
@@ -269,7 +269,7 @@
   .dash-mov-row {
     flex-wrap: wrap;
     padding: 0.35rem 0.4rem;
-    background: #f8fafd;
+    background: var(--k-surface-2);
     border-radius: 8px;
   }
   .dash-mov-row__name {

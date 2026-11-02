@@ -70,7 +70,8 @@ export function reportHref(id, params = {}) {
 
 // ── Layout ───────────────────────────────────────────────────────────────
 
-/** Brand hero band — the gradient the Home dashboard has always carried. */
+/** Page hero — Classic draws the gradient brand band the Home dashboard has always
+ *  carried; Workspace draws a plain page header (CommandCenter.css). */
 export function Hero({ eyebrow, title, subtitle, children }) {
   return (
     <header className="cc-hero">
@@ -401,7 +402,7 @@ export function Skeleton({ rows = 2 }) {
   return (
     <div aria-busy="true" aria-label="Loading">
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="cc-grid" style={{ "--cc-min": "210px", marginBottom: "0.85rem" }}>
+        <div key={i} className="cc-grid" style={{ "--cc-min": "210px", marginBottom: "var(--cc-gap)" }}>
           {[0, 1, 2, 3].map((j) => <div key={j} className="cc-skeleton" />)}
         </div>
       ))}
