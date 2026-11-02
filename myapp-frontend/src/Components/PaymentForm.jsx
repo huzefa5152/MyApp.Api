@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, useRef, useId, Fragment } from "react";
 import { MdClose, MdExpandMore, MdChevronRight } from "react-icons/md";
-import { formStyles, modalSizes, colors } from "../theme";
+import { formStyles, modalSizes } from "../theme";
 import "./PaymentForm.css";
-import { Button } from "../ui/Kit";
+import { Button, IconButton, TableWrap } from "../ui/Kit";
 import SearchableSelect from "./SearchableSelect";
 import DocumentNotesEditor from "./DocumentNotesEditor";
 import BankCashSelect from "./BankCashSelect";
@@ -417,14 +417,14 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
             <span style={adjShortText}>Short Rs {gap.toLocaleString()} — settle as</span>
             <div style={pillGroup}>
               {quickPicks.map((p) => (
-                <button
-                  type="button"
+                <Button
+                  size="sm"
                   key={p.mode}
-                  style={{ ...pill, ...(isNarrow ? pillNarrow : null) }}
+                  style={isNarrow ? tap44 : undefined}
                   onClick={() => applyAdjPick(d, p)}
                 >
                   {p.label}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -436,21 +436,22 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
       <div style={adjWrap}>
         <div style={adjActiveRow}>
           {isSettled
-            ? <span style={settledBadge}>✓ Settled</span>
+            ? <span className="k-tone-green" style={settledBadge}>✓ Settled</span>
             : <span style={adjModeBadge}>{MODE_LABEL[row.adjMode] || "Adjustment"}</span>}
           <span style={adjMiniLabel}>Adjust</span>
           <input
             type="number" min="0" step="0.01"
+            className="k-input"
             style={{ ...adjInput, ...(isNarrow ? adjInputNarrow : null) }}
             value={row.adj}
             onChange={(e) => setAdjAmount(d.id, e.target.value)}
           />
-          <button data-admin-close=""
-            type="button"
-            style={{ ...clearX, ...(isNarrow ? clearXNarrow : null) }}
-            title="Remove adjustment"
+          <IconButton data-admin-close=""
+            danger
+            label="Remove adjustment"
+            style={{ ...iconBtnBorder, color: "var(--k-danger)", ...(isNarrow ? tapSquare44 : null) }}
             onClick={() => clearAdj(d)}
-          >×</button>
+          >×</IconButton>
         </div>
         {row.adjMode === "other" && glOn && (
           <div style={{ marginTop: 6 }}>
@@ -624,7 +625,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                         <div style={allocCardHead}>
                           <strong>#{d.number}</strong>
                           {d.previouslyApplied && <span style={originalAllocation}>Originally {isReceipt ? "received" : "paid"}: Rs {d.originalCash.toLocaleString()}{d.originalAdjustment > 0 ? ` + Rs ${d.originalAdjustment.toLocaleString()} adjustment` : ""}</span>}
-                          <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>{d.date ? new Date(d.date).toLocaleDateString() : "—"}</span>
+                          <span style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)" }}>{d.date ? new Date(d.date).toLocaleDateString() : "—"}</span>
                         </div>
                         <div style={allocCardMeta}>
                           <div><span style={allocMetaLabel}>Total</span><span style={allocMetaValue}>{d.grandTotal.toLocaleString()}</span></div>
@@ -634,12 +635,12 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                           <span style={allocMetaLabel}>{isReceipt ? "Received" : "Paid"} (cash)</span>
                           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                             <input
-                              type="number" min="0" step="0.01" style={{ ...formStyles.input, textAlign: "right", flex: 1, minHeight: 44 }}
+                              type="number" min="0" step="0.01" className="k-input" style={{ textAlign: "right", flex: 1, minHeight: 44 }}
                               aria-label={`${isReceipt ? "Received" : "Paid"} for ${docLabel.toLowerCase()} #${d.number}`}
                               value={c.row.cash ?? ""}
                               onChange={(e) => setCash(d.id, e.target.value)}
                             />
-                            <Button size="sm" onClick={() => fillBalance(d)} title="Pay full balance in cash">Max</Button>
+                            <Button size="sm" style={tap44} onClick={() => fillBalance(d)} title="Pay full balance in cash">Max</Button>
                           </div>
                           {renderAdjust(d, c)}
                         </div>
@@ -648,15 +649,15 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                   })}
                 </div>
               ) : (
-                <div data-admin-table-region="" style={{ overflowX: "auto" }}>
-                  <table style={tbl}>
+                <TableWrap>
+                  <table className="k-table">
                     <thead>
                       <tr>
-                        <th style={th}>{docLabel} #</th>
-                        <th style={th}>Date</th>
-                        <th style={{ ...th, textAlign: "right" }}>Total</th>
-                        <th style={{ ...th, textAlign: "right" }}>{isEdit ? "Available to allocate" : "Balance due"}</th>
-                        <th style={{ ...th, textAlign: "right", width: 160 }}>{isReceipt ? "Received" : "Paid"}</th>
+                        <th>{docLabel} #</th>
+                        <th>Date</th>
+                        <th className="k-num">Total</th>
+                        <th className="k-num">{isEdit ? "Available to allocate" : "Balance due"}</th>
+                        <th className="k-num" style={{ width: 160 }}>{isReceipt ? "Received" : "Paid"}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -665,19 +666,19 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                         const adjNode = renderAdjust(d, c);
                         // Drop the main row's bottom border when an adjustment
                         // sub-row follows, so the two read as one unit.
-                        const cellTd = adjNode ? { ...td, borderBottom: "none" } : td;
+                        const cellTd = adjNode ? { borderBottom: "none" } : undefined;
                         return (
                           <Fragment key={d.id}>
                             <tr>
                               <td style={cellTd}><strong>#{d.number}</strong>
                           {d.previouslyApplied && <span style={originalAllocation}>Originally {isReceipt ? "received" : "paid"}: Rs {d.originalCash.toLocaleString()}{d.originalAdjustment > 0 ? ` + Rs ${d.originalAdjustment.toLocaleString()} adjustment` : ""}</span>}</td>
                               <td style={cellTd}>{d.date ? new Date(d.date).toLocaleDateString() : "—"}</td>
-                              <td style={{ ...cellTd, textAlign: "right" }}>{d.grandTotal.toLocaleString()}</td>
-                              <td style={{ ...cellTd, textAlign: "right" }}>{d.available.toLocaleString()}</td>
-                              <td style={{ ...cellTd, textAlign: "right" }}>
+                              <td className="k-num" style={cellTd}>{d.grandTotal.toLocaleString()}</td>
+                              <td className="k-num" style={cellTd}>{d.available.toLocaleString()}</td>
+                              <td className="k-num" style={cellTd}>
                                 <div style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "flex-end" }}>
                                   <input
-                                    type="number" min="0" step="0.01" style={{ ...formStyles.input, textAlign: "right", padding: "0.35rem 0.5rem", width: 110 }}
+                                    type="number" min="0" step="0.01" className="k-input" style={{ textAlign: "right", width: 110 }}
                                     aria-label={`${isReceipt ? "Received" : "Paid"} for ${docLabel.toLowerCase()} #${d.number}`}
                               value={c.row.cash ?? ""}
                                     onChange={(e) => setCash(d.id, e.target.value)}
@@ -688,7 +689,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                             </tr>
                             {adjNode && (
                               <tr>
-                                <td colSpan={5} style={{ ...td, paddingTop: 0 }}>{adjNode}</td>
+                                <td colSpan={5} style={{ paddingTop: 0 }}>{adjNode}</td>
                               </tr>
                             )}
                           </Fragment>
@@ -696,7 +697,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                       })}
                     </tbody>
                   </table>
-                </div>
+                </TableWrap>
               );
 
   return (
@@ -732,7 +733,8 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
               </div>
               {payeeType === "Other" ? (
                 <input
-                  style={{ ...formStyles.input, marginTop: "0.5rem" }}
+                  className="k-input"
+                  style={{ marginTop: "0.5rem" }}
                   value={payeeName}
                   onChange={(e) => setPayeeName(e.target.value)}
                   placeholder="Name — e.g. the landlord, a courier, an employee"
@@ -795,7 +797,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Date</label>
-                <input type="date" style={formStyles.input} value={date} onChange={(e) => setDate(e.target.value)} max={today} />
+                <input type="date" className="k-input" value={date} onChange={(e) => setDate(e.target.value)} max={today} />
                 <span style={payeeHint}>Actual receipt/payment date; entry time is recorded separately.</span>
               </div>
               <div data-admin-field="" style={formStyles.formGroup}>
@@ -822,11 +824,11 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
                 <div data-admin-field="" style={formStyles.formGroup}>
                   <label style={formStyles.label}>Cheque #</label>
-                  <input style={formStyles.input} value={chequeNumber} onChange={(e) => setChequeNumber(e.target.value)} />
+                  <input className="k-input" value={chequeNumber} onChange={(e) => setChequeNumber(e.target.value)} />
                 </div>
                 <div data-admin-field="" style={formStyles.formGroup}>
-                  <label style={formStyles.label}>Cheque date <span style={{ color: colors.textSecondary, fontWeight: 400 }}>(future = post-dated)</span></label>
-                  <input type="date" style={formStyles.input} value={chequeDate} onChange={(e) => setChequeDate(e.target.value)} />
+                  <label style={formStyles.label}>Cheque date <span style={{ color: "var(--k-muted)", fontWeight: 400 }}>(future = post-dated)</span></label>
+                  <input type="date" className="k-input" value={chequeDate} onChange={(e) => setChequeDate(e.target.value)} />
                 </div>
               </div>
             )}
@@ -840,7 +842,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
             </div>}
             <div data-admin-field="" style={formStyles.formGroup}>
               <label style={formStyles.label}>Description (optional)</label>
-              <input style={formStyles.input} value={description} onChange={(e) => setDescription(e.target.value)} />
+              <input className="k-input" value={description} onChange={(e) => setDescription(e.target.value)} />
               <span style={payeeHint}>Choose your receiving/paying account above. Use the description for the other party's bank or reference details.</span>
             </div>
             <details className="payment-notes"><summary>Notes (optional)</summary><DocumentNotesEditor value={notes} onChange={setNotes} /></details>
@@ -851,7 +853,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
             {purpose === "expense" && (
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>
-                  What was it for? {glOn && <span style={{ fontWeight: 400, color: colors.textSecondary }}>(from your Chart of Accounts)</span>}
+                  What was it for? {glOn && <span style={{ fontWeight: 400, color: "var(--k-muted)" }}>(from your Chart of Accounts)</span>}
                 </label>
                 {accounts.length === 0 ? (
                   <div style={hintBox}>
@@ -876,7 +878,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                           <div style={expAmountCell}>
                             <input
                               type="number" min="0" step="0.01"
-                              style={formStyles.input}
+                              className="k-input"
                               value={row.amount}
                               onChange={(e) => patchExp(i, { amount: e.target.value })}
                               placeholder="Amount"
@@ -885,19 +887,18 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                           <div style={expTaxCell}>
                             <input
                               type="number" min="0" max="100" step="0.01"
-                              style={formStyles.input}
+                              className="k-input"
                               value={row.taxRate}
                               onChange={(e) => patchExp(i, { taxRate: e.target.value })}
                               placeholder="Tax %"
                             />
                           </div>
-                          <button data-admin-close=""
-                            type="button"
-                            style={expRemove}
-                            title="Remove this line"
+                          <IconButton data-admin-close=""
+                            label="Remove this line"
+                            style={{ ...iconBtnBorder, ...tapSquare44 }}
                             disabled={expLines.length === 1}
                             onClick={() => removeExpLine(i)}
-                          >×</button>
+                          >×</IconButton>
                           {c.tax > 0 && (
                             <div style={expTaxHint}>
                               Includes Rs {c.tax.toLocaleString()} {isReceipt ? "sales tax" : "input tax"} —
@@ -907,7 +908,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                         </div>
                       );
                     })}
-                    <button type="button" style={expAddBtn} onClick={addExpLine}>+ Add another line</button>
+                    <Button style={{ borderStyle: "dashed" }} onClick={addExpLine}>+ Add another line</Button>
                     <span style={payeeHint}>
                       Enter the amount as it appears on the bill — including tax. Leave Tax % blank
                       when there is no recoverable tax.
@@ -919,7 +920,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
 
             {purpose === "settle" && <div data-admin-field="" style={formStyles.formGroup}>
               <label style={formStyles.label}>Additional amount on account</label>
-              <input aria-label="Additional amount on account" type="number" min="0" step="0.01" style={formStyles.input}
+              <input aria-label="Additional amount on account" type="number" min="0" step="0.01" className="k-input"
                 value={remainderAmount} onChange={e => setRemainderAmount(e.target.value)} placeholder="0.00" />
               <span style={payeeHint}>The rest of this receipt/payment, against the selected party's balance. Confirm historical invoices are already covered by their opening balance.</span>
             </div>}
@@ -929,7 +930,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                 <label style={formStyles.label}>Advance amount</label>
                 <input aria-label="Advance amount"
                   type="number" min="0" step="0.01"
-                  style={formStyles.input}
+                  className="k-input"
                   value={advanceAmount}
                   onChange={(e) => setAdvanceAmount(e.target.value)}
                   placeholder="0.00"
@@ -948,7 +949,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
             {purpose === "settle" && (
             <div data-admin-field="" style={formStyles.formGroup}>
               <label style={formStyles.label}>Allocate to {docLabel.toLowerCase()}s</label>
-              {contactId && !loadingDocs && docs.length > 0 && <div className="payment-doc-search"><label>Search {docLabel.toLowerCase()} number<input type="search" value={documentSearch} onChange={e => setDocumentSearch(e.target.value)} placeholder={`Find ${docLabel.toLowerCase()} #`} style={formStyles.input} /></label><span>{visibleDocs.length} of {docs.length} available {docLabel.toLowerCase()}s</span></div>}
+              {contactId && !loadingDocs && docs.length > 0 && <div className="payment-doc-search"><label>Search {docLabel.toLowerCase()} number<input type="search" value={documentSearch} onChange={e => setDocumentSearch(e.target.value)} placeholder={`Find ${docLabel.toLowerCase()} #`} className="k-input" /></label><span>{visibleDocs.length} of {docs.length} available {docLabel.toLowerCase()}s</span></div>}
               {contactId && !loadingDocs && docs.length > 0 && visibleDocs.length === 0 && <p role="status">No matching {docLabel.toLowerCase()} number. Clear search to see all available documents.</p>}
               {!contactId ? (
                 <div style={hintBox}>Select a {contactLabel.toLowerCase()} to see their unpaid {docLabel.toLowerCase()}s.</div>
@@ -1034,76 +1035,63 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   );
 }
 
-const originalAllocation = { display: "block", fontSize: "0.78rem", color: colors.textSecondary, fontWeight: 400 };
-const documentSectionHeading = { fontSize: "0.95rem", fontWeight: 700, margin: "1rem 0 0.5rem", color: colors.textPrimary };
-const hintBox = { padding: "0.75rem", background: colors.inputBg, border: `1px dashed ${colors.inputBorder}`, borderRadius: 8, color: colors.textSecondary, fontSize: "0.85rem" };
-const tbl = { width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" };
-const th = { textAlign: "left", padding: "0.4rem 0.5rem", borderBottom: `1px solid ${colors.cardBorder}`, color: colors.textSecondary, fontWeight: 700, whiteSpace: "nowrap" };
-const td = { padding: "0.4rem 0.5rem", borderBottom: `1px solid ${colors.cardBorder}`, color: colors.textPrimary };
+const originalAllocation = { display: "block", fontSize: "var(--k-font-sm)", color: "var(--k-muted)", fontWeight: 400 };
+const documentSectionHeading = { fontSize: "var(--k-font)", fontWeight: 700, margin: "1rem 0 0.5rem", color: "var(--k-ink)" };
+const hintBox = { padding: "0.75rem", background: "var(--k-surface-2)", border: "1px dashed var(--k-line-strong)", borderRadius: "var(--k-radius)", color: "var(--k-muted)", fontSize: "var(--k-font-sm)" };
 // Mobile (<768px) allocation cards.
-const allocCard = { border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: "0.7rem 0.8rem", background: "#fff", display: "flex", flexDirection: "column", gap: "0.5rem" };
+const allocCard = { border: "1px solid var(--k-line)", borderRadius: "var(--k-radius)", padding: "0.7rem 0.8rem", background: "var(--k-surface)", display: "flex", flexDirection: "column", gap: "0.5rem" };
 const allocCardHead = { display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: "0.5rem" };
 const allocCardMeta = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(120px, 100%), 1fr))", gap: "0.4rem 1rem" };
-const allocMetaLabel = { display: "block", fontSize: "0.66rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: colors.textSecondary, marginBottom: 2 };
-const allocMetaValue = { fontSize: "0.9rem", fontWeight: 600, color: colors.textPrimary };
+const allocMetaLabel = { display: "block", fontSize: "var(--k-th-font)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--k-muted)", marginBottom: 2 };
+const allocMetaValue = { fontSize: "var(--k-font)", fontWeight: 600, color: "var(--k-ink)" };
+
+// Phone tap targets (>= 44px) on top of the kit's compact sizes.
+const tap44 = { minHeight: 44 };
+const tapSquare44 = { width: 44, height: 44 };
+const iconBtnBorder = { border: "1px solid var(--k-line-strong)", background: "var(--k-surface)" };
 
 // ── Settle-remainder adjustment affordance ──────────────────────────────
 const MODE_LABEL = { discount: "Discount", writeoff: "Write-off", other: "Adjustment" };
 const adjWrap = { marginTop: 6, display: "flex", flexDirection: "column", gap: 6 };
 const adjPromptRow = { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 };
-const adjShortText = { fontSize: "0.72rem", color: colors.textSecondary, fontWeight: 600 };
+const adjShortText = { fontSize: "var(--k-font-sm)", color: "var(--k-muted)", fontWeight: 600 };
 const pillGroup = { display: "flex", flexWrap: "wrap", gap: 4 };
-const pill = { padding: "0.25rem 0.6rem", fontSize: "0.72rem", fontWeight: 700, borderRadius: 999, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, cursor: "pointer", minHeight: 30, lineHeight: 1, boxShadow: "none" };
-const pillNarrow = { minHeight: 44, padding: "0.5rem 0.95rem", fontSize: "0.82rem" };
 const adjActiveRow = { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 };
-const settledBadge = { display: "inline-flex", alignItems: "center", gap: 4, padding: "0.2rem 0.5rem", fontSize: "0.7rem", fontWeight: 800, borderRadius: 6, background: "#e8f5e9", color: colors.success, border: `1px solid ${colors.success}40` };
-const adjModeBadge = { display: "inline-flex", alignItems: "center", padding: "0.2rem 0.5rem", fontSize: "0.7rem", fontWeight: 700, borderRadius: 6, background: colors.inputBg, color: colors.textSecondary, border: `1px solid ${colors.inputBorder}` };
-const adjMiniLabel = { fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.03em", color: colors.textSecondary };
-const adjInput = { width: 110, padding: "0.3rem 0.5rem", borderRadius: 6, border: `1px solid ${colors.inputBorder}`, background: colors.inputBg, color: colors.textPrimary, fontSize: "0.82rem", textAlign: "right", outline: "none" };
-const adjInputNarrow = { flex: 1, minWidth: 90, minHeight: 44, fontSize: "0.95rem" };
-const clearX = { width: 28, height: 28, minWidth: 28, display: "grid", placeItems: "center", borderRadius: 6, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.danger, cursor: "pointer", fontSize: "1rem", lineHeight: 1, padding: 0, boxShadow: "none" };
-const clearXNarrow = { width: 44, height: 44, minWidth: 44, fontSize: "1.2rem" };
-const adjAcctHint = { fontSize: "0.72rem", color: colors.textSecondary, fontStyle: "italic" };
-const adjError = { fontSize: "0.72rem", color: colors.danger, fontWeight: 600 };
-const adjRemainHint = { fontSize: "0.72rem", color: colors.textSecondary };
+const badge = { display: "inline-flex", alignItems: "center", gap: 4, padding: "0.2rem 0.5rem", fontSize: "var(--k-th-font)", borderRadius: "calc(var(--k-radius) - 4px)" };
+// className="k-tone-green" supplies --k-tone / --k-tone-soft.
+const settledBadge = { ...badge, fontWeight: 800, background: "var(--k-tone-soft)", color: "var(--k-tone)", border: "1px solid var(--k-tone)" };
+const adjModeBadge = { ...badge, fontWeight: 700, background: "var(--k-surface-2)", color: "var(--k-muted)", border: "1px solid var(--k-line-strong)" };
+const adjMiniLabel = { fontSize: "var(--k-th-font)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.03em", color: "var(--k-muted)" };
+const adjInput = { width: 110, textAlign: "right" };
+const adjInputNarrow = { flex: 1, minWidth: 90, minHeight: 44 };
+const adjAcctHint = { fontSize: "var(--k-font-sm)", color: "var(--k-muted)", fontStyle: "italic" };
+const adjError = { fontSize: "var(--k-font-sm)", color: "var(--k-danger)", fontWeight: 600 };
+const adjRemainHint = { fontSize: "var(--k-font-sm)", color: "var(--k-muted)" };
 // Footer money summary.
 const summaryWrap = { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 };
 const summaryLine = { display: "flex", justifyContent: "flex-end", alignItems: "baseline", flexWrap: "wrap", gap: "0.5rem" };
-const summaryLabel = { color: colors.textSecondary, fontSize: "0.85rem", fontWeight: 600 };
+const summaryLabel = { color: "var(--k-muted)", fontSize: "var(--k-font)", fontWeight: 600 };
 // ── Payee / purpose selectors ────────────────────────────────────────────────
 // Wraps instead of scrolling, so three or four choices stack on a phone rather
 // than hiding behind an edge (CLAUDE.md §3: no media queries needed).
 const payeeTabs = { display: "flex", flexWrap: "wrap", gap: "0.4rem" };
 const payeeTab = {
   flex: "1 1 auto", minWidth: 110, minHeight: 44, padding: "0.5rem 0.75rem",
-  border: `1px solid ${colors.inputBorder}`, borderRadius: 8, background: colors.inputBg,
-  color: colors.textSecondary, fontSize: "0.85rem", fontWeight: 600, cursor: "pointer",
+  border: "1px solid var(--k-line-strong)", borderRadius: "var(--k-radius)", background: "var(--k-surface-2)",
+  color: "var(--k-muted)", fontFamily: "inherit", fontSize: "var(--k-font)", fontWeight: 600, cursor: "pointer", boxShadow: "none",
 };
-const payeeTabActive = { background: colors.blue, borderColor: colors.blue, color: "#fff" };
-const payeeHint = { display: "block", marginTop: "0.35rem", color: colors.textSecondary, fontSize: "0.78rem" };
+const payeeTabActive = { background: "var(--k-blue)", borderColor: "var(--k-blue)", color: "#fff" };
+const payeeHint = { display: "block", marginTop: "0.35rem", color: "var(--k-muted)", fontSize: "var(--k-font-sm)" };
 
 // ── Income/expense line editor ───────────────────────────────────────────────
-// Account takes the room it needs; amount and tax stay side by side. Collapses
-// to a single column on a phone.
-const expRow = {
-  display: "grid", gap: "0.4rem", alignItems: "start", marginBottom: "0.5rem",
-  gridTemplateColumns: "minmax(min(240px, 100%), 3fr) minmax(110px, 1fr) minmax(80px, 0.6fr) 44px",
-};
-const expAccountCell = { minWidth: 0 };
-const expAmountCell = { minWidth: 0 };
-const expTaxCell = { minWidth: 0 };
-const expRemove = {
-  display: "grid", placeItems: "center", width: 44, height: 44, padding: 0,
-  border: `1px solid ${colors.inputBorder}`, borderRadius: 8, background: colors.inputBg,
-  color: colors.textSecondary, fontSize: "1.1rem", cursor: "pointer",
-};
-const expTaxHint = { gridColumn: "1 / -1", color: colors.textSecondary, fontSize: "0.78rem" };
-const expAddBtn = {
-  minHeight: 44, padding: "0.5rem 0.9rem", border: `1px dashed ${colors.inputBorder}`,
-  borderRadius: 8, background: "transparent", color: colors.blue,
-  fontSize: "0.85rem", fontWeight: 600, cursor: "pointer",
-};
+// Account takes the room it needs; amount and tax stay side by side. Wraps to
+// one field per line on a phone (flex-wrap, no fixed columns).
+const expRow = { display: "flex", flexWrap: "wrap", gap: "0.4rem", alignItems: "flex-start", marginBottom: "0.5rem" };
+const expAccountCell = { flex: "3 1 min(240px, 100%)", minWidth: 0 };
+const expAmountCell = { flex: "1 1 110px", minWidth: 0 };
+const expTaxCell = { flex: "0.6 1 80px", minWidth: 0 };
+const expTaxHint = { flexBasis: "100%", color: "var(--k-muted)", fontSize: "var(--k-font-sm)" };
 
-const summaryStrong = { fontSize: "1.05rem", fontWeight: 700, color: colors.blue };
-const summaryLabelMuted = { color: colors.textSecondary, fontSize: "0.78rem", fontWeight: 500 };
-const summaryMuted = { fontSize: "0.85rem", fontWeight: 600, color: colors.textSecondary };
+const summaryStrong = { fontSize: "calc(var(--k-font) * 1.15)", fontWeight: 700, color: "var(--k-blue)" };
+const summaryLabelMuted = { color: "var(--k-muted)", fontSize: "var(--k-font-sm)", fontWeight: 500 };
+const summaryMuted = { fontSize: "var(--k-font)", fontWeight: 600, color: "var(--k-muted)" };
