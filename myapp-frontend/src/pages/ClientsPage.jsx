@@ -7,8 +7,9 @@ import CommonClientForm from "../Components/CommonClientForm";
 import CopyToCompaniesDialog from "../Components/CopyToCompaniesDialog";
 import { getClientsByCompany, getCommonClients, copyClientToCompanies } from "../api/clientApi";
 import { notify } from "../utils/notify";
-import { PageHeader, CompanyPicker, Button, Toolbar, SearchBox, EmptyState, Loading } from "../ui/Kit";
-import { matchesSearch, countByType, REGISTRATION_TYPES } from "../Components/party/partyUtils";
+import { PageHeader, Button, EmptyState, Loading } from "../ui/Kit";
+import PartyToolbar from "../Components/party/PartyToolbar";
+import { matchesSearch, countByType } from "../Components/party/partyUtils";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import ImportFromExcelButton from "../Components/onboarding/ImportFromExcelButton";
@@ -95,13 +96,6 @@ export default function ClientsPage() {
   const filtered = typeFilter === "all" ? searched
     : typeFilter === "common" ? searched.filter(isCommon)
     : searched.filter((c) => (c.registrationType || "None") === typeFilter);
-  // Registration-type chips show only the types present, with their counts.
-  const typeChips = [...REGISTRATION_TYPES, "None"].filter((t) => counts[t] > 0);
-  const chip = (key, label, n) => (
-    <Button key={key} size="sm" variant={typeFilter === key ? "primary" : "secondary"} aria-pressed={typeFilter === key} onClick={() => setTypeFilter(key)}>
-      {label} <span style={{ opacity: 0.8 }}>{n}</span>
-    </Button>
-  );
 
   return (
     <div>
@@ -121,23 +115,22 @@ export default function ClientsPage() {
         )}
       />
 
-      {/* Company Selector */}
+      {/* Company picker (hidden in Workspace: the topbar switches company),
+          search and registration-type / Common chips — same toolbar as Suppliers. */}
       {loadingCompanies ? (
         <Loading>Loading companies...</Loading>
       ) : companies.length > 0 ? (
-        <>
-          <CompanyPicker />
-          <Toolbar>
-            <SearchBox value={search} onChange={setSearch} placeholder="Search name, NTN, CNIC, phone, email, address" />
-            {(typeChips.length > 1 || counts.common > 0) && (
-              <div role="group" aria-label="Filter by registration type or shared status" style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
-                {chip("all", "All", counts.all)}
-                {counts.common > 0 && chip("common", "Common", counts.common)}
-                {typeChips.length > 1 && typeChips.map((t) => chip(t, t === "None" ? "No type" : t, counts[t]))}
-              </div>
-            )}
-          </Toolbar>
-        </>
+        <PartyToolbar
+          companies={companies}
+          selectedCompany={selectedCompany}
+          onCompanyChange={setSelectedCompany}
+          search={search}
+          onSearch={setSearch}
+          searchPlaceholder="Search name, NTN, CNIC, phone, email, address"
+          typeFilter={typeFilter}
+          onTypeFilter={setTypeFilter}
+          counts={counts}
+        />
       ) : (
         <EmptyState icon={MdBusiness} title="No companies yet">Add a company first, then its clients will appear here.</EmptyState>
       )}

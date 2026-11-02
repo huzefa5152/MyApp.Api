@@ -9,7 +9,7 @@ import { formStyles, modalSizes } from "../theme";
 import CopyToCompaniesDialog from "./CopyToCompaniesDialog";
 import { notify } from "../utils/notify";
 import useScrollToError from "../hooks/useScrollToError";
-import { Button, Loading } from "../ui/Kit";
+import { Alert, Button, Loading } from "../ui/Kit";
 import { PartyFormHeader, FormSection } from "./party/PartyFormKit";
 
 /**
@@ -328,7 +328,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
         />
 
         <form onSubmit={handleSubmit} style={{ display: "contents" }}>
-          <div data-admin-body="" className="pf-body" style={{ ...formStyles.body, background: "#f5f8fc" }}>
+          <div data-admin-body="" className="pf-body" style={{ ...formStyles.body, background: "var(--k-surface-3)" }}>
             {loading ? (
               <Loading>Loading…</Loading>
             ) : (
@@ -339,20 +339,17 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                     operator saves: every change here applies to every
                     member company below. */}
                 {detail && (
-                  <div style={s.cascadeBanner}>
-                    <MdInfo size={18} color="#0d47a1" style={{ flexShrink: 0, marginTop: 2 }} />
-                    <div>
-                      <div style={{ fontWeight: 700, marginBottom: 2 }}>
-                        Changes propagate to {detail.members?.length || 0} client
-                        {(detail.members?.length || 0) !== 1 ? "s" : ""} across {memberCompanyList || "this company"}
-                      </div>
-                      <div style={{ fontSize: "0.8rem", color: "#5f6d7e" }}>
-                        Every field below — including <strong>Sites</strong> — applies to every sibling
-                        company's record on save. Sites pre-fill from the longest existing list so the
-                        common case (you set them under one tenant, forgot the others) is a no-op rewrite.
-                      </div>
+                  <Alert tone="info" icon={MdInfo}>
+                    <div style={{ fontWeight: 700, marginBottom: 2 }}>
+                      Changes propagate to {detail.members?.length || 0} client
+                      {(detail.members?.length || 0) !== 1 ? "s" : ""} across {memberCompanyList || "this company"}
                     </div>
-                  </div>
+                    <div style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)" }}>
+                      Every field below — including <strong>Sites</strong> — applies to every sibling
+                      company's record on save. Sites pre-fill from the longest existing list so the
+                      common case (you set them under one tenant, forgot the others) is a no-op rewrite.
+                    </div>
+                  </Alert>
                 )}
 
                 <FormSection icon={<MdStorefront size={18} />} title="Business details" hint="As it should print on documents">
@@ -428,7 +425,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                     {showNtn && (
                       <div data-admin-field="" style={formStyles.formGroup}>
                         <label style={formStyles.label}>
-                          {ntnLabel} {ntnRequired ? "*" : <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional)</span>}
+                          {ntnLabel} {ntnRequired ? "*" : <span style={{ fontWeight: 400, color: "var(--k-muted)" }}>(optional)</span>}
                         </label>
                         <input
                           name="ntn"
@@ -532,9 +529,9 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                             <div className="pf-member__company">
                               <MdCheckCircle size={14} color="#28a745" /> {m.companyName}
                             </div>
-                            <div className="pf-member__site">{m.site || <em style={{ color: "#aab3bf" }}>(no sites)</em>}</div>
+                            <div className="pf-member__site">{m.site || <em style={{ color: "var(--k-faint)" }}>(no sites)</em>}</div>
                             <div className="pf-member__flag">
-                              {m.hasInvoices ? "Has bills" : <span style={{ color: "#aab3bf" }}>—</span>}
+                              {m.hasInvoices ? "Has bills" : <span style={{ color: "var(--k-faint)" }}>—</span>}
                             </div>
                             {canDelete ? (
                               <Button
@@ -646,29 +643,18 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
 }
 
 const s = {
-  cascadeBanner: {
-    display: "flex",
-    gap: "0.6rem",
-    background: "linear-gradient(135deg, rgba(13,71,161,0.07), rgba(0,137,123,0.08))",
-    border: "1px solid #cfe0f4",
-    color: "#0a3680",
-    padding: "0.75rem 0.95rem",
-    borderRadius: 14,
-    marginBottom: "0.9rem",
-  },
-
   fieldHelp: {
-    fontSize: "0.75rem",
-    color: "#5f6d7e",
+    fontSize: "var(--k-font-sm)",
+    color: "var(--k-muted)",
     marginTop: "0.25rem",
     display: "block",
     lineHeight: 1.4,
   },
   deleteBtn: {
-    background: "#fff0f1",
-    backgroundColor: "#fff0f1",
-    color: "#dc3545",
-    border: "1px solid rgba(220,53,69,0.2)",
+    background: "var(--k-danger-bg)",
+    backgroundColor: "var(--k-danger-bg)",
+    color: "var(--k-danger)",
+    border: "1px solid color-mix(in srgb, var(--k-danger) 20%, transparent)",
     boxShadow: "none",
   },
   addCompanyBtn: {

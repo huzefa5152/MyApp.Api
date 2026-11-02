@@ -194,7 +194,7 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
           onClose={onClose}
         />
         <form onSubmit={handleSubmit} noValidate style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
-          <div data-admin-body="" className="pf-body" style={{ ...body, background: "#f5f8fc" }}>
+          <div data-admin-body="" className="pf-body" style={{ ...body, background: "var(--k-surface-3)" }}>
             {/* Multi-company picker — CREATE mode + parent supplied
                 companies. Default-checked is the currently-active
                 company so single-company creates stay one click;
@@ -349,7 +349,7 @@ const pickerStyles = {
     fontFamily: "inherit",
     fontSize: "var(--k-font-sm)",
     fontWeight: 600,
-    minHeight: 36,
+    minHeight: 44,
     padding: "0 0.9rem",
     borderRadius: 999,
     cursor: "pointer",
@@ -357,6 +357,6 @@ const pickerStyles = {
     boxShadow: "none",
     margin: 0,
   },
-  chipOn: { background: "linear-gradient(135deg, #0d47a1, #00897b)", color: "#fff", border: "1px solid transparent" },
-  chipOff: { background: "#f5f8fc", color: "#0d47a1", border: "1px solid #d8e3f1" },
+  chipOn: { background: "var(--k-primary-bg)", color: "#fff", border: "1px solid transparent" },
+  chipOff: { background: "var(--k-surface-3)", color: "var(--k-blue)", border: "1px solid var(--k-line-strong)" },
 };

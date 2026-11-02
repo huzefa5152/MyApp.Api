@@ -119,7 +119,7 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
   const showCnic = !!regType;
   const ntnLabel = ntnRequired
     ? "NTN *"
-    : <>{regType === "FTN" ? "NTN / FTN" : "NTN"} <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional)</span></>;
+    : <>{regType === "FTN" ? "NTN / FTN" : "NTN"} <span style={{ fontWeight: 400, color: "var(--k-muted)" }}>(optional)</span></>;
 
   // "Check with FBR": FBR's Get_Reg_Type answer for the typed NTN/CNIC.
   // A buyer recorded as Registered whom FBR holds as Unregistered is
@@ -241,10 +241,10 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
   };
 
   const fieldError = (name) =>
-    errors[name] ? { border: "1px solid #dc3545" } : {};
+    errors[name] ? { border: "1px solid var(--k-danger)" } : {};
 
   const errorMsg = (name) =>
-    errors[name] ? <span style={{ color: "#dc3545", fontSize: "0.78rem", marginTop: "0.2rem", display: "block" }}>{errors[name]}</span> : null;
+    errors[name] ? <span style={{ color: "var(--k-danger)", fontSize: "var(--k-font-sm)", marginTop: "0.2rem", display: "block" }}>{errors[name]}</span> : null;
 
   return (
     <div data-admin-backdrop="" style={backdrop}>
@@ -256,7 +256,7 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
           onClose={onClose}
         />
         <form onSubmit={handleSubmit} noValidate style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
-          <div data-admin-body="" className="pf-body" style={{ ...body, background: "#f5f8fc" }}>
+          <div data-admin-body="" className="pf-body" style={{ ...body, background: "var(--k-surface-3)" }}>
             {/* Multi-company picker — CREATE mode only, when the parent
                 has supplied the companies list and the operator has
                 more than one to pick from. Default-checked is the
@@ -345,7 +345,7 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
                         {fbrCheck.busy ? "Asking FBR…" : "Check with FBR"}
                       </Button>
                       {fbrCheck.result && (
-                        <span style={{ fontSize: "0.78rem", color: fbrCheck.result.startsWith("FBR:") ? "#1b5e20" : "#b71c1c" }}>{fbrCheck.result}</span>
+                        <span style={{ fontSize: "var(--k-font-sm)", color: fbrCheck.result.startsWith("FBR:") ? "#1b5e20" : "var(--k-danger)" }}>{fbrCheck.result}</span>
                       )}
                     </div>
                   )}
@@ -364,7 +364,7 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
 
               {/* Identity fields — type-driven. */}
               {!regType && (
-                <p style={{ margin: "0.5rem 0 0", fontSize: "0.78rem", color: "#5f6d7e" }}>
+                <p style={{ margin: "0.5rem 0 0", fontSize: "var(--k-font-sm)", color: "var(--k-muted)" }}>
                   Pick a registration type to see the right identity fields.
                 </p>
               )}
@@ -387,7 +387,7 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
                   )}
                   {showStrn && (
                     <div data-admin-field="" style={formGroup}>
-                      <label style={label}>STRN <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional — not sent to FBR)</span></label>
+                      <label style={label}>STRN <span style={{ fontWeight: 400, color: "var(--k-muted)" }}>(optional — not sent to FBR)</span></label>
                       <input
                         type="text"
                         name="strn"
@@ -404,7 +404,7 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
 
               {showCnic && (
                 <div style={{ ...formGroup, marginTop: "0.5rem" }}>
-                  <label style={label}>CNIC (13 digits) <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional)</span></label>
+                  <label style={label}>CNIC (13 digits) <span style={{ fontWeight: 400, color: "var(--k-muted)" }}>(optional)</span></label>
                   <input
                     type="text"
                     name="cnic"
@@ -415,7 +415,7 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
                     maxLength={13}
                   />
                   {errorMsg("cnic")}
-                  <span style={{ fontSize: "0.75rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" }}>
+                  <span style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)", marginTop: "0.2rem", display: "block" }}>
                     Optional — FBR files a buyer under the NTN when it has one, and under the CNIC otherwise.
                   </span>
                 </div>
@@ -427,13 +427,13 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
             <div data-admin-field="" style={formGroup}>
               <label style={label}>Sites</label>
               <input type="text" name="site" value={formData.site} onChange={handleChange} style={input} placeholder="e.g. Site-A ; Site-B ; Site-C" />
-              <span style={{ fontSize: "0.75rem", color: "#5f6d7e", marginTop: "0.25rem", display: "block" }}>Separate multiple sites with semicolons (;). These will appear as dropdown options when creating a delivery challan.</span>
+              <span style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)", marginTop: "0.25rem", display: "block" }}>Separate multiple sites with semicolons (;). These will appear as dropdown options when creating a delivery challan.</span>
             </div>
 
             <div data-admin-field="" style={formGroup}>
               <label style={label}>Contact Persons</label>
               <input type="text" name="contactPerson" value={formData.contactPerson} onChange={handleChange} style={input} placeholder="e.g. Ali ; Bilal ; Sara" />
-              <span style={{ fontSize: "0.75rem", color: "#5f6d7e", marginTop: "0.25rem", display: "block" }}>Separate multiple contacts with semicolons (;). These appear as a dropdown when creating a Sales Quote.</span>
+              <span style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)", marginTop: "0.25rem", display: "block" }}>Separate multiple contacts with semicolons (;). These appear as a dropdown when creating a Sales Quote.</span>
             </div>
             </FormSection>
 
@@ -459,9 +459,9 @@ const pickerStyles = {
   },
   chip: {
     fontFamily: "inherit",
-    fontSize: "0.82rem",
+    fontSize: "var(--k-font-sm)",
     fontWeight: 600,
-    minHeight: 36,
+    minHeight: 44,
     padding: "0 0.9rem",
     borderRadius: 999,
     cursor: "pointer",
@@ -470,13 +470,13 @@ const pickerStyles = {
     margin: 0,
   },
   chipOn: {
-    background: "linear-gradient(135deg, #0d47a1, #00897b)",
+    background: "var(--k-primary-bg)",
     color: "#fff",
     border: "1px solid transparent",
   },
   chipOff: {
-    background: "#f5f8fc",
-    color: "#0d47a1",
-    border: "1px solid #d8e3f1",
+    background: "var(--k-surface-3)",
+    color: "var(--k-blue)",
+    border: "1px solid var(--k-line-strong)",
   },
 };

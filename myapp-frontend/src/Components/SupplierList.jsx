@@ -60,13 +60,13 @@ export default function SupplierList({ suppliers, commonGroups, onEdit, onEditCo
           style={{ animationDelay: `${Math.min(i, 12) * 0.03}s` }}
           footnote={<>
             {payables && (payables.get(supplier.id) || 0) > 0 && (
-              <span className="pd-contact__row" style={{ color: "#b45309", fontSize: "0.8rem", fontWeight: 700 }}>
-                <MdPayments style={{ color: "#d97706" }} /><span>Payable Rs. {money(payables.get(supplier.id))}</span>
+              <span className="pd-contact__row" style={{ color: "#b45309", fontWeight: 700 }}>
+                <MdPayments style={{ color: "inherit" }} /><span>Payable Rs. {money(payables.get(supplier.id))}</span>
               </span>
             )}
             {supplier.hasPurchaseBills && (
-              <span className="pd-contact__row" style={{ color: "#00695c", fontSize: "0.76rem", fontWeight: 600 }}>
-                <MdInventory2 style={{ color: "#00897b" }} /><span>Has purchase bills</span>
+              <span className="pd-contact__row" style={{ color: "var(--k-teal)", fontWeight: 600 }}>
+                <MdInventory2 style={{ color: "inherit" }} /><span>Has purchase bills</span>
               </span>
             )}
           </>}

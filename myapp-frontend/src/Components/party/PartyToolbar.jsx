@@ -1,16 +1,20 @@
 import { MdSearch, MdBusiness } from "react-icons/md";
 import { REGISTRATION_TYPES } from "./partyUtils";
+import useUi2 from "../../ui2/useUi2";
 import "./PartyDirectory.css";
 
 /**
  * Company picker + search + registration-type filter for the directory
  * screens. Type chips show only the types present, with their counts.
+ * The company select follows the kit CompanyPicker rule: hidden in the
+ * Workspace layout, where the topbar switcher drives the same CompanyContext.
  */
 export default function PartyToolbar({
   companies, selectedCompany, onCompanyChange,
   search, onSearch, searchPlaceholder,
   typeFilter, onTypeFilter, counts,
 }) {
+  const topbarSwitcher = useUi2();
   const types = [...REGISTRATION_TYPES, "None"].filter((t) => counts[t] > 0);
   const chip = (key, label, n) => (
     <button key={key} type="button" className="pd-chip" aria-pressed={typeFilter === key} onClick={() => onTypeFilter(key)}>
@@ -20,9 +24,9 @@ export default function PartyToolbar({
 
   return (
     <div className="pd-toolbar" data-admin-toolbar="">
-      {companies.length > 1 && (
+      {!topbarSwitcher && companies.length > 1 && (
         <label className="pd-toolbar__company">
-          <MdBusiness size={20} color="#0d47a1" aria-hidden="true" />
+          <MdBusiness size={20} aria-hidden="true" />
           <select
             aria-label="Company"
             value={selectedCompany?.id || ""}

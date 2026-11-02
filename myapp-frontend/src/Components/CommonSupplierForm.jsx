@@ -495,7 +495,7 @@ const clamp2 = { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "v
 const s = {
   clamp2,
   fieldHelp: {
-    fontSize: "0.75rem",
+    fontSize: "var(--k-font-sm)",
     color: "var(--k-muted)",
     marginTop: "0.25rem",
     display: "block",
@@ -505,7 +505,7 @@ const s = {
     background: "var(--k-danger-bg)",
     backgroundColor: "var(--k-danger-bg)",
     color: "var(--k-danger)",
-    border: "1px solid rgba(220,53,69,0.2)",
+    border: "1px solid color-mix(in srgb, var(--k-danger) 20%, transparent)",
     boxShadow: "none",
   },
 };
