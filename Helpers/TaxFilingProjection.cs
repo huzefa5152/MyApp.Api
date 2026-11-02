@@ -37,7 +37,7 @@ public static class TaxFilingProjection
         var overlays = bill.Items.Where(i => i.Adjustment != null).Select(i => i.Adjustment!).ToList();
         if (bill.TaxFilingRowsJson != null || overlays.Count == 0) return;
         bill.TaxFilingRowsJson = JsonSerializer.Serialize(new TaxFilingPlan {
-            SourceVersion = SourceVersion(bill), Rows = InitialRows(bill),
+            SourceVersion = SourceVersion(bill), Rows = InitialRows(bill, splitUnits: true),
             SavedAt = overlays.Max(a => a.UpdatedAt ?? a.CreatedAt), SavedBy = overlays[0].CreatedByUserId ?? 0
         });
     }
@@ -71,16 +71,23 @@ public static class TaxFilingProjection
     /// The starting rows of the filing editor. <paramref name="perLine"/> gives every original bill line its own row
     /// (a company that prints its original lines never starts from item-type groups) and names the row by the bill's
     /// own description, so the consultant sees the line the customer was billed.
+    /// Lines of one classification start as ONE row whatever unit the bill used (Roshan bill 1139: 1 Set line and
+    /// 8 Pcs lines of Fastener Item). Quantities in different units are never summed: such a row starts with no
+    /// unit and no quantity, for the consultant to file in one FBR unit. <paramref name="splitUnits"/> keeps the
+    /// old split for converting a legacy overlay, which is saved as is and must keep a real quantity per row.
     /// </summary>
-    public static List<TaxFilingRowDto> InitialRows(Invoice bill, bool commercial = false, bool perLine = false) => bill.Items.Select(i => commercial ? i : LegacyLine(i))
-        .GroupBy(i => perLine ? (object)i.Id : new { Classification = TaxInvoiceGrouping.Key(i), i.UOM }).Select(g => new TaxFilingRowDto {
-            SourceLineIds = g.Select(i => i.Id).ToList(), ItemTypeId = g.First().ItemTypeId,
-            Description = perLine && !string.IsNullOrWhiteSpace(g.First().Description) ? g.First().Description : g.First().ItemTypeName ?? g.First().Description,
-            HSCode = g.First().HSCode, UOM = g.First().UOM, FbrUOMId = g.First().FbrUOMId,
-            SaleType = g.First().SaleType, RateId = g.First().RateId,
-            SroScheduleNo = g.First().SroScheduleNo, SroItemSerialNo = g.First().SroItemSerialNo,
-            Quantity = g.Sum(i => i.Quantity), ValueExclTax = g.Sum(i => i.LineTotal),
-            RetailPrice = g.Sum(i => i.FixedNotifiedValueOrRetailPrice ?? 0m)
+    public static List<TaxFilingRowDto> InitialRows(Invoice bill, bool commercial = false, bool perLine = false, bool splitUnits = false) => bill.Items.Select(i => commercial ? i : LegacyLine(i))
+        .GroupBy(i => perLine ? (object)i.Id : new { Classification = TaxInvoiceGrouping.Key(i), Unit = splitUnits ? i.UOM : null }).Select(g => {
+            var mixedUnits = g.Select(i => i.UOM?.Trim().ToUpperInvariant()).Distinct().Count() > 1;
+            return new TaxFilingRowDto {
+                SourceLineIds = g.Select(i => i.Id).ToList(), ItemTypeId = g.First().ItemTypeId,
+                Description = perLine && !string.IsNullOrWhiteSpace(g.First().Description) ? g.First().Description : g.First().ItemTypeName ?? g.First().Description,
+                HSCode = g.First().HSCode, UOM = mixedUnits ? "" : g.First().UOM, FbrUOMId = mixedUnits ? null : g.First().FbrUOMId,
+                SaleType = g.First().SaleType, RateId = g.First().RateId,
+                SroScheduleNo = g.First().SroScheduleNo, SroItemSerialNo = g.First().SroItemSerialNo,
+                Quantity = mixedUnits ? 0 : g.Sum(i => i.Quantity), ValueExclTax = g.Sum(i => i.LineTotal),
+                RetailPrice = g.Sum(i => i.FixedNotifiedValueOrRetailPrice ?? 0m)
+            };
         }).ToList();
 
     /// <summary>
