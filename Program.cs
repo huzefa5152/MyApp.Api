@@ -142,8 +142,25 @@ if (builder.Environment.IsDevelopment())
 
 // Add services to the container
 builder.Services.AddControllers(); // 👈 Needed for controllers
+// Opening a connection to the production SQL server takes about a second. The pool closes idle
+// connections after a few quiet minutes, so the first page load after a lull (eight parallel
+// calls) waited on fresh connections: 0.5-1.4 s per call, once 19.8 s, against ~0.2 s warm.
+// A minimum pool keeps that many open. Leaves a Min Pool Size set in configuration alone.
+static string? WithWarmPool(string? connectionString)
+{
+    if (string.IsNullOrWhiteSpace(connectionString)) return connectionString;
+    try
+    {
+        var csb = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString);
+        if (!connectionString.Contains("Min Pool Size", StringComparison.OrdinalIgnoreCase)
+            && !connectionString.Contains("MinPoolSize", StringComparison.OrdinalIgnoreCase))
+            csb.MinPoolSize = 8;
+        return csb.ConnectionString;
+    }
+    catch (ArgumentException) { return connectionString; }
+}
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"))
+    options.UseSqlServer(WithWarmPool(builder.Configuration.GetConnectionString("DefaultConnection")))
            .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
 
 // Register Swagger generator
