@@ -253,20 +253,25 @@ builder.Services.AddAuthentication(options =>
             }
 
             var db = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
-            var currentStamp = await db.Users.AsNoTracking()
-                .Where(u => u.Id == userId).Select(u => u.SecurityStamp).FirstOrDefaultAsync();
-            if (currentStamp == null || !string.Equals(currentStamp, stamp, StringComparison.Ordinal))
+            // Stamp and session in one round trip: this runs before every API call.
+            var sessionId = principal.FindFirstValue("sid");
+            var auth = await db.Users.AsNoTracking().Where(u => u.Id == userId)
+                .Select(u => new
+                {
+                    u.SecurityStamp,
+                    Session = db.UserSessions.Where(s => s.Id == sessionId)
+                        .Select(s => new { s.UserId, s.IsRevoked, s.ExpiresAt, s.LastSeenAt }).FirstOrDefault(),
+                }).FirstOrDefaultAsync();
+            if (auth?.SecurityStamp == null || !string.Equals(auth.SecurityStamp, stamp, StringComparison.Ordinal))
             {
                 context.Fail("Token has been revoked");
                 return;
             }
             // A token minted with a session must still have a live session row. Tokens
             // from before sessions existed carry no sid and age out on their own expiry.
-            var sessionId = principal.FindFirstValue("sid");
             if (sessionId == null) return;
             var now = DateTime.UtcNow;
-            var session = await db.UserSessions.AsNoTracking().Where(s => s.Id == sessionId)
-                .Select(s => new { s.UserId, s.IsRevoked, s.ExpiresAt, s.LastSeenAt }).FirstOrDefaultAsync();
+            var session = auth.Session;
             if (session == null || session.UserId != userId || session.IsRevoked || session.ExpiresAt <= now)
             {
                 context.Fail("Session expired or revoked");
