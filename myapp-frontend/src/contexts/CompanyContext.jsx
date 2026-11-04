@@ -10,6 +10,7 @@ import {
 import { getCompanies } from "../api/companyApi";
 import { getCompanyStamps } from "../api/stampApi";
 import { setActiveStamps } from "../utils/templateEngine";
+import { loadStampImage, stampImageSrc } from "../utils/stampImages";
 import { useAuth } from "./AuthContext";
 import { usePermissions } from "./PermissionsContext";
 
@@ -30,6 +31,8 @@ export function CompanyProvider({ children }) {
   const [companyStamps, setCompanyStamps] = useState([]);
 
   const stampRequest = useRef(0);
+  // Images held in memory for this login only (see utils/stampImages.js).
+  const stampImages = useRef({ token: null, cache: new Map() });
   const companyRequest = useRef(0);
 
   const loadStamps = useCallback(
@@ -46,8 +49,17 @@ export function CompanyProvider({ children }) {
         const { data } = await getCompanyStamps(companyId);
         if (request !== stampRequest.current) return;
         const list = data || [];
-        setCompanyStamps(list);
-        setActiveStamps(Object.fromEntries(list.map((s) => [s.slug, s.url])));
+        const publish = (stamps) => {
+          setCompanyStamps(stamps);
+          setActiveStamps(Object.fromEntries(stamps.map((s) => [s.slug, stampImageSrc(s)])));
+        };
+        // Usable at once by URL; a print started now must not lose its stamp to the wait below.
+        publish(list);
+        if (stampImages.current.token !== token) stampImages.current = { token, cache: new Map() };
+        const { cache } = stampImages.current;
+        const images = await Promise.all(list.map((s) => loadStampImage(s, cache)));
+        if (request !== stampRequest.current) return;
+        publish(list.map((s, i) => (images[i] ? { ...s, image: images[i] } : s)));
       } catch {
         if (request !== stampRequest.current) return;
         // No view permission or transient error — clear rather than leave stale.

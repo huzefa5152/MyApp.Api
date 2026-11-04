@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { MdBlock, MdAddPhotoAlternate } from "react-icons/md";
 import { STAMP_STATE } from "../../utils/stampSlot";
+import { stampImageSrc } from "../../utils/stampImages";
 
 /**
  * Choose which company stamp a template renders.
@@ -90,7 +91,7 @@ export default function StampPicker({
             title={`{{stamps.${s.slug}}}`}
           >
             <span style={st.cardArt}>
-              <img src={s.url} alt="" style={st.cardImg} />
+              <img src={stampImageSrc(s)} alt="" style={st.cardImg} />
             </span>
             <span style={st.cardLabel}>{s.name}</span>
           </button>
@@ -101,7 +102,7 @@ export default function StampPicker({
 
   return (
     <div style={st.row}>
-      {selected && <img src={selected.url} alt="" style={st.inlineThumb} />}
+      {selected && <img src={stampImageSrc(selected)} alt="" style={st.inlineThumb} />}
       <select
         value={value == null ? "" : String(value)}
         disabled={disabled || busy}

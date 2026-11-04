@@ -67,6 +67,7 @@ import {
   peekRecentTemplate,
   clearRecentTemplate,
 } from "../utils/templateEditorNav";
+import { stampImageSrc } from "../utils/stampImages";
 
 const colors = {
   blue: "#0d47a1",
@@ -1157,12 +1158,7 @@ export default function PrintTemplatesPage() {
                           )}
                         </div>
                         <div style={st.stampThumbWrap}>
-                          {/* The URL can stay the same after a replace; v shows the new image. */}
-                          <img
-                            src={`${s.url}?v=${encodeURIComponent(s.updatedAt)}`}
-                            alt={s.name}
-                            style={st.stampThumbImg}
-                          />
+                          <img src={stampImageSrc(s)} alt={s.name} style={st.stampThumbImg} />
                         </div>
                         <button
                           style={st.stampToken}
@@ -1359,7 +1355,7 @@ export default function PrintTemplatesPage() {
                   // with the printed document.
                   materializeStamp(
                     previewTarget.htmlContent || "",
-                    companyStamps.find((s) => s.id === previewTarget.stampId)?.url || null,
+                    stampImageSrc(companyStamps.find((s) => s.id === previewTarget.stampId)),
                   ),
                   { company: selectedCompany },
                 )}

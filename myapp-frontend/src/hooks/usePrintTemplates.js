@@ -3,6 +3,7 @@ import { getTemplatesByCompany } from "../api/printTemplateApi";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { withStamp } from "../utils/stampSlot";
+import { stampImageSrc } from "../utils/stampImages";
 
 // Generic per-document-type print-template picker state, shared by every
 // document screen (quotes, orders, challans, bills, tax invoices, notes,
@@ -127,7 +128,7 @@ export function usePrintTemplates(templateType) {
   // Slug -> URL for the active company's stamps, so {{stamp}} can be resolved
   // without another fetch. CompanyContext already holds this list.
   const stampsBySlug = useMemo(
-    () => Object.fromEntries((companyStamps || []).map((s) => [s.slug, s.url])),
+    () => Object.fromEntries((companyStamps || []).map((s) => [s.slug, stampImageSrc(s)])),
     [companyStamps],
   );
 
