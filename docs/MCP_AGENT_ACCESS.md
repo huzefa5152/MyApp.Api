@@ -42,6 +42,7 @@ copies (PDF via Edge, printed by SumatraPDF); its token lives in the gitignored
 | `challans.write` | `prepare_challan` | `challans.manage.create`, `challans.list.view` |
 | `bills.write` | `prepare_bill` (from challans, or standalone) | `bills.manage.create` and/or `bills.manage.create.standalone`, `challans.list.view` |
 | `templates.write` | `prepare_print_template_update` | Both `printtemplates.manage.view` and `printtemplates.manage.update` |
+| `templates.write` | `prepare_company_stamp` (add, replace, rename, set default, delete, assign to a template) | `printtemplates.stamps.manage` for stamp changes; `printtemplates.manage.update` to assign. The scope itself needs `printtemplates.manage.view` and `.update`, and each action needs its read right (`printtemplates.stamps.view`, or `printtemplates.manage.view` to assign) |
 | `suppliers.write` | `prepare_supplier` (create or update) | `suppliers.manage.create` and `.update` |
 | `itemtypes.write` | `prepare_item_type` (create or update a catalog item) | `itemtypes.manage.view`, and `.create` and/or `.update` |
 | `taxfiling.write` | `prepare_bill_tax_filing` (a bill's FBR filing rows) | `invoices.list.view`, and `invoices.manage.update.itemtype` and/or `.itemtype.qty` |
@@ -80,9 +81,29 @@ record ownership, permissions, tool grants and revision while locking the saved 
 concurrent template or assignment change refuses the plan. Saves preserve the default,
 stamp and Excel settings, switch to code mode, and clear stale visual-editor project data.
 The tool updates existing designs only; it does not create, delete or activate templates,
-upload assets, submit documents to FBR, or change financial data. Large designs exceeding
+submit documents to FBR, or change financial data. Stamp images have their own tool, below. Large designs exceeding
 the bounded plan size must be edited in the application. Re-read the saved template and
 verify print/PDF with the existing renderer after committing.
+
+### Company stamps
+
+`list_company_stamps` gives each stamp's id, merge field, usage and revision, plus the slot
+markup; `get_company_stamp` adds the image. `prepare_company_stamp` takes an `action`:
+
+- `add`: `imageBase64` and `fileName`, optional `name`.
+- `replace`: `stampId`, `revision`, `imageBase64`, `fileName`. The id, merge field and template
+  assignments stay, so every template using the stamp shows the new image with none edited.
+- `rename`, `set_default`, `delete`: `stampId` and `revision`.
+- `assign_template`: `templateId` and the template's `revision`, with `stampId`, or without it to
+  remove the stamp. A template with no `{{stamp}}` slot is refused unless `htmlContent` adds one;
+  the same field converts `{{stamps.<slug>}}` to `{{stamp}}`.
+
+Images are PNG, JPG, WebP or GIF up to 256 KB. This is the one call allowed past the ordinary
+64 KB request limit. The image is not echoed in the plan or kept in the activity log, so review
+`imageBytes` and `imageSha256`, then check `get_company_stamp` after committing. Commit rechecks
+the company, the record's stored company, permissions, the tool grant and the revision. Changes are
+capped at 30 per user per hour. Grant `prepare_company_stamp` in the user's MCP catalog: existing
+policies do not gain it.
 
 ### Email enquiries from ChatGPT
 

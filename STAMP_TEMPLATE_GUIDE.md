@@ -5,6 +5,10 @@ carried through copy / starter / import — and how to build it so the **same
 change lands on `master` and on `customize-solution-for-other`** with minimal
 per-branch work.
 
+A stamp's image can be replaced in place (`PUT /api/companies/{id}/stamps/{stampId}/image`): the id,
+slug and template assignments stay, so no template needs editing. The screen and MCP share
+`ICompanyStampService`; `scripts/test_stamp_operations.py` is the suite.
+
 Base stamps feature (upload / rename / delete, `{{stamps.<slug>}}`) already
 exists on both branches. This guide covers only what sits on top of it.
 

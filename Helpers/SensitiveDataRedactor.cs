@@ -63,7 +63,7 @@ namespace MyApp.Api.Helpers
             "code", "state", "access_token", "refresh_token", "client_secret",
             "password", "currentpassword", "newpassword", "oldpassword",
             "passwordhash", "confirmpassword",
-            "fbrtoken", "token", "apikey", "api_key", "secret",
+            "fbrtoken", "token", "apikey", "api_key", "secret", "imagebase64",
             "jwt", "authorization", "bearer",
             "connectionstring",
         };

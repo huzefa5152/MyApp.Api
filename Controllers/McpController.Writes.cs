@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
@@ -26,12 +27,13 @@ namespace MyApp.Api.Controllers
         // activity row is filed under that company like every companyId call.
         private int? _activityCompanyId;
 
-        private static readonly string[] WriteToolNameList = { "prepare_client", "prepare_quote", "prepare_challan", "prepare_bill", "prepare_email_decision", "prepare_email_quotation", "prepare_print_template_update", "prepare_starter_template", "prepare_supplier", "prepare_item_type", "prepare_bill_tax_filing", "prepare_fbr_exclusion", "commit_action", "cancel_action" };
+        private static readonly string[] WriteToolNameList = { "prepare_client", "prepare_quote", "prepare_challan", "prepare_bill", "prepare_email_decision", "prepare_email_quotation", "prepare_print_template_update", "prepare_company_stamp", "prepare_starter_template", "prepare_supplier", "prepare_item_type", "prepare_bill_tax_filing", "prepare_fbr_exclusion", "commit_action", "cancel_action" };
         private static bool IsWriteTool(string name) => WriteToolNameList.Contains(name, StringComparer.Ordinal);
 
         private static string PrepareToolFor(string kind) => kind switch
         {
             "template.update" => "prepare_print_template_update",
+            "stamp.add" or "stamp.replace" or "stamp.rename" or "stamp.default" or "stamp.delete" or "stamp.assign" => "prepare_company_stamp",
             "starter.create" or "starter.update" or "starter.activate" or "starter.deactivate" or "starter.delete" => "prepare_starter_template",
             "client.create" or "client.update" => "prepare_client",
             "quote.create" => "prepare_quote",
@@ -260,12 +262,20 @@ namespace MyApp.Api.Controllers
             kind = plan.Kind,
             companyId = plan.CompanyId,
             summary = plan.Summary,
-            details = JsonSerializer.Deserialize<JsonElement>(plan.Payload),
+            details = PlanDetails(plan),
             expiresInSeconds = Math.Max(0, (int)(plan.ExpiresAt - DateTime.UtcNow).TotalSeconds),
             saved = false,
             note,
             instruction = "Nothing has been saved. Show this plan to the user and obtain approval, then call commit_action with the planId.",
         };
+
+        // The plan keeps a stamp's image to commit; the agent just sent it, so it is not sent back.
+        private static JsonNode? PlanDetails(McpPendingAction plan)
+        {
+            var details = JsonNode.Parse(plan.Payload);
+            (details as JsonObject)?.Remove("imageBase64");
+            return details;
+        }
 
         private async Task<object> StorePlanAsync(McpAgentToken agent, string kind, int companyId, object payload, string summary, string? key)
         {
@@ -435,6 +445,7 @@ namespace MyApp.Api.Controllers
         private static string ScopeFor(string kind) => kind switch
         {
             "template.update" => McpScopes.TemplatesWrite,
+            "stamp.add" or "stamp.replace" or "stamp.rename" or "stamp.default" or "stamp.delete" or "stamp.assign" => McpScopes.TemplatesWrite,
             "starter.create" or "starter.update" or "starter.activate" or "starter.deactivate" or "starter.delete" => McpScopes.TemplatesWrite,
             "client.create" or "client.update" => McpScopes.Clients,
             "challan.create" => McpScopes.Challans,
@@ -456,6 +467,8 @@ namespace MyApp.Api.Controllers
             "supplier.update" => "suppliers.manage.view",
             "itemtype.update" => "itemtypes.manage.view",
             "taxfiling.save" => "invoices.list.view",
+            "stamp.add" or "stamp.replace" or "stamp.rename" or "stamp.default" or "stamp.delete" => "printtemplates.stamps.view",
+            "stamp.assign" => "printtemplates.manage.view",
             _ => null,
         };
 
@@ -463,6 +476,8 @@ namespace MyApp.Api.Controllers
         private static string[] PermissionFor(string kind) => kind switch
         {
             "template.update" => new[] { "printtemplates.manage.update" },
+            "stamp.add" or "stamp.replace" or "stamp.rename" or "stamp.default" or "stamp.delete" => new[] { "printtemplates.stamps.manage" },
+            "stamp.assign" => new[] { "printtemplates.manage.update" },
             "starter.create" or "starter.update" or "starter.activate" or "starter.deactivate" or "starter.delete" => new[] { "printtemplates.manage.update" },
             "client.create" => new[] { "clients.manage.create" },
             "client.update" => new[] { "clients.manage.update" },
@@ -536,6 +551,16 @@ namespace MyApp.Api.Controllers
                     case "template.update":
                         {
                             (resultRef, resultSummary) = await CommitPrintTemplateAsync(plan, p);
+                            break;
+                        }
+                    case "stamp.add":
+                    case "stamp.replace":
+                    case "stamp.rename":
+                    case "stamp.default":
+                    case "stamp.delete":
+                    case "stamp.assign":
+                        {
+                            (resultRef, resultSummary) = await CommitStampAsync(plan, p);
                             break;
                         }
                     case "starter.create":
@@ -632,7 +657,7 @@ namespace MyApp.Api.Controllers
                     default: throw new ToolError("Unknown plan type.");
                 }
             }
-            catch (Exception ex) when (ex is InvalidOperationException or KeyNotFoundException || ((plan.Kind.StartsWith("email.") || plan.Kind == "template.update") && ex is ToolError))
+            catch (Exception ex) when (ex is InvalidOperationException or KeyNotFoundException || ((plan.Kind.StartsWith("email.") || plan.Kind.StartsWith("stamp.") || plan.Kind == "template.update") && ex is ToolError))
             {
                 // Service rules are operator-facing messages (name clash, unknown client...).
                 await _context.McpPendingActions.Where(a => a.Id == plan.Id).ExecuteUpdateAsync(s => s.SetProperty(a => a.ResultRef, "FAILED").SetProperty(a => a.ResultSummary, "The action was refused or may be incomplete. Check the affected records."));

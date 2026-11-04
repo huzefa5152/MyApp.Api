@@ -18,5 +18,6 @@ namespace MyApp.Api.Repositories.Interfaces
         // How many print templates currently render this stamp. Shown before
         // deleting so the operator knows what will start printing unsigned.
         Task<int> TemplateUsageCountAsync(int stampId);
+        Task<Dictionary<int, int>> TemplateUsageCountsAsync(int companyId);
     }
 }

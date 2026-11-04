@@ -422,6 +422,7 @@ try
     builder.Services.AddScoped<IPrintTemplateRepository, PrintTemplateRepository>();
     builder.Services.AddScoped<IStarterTemplateService, StarterTemplateService>();
     builder.Services.AddScoped<ICompanyStampRepository, CompanyStampRepository>();
+    builder.Services.AddScoped<ICompanyStampService, CompanyStampService>();
     builder.Services.AddScoped<IMergeFieldRepository, MergeFieldRepository>();
     builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
     builder.Services.AddScoped<ISalesQuoteRepository, SalesQuoteRepository>();

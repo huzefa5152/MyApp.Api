@@ -31,7 +31,13 @@ import {
   deleteExcelTemplate,
 } from "../api/printTemplateApi";
 import { setTemplateStamp } from "../api/printTemplateApi";
-import { uploadStamp, updateStamp, deleteStamp, setDefaultStamp } from "../api/stampApi";
+import {
+  uploadStamp,
+  replaceStampImage,
+  updateStamp,
+  deleteStamp,
+  setDefaultStamp,
+} from "../api/stampApi";
 import StampPicker from "../Components/templateEditor/StampPicker";
 import {
   detectStampState,
@@ -129,6 +135,7 @@ export default function PrintTemplatesPage() {
 
   // Stamps tab
   const [stampModalOpen, setStampModalOpen] = useState(false);
+  const [stampToReplace, setStampToReplace] = useState(null);
   const [stampUploading, setStampUploading] = useState(false);
   const [stampBusyId, setStampBusyId] = useState(null);
 
@@ -527,6 +534,21 @@ export default function PrintTemplatesPage() {
       await refreshStamps();
     } catch (err) {
       notify(err.response?.data?.error || "Failed to upload stamp.", "error");
+    } finally {
+      setStampUploading(false);
+    }
+  };
+
+  const handleStampReplace = async (file) => {
+    if (!file || !selectedCompany || !stampToReplace) return;
+    setStampUploading(true);
+    try {
+      await replaceStampImage(selectedCompany.id, stampToReplace.id, file);
+      notify(`"${stampToReplace.name}" now shows the new image.`, "success");
+      setStampToReplace(null);
+      await refreshStamps();
+    } catch (err) {
+      notify(err.response?.data?.error || "Failed to replace stamp image.", "error");
     } finally {
       setStampUploading(false);
     }
@@ -1104,7 +1126,8 @@ export default function PrintTemplatesPage() {
                   Upload stamps or signatures once, then insert them into any template as{" "}
                   <code style={{ fontFamily: "monospace" }}>{"{{stamps.slug}}"}</code> — no more
                   pasting images into the HTML. Each template can use a different stamp, and
-                  renaming a stamp never breaks templates that already use it.
+                  renaming a stamp or replacing its image never breaks templates that already use
+                  it: they show the new image with no edit.
                 </p>
                 {canManageStamps && (
                   <div style={{ marginBottom: "0.85rem" }}>
@@ -1134,7 +1157,12 @@ export default function PrintTemplatesPage() {
                           )}
                         </div>
                         <div style={st.stampThumbWrap}>
-                          <img src={s.url} alt={s.name} style={st.stampThumbImg} />
+                          {/* The URL can stay the same after a replace; v shows the new image. */}
+                          <img
+                            src={`${s.url}?v=${encodeURIComponent(s.updatedAt)}`}
+                            alt={s.name}
+                            style={st.stampThumbImg}
+                          />
                         </div>
                         <button
                           style={st.stampToken}
@@ -1173,6 +1201,17 @@ export default function PrintTemplatesPage() {
                               onClick={() => handleStampSetDefault(s)}
                             >
                               <MdStar size={15} />
+                            </button>
+                          )}
+                          {canManageStamps && (
+                            <button
+                              style={st.actBtn}
+                              title="Replace image"
+                              aria-label={`Replace the image of ${s.name}`}
+                              disabled={stampBusyId != null || stampUploading}
+                              onClick={() => setStampToReplace(s)}
+                            >
+                              <MdUploadFile size={15} />
                             </button>
                           )}
                           {canManageStamps && (
@@ -1339,13 +1378,23 @@ export default function PrintTemplatesPage() {
           onUpload={handleStampUpload}
         />
       )}
+
+      {/* Stamp image replace: same merge field, same template assignments */}
+      {stampToReplace && (
+        <StampUploadModal
+          replacing={stampToReplace}
+          uploading={stampUploading}
+          onClose={() => setStampToReplace(null)}
+          onUpload={handleStampReplace}
+        />
+      )}
     </div>
   );
 }
 
 // Pick an image, see it, name it, upload. Replaces the bare window.prompt,
 // which showed no preview and is blocked outright in some embedded browsers.
-function StampUploadModal({ onClose, onUpload, uploading }) {
+function StampUploadModal({ replacing, onClose, onUpload, uploading }) {
   const [file, setFile] = useState(null);
   const [name, setName] = useState("");
   const [preview, setPreview] = useState("");
@@ -1383,7 +1432,7 @@ function StampUploadModal({ onClose, onUpload, uploading }) {
         <div data-admin-header="" style={formStyles.header}>
           <div>
             <h3 id="stamp-upload-title" style={formStyles.title}>
-              Upload Stamp
+              {replacing ? "Replace stamp image" : "Upload Stamp"}
             </h3>
             <p
               style={{
@@ -1448,37 +1497,49 @@ function StampUploadModal({ onClose, onUpload, uploading }) {
                   gap: 6,
                 }}
               >
-                <MdUploadFile size={28} /> Click to choose an image
+                <MdUploadFile size={28} />{" "}
+                {replacing ? "Click to choose the new image" : "Click to choose an image"}
               </span>
             )}
           </button>
-          <label
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 4,
-              fontSize: "0.8rem",
-              color: colors.textSecondary,
-              fontWeight: 600,
-            }}
-          >
-            Name
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Director Signature"
-              maxLength={80}
+          {replacing ? (
+            <p style={{ margin: 0, fontSize: "0.85rem", color: colors.textSecondary }}>
+              <strong style={{ color: colors.textPrimary }}>{replacing.name}</strong> keeps its
+              merge field{" "}
+              <code
+                style={{ fontFamily: "monospace", color: colors.blue, overflowWrap: "anywhere" }}
+              >{`{{stamps.${replacing.slug}}}`}</code>
+              . Every template using this stamp prints the new image. No template needs editing.
+            </p>
+          ) : (
+            <label
               style={{
-                padding: "0.55rem 0.7rem",
-                border: `1px solid ${colors.inputBorder}`,
-                borderRadius: 8,
-                fontSize: "0.9rem",
-                minHeight: 44,
-                color: colors.textPrimary,
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+                fontSize: "0.8rem",
+                color: colors.textSecondary,
+                fontWeight: 600,
               }}
-            />
-          </label>
+            >
+              Name
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Director Signature"
+                maxLength={80}
+                style={{
+                  padding: "0.55rem 0.7rem",
+                  border: `1px solid ${colors.inputBorder}`,
+                  borderRadius: 8,
+                  fontSize: "0.9rem",
+                  minHeight: 44,
+                  color: colors.textPrimary,
+                }}
+              />
+            </label>
+          )}
         </div>
         <div
           style={{
@@ -1509,7 +1570,8 @@ function StampUploadModal({ onClose, onUpload, uploading }) {
             disabled={!file || uploading}
             onClick={() => onUpload(file, name.trim())}
           >
-            <MdUploadFile size={16} /> {uploading ? "Uploading…" : "Upload"}
+            <MdUploadFile size={16} />{" "}
+            {uploading ? "Uploading…" : replacing ? "Replace image" : "Upload"}
           </button>
         </div>
       </div>

@@ -32,6 +32,7 @@ public partial class McpController
                 ExpandedSchema(new { planId = new { type = "string", maxLength = 64 } }, "planId"), Array.Empty<string>())
         };
         AddPrintTools(tools);
+        AddStampTools(tools);
         AddStarterTools(tools);
         AddDocumentPrintTools(tools);
         AddOnboardingTools(tools);
@@ -107,6 +108,7 @@ public partial class McpController
             "search_email_enquiries" or "get_email_enquiry" or "prepare_email_decision" or "prepare_email_quotation" => await CallEmailToolAsync(name, args),
             "list_print_templates" or "get_print_template" or "get_print_contract" or "prepare_print_template_update" => await CallPrintToolAsync(name, args),
             "get_document_print_data" or "get_document_render_bundle" => await CallDocumentPrintToolAsync(name, args),
+            "list_company_stamps" or "get_company_stamp" or "prepare_company_stamp" => await CallStampToolAsync(name, args),
             "list_starter_templates" or "get_starter_template" or "prepare_starter_template" => await CallStarterToolAsync(name, args),
             "get_onboarding_schema" or "get_company_onboarding_status" => await CallOnboardingToolAsync(name, args),
             "prepare_supplier" or "prepare_item_type" => await CallMasterToolAsync(name, args),

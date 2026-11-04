@@ -81,6 +81,11 @@ public static class McpToolAccessCatalog
         new("get_print_template", "Print templates", "Read print design content", new[] { "printtemplates.manage.view" }, McpScopes.TemplatesRead),
         new("prepare_print_template_update", "Print templates", "Prepare print design changes", new[] { "printtemplates.manage.view", "printtemplates.manage.update" }, McpScopes.TemplatesWrite, Write: true, RequireAll: true),
         new("get_print_contract", "Print templates", "Read supported print fields", new[] { "printtemplates.manage.view" }, McpScopes.TemplatesRead),
+        new("list_company_stamps", "Print templates", "List company stamps", new[] { "printtemplates.stamps.view" }, McpScopes.TemplatesRead),
+        // Rides on the list grant: the same stamps, with the image.
+        new("get_company_stamp", "Print templates", "See a company stamp's image", new[] { "printtemplates.stamps.view" }, McpScopes.TemplatesRead,
+            Configurable: false, GrantedWith: "list_company_stamps"),
+        new("prepare_company_stamp", "Print templates", "Prepare adding, replacing, renaming, deleting or assigning stamps", new[] { "printtemplates.stamps.manage", "printtemplates.manage.update" }, McpScopes.TemplatesWrite, Write: true),
         new("list_starter_templates", "Print templates", "List shared starter designs", new[] { "printtemplates.manage.view", "printtemplates.starter.apply" }, McpScopes.TemplatesRead),
         new("get_starter_template", "Print templates", "Read a shared starter design", new[] { "printtemplates.manage.view", "printtemplates.starter.apply" }, McpScopes.TemplatesRead),
         new("prepare_starter_template", "Print templates", "Add or change shared starter designs (system administrator)", new[] { "printtemplates.manage.update" }, McpScopes.TemplatesWrite, Write: true, SeedOnly: true),

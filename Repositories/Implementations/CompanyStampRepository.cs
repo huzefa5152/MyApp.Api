@@ -69,5 +69,11 @@ namespace MyApp.Api.Repositories.Implementations
 
         public Task<int> TemplateUsageCountAsync(int stampId) =>
             _ctx.PrintTemplates.CountAsync(pt => pt.StampId == stampId);
+
+        public Task<Dictionary<int, int>> TemplateUsageCountsAsync(int companyId) =>
+            _ctx.PrintTemplates.AsNoTracking()
+                .Where(pt => pt.CompanyId == companyId && pt.StampId != null)
+                .GroupBy(pt => pt.StampId!.Value)
+                .ToDictionaryAsync(g => g.Key, g => g.Count());
     }
 }
