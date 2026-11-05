@@ -7,6 +7,8 @@ table, commit identity, and the production-identifier rule. This file exists so
 that agents which do not load `CLAUDE.md` automatically still get the rules
 that have cost the most when they were broken.
 
+**Architecture and engineering standards:** `docs/ENGINEERING_STANDARDS.md`. Read it with `CLAUDE.md` before any change.
+
 ## The repository is PUBLIC
 
 Never commit a production database name, SQL host, FTP host, login, password,
@@ -16,7 +18,7 @@ message. Use a placeholder. Run
 comments or scripts. Scrubbing afterwards does not help: the value stays in the
 pushed history.
 
-## Four production installations, one per branch
+## Three live production installations, one per branch (master is retired)
 
 `master`, `customize-solution-for-other`, `feat/importer-ledger-receipts` and
 `TraderFbrInvoicingSystem` are separate live products with separate databases.
