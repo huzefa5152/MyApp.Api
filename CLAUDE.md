@@ -44,6 +44,8 @@ investigation only — never `INSERT` / `UPDATE` / `DELETE` / `MERGE` /
 `TRUNCATE` / `ALTER` / `DROP` / `CREATE` / migrations without a written
 override from the maintainer.
 
+**Architecture and engineering standards: read `docs/ENGINEERING_STANDARDS.md` before any change.** It maps this line's architecture (authorization, tenancy and the seed admin, the UI design system, backend layers, configuration and workflows) and names the existing mechanism to reuse. Where it and this file disagree, correct the standards file in the same commit as the change.
+
 ---
 
 ## Stack & layout
