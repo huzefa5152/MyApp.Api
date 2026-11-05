@@ -9,6 +9,8 @@ follow.** It is auto-loaded into every conversation — read it once and
 treat the rules as non-negotiable unless the user explicitly overrides
 them in their message.
 
+**Architecture and engineering standards: read `docs/ENGINEERING_STANDARDS.md` before any change.** It maps this line's architecture (authorization, tenancy and the seed admin, the UI design system, backend layers, configuration and workflows) and names the existing mechanism to reuse. Where it and this file disagree, correct the standards file in the same commit as the change.
+
 ---
 
 ## Environments — READ `docs/ENVIRONMENTS.md` BEFORE TOUCHING ANYTHING
