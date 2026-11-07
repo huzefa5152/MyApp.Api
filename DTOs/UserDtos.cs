@@ -16,6 +16,9 @@ namespace MyApp.Api.DTOs
 
         public string Role { get; set; } = "Admin";
 
+        /// <summary>Seed admin only.</summary>
+        public bool CompanyChangesLocked { get; set; }
+
         // ── One-step provisioning (all optional; each gated by its own perm) ──
         // Supplying any of these lets an admin create a user AND wire up access
         // in a single call, so the user works on first login instead of the old

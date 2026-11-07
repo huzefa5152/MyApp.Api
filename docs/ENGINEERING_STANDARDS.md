@@ -63,7 +63,7 @@ Before a change is called done: check permitted access and attempted cross-compa
 - The account whose id equals `AppSettings:SeedAdminUserId` (default `1`). It is an id comparison, never a role name, and it is read in `Program.cs`.
 - It reaches every company and every permission key, except the two MCP keys that follow the MCP access policy. It is the only account that may use installation-wide `[SeedAdminOnly]` writes and the all-companies MCP token. Its audit-log reads are unscoped.
 - Never give anyone else seed-admin power through a role name, and never reuse its id.
-- The seed admin can set `User.CompanyChangesLocked` from Edit user. `PermissionService` then removes the company create, update, delete and FBR token keys for that account and every account below it in `CreatedByUserId`, so `[HasPermission]`, `has()` and MCP tool gates all follow.
+- The seed admin can set `User.CompanyChangesLocked` from New user and Edit user. `PermissionService` then removes the company create, update, delete and FBR token keys for that account and every account below it in `CreatedByUserId`, so `[HasPermission]`, `has()` and MCP tool gates all follow.
 
 ### 5.2 Administrators
 

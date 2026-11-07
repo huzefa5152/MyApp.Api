@@ -633,7 +633,7 @@ export default function UsersPage() {
                 </p>
               )}
 
-              {editUser && isSeedAdmin && (
+              {isSeedAdmin && (
                 <label
                   style={{
                     display: "flex",
