@@ -378,7 +378,9 @@ export default function UsersPage() {
             <strong>
               {blockedCount} blocked {blockedCount === 1 ? "user" : "users"}
             </strong>
-            <label style={{ display: "flex", gap: 8, alignItems: "center", minHeight: 44 }}>
+            <label
+              style={{ display: "flex", gap: 8, alignItems: "center", minHeight: "var(--k-btn-h)" }}
+            >
               <input
                 type="checkbox"
                 checked={blockedOnly}
@@ -424,7 +426,7 @@ export default function UsersPage() {
                         >
                           @{u.username}
                           {isSeedAdmin && isBlocked(u) && (
-                            <div style={{ color: colors.danger, fontWeight: 600 }}>Blocked</div>
+                            <div style={{ color: "var(--k-danger)", fontWeight: 600 }}>Blocked</div>
                           )}
                         </div>
                       </div>
@@ -462,7 +464,7 @@ export default function UsersPage() {
                           </span>
                           {canUpdate && (
                             <button
-                              style={{ ...styles.editBtn, minHeight: 44 }}
+                              style={{ ...styles.editBtn, minHeight: "var(--k-btn-h)" }}
                               disabled={unlocking !== null}
                               onClick={() => handleUnlock(u)}
                             >
@@ -625,7 +627,7 @@ export default function UsersPage() {
                     display: "flex",
                     gap: 8,
                     alignItems: "center",
-                    minHeight: 44,
+                    minHeight: "var(--k-btn-h)",
                     marginTop: "0.5rem",
                   }}
                 >
@@ -677,9 +679,7 @@ export default function UsersPage() {
             <div data-admin-body="" style={styles.modalBody}>
               {rolesMsg && <Alert tone={msgTone(rolesMsg.type)}>{rolesMsg.text}</Alert>}
 
-              <p
-                style={{ margin: "0 0 0.75rem", color: colors.textSecondary, fontSize: "0.85rem" }}
-              >
+              <p style={{ margin: "0 0 0.75rem", color: "var(--k-muted)", fontSize: "0.85rem" }}>
                 Select the roles this user should have. Their permissions are the union of
                 everything granted by their assigned roles.
               </p>
@@ -703,7 +703,7 @@ export default function UsersPage() {
                           alignItems: "flex-start",
                           gap: "0.75rem",
                           padding: "0.75rem 0.9rem",
-                          border: `1px solid ${checked ? colors.blue : colors.cardBorder}`,
+                          border: `1px solid ${checked ? "var(--k-blue)" : "var(--k-line)"}`,
                           borderRadius: 10,
                           background: checked ? `${colors.blue}0c` : "var(--k-surface)",
                           cursor: "pointer",
@@ -714,7 +714,7 @@ export default function UsersPage() {
                           type="checkbox"
                           checked={checked}
                           onChange={() => toggleRoleAssignment(role.id)}
-                          style={{ accentColor: colors.blue, marginTop: 3 }}
+                          style={{ accentColor: "var(--k-blue)", marginTop: 3 }}
                         />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div
@@ -728,7 +728,7 @@ export default function UsersPage() {
                             <span
                               style={{
                                 fontWeight: 600,
-                                color: colors.textPrimary,
+                                color: "var(--k-ink)",
                                 fontSize: "0.92rem",
                               }}
                             >
@@ -743,7 +743,7 @@ export default function UsersPage() {
                                   fontSize: "0.68rem",
                                   fontWeight: 700,
                                   background: `${colors.teal}18`,
-                                  color: colors.teal,
+                                  color: "var(--k-teal)",
                                   textTransform: "uppercase",
                                   letterSpacing: "0.03em",
                                 }}
@@ -755,7 +755,7 @@ export default function UsersPage() {
                               style={{
                                 marginLeft: "auto",
                                 fontSize: "0.78rem",
-                                color: colors.textSecondary,
+                                color: "var(--k-muted)",
                               }}
                             >
                               {role.permissionKeys.length} permission
@@ -766,7 +766,7 @@ export default function UsersPage() {
                             <p
                               style={{
                                 margin: "0.25rem 0 0",
-                                color: colors.textSecondary,
+                                color: "var(--k-muted)",
                                 fontSize: "0.82rem",
                               }}
                             >
@@ -811,9 +811,9 @@ export default function UsersPage() {
         // Cancel or Delete click.
         <div data-admin-backdrop="" style={styles.overlay}>
           <div data-admin-dialog="" style={styles.deleteModal} onClick={(e) => e.stopPropagation()}>
-            <MdDelete style={{ fontSize: "2.5rem", color: colors.danger }} />
-            <h3 style={{ margin: "0.75rem 0 0.5rem", color: colors.textPrimary }}>Delete User?</h3>
-            <p style={{ margin: 0, color: colors.textSecondary, fontSize: "0.9rem" }}>
+            <MdDelete style={{ fontSize: "2.5rem", color: "var(--k-danger)" }} />
+            <h3 style={{ margin: "0.75rem 0 0.5rem", color: "var(--k-ink)" }}>Delete User?</h3>
+            <p style={{ margin: 0, color: "var(--k-muted)", fontSize: "0.9rem" }}>
               Are you sure you want to delete <strong>{deleteConfirm.fullName}</strong>? This action
               cannot be undone.
             </p>
@@ -836,7 +836,7 @@ export default function UsersPage() {
               </button>
               <button
                 type="button"
-                style={{ ...styles.saveBtn, background: colors.danger }}
+                style={{ ...styles.saveBtn, background: "var(--k-danger)" }}
                 onClick={() => handleDelete(deleteConfirm.id)}
               >
                 Delete
@@ -891,7 +891,7 @@ const styles = {
     height: 36,
     flex: "none",
     borderRadius: "50%",
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
+    background: `linear-gradient(135deg, var(--k-blue), var(--k-teal))`,
     color: "#fff",
     display: "flex",
     alignItems: "center",
@@ -906,7 +906,7 @@ const styles = {
     fontSize: "0.78rem",
     fontWeight: 600,
     background: `${colors.blue}14`,
-    color: colors.blue,
+    color: "var(--k-blue)",
   },
   // Modal chrome — all delegated to the shared formStyles baseline so
   // every popup (Create/Edit user, Roles, Delete confirm) has identical
@@ -926,7 +926,7 @@ const styles = {
   },
   labelIcon: {
     fontSize: "1rem",
-    color: colors.blue,
+    color: "var(--k-blue)",
   },
   cancelBtn: { ...formStyles.button, ...formStyles.cancel },
   saveBtn: {

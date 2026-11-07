@@ -920,7 +920,11 @@ export default function SalesReportPage() {
                           disabled={!!rowBusyId || !!bulk || tplPicker.noTemplate}
                           title="Download this Tax Invoice as PDF"
                           aria-label={`Download Tax Invoice ${inv.documentNumber} as PDF`}
-                          style={{ alignSelf: "flex-start", color: pdfRed, minHeight: 44 }}
+                          style={{
+                            alignSelf: "flex-start",
+                            color: pdfRed,
+                            minHeight: "var(--k-btn-h)",
+                          }}
                         >
                           {rowBusyId === inv.invoiceId ? "Preparing…" : "Tax Invoice PDF"}
                         </Button>

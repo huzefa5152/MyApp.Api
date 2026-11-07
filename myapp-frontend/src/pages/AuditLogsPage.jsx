@@ -236,7 +236,7 @@ export default function AuditLogsPage() {
                             style={{
                               fontWeight: 700,
                               fontSize: "0.78rem",
-                              color: methodColor[log.httpMethod] || colors.textPrimary,
+                              color: methodColor[log.httpMethod] || "var(--k-ink)",
                             }}
                           >
                             {log.httpMethod}
@@ -260,10 +260,10 @@ export default function AuditLogsPage() {
                               fontWeight: 700,
                               color:
                                 log.statusCode >= 500
-                                  ? colors.danger
+                                  ? "var(--k-danger)"
                                   : log.statusCode >= 400
                                     ? "#fd7e14"
-                                    : colors.teal,
+                                    : "var(--k-teal)",
                             }}
                           >
                             {log.statusCode}
@@ -299,10 +299,10 @@ export default function AuditLogsPage() {
                 const badge = levelBadge[log.level] || levelBadge.Info;
                 const statusColor =
                   log.statusCode >= 500
-                    ? colors.danger
+                    ? "var(--k-danger)"
                     : log.statusCode >= 400
                       ? "#fd7e14"
-                      : colors.teal;
+                      : "var(--k-teal)";
                 return (
                   <div key={log.id} className="audit-card" onClick={() => setSelectedLog(log)}>
                     {/* Row 1: level pill + timestamp on the right */}
@@ -322,7 +322,7 @@ export default function AuditLogsPage() {
                     <div className="audit-card__meta">
                       <span
                         className="audit-card__method"
-                        style={{ color: methodColor[log.httpMethod] || colors.textPrimary }}
+                        style={{ color: methodColor[log.httpMethod] || "var(--k-ink)" }}
                       >
                         {log.httpMethod}
                       </span>

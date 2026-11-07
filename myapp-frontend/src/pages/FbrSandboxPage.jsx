@@ -489,8 +489,8 @@ const styles = {
   },
   failBadge: {
     padding: "0.15rem 0.5rem",
-    backgroundColor: colors.dangerLight,
-    color: colors.danger,
+    backgroundColor: "var(--k-danger-bg)",
+    color: "var(--k-danger)",
     borderRadius: 4,
     fontSize: "0.72rem",
     fontWeight: 700,

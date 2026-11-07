@@ -49,7 +49,7 @@ const DECISION_CONFIG = {
   },
   "product-will-be-created": {
     label: "Product to create",
-    color: "#0d47a1",
+    color: "var(--k-blue)",
     bg: "#e3f2fd",
     border: "#90caf9",
     icon: MdInventory,
@@ -131,7 +131,7 @@ function decisionCfg(d) {
   return (
     DECISION_CONFIG[d] || {
       label: d,
-      color: "#5f6d7e",
+      color: "var(--k-muted)",
       bg: "#eceff1",
       border: "#b0bec5",
       icon: MdInfo,
@@ -589,7 +589,7 @@ export default function FbrPurchaseImportPage() {
               <span
                 style={{
                   ...styles.chip,
-                  color: "#0d47a1",
+                  color: "var(--k-blue)",
                   backgroundColor: "#e3f2fd",
                   border: "1px solid #90caf9",
                 }}
@@ -599,7 +599,7 @@ export default function FbrPurchaseImportPage() {
               <span
                 style={{
                   ...styles.chip,
-                  color: "#0d47a1",
+                  color: "var(--k-blue)",
                   backgroundColor: "#e3f2fd",
                   border: "1px solid #90caf9",
                 }}
@@ -609,7 +609,7 @@ export default function FbrPurchaseImportPage() {
               <span
                 style={{
                   ...styles.chip,
-                  color: "#0d47a1",
+                  color: "var(--k-blue)",
                   backgroundColor: "#e3f2fd",
                   border: "1px solid #90caf9",
                 }}
@@ -619,7 +619,7 @@ export default function FbrPurchaseImportPage() {
               <span
                 style={{
                   ...styles.chip,
-                  color: "#0d47a1",
+                  color: "var(--k-blue)",
                   backgroundColor: "#e3f2fd",
                   border: "1px solid #90caf9",
                 }}

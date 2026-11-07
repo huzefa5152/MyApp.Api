@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { MdClose } from "react-icons/md";
-import { formStyles, modalSizes, colors, dropdownStyles } from "../theme";
+import { formStyles, modalSizes, dropdownStyles } from "../theme";
 import { createAccount } from "../api/accountApi";
 import { notify } from "../utils/notify";
 import useScrollToError from "../hooks/useScrollToError";
@@ -81,7 +81,7 @@ export default function CreateBankCashModal({
           <h3 style={formStyles.title}>New Bank / Cash Account</h3>
           <button
             data-admin-close=""
-            style={{ ...formStyles.closeButton, minWidth: 44, minHeight: 44 }}
+            style={{ ...formStyles.closeButton, minWidth: 44, minHeight: "var(--k-btn-h)" }}
             onClick={onClose}
             disabled={saving}
             title="Close"
@@ -216,10 +216,10 @@ const st = {
     fontSize: "0.85rem",
     fontWeight: 700,
     marginBottom: 4,
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
   },
-  muted: { color: colors.textSecondary },
-  error: { color: colors.danger, padding: 12 },
+  muted: { color: "var(--k-muted)" },
+  error: { color: "var(--k-danger)", padding: 12 },
   footer: {
     display: "flex",
     justifyContent: "flex-end",
@@ -228,6 +228,6 @@ const st = {
     padding: "1rem",
     flexShrink: 0,
   },
-  secondaryBtn: { ...formStyles.button, minHeight: 44 },
-  primaryBtn: { ...formStyles.button, ...formStyles.submit, minHeight: 44 },
+  secondaryBtn: { ...formStyles.button, minHeight: "var(--k-btn-h)" },
+  primaryBtn: { ...formStyles.button, ...formStyles.submit, minHeight: "var(--k-btn-h)" },
 };

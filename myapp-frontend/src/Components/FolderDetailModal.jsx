@@ -27,7 +27,7 @@ export default function FolderDetailModal({ companyId, folder, onClose }) {
               style={{
                 marginTop: 0,
                 marginBottom: "0.5rem",
-                color: "#5f6d7e",
+                color: "var(--k-muted)",
                 fontSize: "0.85rem",
               }}
             >

@@ -4,7 +4,6 @@ import { MdLock } from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { permissionForPath } from "../config/routePermissions";
 import { useCompany } from "../contexts/CompanyContext";
-import { colors } from "../theme";
 import "../ui/kit.css";
 import "../ui/shared-components.css";
 
@@ -145,7 +144,7 @@ const styles = {
     fontFamily: "monospace",
     padding: "0.1rem 0.3rem",
     borderRadius: 4,
-    backgroundColor: colors.inputBg,
+    backgroundColor: "var(--k-input-bg)",
     border: "1px solid var(--k-line-strong, #d0d7e2)",
     fontSize: "0.82rem",
     color: "var(--k-ink, #1a2332)",

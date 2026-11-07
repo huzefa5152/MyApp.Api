@@ -343,7 +343,7 @@ export default function AccountingCatalogShell({
           <div className="rw-section-head ledger-transactions-heading">
             <h3>
               Transactions{" "}
-              <span style={{ fontWeight: 600, color: colors.textSecondary }}>
+              <span style={{ fontWeight: 600, color: "var(--k-muted)" }}>
                 · {report.partyName || "All customers"}
               </span>
             </h3>
@@ -601,16 +601,16 @@ function AgingFooter({ aging, owed }) {
 }
 
 const AGING_TONE = {
-  zero: { color: colors.textSecondary, fontWeight: 600 },
-  ok: { color: colors.textPrimary },
+  zero: { color: "var(--k-muted)", fontWeight: 600 },
+  ok: { color: "var(--k-ink)" },
   warn: { color: "#b26a00" },
-  bad: { color: colors.danger },
+  bad: { color: "var(--k-danger)" },
 };
 const AGING_BAR = {
   zero: { background: "#e3e8ef" },
   ok: {},
   warn: { background: "#f0a000" },
-  bad: { background: colors.danger },
+  bad: { background: "var(--k-danger)" },
 };
 
 /**
@@ -720,7 +720,7 @@ function StatementTable({ report, rows, onDrill }) {
                 </td>
                 <td className="rw-num">{fmtLine(line, line.amount)}</td>
                 {hasComparative && (
-                  <td className="rw-num" style={{ color: colors.textSecondary }}>
+                  <td className="rw-num" style={{ color: "var(--k-muted)" }}>
                     {line.comparative === null || line.comparative === undefined
                       ? ""
                       : fmtLine(line, line.comparative)}
@@ -756,8 +756,8 @@ function StatementTable({ report, rows, onDrill }) {
  *  tint is deliberately neutral-leaning: red only for a real decline. */
 function changeTone(change) {
   const n = Number(change || 0);
-  if (!change) return { color: colors.textSecondary };
-  return n < 0 ? { color: colors.danger } : { color: colors.success };
+  if (!change) return { color: "var(--k-muted)" };
+  return n < 0 ? { color: "var(--k-danger)" } : { color: colors.success };
 }
 
 /** A grouped breakdown with a proportion bar, so the biggest lines read instantly. */

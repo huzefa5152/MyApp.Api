@@ -1663,7 +1663,7 @@ const st = {
     height: 96,
     border: "1px solid var(--k-line)",
     borderRadius: 8,
-    background: "#fff",
+    background: "var(--k-surface)",
     padding: "0.4rem",
   },
   stampThumbImg: { maxWidth: "100%", maxHeight: "100%", objectFit: "contain" },
@@ -1704,7 +1704,7 @@ const st = {
     fontWeight: 600,
     cursor: "pointer",
     textAlign: "left",
-    minHeight: 44,
+    minHeight: "var(--k-btn-h)",
     boxShadow: "none",
   },
   copyTypeBtnSame: {

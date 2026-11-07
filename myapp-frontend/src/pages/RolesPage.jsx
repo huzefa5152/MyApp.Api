@@ -509,7 +509,7 @@ export default function RolesPage() {
                         display: "flex",
                         alignItems: "center",
                         gap: 8,
-                        minHeight: 44,
+                        minHeight: "var(--k-btn-h)",
                         overflowWrap: "anywhere",
                       }}
                     >
@@ -586,7 +586,7 @@ export default function RolesPage() {
                       >
                         Collapse all
                       </button>
-                      <span style={{ color: colors.cardBorder }}>|</span>
+                      <span style={{ color: "var(--k-line)" }}>|</span>
                       <button
                         type="button"
                         style={styles.smallLinkBtn}
@@ -600,7 +600,7 @@ export default function RolesPage() {
                       </button>
                       <span
                         style={{
-                          color: colors.textSecondary,
+                          color: "var(--k-muted)",
                           fontSize: "0.82rem",
                           marginLeft: "0.5rem",
                         }}
@@ -686,16 +686,16 @@ export default function RolesPage() {
                                     >
                                       {modAll ? (
                                         <MdCheckBox
-                                          style={{ color: colors.blue, fontSize: "1.15rem" }}
+                                          style={{ color: "var(--k-blue)", fontSize: "1.15rem" }}
                                         />
                                       ) : modSome ? (
                                         <MdIndeterminateCheckBox
-                                          style={{ color: colors.blue, fontSize: "1.15rem" }}
+                                          style={{ color: "var(--k-blue)", fontSize: "1.15rem" }}
                                         />
                                       ) : (
                                         <MdCheckBoxOutlineBlank
                                           style={{
-                                            color: colors.textSecondary,
+                                            color: "var(--k-muted)",
                                             fontSize: "1.15rem",
                                           }}
                                         />
@@ -730,16 +730,22 @@ export default function RolesPage() {
                                           >
                                             {pgAll ? (
                                               <MdCheckBox
-                                                style={{ color: colors.teal, fontSize: "1.05rem" }}
+                                                style={{
+                                                  color: "var(--k-teal)",
+                                                  fontSize: "1.05rem",
+                                                }}
                                               />
                                             ) : pgSome ? (
                                               <MdIndeterminateCheckBox
-                                                style={{ color: colors.teal, fontSize: "1.05rem" }}
+                                                style={{
+                                                  color: "var(--k-teal)",
+                                                  fontSize: "1.05rem",
+                                                }}
                                               />
                                             ) : (
                                               <MdCheckBoxOutlineBlank
                                                 style={{
-                                                  color: colors.textSecondary,
+                                                  color: "var(--k-muted)",
                                                   fontSize: "1.05rem",
                                                 }}
                                               />
@@ -823,7 +829,7 @@ export default function RolesPage() {
         // Cancel or Delete click.
         <div data-admin-backdrop="" style={styles.overlay}>
           <div data-admin-dialog="" style={styles.deleteModal} onClick={(e) => e.stopPropagation()}>
-            <MdDelete style={{ fontSize: "2.5rem", color: colors.danger }} />
+            <MdDelete style={{ fontSize: "2.5rem", color: "var(--k-danger)" }} />
             <h3 style={{ margin: "0.75rem 0 0.5rem", color: "var(--k-ink)" }}>Delete role?</h3>
             <p style={{ margin: 0, color: "var(--k-muted)", fontSize: "var(--k-font)" }}>
               Are you sure you want to delete <strong>{deleteConfirm.name}</strong>?
@@ -855,7 +861,7 @@ export default function RolesPage() {
               </button>
               <button
                 type="button"
-                style={{ ...formStyles.button, background: colors.danger, color: "#fff" }}
+                style={{ ...formStyles.button, background: "var(--k-danger)", color: "#fff" }}
                 onClick={() => handleDelete(deleteConfirm)}
               >
                 Delete
@@ -899,7 +905,7 @@ const styles = {
     fontSize: "0.7rem",
     fontWeight: 700,
     background: `${colors.teal}18`,
-    color: colors.teal,
+    color: "var(--k-teal)",
     letterSpacing: "0.03em",
     textTransform: "uppercase",
   },
@@ -912,7 +918,7 @@ const styles = {
     fontSize: "0.78rem",
     fontWeight: 600,
     background: `${colors.blue}10`,
-    color: colors.blue,
+    color: "var(--k-blue)",
   },
   // Modal chrome delegated to formStyles so the Roles & Permissions popup
   // matches every other dialog in the app (blurred backdrop, gradient
@@ -932,7 +938,7 @@ const styles = {
     background: "transparent",
     backgroundColor: "transparent",
     border: "none",
-    color: colors.blue,
+    color: "var(--k-blue)",
     fontSize: "0.78rem",
     fontWeight: 600,
     padding: "0.15rem 0.35rem",
@@ -954,13 +960,13 @@ const styles = {
     marginBottom: "0.5rem",
   },
   permTree: {
-    border: `1px solid ${colors.cardBorder}`,
+    border: `1px solid var(--k-line)`,
     borderRadius: 10,
     maxHeight: "46vh",
     overflowY: "auto",
     background: "#fafcfe",
   },
-  sectionBlock: { borderBottom: `2px solid ${colors.cardBorder}` },
+  sectionBlock: { borderBottom: `2px solid var(--k-line)` },
   sectionToggle: {
     background: "transparent",
     border: "none",
@@ -975,7 +981,7 @@ const styles = {
   sectionHeader: {
     display: "flex",
     alignItems: "center",
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
+    background: `linear-gradient(135deg, var(--k-blue), var(--k-teal))`,
     padding: "0.5rem 0.6rem",
     gap: "0.25rem",
     color: "#fff",
@@ -1002,13 +1008,13 @@ const styles = {
   sectionName: { flex: 1 },
   sectionCount: {
     fontWeight: 700,
-    color: colors.blue,
+    color: "var(--k-blue)",
     fontSize: "0.78rem",
-    background: "#fff",
+    background: "var(--k-surface)",
     borderRadius: 50,
     padding: "0.1rem 0.6rem",
   },
-  moduleBlock: { borderBottom: `1px solid ${colors.cardBorder}` },
+  moduleBlock: { borderBottom: `1px solid var(--k-line)` },
   moduleHeader: {
     display: "flex",
     alignItems: "center",
@@ -1019,7 +1025,7 @@ const styles = {
   moduleToggle: {
     background: "transparent",
     border: "none",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     cursor: "pointer",
     padding: "0.2rem",
     display: "inline-flex",
@@ -1036,16 +1042,16 @@ const styles = {
     cursor: "pointer",
     padding: "0.25rem",
     fontWeight: 700,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     fontSize: "0.9rem",
     textAlign: "left",
   },
   moduleName: { flex: 1 },
   moduleCount: {
     fontWeight: 600,
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     fontSize: "0.78rem",
-    background: "#fff",
+    background: "var(--k-surface)",
     borderRadius: 50,
     padding: "0.1rem 0.55rem",
   },
@@ -1059,10 +1065,10 @@ const styles = {
     cursor: "pointer",
     padding: "0.15rem 0",
     fontWeight: 600,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     fontSize: "0.85rem",
   },
-  pageName: { color: colors.textPrimary },
+  pageName: { color: "var(--k-ink)" },
   actionList: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
@@ -1078,13 +1084,13 @@ const styles = {
     borderRadius: 6,
     cursor: "pointer",
     fontSize: "0.85rem",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
   },
-  checkbox: { cursor: "pointer", accentColor: colors.blue },
+  checkbox: { cursor: "pointer", accentColor: "var(--k-blue)" },
   actionName: { fontWeight: 600 },
   actionKey: {
     marginLeft: "auto",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     fontSize: "0.73rem",
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
   },

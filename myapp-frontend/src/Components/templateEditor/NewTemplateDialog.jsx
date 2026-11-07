@@ -411,7 +411,7 @@ const s = {
     border: "1px solid var(--k-line-strong)",
     background: "var(--k-surface)",
     cursor: "pointer",
-    minHeight: 44,
+    minHeight: "var(--k-btn-h)",
     outline: "none",
   },
   optionActive: {

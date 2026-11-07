@@ -18,7 +18,7 @@ import { useConfirm } from "./ConfirmDialog";
 import { notify } from "../utils/notify";
 import { SCOPE_INFO, orderedScopes } from "../utils/mcpScopes";
 import AllCompaniesOption from "./AllCompaniesOption";
-import { colors, cardStyles, formStyles, modalSizes } from "../theme";
+import { cardStyles, formStyles, modalSizes } from "../theme";
 import SearchableSelect from "./SearchableSelect";
 import { Button, IconButton, Toolbar, TableWrap, Loading, EmptyState, Alert } from "../ui/Kit";
 
@@ -832,12 +832,12 @@ const s = {
     minHeight: "var(--k-btn-h)",
     padding: "0.4rem 0.8rem",
     borderRadius: 8,
-    border: `1px solid ${colors.inputBorder}`,
+    border: `1px solid var(--k-line-strong)`,
     background: "var(--k-input-bg)",
     fontSize: "var(--k-font)",
     cursor: "pointer",
   },
-  checkOn: { borderColor: colors.blue, background: "rgba(13,71,161,0.07)" },
+  checkOn: { borderColor: "var(--k-blue)", background: "rgba(13,71,161,0.07)" },
   scopes: { display: "grid", gap: "0.5rem" },
   scope: {
     display: "flex",
@@ -846,7 +846,7 @@ const s = {
     minHeight: "var(--k-btn-h)",
     padding: "0.55rem 0.8rem",
     borderRadius: 8,
-    border: `1px solid ${colors.inputBorder}`,
+    border: `1px solid var(--k-line-strong)`,
     background: "var(--k-input-bg)",
     fontSize: "var(--k-font)",
     cursor: "pointer",
@@ -887,7 +887,7 @@ const s = {
     borderRadius: 6,
     fontSize: "0.74rem",
     fontWeight: 600,
-    color: colors.blue,
+    color: "var(--k-blue)",
     background: "rgba(13,71,161,0.08)",
   },
   strong: {

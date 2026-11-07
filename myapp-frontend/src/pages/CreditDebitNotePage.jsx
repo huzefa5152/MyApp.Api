@@ -237,7 +237,7 @@ export default function CreditDebitNotePage() {
     return <EmptyState icon={MdBusiness}>Select a company to create a {label}.</EmptyState>;
   }
 
-  const tint = isCredit ? colors.purple : colors.teal;
+  const tint = isCredit ? colors.purple : "var(--k-teal)";
 
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto" }}>

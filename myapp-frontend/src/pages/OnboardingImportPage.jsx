@@ -690,7 +690,7 @@ function Page({ companyName, children }) {
 }
 
 const TONES = {
-  info: { icon: MdInfo, color: "#0d47a1", bg: "#e3f2fd", border: "#90caf9" },
+  info: { icon: MdInfo, color: "var(--k-blue)", bg: "#e3f2fd", border: "#90caf9" },
   warning: { icon: MdWarning, color: "#8a4b00", bg: "#fff4e0", border: "#ffcc80" },
   error: { icon: MdError, color: "#b71c1c", bg: "#ffebee", border: "#ef9a9a" },
 };
@@ -772,7 +772,7 @@ function RowCard({ row, sheet }) {
       {row.issues.length > 0 && (
         <ul style={st.issueList}>
           {row.issues.map((i, n) => (
-            <li key={n} style={{ color: i.isError ? STATUS.error.color : colors.textSecondary }}>
+            <li key={n} style={{ color: i.isError ? STATUS.error.color : "var(--k-muted)" }}>
               {issueLine(i)}
             </li>
           ))}
@@ -792,11 +792,7 @@ function Checklist({ items }) {
             display: "flex",
             alignItems: "center",
             gap: "0.45rem",
-            color: i.warn
-              ? STATUS.warning.color
-              : i.done
-                ? STATUS.import.color
-                : colors.textSecondary,
+            color: i.warn ? STATUS.warning.color : i.done ? STATUS.import.color : "var(--k-muted)",
           }}
         >
           {i.warn ? (
@@ -816,7 +812,7 @@ function Checklist({ items }) {
 const st = {
   page: { maxWidth: 1080, margin: "0 auto", padding: "0.25rem 0 2rem" },
   steps: { display: "flex", flexDirection: "column", gap: "var(--k-gap)" },
-  muted: { fontSize: "var(--k-font-sm)", color: colors.textSecondary, lineHeight: 1.4 },
+  muted: { fontSize: "var(--k-font-sm)", color: "var(--k-muted)", lineHeight: 1.4 },
   choiceGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
@@ -827,20 +823,20 @@ const st = {
     gap: "0.6rem",
     alignItems: "flex-start",
     padding: "0.75rem 0.85rem",
-    minHeight: 44,
+    minHeight: "var(--k-btn-h)",
     borderRadius: "var(--k-radius)",
-    border: `1px solid ${colors.inputBorder}`,
-    background: "#fff",
+    border: `1px solid var(--k-line-strong)`,
+    background: "var(--k-surface)",
     cursor: "pointer",
     fontSize: "var(--k-font)",
   },
   choiceOn: {
-    borderColor: colors.blue,
+    borderColor: "var(--k-blue)",
     background: "#f3f7ff",
-    boxShadow: `0 0 0 1px ${colors.blue} inset`,
+    boxShadow: `0 0 0 1px var(--k-blue) inset`,
   },
   choiceOff: { opacity: 0.55, cursor: "not-allowed" },
-  checkbox: { width: 20, height: 20, marginTop: 2, flexShrink: 0, accentColor: colors.blue },
+  checkbox: { width: 20, height: 20, marginTop: 2, flexShrink: 0, accentColor: "var(--k-blue)" },
   choiceText: { display: "flex", flexDirection: "column", gap: 3, minWidth: 0 },
   actions: { display: "flex", flexWrap: "wrap", gap: "0.6rem", marginTop: "1rem" },
   sheetGrid: {
@@ -854,11 +850,11 @@ const st = {
     gap: 4,
     padding: "0.75rem 0.85rem",
     borderRadius: "var(--k-radius)",
-    border: `1px solid ${colors.cardBorder}`,
-    background: colors.inputBg,
+    border: `1px solid var(--k-line)`,
+    background: "var(--k-input-bg)",
     fontSize: "var(--k-font)",
   },
-  tileTitle: { fontSize: "calc(var(--k-font) + 0.05rem)", color: colors.textPrimary },
+  tileTitle: { fontSize: "calc(var(--k-font) + 0.05rem)", color: "var(--k-ink)" },
   requiredTag: {
     alignSelf: "flex-start",
     marginTop: 4,
@@ -879,20 +875,20 @@ const st = {
     minHeight: 150,
     padding: "1.25rem",
     borderRadius: 12,
-    border: `2px dashed ${colors.inputBorder}`,
-    background: colors.inputBg,
+    border: `2px dashed var(--k-line-strong)`,
+    background: "var(--k-input-bg)",
     textAlign: "center",
     cursor: "pointer",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
   },
-  dropOver: { borderColor: colors.blue, background: "#eef4ff" },
+  dropOver: { borderColor: "var(--k-blue)", background: "#eef4ff" },
   fileChip: {
     display: "inline-flex",
     alignItems: "center",
     gap: 4,
     marginTop: 4,
     fontSize: "0.82rem",
-    color: colors.blue,
+    color: "var(--k-blue)",
     maxWidth: "100%",
     overflowWrap: "anywhere",
   },
@@ -933,9 +929,9 @@ const st = {
   rowCard: {
     padding: "0.6rem 0.75rem",
     borderRadius: 10,
-    border: `1px solid ${colors.cardBorder}`,
+    border: `1px solid var(--k-line)`,
     borderLeft: "4px solid",
-    background: "#fff",
+    background: "var(--k-surface)",
     minWidth: 0,
   },
   rowHead: {
@@ -948,7 +944,7 @@ const st = {
   rowNum: {
     fontSize: "0.75rem",
     fontWeight: 700,
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     textTransform: "uppercase",
     letterSpacing: "0.03em",
   },
@@ -962,7 +958,7 @@ const st = {
   rowLabel: {
     marginTop: 3,
     fontWeight: 700,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     fontSize: "0.92rem",
     display: "-webkit-box",
     WebkitLineClamp: 2,
@@ -984,16 +980,16 @@ const st = {
     flexDirection: "column",
     gap: "0.35rem",
     borderRadius: 10,
-    background: colors.inputBg,
-    border: `1px solid ${colors.cardBorder}`,
+    background: "var(--k-input-bg)",
+    border: `1px solid var(--k-line)`,
     fontSize: "0.86rem",
   },
   link: {
     display: "inline-flex",
     alignItems: "center",
     gap: 4,
-    minHeight: 44,
-    color: colors.blue,
+    minHeight: "var(--k-btn-h)",
+    color: "var(--k-blue)",
     fontWeight: 700,
     fontSize: "0.85rem",
     textDecoration: "none",

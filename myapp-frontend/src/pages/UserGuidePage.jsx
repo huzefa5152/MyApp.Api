@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { MdSearch, MdMenuBook, MdClose } from "react-icons/md";
-import { colors } from "../theme";
 import { GUIDE_SECTIONS, GUIDE_GROUPS } from "../content/accountingGuide";
 import useIsNarrow from "../hooks/useIsNarrow";
+import { Button, PageHeader } from "../ui/Kit";
 
 /**
  * In-app accounting guide. Content lives in content/accountingGuide.js; this
@@ -88,23 +88,19 @@ export default function UserGuidePage() {
 
   return (
     <div style={st.page}>
-      <div data-admin-page-header="" style={st.header}>
-        <div>
-          <h2 style={st.h2}>
-            <MdMenuBook size={22} style={{ verticalAlign: "-4px", marginRight: 8 }} />
-            Accounting Guide
-          </h2>
-          <div style={st.subtitle}>
-            How to record what happens in your business — written for business owners, not
-            accountants.
-          </div>
-        </div>
-        {isNarrow && (
-          <button style={st.navToggle} onClick={() => setNavOpen((v) => !v)}>
-            {navOpen ? "Hide contents" : "Contents"}
-          </button>
-        )}
-      </div>
+      <PageHeader
+        icon={MdMenuBook}
+        tone="blue"
+        title="Accounting Guide"
+        subtitle="How to record what happens in your business — written for business owners, not accountants."
+        actions={
+          isNarrow && (
+            <Button onClick={() => setNavOpen((v) => !v)}>
+              {navOpen ? "Hide contents" : "Contents"}
+            </Button>
+          )
+        }
+      />
 
       <div style={{ ...st.layout, ...(isNarrow ? st.layoutNarrow : null) }}>
         {(!isNarrow || navOpen) && nav}
@@ -314,32 +310,6 @@ const nextOf = (s) => GUIDE_SECTIONS[idx(s) + 1];
 
 const st = {
   page: { padding: 0 },
-  header: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "0.75rem",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    marginBottom: "1rem",
-  },
-  h2: { margin: 0, fontSize: "1.35rem", fontWeight: 800, color: colors.textPrimary },
-  subtitle: {
-    marginTop: "0.25rem",
-    color: colors.textSecondary,
-    fontSize: "0.88rem",
-    maxWidth: 620,
-  },
-  navToggle: {
-    minHeight: 44,
-    padding: "0.5rem 0.9rem",
-    border: `1px solid ${colors.inputBorder}`,
-    borderRadius: 8,
-    background: colors.cardBg,
-    color: colors.textPrimary,
-    fontWeight: 600,
-    fontSize: "0.85rem",
-    cursor: "pointer",
-  },
 
   layout: {
     display: "grid",
@@ -354,8 +324,8 @@ const st = {
     top: "1rem",
     maxHeight: "calc(100vh - 3rem)",
     overflowY: "auto",
-    background: colors.cardBg,
-    border: `1px solid ${colors.inputBorder}`,
+    background: "var(--k-surface)",
+    border: `1px solid var(--k-line-strong)`,
     borderRadius: 12,
     padding: "0.75rem",
   },
@@ -366,17 +336,17 @@ const st = {
     left: 10,
     top: "50%",
     transform: "translateY(-50%)",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     pointerEvents: "none",
   },
   search: {
     width: "100%",
-    minHeight: 40,
+    minHeight: "var(--k-h)",
     padding: "0.45rem 2rem 0.45rem 2rem",
-    border: `1px solid ${colors.inputBorder}`,
+    border: `1px solid var(--k-line-strong)`,
     borderRadius: 8,
-    background: colors.inputBg,
-    color: colors.textPrimary,
+    background: "var(--k-input-bg)",
+    color: "var(--k-ink)",
     fontSize: "0.85rem",
   },
   searchClear: {
@@ -392,15 +362,15 @@ const st = {
     border: "none",
     borderRadius: 6,
     background: "transparent",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     cursor: "pointer",
   },
-  matchCount: { padding: "0 0.35rem 0.5rem", color: colors.textSecondary, fontSize: "0.75rem" },
+  matchCount: { padding: "0 0.35rem 0.5rem", color: "var(--k-muted)", fontSize: "0.75rem" },
 
   navGroup: { marginBottom: "0.6rem" },
   navGroupTitle: {
     padding: "0.35rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     fontSize: "0.7rem",
     fontWeight: 800,
     textTransform: "uppercase",
@@ -414,23 +384,23 @@ const st = {
     border: "none",
     borderRadius: 7,
     background: "transparent",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     fontSize: "0.84rem",
     textAlign: "left",
     cursor: "pointer",
     lineHeight: 1.35,
   },
-  navItemActive: { background: colors.blue, color: "#fff", fontWeight: 700 },
+  navItemActive: { background: "var(--k-blue)", color: "#fff", fontWeight: 700 },
 
   article: {
     minWidth: 0,
-    background: colors.cardBg,
-    border: `1px solid ${colors.inputBorder}`,
+    background: "var(--k-surface)",
+    border: `1px solid var(--k-line-strong)`,
     borderRadius: 12,
     padding: "1.25rem",
   },
   articleGroup: {
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     fontSize: "0.72rem",
     fontWeight: 800,
     textTransform: "uppercase",
@@ -440,21 +410,21 @@ const st = {
     margin: "0.3rem 0 1rem",
     fontSize: "1.2rem",
     fontWeight: 800,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
   },
 
-  p: { margin: "0 0 0.85rem", color: colors.textPrimary, fontSize: "0.92rem", lineHeight: 1.65 },
+  p: { margin: "0 0 0.85rem", color: "var(--k-ink)", fontSize: "0.92rem", lineHeight: 1.65 },
   ol: {
     margin: "0 0 0.95rem",
     paddingLeft: "1.35rem",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     fontSize: "0.92rem",
     lineHeight: 1.7,
   },
   ul: {
     margin: "0 0 0.95rem",
     paddingLeft: "1.2rem",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     fontSize: "0.92rem",
     lineHeight: 1.7,
   },
@@ -467,12 +437,12 @@ const st = {
     gap: "0.5rem",
     margin: "0 0 0.95rem",
     padding: "0.6rem 0.75rem",
-    background: colors.inputBg,
-    borderLeft: `3px solid ${colors.blue}`,
+    background: "var(--k-input-bg)",
+    borderLeft: `3px solid var(--k-blue)`,
     borderRadius: 8,
   },
   pathLabel: {
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     fontSize: "0.72rem",
     fontWeight: 800,
     textTransform: "uppercase",
@@ -482,16 +452,16 @@ const st = {
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
     fontSize: "0.86rem",
     fontWeight: 700,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
   },
 
   note: {
     margin: "0 0 0.95rem",
     padding: "0.7rem 0.85rem",
-    background: colors.inputBg,
-    border: `1px solid ${colors.inputBorder}`,
+    background: "var(--k-input-bg)",
+    border: `1px solid var(--k-line-strong)`,
     borderRadius: 8,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     fontSize: "0.87rem",
     lineHeight: 1.6,
   },
@@ -501,7 +471,7 @@ const st = {
     background: "rgba(217,119,6,0.09)",
     border: "1px solid rgba(217,119,6,0.35)",
     borderRadius: 8,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     fontSize: "0.87rem",
     lineHeight: 1.6,
   },
@@ -510,8 +480,8 @@ const st = {
   table: { width: "100%", borderCollapse: "collapse", fontSize: "0.86rem", minWidth: 420 },
   th: {
     padding: "0.5rem 0.6rem",
-    borderBottom: `2px solid ${colors.inputBorder}`,
-    color: colors.textSecondary,
+    borderBottom: `2px solid var(--k-line-strong)`,
+    color: "var(--k-muted)",
     fontSize: "0.72rem",
     fontWeight: 800,
     textTransform: "uppercase",
@@ -521,8 +491,8 @@ const st = {
   },
   td: {
     padding: "0.5rem 0.6rem",
-    borderBottom: `1px solid ${colors.inputBorder}`,
-    color: colors.textPrimary,
+    borderBottom: `1px solid var(--k-line-strong)`,
+    color: "var(--k-ink)",
     lineHeight: 1.5,
     verticalAlign: "top",
   },
@@ -530,25 +500,25 @@ const st = {
   entry: {
     margin: "0 0 1rem",
     padding: "0.85rem",
-    background: colors.inputBg,
-    border: `1px solid ${colors.inputBorder}`,
+    background: "var(--k-input-bg)",
+    border: `1px solid var(--k-line-strong)`,
     borderRadius: 10,
   },
   entryTitle: {
     marginBottom: "0.5rem",
     fontSize: "0.8rem",
     fontWeight: 800,
-    color: colors.blue,
+    color: "var(--k-blue)",
     textTransform: "uppercase",
     letterSpacing: "0.04em",
   },
-  entryFoot: { color: colors.textSecondary, fontSize: "0.83rem", lineHeight: 1.6 },
+  entryFoot: { color: "var(--k-muted)", fontSize: "0.83rem", lineHeight: 1.6 },
 
   flow: { margin: "0 0 1rem" },
   flowStart: {
     display: "inline-block",
     padding: "0.45rem 0.85rem",
-    background: colors.blue,
+    background: "var(--k-blue)",
     color: "#fff",
     borderRadius: 8,
     fontSize: "0.86rem",
@@ -557,15 +527,15 @@ const st = {
   flowStep: {
     display: "inline-block",
     padding: "0.45rem 0.85rem",
-    background: colors.cardBg,
-    border: `1px solid ${colors.inputBorder}`,
+    background: "var(--k-surface)",
+    border: `1px solid var(--k-line-strong)`,
     borderRadius: 8,
     fontSize: "0.86rem",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
   },
   flowArrow: {
     padding: "0.15rem 0 0.15rem 1rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     fontSize: "1rem",
     lineHeight: 1,
   },
@@ -576,15 +546,15 @@ const st = {
     gap: "0.5rem",
     marginTop: "1.5rem",
     paddingTop: "1rem",
-    borderTop: `1px solid ${colors.inputBorder}`,
+    borderTop: `1px solid var(--k-line-strong)`,
   },
   pagerBtn: {
-    minHeight: 44,
+    minHeight: "var(--k-btn-h)",
     padding: "0.5rem 0.85rem",
-    border: `1px solid ${colors.inputBorder}`,
+    border: `1px solid var(--k-line-strong)`,
     borderRadius: 8,
     background: "transparent",
-    color: colors.blue,
+    color: "var(--k-blue)",
     fontSize: "0.83rem",
     fontWeight: 600,
     cursor: "pointer",

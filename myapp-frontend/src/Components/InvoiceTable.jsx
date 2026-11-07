@@ -811,7 +811,7 @@ export default function InvoiceTable({
 // (print / PDF / XLS / FBR / edit / delete …) still reads at a glance.
 const baseBtn = { border: "none" };
 const btn = {
-  view: { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1" },
+  view: { ...baseBtn, backgroundColor: "#e3f2fd", color: "var(--k-blue)" },
   teal: { ...baseBtn, backgroundColor: "#e0f2f1", color: "#00695c" },
   print: { ...baseBtn, backgroundColor: "#f3e5f5", color: "#7b1fa2" },
   tax: { ...baseBtn, backgroundColor: "#e0f2f1", color: "#00695c" },
@@ -821,7 +821,7 @@ const btn = {
   delete: { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" },
   void: { ...baseBtn, backgroundColor: "#fff8e1", color: "#b26a00" },
   reverse: { ...baseBtn, backgroundColor: "#ede7f6", color: "#5e35b1" },
-  fbrValidate: { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1" },
+  fbrValidate: { ...baseBtn, backgroundColor: "#e3f2fd", color: "var(--k-blue)" },
   fbrSubmit: { ...baseBtn, backgroundColor: "#e8eaf6", color: "#1a237e" },
   neutral: { ...baseBtn, backgroundColor: "#eceff1", color: "#546e7a" },
   handoverMark: { ...baseBtn, backgroundColor: "#e8f5e9", color: "#2e7d32" },

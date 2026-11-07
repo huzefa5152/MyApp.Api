@@ -417,8 +417,8 @@ export default function PurchaseDebitNoteForm({
                   marginTop: "0.75rem",
                   padding: "0.75rem",
                   borderRadius: 10,
-                  border: `1px solid ${colors.cardBorder}`,
-                  backgroundColor: colors.inputBg,
+                  border: `1px solid var(--k-line)`,
+                  backgroundColor: "var(--k-input-bg)",
                 }}
               >
                 <div
@@ -429,7 +429,7 @@ export default function PurchaseDebitNoteForm({
                     marginBottom: "0.5rem",
                   }}
                 >
-                  <strong style={{ color: colors.textPrimary }}>Items ({items.length})</strong>
+                  <strong style={{ color: "var(--k-ink)" }}>Items ({items.length})</strong>
                   <button
                     type="button"
                     onClick={() => setItems([...items, newRow()])}
@@ -441,7 +441,7 @@ export default function PurchaseDebitNoteForm({
                       alignItems: "center",
                       gap: "0.25rem",
                       background: "#e3f2fd",
-                      color: "#0d47a1",
+                      color: "var(--k-blue)",
                       border: "none",
                     }}
                   >
@@ -503,7 +503,7 @@ export default function PurchaseDebitNoteForm({
                                 style={{
                                   ...cellInput,
                                   resize: "vertical",
-                                  minHeight: 38,
+                                  minHeight: "var(--k-h)",
                                   lineHeight: 1.4,
                                 }}
                                 value={it.description}
@@ -589,7 +589,7 @@ export default function PurchaseDebitNoteForm({
                   marginTop: "1rem",
                   padding: "0.75rem 1rem",
                   borderRadius: 10,
-                  border: `1px solid ${colors.cardBorder}`,
+                  border: `1px solid var(--k-line)`,
                   backgroundColor: "#f8faff",
                   display: "grid",
                   gridTemplateColumns: "1fr auto auto",
@@ -597,21 +597,21 @@ export default function PurchaseDebitNoteForm({
                   columnGap: "1rem",
                 }}
               >
-                <span style={{ color: colors.textSecondary }}>Subtotal:</span>
+                <span style={{ color: "var(--k-muted)" }}>Subtotal:</span>
                 <span></span>
                 <strong>
                   Rs. {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </strong>
-                <span style={{ color: colors.textSecondary }}>GST ({gstRate}%):</span>
+                <span style={{ color: "var(--k-muted)" }}>GST ({gstRate}%):</span>
                 <span></span>
                 <strong>
                   Rs. {gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </strong>
-                <span style={{ color: colors.textPrimary, fontWeight: 700, fontSize: "1rem" }}>
+                <span style={{ color: "var(--k-ink)", fontWeight: 700, fontSize: "1rem" }}>
                   Grand Total:
                 </span>
                 <span></span>
-                <strong style={{ fontSize: "1.05rem", color: colors.blue }}>
+                <strong style={{ fontSize: "1.05rem", color: "var(--k-blue)" }}>
                   Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </strong>
               </div>
@@ -645,10 +645,10 @@ export default function PurchaseDebitNoteForm({
 const th = {
   textAlign: "left",
   padding: "0.45rem 0.55rem",
-  borderBottom: "1px solid #e8edf3",
+  borderBottom: "1px solid var(--k-line)",
   fontSize: "0.74rem",
   fontWeight: 700,
-  color: "#5f6d7e",
+  color: "var(--k-muted)",
   textTransform: "uppercase",
   letterSpacing: "0.04em",
 };
@@ -657,9 +657,9 @@ const cellInput = {
   width: "100%",
   padding: "0.3rem 0.5rem",
   fontSize: "0.8rem",
-  border: "1px solid #d0d7e2",
+  border: "1px solid var(--k-line-strong)",
   borderRadius: 6,
-  backgroundColor: "#f8f9fb",
-  color: "#1a2332",
+  backgroundColor: "var(--k-surface-2)",
+  color: "var(--k-ink)",
   outline: "none",
 };

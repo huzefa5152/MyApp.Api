@@ -528,8 +528,8 @@ function PeriodCloseDialog({ companyId, current, onClose, onSaved }) {
               type="button"
               style={{
                 ...formStyles.button,
-                background: "#fff",
-                color: colors.danger,
+                background: "var(--k-surface)",
+                color: "var(--k-danger)",
                 border: `1px solid ${colors.danger}40`,
               }}
               disabled={saving}
@@ -974,7 +974,7 @@ const st = {
     fontWeight: 700,
     textTransform: "uppercase",
     background: "#e3f2fd",
-    color: "#0d47a1",
+    color: "var(--k-blue)",
     padding: "1px 5px",
     borderRadius: 10,
   },

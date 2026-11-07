@@ -59,23 +59,23 @@ export function CalculatedField({ value, label, style }) {
 
 const st = {
   wrap: { display: "inline-flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" },
-  lead: { fontSize: "0.78rem", fontWeight: 600, color: "#5f6d7e", whiteSpace: "nowrap" },
+  lead: { fontSize: "0.78rem", fontWeight: 600, color: "var(--k-muted)", whiteSpace: "nowrap" },
   seg: {
     display: "inline-flex",
-    border: "1px solid #d0d7e2",
+    border: "1px solid var(--k-line-strong)",
     borderRadius: 8,
     overflow: "hidden",
-    background: "#fff",
+    background: "var(--k-surface)",
   },
   option: {
-    minHeight: 44,
+    minHeight: "var(--k-btn-h)",
     padding: "0 0.75rem",
     margin: 0,
     border: "none",
     borderRadius: 0,
     boxShadow: "none",
     background: "transparent",
-    color: "#5f6d7e",
+    color: "var(--k-muted)",
     fontSize: "0.78rem",
     fontWeight: 600,
     cursor: "pointer",

@@ -647,7 +647,7 @@ const styles = {
   },
   profileBanner: {
     height: 90,
-    background: `linear-gradient(135deg, ${colors.blue} 0%, ${colors.teal} 100%)`,
+    background: `linear-gradient(135deg, var(--k-blue) 0%, var(--k-teal) 100%)`,
   },
   avatarRow: {
     display: "flex",
@@ -675,7 +675,7 @@ const styles = {
   avatarFallback: {
     width: "100%",
     height: "100%",
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
+    background: `linear-gradient(135deg, var(--k-blue), var(--k-teal))`,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -754,7 +754,7 @@ const styles = {
     padding: "0.25rem 0.75rem",
     borderRadius: 20,
     background: `linear-gradient(135deg, ${colors.blue}18, ${colors.teal}18)`,
-    color: colors.blue,
+    color: "var(--k-blue)",
     fontSize: "0.78rem",
     fontWeight: 600,
   },

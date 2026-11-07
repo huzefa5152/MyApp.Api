@@ -55,7 +55,7 @@ export default function CustomerImportArchive({ companyId }) {
           <article
             key={row.id}
             style={{
-              border: "1px solid #d0d7e2",
+              border: "1px solid var(--k-line-strong)",
               borderRadius: 8,
               padding: 12,
               overflowWrap: "anywhere",
@@ -71,7 +71,11 @@ export default function CustomerImportArchive({ companyId }) {
                 ? `${names[row.documentKind] || "Document"} record ${row.documentId}`
                 : "No document attachment recorded"}
             </p>
-            <button type="button" style={{ minHeight: 44 }} onClick={() => download(row)}>
+            <button
+              type="button"
+              style={{ minHeight: "var(--k-btn-h)" }}
+              onClick={() => download(row)}
+            >
               Download original
             </button>
           </article>
@@ -81,13 +85,23 @@ export default function CustomerImportArchive({ companyId }) {
       <div
         style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", marginTop: 12 }}
       >
-        <button type="button" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
+        <button
+          type="button"
+          className="k-btn k-btn--secondary k-btn--sm"
+          disabled={page === 1}
+          onClick={() => setPage((p) => p - 1)}
+        >
           Previous
         </button>
         <span>
           Page {page} · {total} uploads
         </span>
-        <button type="button" disabled={page * 20 >= total} onClick={() => setPage((p) => p + 1)}>
+        <button
+          type="button"
+          className="k-btn k-btn--secondary k-btn--sm"
+          disabled={page * 20 >= total}
+          onClick={() => setPage((p) => p + 1)}
+        >
           Next
         </button>
       </div>

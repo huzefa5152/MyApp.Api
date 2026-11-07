@@ -641,14 +641,14 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                     <p
                       style={{
                         margin: "0.5rem 0 0",
-                        color: colors.textSecondary,
+                        color: "var(--k-muted)",
                         fontSize: "var(--k-font)",
                         overflowWrap: "anywhere",
                       }}
                     >
                       {selectedFile ? selectedFile.name : "Choose the customer document"}
                     </p>
-                    <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>
+                    <span style={{ fontSize: "0.78rem", color: "var(--k-muted)" }}>
                       XLSX, PDF, PNG, JPG or WEBP · max 10 MB
                     </span>
                   </div>
@@ -1143,7 +1143,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                           style={{
                             flex: 0.5,
                             fontSize: "0.8rem",
-                            color: colors.textSecondary,
+                            color: "var(--k-muted)",
                             paddingTop: 6,
                           }}
                         >
@@ -1245,7 +1245,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                     style={{
                       cursor: "pointer",
                       fontSize: "var(--k-font-sm)",
-                      color: colors.textSecondary,
+                      color: "var(--k-muted)",
                     }}
                   >
                     View extracted raw text
@@ -1372,7 +1372,7 @@ const styles = {
     height: 24,
     borderRadius: 7,
     background: "var(--k-surface-3)",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     display: "grid",
     placeItems: "center",
     fontSize: "0.78rem",
@@ -1383,7 +1383,7 @@ const styles = {
     fontSize: "0.68rem",
     textTransform: "uppercase",
     letterSpacing: "0.03em",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     fontWeight: 700,
     marginBottom: "0.2rem",
   },
@@ -1392,7 +1392,7 @@ const styles = {
     display: "inline-block",
     fontWeight: 600,
     fontSize: "var(--k-font)",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
   },
   // Inline style for the line-item inputs rendered by LookupAutocomplete /
   // QuantityInput (they take a style object, not a class) — reads the kit tokens.
@@ -1432,7 +1432,7 @@ const styles = {
     borderRadius: 6,
     fontSize: "var(--k-th-font)",
     fontWeight: 700,
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     textTransform: "uppercase",
     letterSpacing: "0.05em",
   },

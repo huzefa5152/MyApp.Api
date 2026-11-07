@@ -534,7 +534,7 @@ const s = {
     fontWeight: 700,
     whiteSpace: "nowrap",
   },
-  badgeReady: { background: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" },
+  badgeReady: { background: "#e3f2fd", color: "var(--k-blue)", border: "1px solid #90caf9" },
   badgeValidated: { background: "#e8f5e9", color: "#1b5e20", border: "1px solid #a5d6a7" },
   badgeSubmitted: { background: "#e0f2f1", color: "#00695c", border: "1px solid #80cbc4" },
   badgeFailed: { background: "#ffebee", color: "#b71c1c", border: "1px solid #ef9a9a" },

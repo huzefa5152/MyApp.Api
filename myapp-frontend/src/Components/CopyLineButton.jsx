@@ -40,5 +40,5 @@ const base = {
   boxShadow: "none",
   border: `1px solid ${colors.teal}40`,
   backgroundColor: `${colors.teal}12`,
-  color: colors.teal,
+  color: "var(--k-teal)",
 };

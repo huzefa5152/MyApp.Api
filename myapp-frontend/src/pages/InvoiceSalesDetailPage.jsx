@@ -7,7 +7,6 @@ import { fileSlug, pdfReport, printReport } from "../utils/reportPrintKit";
 import { getInvoiceSalesDetail, getInvoiceSalesDetailExcel } from "../api/reportApi";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
-import { colors, dropdownStyles } from "../theme";
 import SearchableClientSelect from "../Components/SearchableClientSelect";
 import Pagination from "../Components/Pagination";
 import useIsNarrow from "../hooks/useIsNarrow";
@@ -242,7 +241,7 @@ export default function InvoiceSalesDetailPage() {
           <Field label="Period">
             <select
               aria-label="Period"
-              style={styles.input}
+              className="k-select"
               value={filters.period}
               onChange={(e) => change("period", e.target.value)}
             >
@@ -259,7 +258,7 @@ export default function InvoiceSalesDetailPage() {
                 <input
                   aria-label="From"
                   type="date"
-                  style={styles.input}
+                  className="k-input"
                   value={filters.from}
                   onChange={(e) => change("from", e.target.value)}
                 />
@@ -268,7 +267,7 @@ export default function InvoiceSalesDetailPage() {
                 <input
                   aria-label="To"
                   type="date"
-                  style={styles.input}
+                  className="k-input"
                   value={filters.to}
                   onChange={(e) => change("to", e.target.value)}
                 />
@@ -281,13 +280,13 @@ export default function InvoiceSalesDetailPage() {
               value={filters.clientId}
               onChange={(id) => change("clientId", id)}
               placeholder="All clients"
-              style={{ width: "100%", minHeight: 38, maxWidth: "100%" }}
+              style={{ width: "100%", maxWidth: "100%" }}
             />
           </Field>
           <Field label="FBR status">
             <select
               aria-label="FBR status"
-              style={styles.input}
+              className="k-select"
               value={filters.status}
               onChange={(e) => change("status", e.target.value)}
             >
@@ -305,7 +304,7 @@ export default function InvoiceSalesDetailPage() {
               type="search"
               maxLength={100}
               placeholder="Bill, party, NTN, HS code, item…"
-              style={styles.input}
+              className="k-input"
               value={filters.search}
               onChange={(e) => change("search", e.target.value)}
             />
@@ -403,7 +402,7 @@ function Field({ label, children }) {
         flexDirection: "column",
         gap: 3,
         minWidth: 0,
-        color: colors.textSecondary,
+        color: "var(--k-muted)",
         fontSize: "0.64rem",
         fontWeight: 700,
         textTransform: "uppercase",
@@ -420,15 +419,7 @@ const styles = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit,minmax(min(190px,100%),1fr))",
     gap: "8px 10px",
-    background: colors.cardBg,
-    border: `1px solid ${colors.cardBorder}`,
-  },
-  input: {
-    ...dropdownStyles.base,
-    width: "100%",
-    minWidth: 0,
-    maxWidth: "100%",
-    boxSizing: "border-box",
-    minHeight: 38,
+    background: "var(--k-surface)",
+    border: "1px solid var(--k-line)",
   },
 };

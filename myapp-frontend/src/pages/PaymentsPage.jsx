@@ -73,7 +73,7 @@ export default function PaymentsPage({ mode = "receipts" }) {
   const Icon = isReceipt ? MdReceiptLong : MdPayments;
   // Money in = green accent, money out = brand blue. Gives an at-a-glance cue
   // and colours the amount + allocation chips consistently.
-  const accent = isReceipt ? colors.success : colors.blue;
+  const accent = isReceipt ? colors.success : "var(--k-blue)";
   const docNoun = isReceipt ? "invoice" : "bill";
 
   const { companies, selectedCompany } = useCompany();

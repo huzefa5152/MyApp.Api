@@ -472,7 +472,7 @@ export default function CorrectionWizard({ invoice, onClose, onCreated }) {
                     />
                     <span>
                       Also raise a full Credit Note
-                      <span style={{ color: "#5f6d7e", fontWeight: 400 }}>
+                      <span style={{ color: "var(--k-muted)", fontWeight: 400 }}>
                         {" "}
                         — only if the customer already has the invoice and needs a document against
                         it. A withdrawn filing normally needs none.

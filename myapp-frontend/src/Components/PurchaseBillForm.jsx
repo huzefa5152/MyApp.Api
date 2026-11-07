@@ -976,7 +976,7 @@ export default function PurchaseBillForm({
                                     items.some((i) => rowKey(i) === lineKey(l)),
                                   )}
                                   onClick={() => addSourceLines(sourceLines)}
-                                  style={{ ...formStyles.button, minHeight: 44 }}
+                                  style={{ ...formStyles.button, minHeight: "var(--k-btn-h)" }}
                                 >
                                   Add all remaining
                                 </button>
@@ -1008,7 +1008,7 @@ export default function PurchaseBillForm({
                                         onClick={() => addSourceLines([line])}
                                         style={{
                                           ...formStyles.button,
-                                          minHeight: 44,
+                                          minHeight: "var(--k-btn-h)",
                                           flexShrink: 0,
                                         }}
                                       >
@@ -1208,7 +1208,7 @@ export default function PurchaseBillForm({
                                       style={{
                                         display: "block",
                                         marginTop: 3,
-                                        color: colors.textSecondary,
+                                        color: "var(--k-muted)",
                                       }}
                                     >
                                       {it._sourceLabel || "Linked line"}
@@ -1347,7 +1347,7 @@ export default function PurchaseBillForm({
                                           style={{
                                             display: "block",
                                             marginTop: 3,
-                                            color: colors.textSecondary,
+                                            color: "var(--k-muted)",
                                           }}
                                         >
                                           {it._sourceLabel || "Linked line"}
@@ -1469,15 +1469,15 @@ export default function PurchaseBillForm({
                         marginTop: 16,
                         padding: 16,
                         borderRadius: 10,
-                        border: `1px solid ${colors.cardBorder}`,
+                        border: `1px solid var(--k-line)`,
                         background: "#f8faff",
                       }}
                     >
-                      <strong style={{ color: colors.blue }}>Inventory impact</strong>
+                      <strong style={{ color: "var(--k-blue)" }}>Inventory impact</strong>
                       <p
                         style={{
                           fontSize: "0.85rem",
-                          color: colors.textSecondary,
+                          color: "var(--k-muted)",
                           margin: "8px 0",
                         }}
                       >
@@ -1523,12 +1523,12 @@ export default function PurchaseBillForm({
                                     padding: 12,
                                     background: "white",
                                     borderRadius: 8,
-                                    border: `1px solid ${colors.cardBorder}`,
+                                    border: `1px solid var(--k-line)`,
                                     overflowWrap: "anywhere",
                                   }}
                                 >
                                   <strong>{item.name}</strong>
-                                  <div style={{ fontSize: "0.8rem", color: colors.textSecondary }}>
+                                  <div style={{ fontSize: "0.8rem", color: "var(--k-muted)" }}>
                                     {item.hsCode || "No HS code"}
                                   </div>
                                   {!item.tracksStock && item.changeQuantity === 0 ? (
@@ -1550,7 +1550,8 @@ export default function PurchaseBillForm({
                                       <dd
                                         style={{
                                           margin: 0,
-                                          color: item.changeQuantity < 0 ? "#b45309" : colors.teal,
+                                          color:
+                                            item.changeQuantity < 0 ? "#b45309" : "var(--k-teal)",
                                         }}
                                       >
                                         {item.changeQuantity > 0 ? "+" : ""}
@@ -1568,7 +1569,7 @@ export default function PurchaseBillForm({
                             <p
                               style={{
                                 fontSize: "0.8rem",
-                                color: colors.textSecondary,
+                                color: "var(--k-muted)",
                                 marginBottom: 0,
                               }}
                             >

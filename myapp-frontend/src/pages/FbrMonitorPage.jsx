@@ -96,7 +96,7 @@ function statusCfg(s) {
   return (
     STATUS_CFG[s] || {
       label: s || "—",
-      color: "#5f6d7e",
+      color: "var(--k-muted)",
       bg: "#eceff1",
       border: "#b0bec5",
       icon: MdWarning,

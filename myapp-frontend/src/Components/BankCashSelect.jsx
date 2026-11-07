@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { formStyles, colors } from "../theme";
+import { formStyles } from "../theme";
 import SearchableSelect from "./SearchableSelect";
 import CreateBankCashModal from "./CreateBankCashModal";
 import { getBankCashAccounts, getCoaTree } from "../api/accountApi";
@@ -117,7 +117,7 @@ export default function BankCashSelect({
             onChange={(e) => onChange?.(null, e.target.value)}
             placeholder="Bank current account or cash account"
           />
-          <span style={{ display: "block", color: colors.textSecondary, marginTop: 4 }}>
+          <span style={{ display: "block", color: "var(--k-muted)", marginTop: 4 }}>
             No bank/cash accounts configured yet.
           </span>
         </>
@@ -125,7 +125,7 @@ export default function BankCashSelect({
       {canCreate && (
         <button
           type="button"
-          style={{ ...formStyles.button, minHeight: 44, marginTop: 8 }}
+          style={{ ...formStyles.button, minHeight: "var(--k-btn-h)", marginTop: 8 }}
           disabled={loadingGroups || status === "loading"}
           onClick={openCreate}
         >

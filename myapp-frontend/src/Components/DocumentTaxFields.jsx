@@ -1,5 +1,5 @@
 import { MdAdd, MdClose, MdInfoOutline } from "react-icons/md";
-import { colors, formStyles } from "../theme";
+import { formStyles } from "../theme";
 
 /**
  * Optional document taxes — further tax (s.3(1A)) and withholding income tax
@@ -213,7 +213,7 @@ export default function DocumentTaxFields({
                 <span>Less withheld</span>
                 <span>− Rs. {money(withheld)}</span>
               </div>
-              <div style={{ ...st.summaryRow, fontWeight: 800, color: colors.blue }}>
+              <div style={{ ...st.summaryRow, fontWeight: 800, color: "var(--k-blue)" }}>
                 <span>Collectible</span>
                 <span>Rs. {money(collectible)}</span>
               </div>
@@ -227,10 +227,10 @@ export default function DocumentTaxFields({
 
 const st = {
   wrap: {
-    border: `1px solid ${colors.cardBorder}`,
+    border: `1px solid var(--k-line)`,
     borderRadius: 10,
     padding: "0.7rem 0.85rem",
-    background: colors.cardBg,
+    background: "var(--k-surface)",
     marginTop: "0.75rem",
   },
   header: {
@@ -244,22 +244,22 @@ const st = {
     fontWeight: 800,
     textTransform: "uppercase",
     letterSpacing: "0.04em",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
   },
   noneChip: {
     fontSize: "0.64rem",
     fontWeight: 700,
     textTransform: "uppercase",
-    background: colors.inputBg,
-    color: colors.textSecondary,
-    border: `1px solid ${colors.cardBorder}`,
+    background: "var(--k-input-bg)",
+    color: "var(--k-muted)",
+    border: `1px solid var(--k-line)`,
     padding: "1px 7px",
     borderRadius: 10,
   },
   hint: {
     margin: "0 0 0.5rem",
     fontSize: "0.76rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     lineHeight: 1.45,
   },
   chipRow: { display: "flex", flexWrap: "wrap", gap: "0.45rem" },
@@ -274,9 +274,9 @@ const st = {
     padding: "0 0.9rem",
     height: "var(--ui-btn-h, 44px)",
     borderRadius: 999,
-    border: `1px dashed ${colors.inputBorder}`,
-    background: "#fff",
-    color: colors.blue,
+    border: `1px dashed var(--k-line-strong)`,
+    background: "var(--k-surface)",
+    color: "var(--k-blue)",
     fontSize: "var(--ui-btn-size, 0.8rem)",
     fontWeight: 700,
     cursor: "pointer",
@@ -288,9 +288,9 @@ const st = {
     marginBottom: "var(--ui-label-gap, 0.3rem)",
     fontWeight: 600,
     fontSize: "var(--ui-label-size, 0.8rem)",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
   },
-  fieldHint: { fontSize: "0.72rem", color: colors.textSecondary, marginTop: 4, lineHeight: 1.45 },
+  fieldHint: { fontSize: "0.72rem", color: "var(--k-muted)", marginTop: 4, lineHeight: 1.45 },
   removeBtn: {
     display: "grid",
     placeItems: "center",
@@ -299,9 +299,9 @@ const st = {
     padding: 0,
     marginTop: "calc(var(--ui-label-size, 0.8rem) * 1.75)",
     borderRadius: 8,
-    border: `1px solid ${colors.inputBorder}`,
-    background: "#fff",
-    color: colors.textSecondary,
+    border: `1px solid var(--k-line-strong)`,
+    background: "var(--k-surface)",
+    color: "var(--k-muted)",
     cursor: "pointer",
     boxShadow: "none",
     flexShrink: 0,
@@ -309,7 +309,7 @@ const st = {
   summary: {
     marginTop: "0.7rem",
     paddingTop: "0.55rem",
-    borderTop: `1px solid ${colors.cardBorder}`,
+    borderTop: `1px solid var(--k-line)`,
     display: "grid",
     gap: "0.2rem",
   },
@@ -318,6 +318,6 @@ const st = {
     justifyContent: "space-between",
     gap: 10,
     fontSize: "0.84rem",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
   },
 };

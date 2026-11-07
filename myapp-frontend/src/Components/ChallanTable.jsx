@@ -132,7 +132,7 @@ export default function ChallanTable({
       accessor: (c) => c.salesOrderNumber || 0,
       render: (c) =>
         c.salesOrderNumber ? (
-          <span style={{ color: "#0d47a1", fontWeight: 700 }}>#{c.salesOrderNumber}</span>
+          <span style={{ color: "var(--k-blue)", fontWeight: 700 }}>#{c.salesOrderNumber}</span>
         ) : (
           "—"
         ),
@@ -187,7 +187,12 @@ export default function ChallanTable({
           {/* Which bill it went onto. */}
           {c.invoiceNumber != null && (
             <div
-              style={{ fontSize: "0.72rem", color: "#5f6d7e", marginTop: 2, whiteSpace: "nowrap" }}
+              style={{
+                fontSize: "0.72rem",
+                color: "var(--k-muted)",
+                marginTop: 2,
+                whiteSpace: "nowrap",
+              }}
             >
               Bill #{c.invoiceNumber}
             </div>
@@ -287,7 +292,7 @@ export default function ChallanTable({
           <button
             data-label="Edit delivery & update bill"
             data-primary
-            style={{ ...btnStyles.edit, minHeight: 44 }}
+            style={{ ...btnStyles.edit, minHeight: "var(--k-btn-h)" }}
             title="Edit delivery & update bill"
             onClick={() => onEditDelivery(c)}
           >
@@ -383,14 +388,14 @@ const baseBtn = {
   padding: 0,
 };
 const btnStyles = {
-  view: { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1" },
+  view: { ...baseBtn, backgroundColor: "#e3f2fd", color: "var(--k-blue)" },
   print: { ...baseBtn, backgroundColor: "#f3e5f5", color: "#7b1fa2" },
   pdf: { ...baseBtn, backgroundColor: "#ffebee", color: "#c62828" },
   excel: { ...baseBtn, backgroundColor: "#e8f5e9", color: "#2e7d32" },
   edit: { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },
   duplicate: { ...baseBtn, backgroundColor: "#ede7f6", color: "#4527a0" },
   generateBill: { ...baseBtn, backgroundColor: "#e0f2f1", color: "#00695c" },
-  link: { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1" },
+  link: { ...baseBtn, backgroundColor: "#e3f2fd", color: "var(--k-blue)" },
   cancel: { ...baseBtn, backgroundColor: "#fce4ec", color: "#c62828" },
   delete: { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" },
 };

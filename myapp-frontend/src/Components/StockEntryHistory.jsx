@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { MdAdd, MdRefresh, MdUndo } from "react-icons/md";
 import http from "../api/httpClient";
-import { colors, formStyles } from "../theme";
+import { formStyles } from "../theme";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "./ConfirmDialog";
 import StockEntryForm from "./StockEntryForm";
 import "../pages/StockDashboardPage.css";
 
-const buttonStyle = { ...formStyles.button, minHeight: 44 };
+const buttonStyle = { ...formStyles.button, minHeight: "var(--k-btn-h)" };
 const number = (value) => Number(value).toLocaleString("en-PK", { maximumFractionDigits: 4 });
 const money = (value) =>
   Number(value).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -194,7 +194,7 @@ function CompanyStockEntryHistory({ companyId, onChanged, onNewEntry }) {
         </p>
       )}
       {success && (
-        <p role="status" style={{ color: colors.teal }}>
+        <p role="status" style={{ color: "var(--k-teal)" }}>
           {success}
         </p>
       )}

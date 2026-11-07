@@ -1308,7 +1308,7 @@ const styles = {
     display: "inline-flex",
     alignItems: "center",
     gap: "0.25rem",
-    minHeight: 44,
+    minHeight: "var(--k-btn-h)",
     padding: "0.3rem 0.6rem",
     borderRadius: "var(--k-radius)",
     border: "1px solid var(--k-line-strong)",

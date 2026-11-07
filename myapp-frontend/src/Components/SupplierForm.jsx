@@ -456,7 +456,7 @@ const pickerStyles = {
     fontFamily: "inherit",
     fontSize: "var(--k-font-sm)",
     fontWeight: 600,
-    minHeight: 44,
+    minHeight: "var(--k-btn-h)",
     padding: "0 0.9rem",
     borderRadius: 999,
     cursor: "pointer",

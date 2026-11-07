@@ -15,7 +15,7 @@ import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
-import { colors, formStyles, modalSizes } from "../theme";
+import { formStyles, modalSizes } from "../theme";
 import useIsNarrow from "../hooks/useIsNarrow";
 import useScrollToError from "../hooks/useScrollToError";
 import SearchableClientSelect from "../Components/SearchableClientSelect";
@@ -478,7 +478,7 @@ const st = {
     margin: 0,
     fontWeight: 800,
     fontSize: "calc(var(--k-font) + 0.08rem)",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     overflowWrap: "anywhere",
     minWidth: 0,
     display: "-webkit-box",
@@ -515,7 +515,7 @@ const st = {
   },
   meta: {
     fontSize: "0.78rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     marginBottom: "0.6rem",
     overflowWrap: "anywhere",
   },
@@ -525,8 +525,8 @@ const st = {
     alignItems: "center",
     gap: "0.5rem",
     padding: "0.5rem 0.65rem",
-    background: colors.inputBg,
-    border: `1px solid ${colors.cardBorder}`,
+    background: "var(--k-input-bg)",
+    border: `1px solid var(--k-line)`,
     borderRadius: 8,
   },
   linkText: {
@@ -534,10 +534,10 @@ const st = {
     minWidth: 0,
     fontSize: "0.78rem",
     fontFamily: "monospace",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     overflowWrap: "anywhere",
   },
-  tokenMask: { letterSpacing: 2, color: colors.textSecondary },
+  tokenMask: { letterSpacing: 2, color: "var(--k-muted)" },
   cardActions: {
     display: "flex",
     alignItems: "center",
@@ -545,7 +545,7 @@ const st = {
     flexWrap: "wrap",
     marginTop: "0.7rem",
     paddingTop: "0.6rem",
-    borderTop: `1px solid ${colors.cardBorder}`,
+    borderTop: `1px solid var(--k-line)`,
   },
   docLabel: {
     display: "flex",
@@ -553,7 +553,7 @@ const st = {
     gap: 8,
     fontSize: "var(--k-font-sm)",
     fontWeight: 600,
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
   },
-  fieldHint: { fontSize: "0.74rem", color: colors.textSecondary, marginTop: 5, lineHeight: 1.45 },
+  fieldHint: { fontSize: "0.74rem", color: "var(--k-muted)", marginTop: 5, lineHeight: 1.45 },
 };

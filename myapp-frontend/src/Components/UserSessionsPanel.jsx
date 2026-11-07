@@ -558,7 +558,7 @@ const s = {
     padding: 0,
     margin: 0,
     boxShadow: "none",
-    color: colors.blue,
+    color: "var(--k-blue)",
     fontWeight: 700,
     textDecoration: "underline",
     cursor: "pointer",

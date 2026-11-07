@@ -309,8 +309,8 @@ function EditModal({ user, selected, onToggle, onSubmit, onClose, saving, canAss
                   key={c.companyId}
                   style={{
                     ...pageStyles.companyRow,
-                    background: checked ? colors.successLight : colors.cardBg,
-                    borderColor: checked ? colors.success : colors.cardBorder,
+                    background: checked ? colors.successLight : "var(--k-surface)",
+                    borderColor: checked ? colors.success : "var(--k-line)",
                   }}
                 >
                   <input
@@ -367,7 +367,7 @@ const pageStyles = {
     height: 32,
     flex: "none",
     borderRadius: "50%",
-    background: colors.blueLight,
+    background: "var(--k-blue)",
     color: "white",
     display: "flex",
     alignItems: "center",
@@ -393,7 +393,7 @@ const pageStyles = {
     fontWeight: 600,
   },
   helpText: {
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     fontSize: "var(--ui-label-size, 0.85rem)",
     marginTop: 0,
     marginBottom: "1rem",
@@ -417,5 +417,5 @@ const pageStyles = {
     cursor: "pointer",
     transition: "all 0.15s ease",
   },
-  companyName: { flex: 1, fontWeight: 500, color: colors.textPrimary, overflowWrap: "anywhere" },
+  companyName: { flex: 1, fontWeight: 500, color: "var(--k-ink)", overflowWrap: "anywhere" },
 };

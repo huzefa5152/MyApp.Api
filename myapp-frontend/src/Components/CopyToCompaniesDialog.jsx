@@ -129,7 +129,7 @@ export default function CopyToCompaniesDialog({
           ) : (
             <>
               <div style={styles.toolbar}>
-                <span style={{ fontSize: "var(--k-font-sm)", color: "#5f6d7e" }}>
+                <span style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)" }}>
                   {selected.size} of {eligibleCompanies.length} selected
                 </span>
                 <Button size="sm" variant="ghost" onClick={toggleAll}>
@@ -214,7 +214,7 @@ const styles = {
   subjectLine: {
     margin: "0 0 0.75rem",
     fontSize: "var(--k-font)",
-    color: "#1a2332",
+    color: "var(--k-ink)",
     overflowWrap: "anywhere",
   },
   toolbar: {
@@ -231,10 +231,10 @@ const styles = {
     minHeight: "var(--k-h)",
     padding: "0.4rem 0.75rem",
     borderRadius: 8,
-    border: "1px solid #e8edf3",
+    border: "1px solid var(--k-line)",
     cursor: "pointer",
     fontSize: "var(--k-font)",
-    color: "#1a2332",
+    color: "var(--k-ink)",
     userSelect: "none",
     transition: "background-color 0.15s, border-color 0.15s",
   },

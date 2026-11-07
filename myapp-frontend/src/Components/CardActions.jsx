@@ -11,7 +11,6 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { MdMoreHoriz } from "react-icons/md";
-import { colors } from "../theme";
 
 /**
  * The action row at the foot of a document card or table row.
@@ -144,9 +143,9 @@ export default function CardActions({
             flexShrink: 0,
             marginLeft: nowrap ? 0 : "auto",
             borderRadius: 8,
-            border: `1px solid ${colors.inputBorder}`,
-            background: open ? colors.inputBg : "#fff",
-            color: colors.textSecondary,
+            border: `1px solid var(--k-line-strong)`,
+            background: open ? "var(--k-input-bg)" : "#fff",
+            color: "var(--k-muted)",
             cursor: "pointer",
             boxShadow: "none",
           }}
@@ -170,8 +169,8 @@ export default function CardActions({
               width: MENU_WIDTH,
               maxHeight: "60vh",
               overflowY: "auto",
-              background: "#fff",
-              border: `1px solid ${colors.cardBorder}`,
+              background: "var(--k-surface)",
+              border: `1px solid var(--k-line)`,
               borderRadius: 10,
               boxShadow: "0 12px 32px rgba(10,22,40,0.18)",
               padding: 4,
@@ -202,7 +201,7 @@ export default function CardActions({
                   gap: 8,
                   width: "100%",
                   height: "auto",
-                  minHeight: 38,
+                  minHeight: "var(--k-h)",
                   padding: "0.4rem 0.65rem",
                   margin: 0,
                   background: "transparent",
@@ -215,13 +214,13 @@ export default function CardActions({
                   fontSize: "0.82rem",
                 },
                 onMouseEnter: (e) => {
-                  e.currentTarget.style.backgroundColor = colors.inputBg;
+                  e.currentTarget.style.backgroundColor = "var(--k-input-bg)";
                 },
                 onMouseLeave: (e) => {
                   e.currentTarget.style.backgroundColor = "transparent";
                 },
                 onFocus: (e) => {
-                  e.currentTarget.style.backgroundColor = colors.inputBg;
+                  e.currentTarget.style.backgroundColor = "var(--k-input-bg)";
                 },
                 onBlur: (e) => {
                   e.currentTarget.style.backgroundColor = "transparent";

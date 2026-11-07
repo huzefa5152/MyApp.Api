@@ -138,7 +138,12 @@ export default function DocumentCopyPicker({
     <section
       className="admin-document-copy"
       data-open={open}
-      style={{ border: "1px solid #d0d7e2", borderRadius: 10, padding: 12, marginBottom: 16 }}
+      style={{
+        border: "1px solid var(--k-line-strong)",
+        borderRadius: 10,
+        padding: 12,
+        marginBottom: 16,
+      }}
     >
       <button
         type="button"
@@ -215,7 +220,7 @@ export default function DocumentCopyPicker({
             <div style={empty}>
               <MdInbox size={22} aria-hidden="true" style={{ color: "#8a97a8", flexShrink: 0 }} />
               <div>
-                <strong style={{ display: "block", color: "#1a2332" }}>
+                <strong style={{ display: "block", color: "var(--k-ink)" }}>
                   {search
                     ? `No ${label.toLowerCase()} matches "${search}"`
                     : `No ${label.toLowerCase()} to copy from yet`}
@@ -260,7 +265,7 @@ export default function DocumentCopyPicker({
                   >
                     <MdChevronLeft size={18} />
                   </button>
-                  <span style={{ fontSize: 12.5, color: "#5f6d7e", whiteSpace: "nowrap" }}>
+                  <span style={{ fontSize: 12.5, color: "var(--k-muted)", whiteSpace: "nowrap" }}>
                     Page {page} of {pages}
                   </span>
                   <button
@@ -342,7 +347,7 @@ export default function DocumentCopyPicker({
                     <span style={srOnly}> — </span>
                     <span
                       style={{
-                        color: "#5f6d7e",
+                        color: "var(--k-muted)",
                         fontVariantNumeric: "tabular-nums",
                         whiteSpace: "nowrap",
                       }}
@@ -361,7 +366,9 @@ export default function DocumentCopyPicker({
                   flexWrap: "wrap",
                 }}
               >
-                <p style={{ margin: 0, fontSize: 12.5, color: "#5f6d7e", flex: "1 1 260px" }}>
+                <p
+                  style={{ margin: 0, fontSize: 12.5, color: "var(--k-muted)", flex: "1 1 260px" }}
+                >
                   Items remain editable. Numbers, dates, payment/FBR status and order/delivery links
                   are not copied.
                 </p>
@@ -406,10 +413,10 @@ const toggle = {
   gap: 6,
   minHeight: 36,
   padding: "6px 12px",
-  border: "1px solid #d0d7e2",
+  border: "1px solid var(--k-line-strong)",
   borderRadius: 8,
-  background: "#fff",
-  color: "#0d47a1",
+  background: "var(--k-surface)",
+  color: "var(--k-blue)",
   fontWeight: 600,
   fontSize: 13,
   cursor: "pointer",
@@ -420,17 +427,17 @@ const pager = {
   width: 32,
   height: 32,
   padding: 0,
-  border: "1px solid #d0d7e2",
+  border: "1px solid var(--k-line-strong)",
   borderRadius: 8,
-  background: "#fff",
-  color: "#0d47a1",
+  background: "var(--k-surface)",
+  color: "var(--k-blue)",
   cursor: "pointer",
 };
 const linkBtn = {
   padding: "4px 6px",
   border: "none",
   background: "none",
-  color: "#0d47a1",
+  color: "var(--k-blue)",
   fontWeight: 600,
   fontSize: 13,
   cursor: "pointer",
@@ -450,9 +457,9 @@ const check = { display: "flex", alignItems: "center", gap: 10, minHeight: 36, f
 const lines = {
   maxHeight: 240,
   overflowY: "auto",
-  border: "1px solid #e8edf3",
+  border: "1px solid var(--k-line)",
   borderRadius: 8,
-  background: "#fff",
+  background: "var(--k-surface)",
 };
 const srOnly = {
   position: "absolute",
@@ -480,8 +487,8 @@ const empty = {
   padding: "12px 14px",
   border: "1px dashed #d0d7e2",
   borderRadius: 8,
-  background: "#f8f9fb",
+  background: "var(--k-surface-2)",
   fontSize: 13,
-  color: "#5f6d7e",
+  color: "var(--k-muted)",
   lineHeight: 1.45,
 };

@@ -289,7 +289,14 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
                   choose below. PO changes update unbilled challans.
                 </p>
                 {has("bills.manage.update") && (
-                  <label style={{ display: "flex", gap: 8, minHeight: 44, alignItems: "center" }}>
+                  <label
+                    style={{
+                      display: "flex",
+                      gap: 8,
+                      minHeight: "var(--k-btn-h)",
+                      alignItems: "center",
+                    }}
+                  >
                     <input
                       type="checkbox"
                       checked={applyRates}
@@ -299,7 +306,14 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
                   </label>
                 )}
                 {has("bills.manage.update") && has("challans.manage.update") && (
-                  <label style={{ display: "flex", gap: 8, minHeight: 44, alignItems: "center" }}>
+                  <label
+                    style={{
+                      display: "flex",
+                      gap: 8,
+                      minHeight: "var(--k-btn-h)",
+                      alignItems: "center",
+                    }}
+                  >
                     <input
                       type="checkbox"
                       checked={applyDetails}

@@ -2,12 +2,12 @@ import { useMemo, useState } from "react";
 import { hasChallanPo, groupChallansByPo } from "../utils/challanBilling";
 
 const button = {
-  minHeight: 44,
+  minHeight: "var(--k-btn-h)",
   padding: "0.5rem 0.75rem",
-  border: "1px solid #d0d7e2",
+  border: "1px solid var(--k-line-strong)",
   borderRadius: 8,
-  background: "#fff",
-  color: "#0d47a1",
+  background: "var(--k-surface)",
+  color: "var(--k-blue)",
 };
 
 export default function ChallanBillingPicker({ challans, selectedIds, onChange }) {
@@ -82,8 +82,8 @@ export default function ChallanBillingPicker({ challans, selectedIds, onChange }
           style={{
             flex: "1 1 160px",
             minWidth: 0,
-            minHeight: 44,
-            border: "1px solid #d0d7e2",
+            minHeight: "var(--k-btn-h)",
+            border: "1px solid var(--k-line-strong)",
             borderRadius: 8,
             padding: "0.5rem",
           }}
@@ -96,7 +96,7 @@ export default function ChallanBillingPicker({ challans, selectedIds, onChange }
       </div>
       <div id="billable-challan-panel" role="tabpanel">
         {tab === "withoutPo" && (
-          <p style={{ fontSize: "0.85rem", color: "#5f6d7e" }}>
+          <p style={{ fontSize: "0.85rem", color: "var(--k-muted)" }}>
             Bill one or more challans without a PO, or enter one PO number and date above to apply
             to every selected challan.
           </p>
@@ -107,7 +107,12 @@ export default function ChallanBillingPicker({ challans, selectedIds, onChange }
         {groups.map((group) => (
           <div
             key={group.key}
-            style={{ marginBottom: 10, border: "1px solid #e8edf3", padding: 10, borderRadius: 10 }}
+            style={{
+              marginBottom: 10,
+              border: "1px solid var(--k-line)",
+              padding: 10,
+              borderRadius: 10,
+            }}
           >
             {tab === "withPo" && (
               <div
@@ -143,12 +148,12 @@ export default function ChallanBillingPicker({ challans, selectedIds, onChange }
                 <label
                   key={c.id}
                   style={{
-                    minHeight: 44,
+                    minHeight: "var(--k-btn-h)",
                     display: "flex",
                     alignItems: "center",
                     gap: 8,
                     padding: 8,
-                    border: "1px solid #d0d7e2",
+                    border: "1px solid var(--k-line-strong)",
                     borderRadius: 8,
                     background: selectedIds.includes(c.id) ? "#e3f2fd" : "#fff",
                     cursor: "pointer",

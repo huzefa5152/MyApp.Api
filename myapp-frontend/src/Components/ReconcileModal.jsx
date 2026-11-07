@@ -1,7 +1,7 @@
 import "./AccountingModalTables.css";
 import { useState, useEffect, useCallback } from "react";
 import { MdClose, MdLock, MdFactCheck } from "react-icons/md";
-import { colors, formStyles, modalSizes } from "../theme";
+import { formStyles, modalSizes } from "../theme";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import {
@@ -170,7 +170,7 @@ export default function ReconcileModal({ companyId, account, onClose, onLocked }
               <span
                 style={{
                   ...st.summaryValue,
-                  color: clearedBalance < 0 ? colors.danger : colors.textPrimary,
+                  color: clearedBalance < 0 ? "var(--k-danger)" : "var(--k-ink)",
                 }}
               >
                 {pkr(clearedBalance)}
@@ -182,7 +182,7 @@ export default function ReconcileModal({ companyId, account, onClose, onLocked }
             </div>
             <div style={st.summaryCell}>
               <span style={st.summaryLabel}>Difference</span>
-              <span style={{ ...st.summaryValue, color: settled ? "#1b7a3d" : colors.danger }}>
+              <span style={{ ...st.summaryValue, color: settled ? "#1b7a3d" : "var(--k-danger)" }}>
                 {pkr(diff)}
               </span>
             </div>
@@ -241,7 +241,7 @@ export default function ReconcileModal({ companyId, account, onClose, onLocked }
                             ...st.td,
                             textAlign: "right",
                             whiteSpace: "nowrap",
-                            color: neg ? colors.danger : colors.textPrimary,
+                            color: neg ? "var(--k-danger)" : "var(--k-ink)",
                           }}
                         >
                           {pkr(txn.amount)}
@@ -268,7 +268,9 @@ export default function ReconcileModal({ companyId, account, onClose, onLocked }
                       style={{
                         ...st.historyMeta,
                         color:
-                          Math.abs(Number(h.difference) || 0) < ZERO ? "#1b7a3d" : colors.danger,
+                          Math.abs(Number(h.difference) || 0) < ZERO
+                            ? "#1b7a3d"
+                            : "var(--k-danger)",
                       }}
                     >
                       Diff {pkr(h.difference)}
@@ -327,8 +329,8 @@ const st = {
     flexWrap: "wrap",
     gap: "0.75rem",
     padding: "0.85rem 1rem",
-    background: colors.inputBg,
-    border: `1px solid ${colors.cardBorder}`,
+    background: "var(--k-input-bg)",
+    border: `1px solid var(--k-line)`,
     borderRadius: 12,
     marginBottom: "1rem",
   },
@@ -338,16 +340,16 @@ const st = {
     fontWeight: 800,
     textTransform: "uppercase",
     letterSpacing: "0.04em",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
   },
   summaryValue: {
     fontSize: "1.05rem",
     fontWeight: 800,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     whiteSpace: "nowrap",
   },
 
-  tableWrap: { overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 12 },
+  tableWrap: { overflowX: "auto", border: `1px solid var(--k-line)`, borderRadius: 12 },
   table: { width: "100%", borderCollapse: "collapse", minWidth: 520 },
   th: {
     textAlign: "left",
@@ -355,27 +357,27 @@ const st = {
     fontWeight: 800,
     textTransform: "uppercase",
     letterSpacing: "0.04em",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     padding: "10px 12px",
-    borderBottom: `2px solid ${colors.cardBorder}`,
+    borderBottom: `2px solid var(--k-line)`,
     whiteSpace: "nowrap",
-    background: colors.inputBg,
+    background: "var(--k-input-bg)",
   },
-  tr: { borderBottom: `1px solid ${colors.cardBorder}` },
+  tr: { borderBottom: `1px solid var(--k-line)` },
   td: {
     padding: "10px 12px",
     fontSize: "0.86rem",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     verticalAlign: "middle",
   },
-  checkbox: { width: 18, height: 18, cursor: "pointer", accentColor: colors.blue },
+  checkbox: { width: 18, height: 18, cursor: "pointer", accentColor: "var(--k-blue)" },
 
   historyHeading: {
     fontSize: "0.72rem",
     fontWeight: 800,
     textTransform: "uppercase",
     letterSpacing: "0.04em",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     marginBottom: 8,
   },
   historyList: { display: "flex", flexDirection: "column", gap: 6 },
@@ -385,31 +387,31 @@ const st = {
     alignItems: "center",
     gap: "6px 14px",
     padding: "8px 12px",
-    background: colors.inputBg,
-    border: `1px solid ${colors.cardBorder}`,
+    background: "var(--k-input-bg)",
+    border: `1px solid var(--k-line)`,
     borderRadius: 8,
   },
   historyDate: {
     fontSize: "0.82rem",
     fontWeight: 700,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     whiteSpace: "nowrap",
   },
-  historyMeta: { fontSize: "0.78rem", color: colors.textSecondary, whiteSpace: "nowrap" },
+  historyMeta: { fontSize: "0.78rem", color: "var(--k-muted)", whiteSpace: "nowrap" },
   historyLocked: {
     fontSize: "0.72rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     marginLeft: "auto",
     whiteSpace: "nowrap",
   },
 
-  lockBtn: { display: "inline-flex", alignItems: "center", gap: 6, minHeight: 40 },
+  lockBtn: { display: "inline-flex", alignItems: "center", gap: 6, minHeight: "var(--k-h)" },
   empty: {
     padding: "2rem 1rem",
     textAlign: "center",
-    color: colors.textSecondary,
-    background: colors.inputBg,
-    border: `1px dashed ${colors.inputBorder}`,
+    color: "var(--k-muted)",
+    background: "var(--k-input-bg)",
+    border: `1px dashed var(--k-line-strong)`,
     borderRadius: 12,
   },
 };

@@ -219,9 +219,9 @@ export default function BillNumberField({
     flex: 1,
     minHeight: "var(--ui-btn-h, 44px)",
     padding: "var(--ui-input-pad, 0.5rem 0.75rem)",
-    border: `1px solid ${active ? colors.blue : colors.inputBorder}`,
-    backgroundColor: active ? colors.blue : "#fff",
-    color: active ? "#fff" : colors.textSecondary,
+    border: `1px solid ${active ? "var(--k-blue)" : "var(--k-line-strong)"}`,
+    backgroundColor: active ? "var(--k-blue)" : "#fff",
+    color: active ? "#fff" : "var(--k-muted)",
     fontSize: "var(--ui-btn-size, 0.82rem)",
     fontWeight: 700,
     cursor: disabled ? "not-allowed" : "pointer",
@@ -233,10 +233,10 @@ export default function BillNumberField({
     padding: "var(--ui-input-pad, 0.55rem 0.75rem)",
     minHeight: "var(--ui-control-h, 0px)",
     borderRadius: 8,
-    border: `1px solid ${colors.inputBorder}`,
+    border: `1px solid var(--k-line-strong)`,
     fontSize: "var(--ui-input-size, 0.9rem)",
-    backgroundColor: `var(--ui-input-bg, ${colors.inputBg})`,
-    color: colors.textPrimary,
+    backgroundColor: `var(--ui-input-bg, var(--k-input-bg))`,
+    color: "var(--k-ink)",
     outline: "none",
     boxSizing: "border-box",
   };
@@ -249,7 +249,7 @@ export default function BillNumberField({
           marginBottom: "var(--ui-label-gap, 0.35rem)",
           fontWeight: 600,
           fontSize: "var(--ui-label-size, 0.85rem)",
-          color: colors.textSecondary,
+          color: "var(--k-muted)",
         }}
       >
         {documentLabel} No.
@@ -288,7 +288,7 @@ export default function BillNumberField({
             value={currentNumber == null ? "—" : String(currentNumber)}
             style={{ ...inputStyle, backgroundColor: "#eef5ff", cursor: "not-allowed" }}
           />
-          <div style={{ fontSize: "0.72rem", color: colors.textSecondary, marginTop: "0.25rem" }}>
+          <div style={{ fontSize: "0.72rem", color: "var(--k-muted)", marginTop: "0.25rem" }}>
             {lockedReason}
           </div>
         </>
@@ -320,16 +320,16 @@ export default function BillNumberField({
                 boxShadow: "none",
                 flexShrink: 0,
                 borderRadius: 8,
-                border: `1px solid ${colors.inputBorder}`,
-                backgroundColor: "#fff",
-                color: colors.textSecondary,
+                border: `1px solid var(--k-line-strong)`,
+                backgroundColor: "var(--k-surface)",
+                color: "var(--k-muted)",
                 cursor: loading || disabled ? "not-allowed" : "pointer",
               }}
             >
               <MdRefresh size={18} />
             </button>
           </div>
-          <div style={{ fontSize: "0.72rem", color: colors.textSecondary, marginTop: "0.25rem" }}>
+          <div style={{ fontSize: "0.72rem", color: "var(--k-muted)", marginTop: "0.25rem" }}>
             {loadError
               ? loadError
               : startingMissing
@@ -355,10 +355,10 @@ export default function BillNumberField({
               ...inputStyle,
               borderColor:
                 probe && probe.available === false
-                  ? colors.danger
+                  ? "var(--k-danger)"
                   : probe?.available
                     ? colors.ok
-                    : colors.inputBorder,
+                    : "var(--k-line-strong)",
             }}
           />
           <div
@@ -377,13 +377,13 @@ export default function BillNumberField({
                   : "Enter a bill number."}
               </span>
             ) : probe?.unchanged ? (
-              <span style={{ color: colors.textSecondary }}>Unchanged.</span>
+              <span style={{ color: "var(--k-muted)" }}>Unchanged.</span>
             ) : probing ? (
-              <span style={{ color: colors.textSecondary }}>Checking…</span>
+              <span style={{ color: "var(--k-muted)" }}>Checking…</span>
             ) : probe && probe.available === false ? (
               <>
                 <MdErrorOutline size={13} color={colors.danger} />
-                <span style={{ color: colors.danger }}>
+                <span style={{ color: "var(--k-danger)" }}>
                   {probe.error || "That number can't be used."}
                 </span>
               </>
@@ -397,11 +397,11 @@ export default function BillNumberField({
                 </span>
               </>
             ) : (
-              <span style={{ color: colors.textSecondary }}>&nbsp;</span>
+              <span style={{ color: "var(--k-muted)" }}>&nbsp;</span>
             )}
           </div>
           {!isEdit && (
-            <div style={{ fontSize: "0.72rem", color: colors.textSecondary, marginTop: "0.25rem" }}>
+            <div style={{ fontSize: "0.72rem", color: "var(--k-muted)", marginTop: "0.25rem" }}>
               Custom reserves this number. Auto continues its sequence and skips numbers already
               used.
             </div>

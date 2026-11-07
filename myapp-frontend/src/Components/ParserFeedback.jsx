@@ -83,7 +83,7 @@ const styles = {
     padding: "var(--sc-opt-pad, 0.5rem 0.7rem)",
     border: "1px solid var(--k-line-strong, #d0d7e2)",
     borderRadius: 8,
-    backgroundColor: "#fff",
+    backgroundColor: "var(--k-surface)",
     fontSize: "var(--sc-text, 0.88rem)",
     color: "var(--k-ink, #1a2332)",
     cursor: "pointer",

@@ -32,7 +32,7 @@ const statusColors = {
   // Imported = historical back-fill, billable same as Pending.
   // Purple tint so operators can tell at a glance which rows came from import.
   Imported: { bg: "#f3e5f5", color: "#6a1b9a", border: "#6a1b9a30" },
-  "No PO": { bg: "#e3f2fd", color: "#0d47a1", border: "#0d47a130" },
+  "No PO": { bg: "#e3f2fd", color: "var(--k-blue)", border: "#0d47a130" },
   Invoiced: { bg: "#e8f5e9", color: "#2e7d32", border: "#2e7d3230" },
   Cancelled: { bg: "#ffebee", color: "#c62828", border: "#c6282830" },
   "Setup Required": { bg: "#fce4ec", color: "#880e4f", border: "#880e4f30" },
@@ -65,7 +65,7 @@ function WarningTooltip({ warnings }) {
               minWidth: 240,
               maxWidth: 320,
               padding: "0.6rem 0.75rem",
-              background: "#fff",
+              background: "var(--k-surface)",
               border: "1px solid #e65100",
               borderRadius: 8,
               boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
@@ -232,7 +232,11 @@ export default function ChallanList({
                       {/* Which bill it went onto. */}
                       {c.invoiceNumber != null && (
                         <span
-                          style={{ fontSize: "0.72rem", color: "#5f6d7e", whiteSpace: "nowrap" }}
+                          style={{
+                            fontSize: "0.72rem",
+                            color: "var(--k-muted)",
+                            whiteSpace: "nowrap",
+                          }}
                         >
                           Bill #{c.invoiceNumber}
                         </span>

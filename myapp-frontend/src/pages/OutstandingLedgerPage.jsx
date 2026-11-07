@@ -346,7 +346,11 @@ export default function OutstandingLedgerPage() {
           <td
             key={key}
             className="k-num"
-            style={{ ...tdR, fontWeight: 700, color: row.balance > 0 ? "#b71c1c" : colors.teal }}
+            style={{
+              ...tdR,
+              fontWeight: 700,
+              color: row.balance > 0 ? "#b71c1c" : "var(--k-teal)",
+            }}
           >
             {money(row.balance)}
           </td>
@@ -647,7 +651,7 @@ export default function OutstandingLedgerPage() {
                 return (
                   <div key={row.invoiceId} style={card.box}>
                     <div style={card.top}>
-                      <span style={{ fontWeight: 700, color: colors.blue }}>
+                      <span style={{ fontWeight: 700, color: "var(--k-blue)" }}>
                         Bill #{row.billNumber}
                       </span>
                       <span
@@ -664,7 +668,7 @@ export default function OutstandingLedgerPage() {
                       </span>
                     </div>
                     {row.poNumber && (
-                      <div style={{ fontSize: "0.8rem", color: colors.textSecondary }}>
+                      <div style={{ fontSize: "0.8rem", color: "var(--k-muted)" }}>
                         PO: {row.poNumber}
                       </div>
                     )}
@@ -695,7 +699,7 @@ export default function OutstandingLedgerPage() {
                           style={{
                             ...card.val,
                             fontWeight: 800,
-                            color: row.balance > 0 ? "#b71c1c" : colors.teal,
+                            color: row.balance > 0 ? "#b71c1c" : "var(--k-teal)",
                           }}
                         >
                           {money(row.balance)}
@@ -707,9 +711,9 @@ export default function OutstandingLedgerPage() {
                         style={{
                           marginTop: 6,
                           paddingTop: 6,
-                          borderTop: `1px dashed ${colors.cardBorder}`,
+                          borderTop: `1px dashed var(--k-line)`,
                           fontSize: "0.78rem",
-                          color: colors.textSecondary,
+                          color: "var(--k-muted)",
                         }}
                       >
                         <span style={card.lbl}>Payments</span>
@@ -763,7 +767,7 @@ const tdR = { ...td, whiteSpace: "nowrap" };
 const totalStyle = {
   fontWeight: 800,
   background: colors.totalBg,
-  borderTop: `2px solid ${colors.blue}`,
+  borderTop: `2px solid var(--k-blue)`,
 };
 // Long P.O numbers wrap to two lines instead of widening the table.
 const clamp2 = {

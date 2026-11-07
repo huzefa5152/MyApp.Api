@@ -180,10 +180,10 @@ export default function UnitsPage() {
                           disabled={!canManage || saving}
                           style={{
                             ...styles.toggleBtn,
-                            backgroundColor: checked ? colors.successBg : colors.inputBg,
-                            color: checked ? colors.successFg : colors.textSecondary,
+                            backgroundColor: checked ? colors.successBg : "var(--k-input-bg)",
+                            color: checked ? colors.successFg : "var(--k-muted)",
                             border: `1px solid ${
-                              checked ? colors.successBorder : colors.inputBorder
+                              checked ? colors.successBorder : "var(--k-line-strong)"
                             }`,
                             cursor: canManage ? "pointer" : "not-allowed",
                             opacity: saving ? 0.6 : 1,

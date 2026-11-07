@@ -1727,7 +1727,7 @@ function CommercialBillEditor({
             style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}
           >
             {loading ? (
-              <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>
+              <div style={{ textAlign: "center", padding: "2rem", color: "var(--k-muted)" }}>
                 Loading...
               </div>
             ) : !invoice ? (
@@ -1760,7 +1760,11 @@ function CommercialBillEditor({
                       <button
                         type="button"
                         disabled={saving}
-                        style={{ minHeight: 44, padding: "0.5rem 0.8rem", marginLeft: "auto" }}
+                        style={{
+                          minHeight: "var(--k-btn-h)",
+                          padding: "0.5rem 0.8rem",
+                          marginLeft: "auto",
+                        }}
                         onClick={async () => {
                           if (
                             await confirm({
@@ -1821,9 +1825,7 @@ function CommercialBillEditor({
                       size={20}
                       style={{ color: "#e65100", flexShrink: 0, marginTop: 2 }}
                     />
-                    <div
-                      style={{ fontSize: "0.85rem", color: colors.textPrimary, lineHeight: 1.55 }}
-                    >
+                    <div style={{ fontSize: "0.85rem", color: "var(--k-ink)", lineHeight: 1.55 }}>
                       <strong style={{ color: "#e65100" }}>
                         Bill changed since this invoice was adjusted — re-adjustment needed.
                       </strong>
@@ -1869,7 +1871,10 @@ function CommercialBillEditor({
 
                 {!readOnly && !billsMode && (
                   <div style={styles.infoBox}>
-                    <MdInfo size={16} style={{ color: colors.blue, flexShrink: 0, marginTop: 2 }} />
+                    <MdInfo
+                      size={16}
+                      style={{ color: "var(--k-blue)", flexShrink: 0, marginTop: 2 }}
+                    />
                     <div>
                       To add, remove or replace challans, ask an administrator to open Bills → Edit
                       → Manage challans. Review the resulting bill here before FBR submission.
@@ -1879,7 +1884,10 @@ function CommercialBillEditor({
 
                 {readOnly && (
                   <div style={styles.infoBox}>
-                    <MdInfo size={16} style={{ color: colors.blue, flexShrink: 0, marginTop: 2 }} />
+                    <MdInfo
+                      size={16}
+                      style={{ color: "var(--k-blue)", flexShrink: 0, marginTop: 2 }}
+                    />
                     <div>
                       <b>Client:</b> {invoice.clientName} · <b>Date:</b>{" "}
                       {invoice.date ? new Date(invoice.date).toLocaleDateString() : "—"}
@@ -1967,7 +1975,7 @@ function CommercialBillEditor({
                         <span
                           style={{
                             fontWeight: 400,
-                            color: colors.textSecondary,
+                            color: "var(--k-muted)",
                             fontSize: "0.7rem",
                           }}
                         >
@@ -2001,7 +2009,7 @@ function CommercialBillEditor({
                         <div
                           style={{
                             fontSize: "0.7rem",
-                            color: colors.textSecondary,
+                            color: "var(--k-muted)",
                             marginTop: "0.25rem",
                           }}
                         >
@@ -2047,7 +2055,7 @@ function CommercialBillEditor({
                         <span
                           style={{
                             fontWeight: 400,
-                            color: colors.textSecondary,
+                            color: "var(--k-muted)",
                             fontSize: "0.7rem",
                             marginLeft: "0.4rem",
                           }}
@@ -2710,7 +2718,7 @@ function CommercialBillEditor({
                                     style={{
                                       ...styles.td,
                                       fontWeight: 600,
-                                      color: colors.textPrimary,
+                                      color: "var(--k-ink)",
                                       textAlign: "right",
                                     }}
                                   >
@@ -2953,7 +2961,7 @@ function CommercialBillEditor({
                                   style={{
                                     ...styles.td,
                                     fontWeight: 600,
-                                    color: colors.textPrimary,
+                                    color: "var(--k-ink)",
                                     textAlign: "right",
                                   }}
                                 >
@@ -3002,7 +3010,7 @@ function CommercialBillEditor({
                     <div
                       style={{
                         fontSize: "0.78rem",
-                        color: colors.textSecondary,
+                        color: "var(--k-muted)",
                         marginBottom: "0.4rem",
                         fontWeight: 600,
                       }}
@@ -3010,7 +3018,7 @@ function CommercialBillEditor({
                       Total-preservation guard
                       <span
                         style={{
-                          color: colors.textSecondary,
+                          color: "var(--k-muted)",
                           fontWeight: 400,
                           marginLeft: "0.4rem",
                         }}
@@ -3042,7 +3050,7 @@ function CommercialBillEditor({
                       style={{
                         ...styles.totalsRow,
                         fontSize: "0.74rem",
-                        color: colors.textSecondary,
+                        color: "var(--k-muted)",
                       }}
                     >
                       <span>
@@ -3065,7 +3073,7 @@ function CommercialBillEditor({
                     <div
                       style={{
                         ...styles.totalsRow,
-                        borderTop: `1px dashed ${colors.cardBorder}`,
+                        borderTop: `1px dashed var(--k-line)`,
                         paddingTop: "0.4rem",
                         marginTop: "0.4rem",
                       }}
@@ -3145,13 +3153,13 @@ function CommercialBillEditor({
                   <div
                     style={{
                       ...styles.totalsRow,
-                      borderTop: `1px solid ${colors.cardBorder}`,
+                      borderTop: `1px solid var(--k-line)`,
                       paddingTop: "0.5rem",
                       marginTop: "0.5rem",
                     }}
                   >
                     <span style={{ fontWeight: 700 }}>Grand Total:</span>
-                    <strong style={{ fontSize: "1.1rem", color: colors.blue }}>
+                    <strong style={{ fontSize: "1.1rem", color: "var(--k-blue)" }}>
                       Rs.{" "}
                       {(
                         grandTotal + (billsMode ? Number(freightCharges || 0) : 0)
@@ -3199,7 +3207,9 @@ function CommercialBillEditor({
                             </strong>
                           </div>
                         )}
-                        <div style={{ ...styles.totalsRow, fontWeight: 700, color: colors.blue }}>
+                        <div
+                          style={{ ...styles.totalsRow, fontWeight: 700, color: "var(--k-blue)" }}
+                        >
                           <span>Balance due:</span>
                           <strong>
                             Rs.{" "}
@@ -3271,7 +3281,7 @@ function CommercialBillEditor({
                     <div
                       style={{
                         fontSize: "0.74rem",
-                        color: colors.textSecondary,
+                        color: "var(--k-muted)",
                         marginTop: "0.35rem",
                       }}
                     >
@@ -3617,13 +3627,11 @@ function TaxClaimPanel({
             }}
           >
             <MdInventory2 size={16} color={colors.teal} />
-            <strong style={{ fontSize: "0.88rem", color: colors.textPrimary }}>
+            <strong style={{ fontSize: "0.88rem", color: "var(--k-ink)" }}>
               Tax Claim Snapshot
             </strong>
             {loading && (
-              <span
-                style={{ fontSize: "0.72rem", color: colors.textSecondary, fontStyle: "italic" }}
-              >
+              <span style={{ fontSize: "0.72rem", color: "var(--k-muted)", fontStyle: "italic" }}>
                 updating…
               </span>
             )}
@@ -3634,7 +3642,7 @@ function TaxClaimPanel({
                 <span>
                   Claimable: <strong>{fmtMoney(collapsedSummary.claimable)}</strong>
                 </span>
-                <span style={{ color: colors.textSecondary }}>·</span>
+                <span style={{ color: "var(--k-muted)" }}>·</span>
                 <span>
                   Net tax: <strong>{fmtMoney(collapsedSummary.net)}</strong>
                 </span>
@@ -3651,7 +3659,7 @@ function TaxClaimPanel({
             style={{
               display: "inline-flex",
               alignItems: "center",
-              color: colors.blue,
+              color: "var(--k-blue)",
               flexShrink: 0,
             }}
           >
@@ -3704,7 +3712,7 @@ function TaxClaimPanel({
                 <option value="all-time">All Time</option>
               </select>
             </div>
-            <div style={{ fontSize: "0.78rem", color: colors.textSecondary, marginTop: "0.4rem" }}>
+            <div style={{ fontSize: "0.78rem", color: "var(--k-muted)", marginTop: "0.4rem" }}>
               Per-sale match at weighted-avg cost · §8A {cfg?.agingMonths ?? 6}-month aging · §8B{" "}
               {cfg?.section8BCapPercent ?? 90}% cap · IRIS reconciliation gate · informational only
               — operator can save freely.
@@ -4045,7 +4053,7 @@ function TaxClaimPanel({
                       amount. Green check when exact; amber when there's a
                       tiny rounding drift (rare prime-cents fallback). */}
                         <div style={styles.taxRowOptimizationSubtotalProof}>
-                          <span style={{ color: colors.textSecondary }}>Recomposed subtotal:</span>{" "}
+                          <span style={{ color: "var(--k-muted)" }}>Recomposed subtotal:</span>{" "}
                           <strong style={{ fontFamily: "ui-monospace, monospace" }}>
                             {fmtQty(opt.suggestedQty)} × Rs.{" "}
                             {Number(opt.suggestedUnitPrice).toLocaleString("en-PK", {
@@ -4054,7 +4062,7 @@ function TaxClaimPanel({
                             })}{" "}
                             = {fmtMoney(opt.recomposedSubtotal)}
                           </strong>{" "}
-                          <span style={{ color: colors.textSecondary }}>
+                          <span style={{ color: "var(--k-muted)" }}>
                             (original: {fmtMoney(row.bill.value)})
                           </span>{" "}
                           {opt.exactSubtotalPreserved ? (
@@ -4368,10 +4376,10 @@ const styles = {
   // Mobile stacked-card line items (individual view, rendered below 760px).
   mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
   mcard: {
-    border: `1px solid ${colors.cardBorder}`,
+    border: `1px solid var(--k-line)`,
     borderRadius: 12,
     padding: "0.7rem 0.75rem",
-    background: "#fff",
+    background: "var(--k-surface)",
   },
   mcardHead: { display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.5rem" },
   mnum: {
@@ -4380,7 +4388,7 @@ const styles = {
     height: 24,
     borderRadius: 7,
     background: "#f0f3f8",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     display: "grid",
     placeItems: "center",
     fontSize: "0.78rem",
@@ -4391,7 +4399,7 @@ const styles = {
     fontSize: "0.68rem",
     textTransform: "uppercase",
     letterSpacing: "0.03em",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     fontWeight: 700,
     marginBottom: "0.2rem",
   },
@@ -4413,14 +4421,14 @@ const styles = {
     alignItems: "center",
     marginTop: "0.55rem",
     paddingTop: "0.45rem",
-    borderTop: `1px dashed ${colors.cardBorder}`,
+    borderTop: `1px dashed var(--k-line)`,
     fontSize: "0.85rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
   },
   errorAlert: {
     padding: "0.7rem 1rem",
-    backgroundColor: colors.dangerLight,
-    color: colors.danger,
+    backgroundColor: "var(--k-danger-bg)",
+    color: "var(--k-danger)",
     borderRadius: 6,
     marginBottom: "1rem",
     fontSize: "0.85rem",
@@ -4440,7 +4448,7 @@ const styles = {
     gap: "0.5rem",
     padding: "0.65rem 0.85rem",
     backgroundColor: colors.infoBg,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     borderRadius: 6,
     marginBottom: "1rem",
     fontSize: "0.82rem",
@@ -4451,23 +4459,23 @@ const styles = {
     display: "block",
     fontSize: "var(--ui-label-size, 0.82rem)",
     fontWeight: 600,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     marginBottom: "var(--ui-label-gap, 0.3rem)",
   },
   input: {
     width: "100%",
     padding: "var(--ui-input-pad, 0.55rem 0.75rem)",
     minHeight: "var(--ui-control-h, 0px)",
-    border: `1px solid ${colors.inputBorder}`,
+    border: `1px solid var(--k-line-strong)`,
     borderRadius: 6,
     fontSize: "var(--ui-input-size, 0.85rem)",
-    backgroundColor: `var(--ui-input-bg, ${colors.inputBg})`,
+    backgroundColor: `var(--ui-input-bg, var(--k-input-bg))`,
   },
   sectionHeading: {
     margin: "1rem 0 0.5rem",
     fontSize: "0.95rem",
     fontWeight: 700,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
   },
   // Header row that pairs the section title with an inline action
   // (e.g. "+ New Item Type"). Wraps on phones via flex-wrap so the
@@ -4485,10 +4493,10 @@ const styles = {
     alignItems: "center",
     gap: "0.3rem",
     padding: "0.35rem 0.7rem",
-    border: `1px solid ${colors.blue}`,
+    border: `1px solid var(--k-blue)`,
     borderRadius: 8,
-    backgroundColor: "#fff",
-    color: colors.blue,
+    backgroundColor: "var(--k-surface)",
+    color: "var(--k-blue)",
     fontSize: "0.78rem",
     fontWeight: 600,
     cursor: "pointer",
@@ -4497,12 +4505,12 @@ const styles = {
   },
   // ── Tax Claim Panel styles ────────────────────────────────────────
   taxPanelCard: {
-    border: `1px solid ${colors.cardBorder}`,
+    border: `1px solid var(--k-line)`,
     borderRadius: 12,
     background: "#fbfdff",
     padding: "0.85rem 1rem",
     margin: "0.5rem 0 1rem",
-    boxShadow: "0 1px 2px rgba(13,71,161,0.04)",
+    boxShadow: "var(--k-primary-shadow)",
   },
   taxPanelHeader: {
     display: "flex",
@@ -4510,21 +4518,21 @@ const styles = {
     gap: "0.2rem",
     marginBottom: "0.7rem",
     paddingBottom: "0.55rem",
-    borderBottom: `1px dashed ${colors.cardBorder}`,
+    borderBottom: `1px dashed var(--k-line)`,
   },
   taxPanelHeadline: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(150px, 100%), 1fr))",
     gap: "0.7rem",
     padding: "0.5rem 0.75rem",
-    background: "#fff",
-    border: `1px solid ${colors.cardBorder}`,
+    background: "var(--k-surface)",
+    border: `1px solid var(--k-line)`,
     borderRadius: 10,
     marginBottom: "0.85rem",
   },
   taxPanelHeadlineLabel: {
     fontSize: "0.7rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     textTransform: "uppercase",
     letterSpacing: "0.04em",
     fontWeight: 600,
@@ -4534,7 +4542,7 @@ const styles = {
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
     fontSize: "1rem",
     fontWeight: 800,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
   },
   taxPanelGrid: {
     display: "grid",
@@ -4546,7 +4554,7 @@ const styles = {
     borderLeftWidth: 3,
     borderRadius: 10,
     padding: "0.6rem 0.75rem",
-    background: "#fff",
+    background: "var(--k-surface)",
     display: "flex",
     flexDirection: "column",
     gap: "0.5rem",
@@ -4566,12 +4574,12 @@ const styles = {
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
     fontSize: "0.85rem",
     fontWeight: 700,
-    color: colors.blue,
+    color: "var(--k-blue)",
     flexShrink: 0,
   },
   taxRowName: {
     fontSize: "0.78rem",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     fontWeight: 600,
     overflow: "hidden",
     display: "-webkit-box",
@@ -4587,7 +4595,7 @@ const styles = {
   },
   taxStatLabel: {
     fontSize: "0.66rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     textTransform: "uppercase",
     letterSpacing: "0.05em",
     fontWeight: 600,
@@ -4597,19 +4605,19 @@ const styles = {
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
     fontSize: "0.85rem",
     fontWeight: 700,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
   },
   taxStatUnit: {
     fontFamily: "inherit",
     fontSize: "0.66rem",
     fontWeight: 500,
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     marginLeft: 2,
   },
   taxStatValue: {
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
     fontSize: "0.78rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     marginTop: 1,
   },
   taxStatExtra: {
@@ -4625,7 +4633,7 @@ const styles = {
     background: "#f7f9fc",
     borderRadius: 6,
     fontSize: "0.74rem",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     lineHeight: 1.4,
   },
   // Optimization-suggestion card (2026-05-09).
@@ -4652,7 +4660,7 @@ const styles = {
   taxRowOptimizationTitle: {
     fontSize: "0.78rem",
     fontWeight: 700,
-    color: "#0d47a1",
+    color: "var(--k-blue)",
     flex: 1,
     minWidth: 0,
   },
@@ -4672,7 +4680,7 @@ const styles = {
   },
   taxRowOptimizationLabel: {
     fontSize: "0.68rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     fontWeight: 600,
     textTransform: "uppercase",
     letterSpacing: "0.03em",
@@ -4681,13 +4689,13 @@ const styles = {
   taxRowOptimizationValue: {
     fontSize: "0.95rem",
     fontWeight: 800,
-    color: "#0d47a1",
+    color: "var(--k-blue)",
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
   },
   taxRowOptimizationValueMuted: {
     fontSize: "0.88rem",
     fontWeight: 600,
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
     textDecoration: "line-through",
   },
@@ -4702,9 +4710,9 @@ const styles = {
   // Lives on a white card to stand apart from the gradient background.
   taxRowOptimizationSubtotalProof: {
     fontSize: "0.74rem",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     lineHeight: 1.55,
-    background: "#fff",
+    background: "var(--k-surface)",
     border: "1px solid #cfe3f6",
     borderRadius: 6,
     padding: "0.4rem 0.55rem",
@@ -4741,9 +4749,9 @@ const styles = {
   },
   taxRowOptimizationRationale: {
     fontSize: "0.74rem",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     lineHeight: 1.45,
-    background: "#fff",
+    background: "var(--k-surface)",
     border: "1px dashed #b3d4f0",
     borderRadius: 6,
     padding: "0.4rem 0.55rem",
@@ -4812,8 +4820,8 @@ const styles = {
     alignItems: "center",
     gap: "0.3rem",
     padding: "0.35rem 0.65rem",
-    background: "#fff",
-    color: "#0d47a1",
+    background: "var(--k-surface)",
+    color: "var(--k-blue)",
     border: "1px solid #90caf9",
     borderRadius: 6,
     fontSize: "0.72rem",
@@ -4826,7 +4834,7 @@ const styles = {
     gap: "0.25rem",
     padding: "0.35rem 0.55rem",
     background: "transparent",
-    color: "#0d47a1",
+    color: "var(--k-blue)",
     border: "1px dashed #90caf9",
     borderRadius: 6,
     fontSize: "0.72rem",
@@ -4877,23 +4885,23 @@ const styles = {
     gap: "0.45rem",
     alignItems: "center",
     padding: "0.3rem 0.45rem",
-    background: "#fff",
+    background: "var(--k-surface)",
     border: "1px solid #e0eef8",
     borderRadius: 5,
     fontSize: "0.72rem",
   },
   taxRowOptimizationDistLabel: {
     fontWeight: 700,
-    color: "#0d47a1",
+    color: "var(--k-blue)",
   },
   taxRowOptimizationDistQty: {
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
   },
   taxRowOptimizationDistTotal: {
     fontWeight: 700,
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
   },
   taxRowOptimizationDistBadgeOk: {
     fontSize: "0.66rem",
@@ -4920,7 +4928,7 @@ const styles = {
   // realistic band, weighted-avg cost, and the top reference purchase
   // bills the suggestion was anchored against.
   taxRowOptimizationWhy: {
-    background: "#fff",
+    background: "var(--k-surface)",
     border: "1px solid #cfe3f6",
     borderRadius: 6,
     padding: "0.55rem 0.7rem",
@@ -4931,7 +4939,7 @@ const styles = {
   taxRowOptimizationWhyHeader: {
     fontSize: "0.74rem",
     fontWeight: 700,
-    color: "#0d47a1",
+    color: "var(--k-blue)",
     textTransform: "uppercase",
     letterSpacing: "0.03em",
   },
@@ -4943,25 +4951,25 @@ const styles = {
   taxRowOptimizationWhyValue: {
     fontSize: "0.86rem",
     fontWeight: 700,
-    color: "#0d47a1",
+    color: "var(--k-blue)",
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
   },
   taxRowOptimizationWhyValueMuted: {
     fontSize: "0.86rem",
     fontWeight: 700,
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
   },
   taxRowOptimizationWhyHint: {
     fontSize: "0.68rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     lineHeight: 1.4,
     marginTop: "0.15rem",
   },
   taxRowOptimizationWhySubheader: {
     fontSize: "0.72rem",
     fontWeight: 700,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     marginTop: "0.2rem",
   },
   taxRowOptimizationRefBills: {
@@ -4982,22 +4990,22 @@ const styles = {
   },
   taxRowOptimizationRefBillNum: {
     fontWeight: 700,
-    color: "#0d47a1",
+    color: "var(--k-blue)",
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
   },
   taxRowOptimizationRefBillMeta: {
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
   },
   taxRowOptimizationRefBillPrice: {
     fontWeight: 700,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
   },
   // Phase B additions ───────────────────────────────────────────────
   periodSelect: {
-    background: "#fff",
-    color: colors.textPrimary,
-    border: `1px solid ${colors.inputBorder}`,
+    background: "var(--k-surface)",
+    color: "var(--k-ink)",
+    border: `1px solid var(--k-line-strong)`,
     borderRadius: 8,
     padding: "0.3rem 0.55rem",
     fontSize: "0.78rem",
@@ -5031,7 +5039,7 @@ const styles = {
     flexWrap: "wrap",
     gap: "0.5rem",
     fontSize: "0.7rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
   },
   taxRowAging: {
     color: "#8a4b00",
@@ -5054,9 +5062,9 @@ const styles = {
     alignItems: "center",
     gap: "0.25rem",
     padding: "0.3rem 0.6rem",
-    background: "#fff",
-    color: colors.blue,
-    border: `1px solid ${colors.blue}`,
+    background: "var(--k-surface)",
+    color: "var(--k-blue)",
+    border: `1px solid var(--k-blue)`,
     borderRadius: 8,
     fontSize: "0.74rem",
     fontWeight: 600,
@@ -5104,7 +5112,7 @@ const styles = {
     gap: "0.4rem",
     flexWrap: "wrap",
     fontSize: "0.78rem",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
   },
   taxCollapsedWarnPill: {
     display: "inline-flex",
@@ -5138,15 +5146,15 @@ const styles = {
     marginTop: "0.65rem",
     padding: "0.4rem 0",
     fontSize: "0.7rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     fontStyle: "italic",
-    borderTop: `1px dashed ${colors.cardBorder}`,
+    borderTop: `1px dashed var(--k-line)`,
     textAlign: "center",
   },
   tableWrap: {
     width: "100%",
     overflowX: "auto",
-    border: `1px solid ${colors.cardBorder}`,
+    border: `1px solid var(--k-line)`,
     borderRadius: 8,
   },
   table: { width: "100%", borderCollapse: "collapse", minWidth: 1100, tableLayout: "fixed" },
@@ -5156,24 +5164,24 @@ const styles = {
     textAlign: "left",
     fontSize: "0.75rem",
     fontWeight: 700,
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     textTransform: "uppercase",
     letterSpacing: "0.03em",
-    borderBottom: `1px solid ${colors.cardBorder}`,
+    borderBottom: `1px solid var(--k-line)`,
   },
   td: {
     padding: "0.4rem 0.5rem",
     fontSize: "0.82rem",
-    borderBottom: `1px solid ${colors.cardBorder}`,
+    borderBottom: `1px solid var(--k-line)`,
     verticalAlign: "middle",
   },
   tableInput: {
     width: "100%",
     padding: "0.35rem 0.5rem",
-    border: `1px solid ${colors.inputBorder}`,
+    border: `1px solid var(--k-line-strong)`,
     borderRadius: 4,
     fontSize: "0.8rem",
-    backgroundColor: "#fff",
+    backgroundColor: "var(--k-surface)",
   },
   narrowPermissionBanner: {
     display: "flex",
@@ -5181,7 +5189,7 @@ const styles = {
     gap: "0.5rem",
     padding: "0.65rem 0.85rem",
     backgroundColor: colors.warnBg,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     borderRadius: 6,
     marginBottom: "1rem",
     fontSize: "0.82rem",
@@ -5190,7 +5198,7 @@ const styles = {
   },
   readOnlyCell: {
     backgroundColor: "#f5f7fa",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     fontSize: "0.78rem",
     overflow: "hidden",
     textOverflow: "ellipsis",
@@ -5200,14 +5208,14 @@ const styles = {
   readOnlyText: {
     padding: "0.35rem 0.5rem",
     fontSize: "0.8rem",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     fontWeight: 600,
   },
   muted: { color: "#9ca3af", fontStyle: "italic" },
   gridHint: {
     margin: "0.5rem 0 0.6rem",
     fontSize: "0.75rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     lineHeight: 1.4,
   },
   bulkApplyBar: {
@@ -5218,38 +5226,38 @@ const styles = {
     padding: "0.55rem 0.85rem",
     marginBottom: "0.65rem",
     borderRadius: 8,
-    border: `1px solid ${colors.cardBorder}`,
+    border: `1px solid var(--k-line)`,
     backgroundColor: "#f8faff",
   },
-  bulkApplyLabel: { fontSize: "0.82rem", color: colors.textPrimary, fontWeight: 500 },
+  bulkApplyLabel: { fontSize: "0.82rem", color: "var(--k-ink)", fontWeight: 500 },
   // Grouped ⇄ Individual lines segmented toggle.
   viewToggle: {
     display: "inline-flex",
     flexWrap: "wrap",
     maxWidth: "100%",
     borderRadius: 8,
-    border: `1px solid ${colors.inputBorder}`,
+    border: `1px solid var(--k-line-strong)`,
     overflow: "hidden",
-    backgroundColor: "#fff",
+    backgroundColor: "var(--k-surface)",
   },
   viewToggleBtn: {
     minHeight: "var(--ui-btn-h, 44px)",
     padding: "0.35rem 0.7rem",
     fontSize: "0.76rem",
     fontWeight: 600,
-    color: colors.textSecondary,
-    backgroundColor: "#fff",
+    color: "var(--k-muted)",
+    backgroundColor: "var(--k-surface)",
     border: "none",
     cursor: "pointer",
     whiteSpace: "normal",
   },
-  viewToggleBtnActive: { backgroundColor: colors.blue, color: "#fff" },
+  viewToggleBtnActive: { backgroundColor: "var(--k-blue)", color: "#fff" },
   // Grouped table affordances.
   groupedRow: { backgroundColor: "#fbfcfe" },
   groupMeta: {
     marginTop: 2,
     fontSize: "0.68rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     fontStyle: "italic",
   },
   // Static helper copy, so nowrap is safe here — the "never nowrap" rule is
@@ -5257,7 +5265,7 @@ const styles = {
   priceMeta: {
     marginTop: 2,
     fontSize: "0.68rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     fontStyle: "italic",
     whiteSpace: "nowrap",
     textAlign: "right",
@@ -5265,20 +5273,20 @@ const styles = {
   adjustRow: { background: "#f7f9fc" },
   adjustCell: {
     padding: "0.5rem 0.75rem 0.75rem 1.1rem",
-    borderBottom: `1px solid ${colors.cardBorder}`,
-    borderLeft: `3px solid ${colors.blue}`,
+    borderBottom: `1px solid var(--k-line)`,
+    borderLeft: `3px solid var(--k-blue)`,
   },
   // auto-fit + min() so the controls stack on a phone with no media query
   adjustWrap: { display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "0.6rem" },
   adjustLabel: {
     fontSize: "0.72rem",
     fontWeight: 600,
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     alignSelf: "center",
   },
   segmented: {
     display: "inline-flex",
-    border: `1px solid ${colors.inputBorder}`,
+    border: `1px solid var(--k-line-strong)`,
     borderRadius: 6,
     overflow: "hidden",
   },
@@ -5286,16 +5294,16 @@ const styles = {
     padding: "0.4rem 0.7rem",
     fontSize: "0.75rem",
     border: "none",
-    background: "#fff",
-    color: colors.textSecondary,
+    background: "var(--k-surface)",
+    color: "var(--k-muted)",
     cursor: "pointer",
     minHeight: "var(--ui-control-h, 36px)",
   },
-  segBtnOn: { background: colors.blue, color: "#fff", fontWeight: 600 },
+  segBtnOn: { background: "var(--k-blue)", color: "#fff", fontWeight: 600 },
   exactBox: {
     flex: "1 1 min(320px, 100%)",
-    background: "#fff",
-    border: `1px solid ${colors.cardBorder}`,
+    background: "var(--k-surface)",
+    border: `1px solid var(--k-line)`,
     borderRadius: 6,
     padding: "0.5rem 0.6rem",
   },
@@ -5303,18 +5311,18 @@ const styles = {
     display: "block",
     fontSize: "0.72rem",
     fontWeight: 600,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     marginBottom: "0.3rem",
   },
-  exactDerived: { marginTop: "0.35rem", fontSize: "0.74rem", color: colors.textPrimary },
+  exactDerived: { marginTop: "0.35rem", fontSize: "0.74rem", color: "var(--k-ink)" },
   clearExactBtn: {
     padding: "0.35rem 0.6rem",
     fontSize: "0.72rem",
     borderRadius: 4,
     minHeight: "var(--ui-control-h, 36px)",
-    border: `1px solid ${colors.inputBorder}`,
-    background: "#fff",
-    color: colors.textSecondary,
+    border: `1px solid var(--k-line-strong)`,
+    background: "var(--k-surface)",
+    color: "var(--k-muted)",
     cursor: "pointer",
   },
   requiredHint: { marginTop: 2, fontSize: "0.66rem", color: colors.warn, fontWeight: 700 },
@@ -5337,7 +5345,7 @@ const styles = {
     display: "flex",
     justifyContent: "space-between",
     fontSize: "0.88rem",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     padding: "0.2rem 0",
   },
 };

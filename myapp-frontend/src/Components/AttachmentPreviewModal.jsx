@@ -97,9 +97,9 @@ export default function AttachmentPreviewModal({ title, ext, loadBlob, onDownloa
           {loading ? (
             <Loading>Loading preview…</Loading>
           ) : err ? (
-            <span style={{ color: "#dc3545" }}>{err}</span>
+            <span style={{ color: "var(--k-danger)" }}>{err}</span>
           ) : !previewable ? (
-            <div style={{ textAlign: "center", color: "#5f6d7e" }}>
+            <div style={{ textAlign: "center", color: "var(--k-muted)" }}>
               <Icon size={72} color={color} />
               <p style={{ marginTop: 12 }}>No inline preview for this file type.</p>
               {onDownload && (
@@ -121,7 +121,12 @@ export default function AttachmentPreviewModal({ title, ext, loadBlob, onDownloa
             <iframe
               src={url}
               title={title}
-              style={{ width: "100%", height: "100%", border: "none", background: "#fff" }}
+              style={{
+                width: "100%",
+                height: "100%",
+                border: "none",
+                background: "var(--k-surface)",
+              }}
             />
           )}
         </div>

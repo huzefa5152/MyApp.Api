@@ -610,7 +610,7 @@ const st = {
     fontWeight: 700,
     padding: "0.1rem 0.5rem",
     borderRadius: 20,
-    color: "#0d47a1",
+    color: "var(--k-blue)",
     background: "#e3f0ff",
   },
   unbilledPill: {

@@ -478,10 +478,10 @@ function Dashboard({
           <TrendChart
             points={trend}
             bars={[
-              { key: "revenue", label: "Revenue", color: "#0d47a1" },
+              { key: "revenue", label: "Revenue", color: "var(--k-blue)" },
               { key: "costOfSales", label: "Cost of sales", color: "#90a4c8" },
             ]}
-            line={{ key: "grossProfit", label: "Gross profit", color: "#00897b" }}
+            line={{ key: "grossProfit", label: "Gross profit", color: "var(--k-teal)" }}
             ariaLabel="Monthly revenue, cost of sales and gross profit"
           />
           {canOpenReports && trend.length > 0 && (
@@ -917,7 +917,7 @@ function GlHealthFooter({ status, canManage, rebuilding, onRebuild }) {
         <Button
           variant="secondary"
           size="sm"
-          style={{ marginLeft: "auto", minHeight: 44 }}
+          style={{ marginLeft: "auto", minHeight: "var(--k-btn-h)" }}
           onClick={onRebuild}
           disabled={rebuilding}
         >
@@ -939,7 +939,7 @@ const st = {
     alignItems: "center",
     gap: 5,
     width: "100%",
-    minHeight: 44,
+    minHeight: "var(--k-btn-h)",
     marginTop: "0.5rem",
     padding: "0.3rem 0",
     background: "none",

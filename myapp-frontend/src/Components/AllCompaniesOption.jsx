@@ -1,5 +1,4 @@
 import { MdPublic, MdWarning } from "react-icons/md";
-import { colors } from "../theme";
 
 // Primary admin only: connect an AI across EVERY tenant, including ones added later. Shown with a plain
 // warning wherever a connection is created, because this is the widest reach the system offers.
@@ -39,7 +38,7 @@ const box = {
   minHeight: "var(--k-h)",
   padding: "0.6rem 0.8rem",
   borderRadius: "var(--k-radius)",
-  border: `1px solid ${colors.inputBorder}`,
+  border: `1px solid var(--k-line-strong)`,
   background: "var(--k-input-bg)",
   fontSize: "var(--k-font)",
   cursor: "pointer",
@@ -49,7 +48,7 @@ const help = {
   display: "block",
   fontSize: "0.76rem",
   fontWeight: 400,
-  color: colors.textSecondary,
+  color: "var(--k-muted)",
   marginTop: 2,
 };
 const warn = {

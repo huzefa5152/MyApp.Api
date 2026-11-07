@@ -39,7 +39,7 @@ const st = {
     padding: 0,
     margin: "-7px 0",
     minWidth: 44,
-    minHeight: 44,
+    minHeight: "var(--k-btn-h)",
     border: "none",
     background: "transparent",
     boxShadow: "none",

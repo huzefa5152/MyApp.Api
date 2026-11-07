@@ -870,7 +870,7 @@ export default function PaymentForm({
                     min="0"
                     step="0.01"
                     className="k-input"
-                    style={{ textAlign: "right", flex: 1, minHeight: 44 }}
+                    style={{ textAlign: "right", flex: 1, minHeight: "var(--k-btn-h)" }}
                     aria-label={`${isReceipt ? "Received" : "Paid"} for ${docLabel.toLowerCase()} #${d.number}`}
                     value={c.row.cash ?? ""}
                     onChange={(e) => setCash(d.id, e.target.value)}
@@ -1602,7 +1602,7 @@ const allocMetaLabel = {
 const allocMetaValue = { fontSize: "var(--k-font)", fontWeight: 600, color: "var(--k-ink)" };
 
 // Phone tap targets (>= 44px) on top of the kit's compact sizes.
-const tap44 = { minHeight: 44 };
+const tap44 = { minHeight: "var(--k-btn-h)" };
 const tapSquare44 = { width: 44, height: 44 };
 const iconBtnBorder = { border: "1px solid var(--k-line-strong)", background: "var(--k-surface)" };
 
@@ -1644,7 +1644,7 @@ const adjMiniLabel = {
   color: "var(--k-muted)",
 };
 const adjInput = { width: 110, textAlign: "right" };
-const adjInputNarrow = { flex: 1, minWidth: 90, minHeight: 44 };
+const adjInputNarrow = { flex: 1, minWidth: 90, minHeight: "var(--k-btn-h)" };
 const adjAcctHint = { fontSize: "var(--k-font-sm)", color: "var(--k-muted)", fontStyle: "italic" };
 const adjError = { fontSize: "var(--k-font-sm)", color: "var(--k-danger)", fontWeight: 600 };
 const adjRemainHint = { fontSize: "var(--k-font-sm)", color: "var(--k-muted)" };
@@ -1665,7 +1665,7 @@ const payeeTabs = { display: "flex", flexWrap: "wrap", gap: "0.4rem" };
 const payeeTab = {
   flex: "1 1 auto",
   minWidth: 110,
-  minHeight: 44,
+  minHeight: "var(--k-btn-h)",
   padding: "0.5rem 0.75rem",
   border: "1px solid var(--k-line-strong)",
   borderRadius: "var(--k-radius)",

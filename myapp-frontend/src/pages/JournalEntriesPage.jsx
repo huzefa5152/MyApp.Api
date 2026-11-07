@@ -693,7 +693,7 @@ function JournalForm({ entry, companyId, accounts, isNarrow, onClose, onSaved })
             <div
               style={{
                 ...st.totalsBox,
-                borderColor: totals.balanced ? colors.success : colors.danger,
+                borderColor: totals.balanced ? colors.success : "var(--k-danger)",
               }}
             >
               <div>
@@ -709,7 +709,7 @@ function JournalForm({ entry, companyId, accounts, isNarrow, onClose, onSaved })
                 <span
                   style={{
                     ...st.totalsValue,
-                    color: totals.balanced ? colors.success : colors.danger,
+                    color: totals.balanced ? colors.success : "var(--k-danger)",
                   }}
                 >
                   {totals.balanced ? "✓ Balanced" : `✗ ${money(totals.diff)} out`}
@@ -815,7 +815,7 @@ const st = {
     fontWeight: 700,
     textTransform: "uppercase",
     background: "#e3f2fd",
-    color: "#0d47a1",
+    color: "var(--k-blue)",
     padding: "1px 6px",
     borderRadius: 10,
   },

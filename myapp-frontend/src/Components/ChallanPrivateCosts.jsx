@@ -11,13 +11,13 @@ import "./ChallanPrivateCosts.css";
 
 const field = {
   width: "100%",
-  minHeight: 44,
+  minHeight: "var(--k-btn-h)",
   boxSizing: "border-box",
-  border: "1px solid #d0d7e2",
+  border: "1px solid var(--k-line-strong)",
   borderRadius: 7,
   padding: "6px 9px",
   fontSize: 12,
-  background: "#fff",
+  background: "var(--k-surface)",
 };
 
 export function useChallanSuppliers(companyId) {

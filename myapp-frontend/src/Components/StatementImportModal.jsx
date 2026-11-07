@@ -1,7 +1,7 @@
 import "./AccountingModalTables.css";
 import { useState, useEffect, useCallback } from "react";
 import { MdClose, MdUploadFile, MdCheck, MdBlock } from "react-icons/md";
-import { colors, formStyles, modalSizes, dropdownStyles } from "../theme";
+import { formStyles, modalSizes, dropdownStyles } from "../theme";
 import { notify } from "../utils/notify";
 import {
   importBankStatement,
@@ -269,7 +269,7 @@ export default function StatementImportModal({ companyId, account, onClose, onDo
                               ...st.td,
                               textAlign: "right",
                               whiteSpace: "nowrap",
-                              color: neg ? colors.danger : colors.textPrimary,
+                              color: neg ? "var(--k-danger)" : "var(--k-ink)",
                             }}
                           >
                             {pkr(line.amount)}
@@ -345,10 +345,10 @@ const st = {
     fontWeight: 800,
     textTransform: "uppercase",
     letterSpacing: "0.04em",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     marginBottom: 8,
   },
-  help: { fontSize: "0.8rem", color: colors.textSecondary, margin: "0 0 0.75rem" },
+  help: { fontSize: "0.8rem", color: "var(--k-muted)", margin: "0 0 0.75rem" },
 
   uploadRow: {
     display: "flex",
@@ -362,34 +362,34 @@ const st = {
     alignItems: "center",
     gap: 6,
     padding: "0.5rem 0.9rem",
-    minHeight: 44,
+    minHeight: "var(--k-btn-h)",
     borderRadius: 8,
-    border: `1px solid ${colors.inputBorder}`,
-    background: "#fff",
-    color: colors.blue,
+    border: `1px solid var(--k-line-strong)`,
+    background: "var(--k-surface)",
+    color: "var(--k-blue)",
     fontWeight: 700,
     cursor: "pointer",
   },
-  fileName: { fontSize: "0.82rem", color: colors.textPrimary, wordBreak: "break-all" },
+  fileName: { fontSize: "0.82rem", color: "var(--k-ink)", wordBreak: "break-all" },
 
   textarea: {
     width: "100%",
     boxSizing: "border-box",
-    border: `1px solid ${colors.inputBorder}`,
+    border: `1px solid var(--k-line-strong)`,
     borderRadius: 8,
     padding: "10px 12px",
     fontSize: "0.82rem",
     fontFamily: "monospace",
-    background: colors.inputBg,
-    color: colors.textPrimary,
+    background: "var(--k-input-bg)",
+    color: "var(--k-ink)",
     resize: "vertical",
     minHeight: 96,
   },
 
   importBtnRow: { display: "flex", justifyContent: "flex-end", marginTop: "0.75rem" },
-  importBtn: { display: "inline-flex", alignItems: "center", gap: 6, minHeight: 40 },
+  importBtn: { display: "inline-flex", alignItems: "center", gap: 6, minHeight: "var(--k-h)" },
 
-  tableWrap: { overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 12 },
+  tableWrap: { overflowX: "auto", border: `1px solid var(--k-line)`, borderRadius: 12 },
   table: { width: "100%", borderCollapse: "collapse", minWidth: 640 },
   th: {
     textAlign: "left",
@@ -397,17 +397,17 @@ const st = {
     fontWeight: 800,
     textTransform: "uppercase",
     letterSpacing: "0.04em",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     padding: "10px 12px",
-    borderBottom: `2px solid ${colors.cardBorder}`,
+    borderBottom: `2px solid var(--k-line)`,
     whiteSpace: "nowrap",
-    background: colors.inputBg,
+    background: "var(--k-input-bg)",
   },
-  tr: { borderBottom: `1px solid ${colors.cardBorder}` },
+  tr: { borderBottom: `1px solid var(--k-line)` },
   td: {
     padding: "10px 12px",
     fontSize: "0.86rem",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     verticalAlign: "middle",
   },
 
@@ -417,7 +417,7 @@ const st = {
     alignItems: "center",
     gap: 4,
     padding: "0.4rem 0.7rem",
-    minHeight: 38,
+    minHeight: "var(--k-h)",
     borderRadius: 8,
     border: "none",
     fontSize: "0.8rem",
@@ -425,19 +425,19 @@ const st = {
     cursor: "pointer",
     whiteSpace: "nowrap",
   },
-  catBtn: { background: colors.blue, color: "#fff" },
+  catBtn: { background: "var(--k-blue)", color: "#fff" },
   ignoreBtn: {
     background: "transparent",
-    color: colors.textSecondary,
-    border: `1px solid ${colors.inputBorder}`,
+    color: "var(--k-muted)",
+    border: `1px solid var(--k-line-strong)`,
   },
 
   empty: {
     padding: "2rem 1rem",
     textAlign: "center",
-    color: colors.textSecondary,
-    background: colors.inputBg,
-    border: `1px dashed ${colors.inputBorder}`,
+    color: "var(--k-muted)",
+    background: "var(--k-input-bg)",
+    border: `1px dashed var(--k-line-strong)`,
     borderRadius: 12,
   },
 };

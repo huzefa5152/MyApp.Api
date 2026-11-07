@@ -5,7 +5,7 @@ import { getBilledChallanEdit, updateBilledChallanEdit } from "../api/challanApi
 import { getAllUnits } from "../api/unitsApi";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { deliveryBillImpact } from "../utils/billedChallanEdit";
-import { formStyles, colors } from "../theme";
+import { formStyles } from "../theme";
 
 const money = (n) =>
   Number(n || 0).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -123,7 +123,7 @@ export default function BilledChallanEditForm({ challan, onClose, onSaved, onOpe
       setSaving(false);
     }
   }
-  const button = { ...formStyles.button, minHeight: 44 };
+  const button = { ...formStyles.button, minHeight: "var(--k-btn-h)" };
   return (
     <div data-admin-backdrop="" style={{ ...formStyles.backdrop, zIndex: 1600 }}>
       <form
@@ -152,8 +152,8 @@ export default function BilledChallanEditForm({ challan, onClose, onSaved, onOpe
               role="alert"
               style={{
                 padding: 12,
-                background: colors.dangerLight,
-                color: colors.danger,
+                background: "var(--k-danger-bg)",
+                color: "var(--k-danger)",
                 borderRadius: 8,
               }}
             >
@@ -172,7 +172,7 @@ export default function BilledChallanEditForm({ challan, onClose, onSaved, onOpe
                 required before FBR submission.
               </p>
               {stockWarnings.length > 0 && (
-                <div role="alert" style={{ color: colors.danger }}>
+                <div role="alert" style={{ color: "var(--k-danger)" }}>
                   <strong>Saved with stock warnings</strong>
                   {stockWarnings.map((w) => (
                     <p key={w.itemTypeId}>
@@ -222,7 +222,7 @@ export default function BilledChallanEditForm({ challan, onClose, onSaved, onOpe
                         key={i.id || `new-${index}`}
                         style={{
                           padding: 10,
-                          borderBottom: `1px solid ${colors.cardBorder}`,
+                          borderBottom: `1px solid var(--k-line)`,
                           overflowWrap: "anywhere",
                         }}
                       >
@@ -236,7 +236,7 @@ export default function BilledChallanEditForm({ challan, onClose, onSaved, onOpe
                     {snapshot.challan.items
                       .filter((i) => !items.some((row) => row.id === i.id))
                       .map((i) => (
-                        <p key={i.id} style={{ color: colors.danger }}>
+                        <p key={i.id} style={{ color: "var(--k-danger)" }}>
                           Removed: {i.description} ({i.quantity} {i.unit})
                         </p>
                       ))}
@@ -246,11 +246,11 @@ export default function BilledChallanEditForm({ challan, onClose, onSaved, onOpe
                   aria-label="Estimated bill impact"
                   aria-live="polite"
                   style={{
-                    background: colors.inputBg,
+                    background: "var(--k-input-bg)",
                     padding: 14,
                     marginTop: 16,
                     borderRadius: 10,
-                    border: `1px solid ${colors.cardBorder}`,
+                    border: `1px solid var(--k-line)`,
                   }}
                 >
                   <strong>Estimated bill totals</strong>
@@ -278,7 +278,7 @@ export default function BilledChallanEditForm({ challan, onClose, onSaved, onOpe
                     <span>Receipts allocated: Rs {money(snapshot.bill.amountPaid)}</span>
                   </div>
                   {paidConflict && (
-                    <p role="alert" style={{ color: colors.danger }}>
+                    <p role="alert" style={{ color: "var(--k-danger)" }}>
                       The new collectible amount is below allocated receipts. Reallocate receipts
                       before reducing this bill.
                     </p>

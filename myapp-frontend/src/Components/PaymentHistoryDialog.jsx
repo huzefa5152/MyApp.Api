@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { MdClose, MdReceiptLong } from "react-icons/md";
-import { formStyles, modalSizes, colors } from "../theme";
+import { formStyles, modalSizes } from "../theme";
 import StatusBadge from "./StatusBadge";
 import { getPaymentsForInvoice, getPaymentsForBill } from "../api/paymentApi";
 import { StatGrid, StatCard, TableWrap, Loading, EmptyState } from "../ui/Kit";
@@ -94,7 +94,7 @@ export default function PaymentHistoryDialog({ mode, companyId, doc, onClose }) 
             <StatCard
               tone="teal"
               label={isReceipt ? "Received" : "Paid"}
-              value={<span style={{ color: colors.teal }}>{money(doc.amountPaid)}</span>}
+              value={<span style={{ color: "var(--k-teal)" }}>{money(doc.amountPaid)}</span>}
             />
             <StatCard
               tone={(doc.balanceDue || 0) > 0 ? "red" : "slate"}

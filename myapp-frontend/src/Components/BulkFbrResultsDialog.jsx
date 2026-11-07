@@ -134,7 +134,7 @@ export default function BulkFbrResultsDialog({ open, action, items, onClose }) {
                     style={{
                       ...styles.td,
                       fontWeight: 600,
-                      color: colors.blue,
+                      color: "var(--k-blue)",
                       whiteSpace: "nowrap",
                     }}
                   >
@@ -149,7 +149,7 @@ export default function BulkFbrResultsDialog({ open, action, items, onClose }) {
                         style={{
                           fontFamily: "monospace",
                           fontSize: "0.78rem",
-                          color: colors.textSecondary,
+                          color: "var(--k-muted)",
                           wordBreak: "break-all",
                         }}
                       >
@@ -159,13 +159,13 @@ export default function BulkFbrResultsDialog({ open, action, items, onClose }) {
                       <span
                         style={{
                           fontSize: "0.82rem",
-                          color: it.status === "failed" ? colors.failFg : colors.textPrimary,
+                          color: it.status === "failed" ? colors.failFg : "var(--k-ink)",
                         }}
                       >
                         {it.message}
                       </span>
                     ) : (
-                      <span style={{ color: colors.textSecondary, fontSize: "0.82rem" }}>—</span>
+                      <span style={{ color: "var(--k-muted)", fontSize: "0.82rem" }}>—</span>
                     )}
                   </td>
                 </tr>
@@ -236,7 +236,7 @@ function StatusBadge({ status }) {
       label: "Not attempted",
       icon: <MdBlock size={13} />,
     },
-  }[status] || { fg: colors.textSecondary, bg: "#f0f0f0", label: status || "—", icon: null };
+  }[status] || { fg: "var(--k-muted)", bg: "#f0f0f0", label: status || "—", icon: null };
   return (
     <span
       style={{

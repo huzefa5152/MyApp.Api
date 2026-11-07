@@ -920,7 +920,7 @@ export default function StandaloneInvoiceForm({
             )}
 
             {loading ? (
-              <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>
+              <div style={{ textAlign: "center", padding: "2rem", color: "var(--k-muted)" }}>
                 Loading…
               </div>
             ) : (
@@ -936,9 +936,9 @@ export default function StandaloneInvoiceForm({
                       flexWrap: "wrap",
                       marginBottom: "1rem",
                       padding: "0.75rem",
-                      border: `1px solid ${colors.cardBorder}`,
+                      border: `1px solid var(--k-line)`,
                       borderRadius: 10,
-                      background: "#f8fafc",
+                      background: "var(--k-surface-2)",
                     }}
                   >
                     {canUseOrders && (
@@ -1158,7 +1158,7 @@ export default function StandaloneInvoiceForm({
                                 }}
                                 style={{
                                   ...styles.scenarioCard,
-                                  borderColor: active ? colors.blue : colors.cardBorder,
+                                  borderColor: active ? "var(--k-blue)" : "var(--k-line)",
                                   backgroundColor: active ? "#e3f2fd" : "#fff",
                                 }}
                               >
@@ -1547,7 +1547,7 @@ export default function StandaloneInvoiceForm({
                           <span
                             style={{
                               fontSize: "0.82rem",
-                              color: colors.textPrimary,
+                              color: "var(--k-ink)",
                               fontWeight: 500,
                             }}
                           >
@@ -1629,7 +1629,7 @@ export default function StandaloneInvoiceForm({
                                     style={{
                                       ...styles.removeRowBtn,
                                       minWidth: 44,
-                                      minHeight: 44,
+                                      minHeight: "var(--k-btn-h)",
                                       flexShrink: 0,
                                     }}
                                     onClick={() => removeRow(r.localId)}
@@ -1664,9 +1664,7 @@ export default function StandaloneInvoiceForm({
                                     <div
                                       style={{
                                         fontSize: "0.9rem",
-                                        color: r.itemTypeName
-                                          ? colors.textPrimary
-                                          : colors.textSecondary,
+                                        color: r.itemTypeName ? "var(--k-ink)" : "var(--k-muted)",
                                         fontStyle: r.itemTypeName ? "normal" : "italic",
                                       }}
                                     >
@@ -1719,7 +1717,7 @@ export default function StandaloneInvoiceForm({
                                           fontSize: "0.9rem",
                                           backgroundColor: r.itemTypeId
                                             ? "#eef5ff"
-                                            : colors.inputBg,
+                                            : "var(--k-input-bg)",
                                           cursor: r.itemTypeId ? "not-allowed" : "text",
                                         }}
                                         value={r.uom}
@@ -1764,7 +1762,7 @@ export default function StandaloneInvoiceForm({
                                       style={{
                                         fontFamily: "monospace",
                                         fontSize: "0.82rem",
-                                        color: r.hsCode ? colors.textPrimary : colors.textSecondary,
+                                        color: r.hsCode ? "var(--k-ink)" : "var(--k-muted)",
                                         fontStyle: r.hsCode ? "normal" : "italic",
                                       }}
                                       title="HS Code auto-fills from the picked Item Type"
@@ -2013,9 +2011,7 @@ export default function StandaloneInvoiceForm({
                                       <td
                                         style={{
                                           ...styles.unifiedTd,
-                                          color: r.itemTypeName
-                                            ? colors.textPrimary
-                                            : colors.textSecondary,
+                                          color: r.itemTypeName ? "var(--k-ink)" : "var(--k-muted)",
                                           fontStyle: r.itemTypeName ? "normal" : "italic",
                                         }}
                                       >
@@ -2071,7 +2067,7 @@ export default function StandaloneInvoiceForm({
                                             fontSize: "0.8rem",
                                             backgroundColor: r.itemTypeId
                                               ? "#eef5ff"
-                                              : colors.inputBg,
+                                              : "var(--k-input-bg)",
                                             cursor: r.itemTypeId ? "not-allowed" : "text",
                                           }}
                                           value={r.uom}
@@ -2158,9 +2154,7 @@ export default function StandaloneInvoiceForm({
                                           backgroundColor: "#f4f6fa",
                                           fontFamily: "monospace",
                                           fontSize: "0.78rem",
-                                          color: r.hsCode
-                                            ? colors.textPrimary
-                                            : colors.textSecondary,
+                                          color: r.hsCode ? "var(--k-ink)" : "var(--k-muted)",
                                           fontStyle: r.hsCode ? "normal" : "italic",
                                         }}
                                         title="HS Code auto-fills from the picked Item Type"
@@ -2389,7 +2383,7 @@ export default function StandaloneInvoiceForm({
                 setWithholdingTaxAmount(amount);
               }}
             />
-            <p style={{ color: colors.textSecondary, fontSize: "0.85rem", lineHeight: 1.5 }}>
+            <p style={{ color: "var(--k-muted)", fontSize: "0.85rem", lineHeight: 1.5 }}>
               Item Type is optional on bills. Selected types suggest filing groups; unclassified
               lines stay separate. The tax consultant can combine or separate them in Adjust
               invoice.
@@ -2413,11 +2407,11 @@ export default function StandaloneInvoiceForm({
           </div>
           <div data-admin-footer="" style={formStyles.footer}>
             {billNumberMode === "custom" && !billNumberOk ? (
-              <span style={{ fontSize: "0.8rem", color: colors.danger, marginRight: "auto" }}>
+              <span style={{ fontSize: "0.8rem", color: "var(--k-danger)", marginRight: "auto" }}>
                 Enter a bill number that isn&apos;t already in use, or switch back to Auto.
               </span>
             ) : !allRowsValid && rows.length > 0 && chosenScenario && selectedClientId ? (
-              <span style={{ fontSize: "0.8rem", color: colors.danger, marginRight: "auto" }}>
+              <span style={{ fontSize: "0.8rem", color: "var(--k-danger)", marginRight: "auto" }}>
                 Some required fields are missing.
               </span>
             ) : null}
@@ -2491,10 +2485,10 @@ const styles = {
   // Mobile stacked-card line items (rendered below 760px instead of the table).
   mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
   mcard: {
-    border: `1px solid ${colors.cardBorder}`,
+    border: `1px solid var(--k-line)`,
     borderRadius: 12,
     padding: "0.7rem 0.75rem",
-    background: "#fff",
+    background: "var(--k-surface)",
   },
   mcardHead: { display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.5rem" },
   mlabel: {
@@ -2502,7 +2496,7 @@ const styles = {
     fontSize: "0.68rem",
     textTransform: "uppercase",
     letterSpacing: "0.03em",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     fontWeight: 700,
     marginBottom: "0.2rem",
   },
@@ -2525,9 +2519,9 @@ const styles = {
     alignItems: "center",
     marginTop: "0.55rem",
     paddingTop: "0.45rem",
-    borderTop: `1px dashed ${colors.cardBorder}`,
+    borderTop: `1px dashed var(--k-line)`,
     fontSize: "0.85rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
   },
   row: { display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" },
   inlineRow: { display: "flex", gap: "0.5rem", alignItems: "stretch", flexWrap: "wrap" },
@@ -2536,17 +2530,17 @@ const styles = {
     marginBottom: "var(--ui-label-gap, 0.35rem)",
     fontWeight: 600,
     fontSize: "var(--ui-label-size, 0.85rem)",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
   },
   input: {
     width: "100%",
     padding: "var(--ui-input-pad, 0.55rem 0.75rem)",
     minHeight: "var(--ui-control-h, 0px)",
     borderRadius: 8,
-    border: `1px solid ${colors.inputBorder}`,
+    border: `1px solid var(--k-line-strong)`,
     fontSize: "var(--ui-input-size, 0.9rem)",
-    backgroundColor: `var(--ui-input-bg, ${colors.inputBg})`,
-    color: colors.textPrimary,
+    backgroundColor: `var(--ui-input-bg, var(--k-input-bg))`,
+    color: "var(--k-ink)",
     outline: "none",
     boxSizing: "border-box",
   },
@@ -2555,16 +2549,16 @@ const styles = {
     padding: "var(--ui-select-pad, 0.6rem 0.75rem)",
     minHeight: "var(--ui-control-h, 0px)",
     borderRadius: 8,
-    border: `1px solid ${colors.inputBorder}`,
+    border: `1px solid var(--k-line-strong)`,
     fontSize: "var(--ui-input-size, 0.9rem)",
-    backgroundColor: `var(--ui-input-bg, ${colors.inputBg})`,
-    color: colors.textPrimary,
+    backgroundColor: `var(--ui-input-bg, var(--k-input-bg))`,
+    color: "var(--k-ink)",
     outline: "none",
     cursor: "pointer",
   },
   errorAlert: {
-    backgroundColor: colors.dangerLight,
-    color: colors.danger,
+    backgroundColor: "var(--k-danger-bg)",
+    color: "var(--k-danger)",
     padding: "0.65rem 1rem",
     borderRadius: 8,
     marginBottom: "1rem",
@@ -2589,9 +2583,9 @@ const styles = {
     gap: "0.35rem",
     alignItems: "flex-end",
     padding: "1rem",
-    backgroundColor: "#f8f9fb",
+    backgroundColor: "var(--k-surface-2)",
     borderRadius: 8,
-    border: `1px solid ${colors.cardBorder}`,
+    border: `1px solid var(--k-line)`,
     marginTop: "0.5rem",
   },
   totalRow: {
@@ -2601,7 +2595,7 @@ const styles = {
     fontSize: "0.9rem",
     minWidth: 280,
   },
-  fbrToggleHint: { margin: "0.3rem 0 0", fontSize: "0.75rem", color: colors.textSecondary },
+  fbrToggleHint: { margin: "0.3rem 0 0", fontSize: "0.75rem", color: "var(--k-muted)" },
   optionalTag: {
     marginLeft: "0.3rem",
     padding: "0.05rem 0.35rem",
@@ -2643,7 +2637,7 @@ const styles = {
     padding: "0.35rem 0.75rem",
     borderRadius: 6,
     border: "none",
-    backgroundColor: colors.blue,
+    backgroundColor: "var(--k-blue)",
     color: "#fff",
     fontSize: "0.78rem",
     fontWeight: 600,
@@ -2656,9 +2650,9 @@ const styles = {
     gap: "0.3rem",
     padding: "0.45rem 0.75rem",
     borderRadius: 6,
-    border: `1px solid ${colors.blue}`,
-    backgroundColor: "#fff",
-    color: colors.blue,
+    border: `1px solid var(--k-blue)`,
+    backgroundColor: "var(--k-surface)",
+    color: "var(--k-blue)",
     fontSize: "0.8rem",
     fontWeight: 600,
     cursor: "pointer",
@@ -2670,9 +2664,9 @@ const styles = {
     justifyContent: "center",
     padding: "0.25rem",
     borderRadius: 6,
-    border: `1px solid ${colors.blue}`,
-    backgroundColor: "#fff",
-    color: colors.blue,
+    border: `1px solid var(--k-blue)`,
+    backgroundColor: "var(--k-surface)",
+    color: "var(--k-blue)",
     cursor: "pointer",
     flexShrink: 0,
   },
@@ -2682,15 +2676,15 @@ const styles = {
     justifyContent: "center",
     padding: "0.3rem",
     borderRadius: 6,
-    border: `1px solid ${colors.cardBorder}`,
-    backgroundColor: "#fff",
-    color: colors.danger,
+    border: `1px solid var(--k-line)`,
+    backgroundColor: "var(--k-surface)",
+    color: "var(--k-danger)",
     cursor: "pointer",
   },
   unifiedTableWrap: {
     width: "100%",
     overflowX: "auto",
-    border: `1px solid ${colors.cardBorder}`,
+    border: `1px solid var(--k-line)`,
     borderRadius: 8,
   },
   unifiedTable: { width: "100%", borderCollapse: "collapse", minWidth: 1200 },
@@ -2700,16 +2694,16 @@ const styles = {
     textAlign: "left",
     fontSize: "0.7rem",
     fontWeight: 800,
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     textTransform: "uppercase",
     letterSpacing: "0.03em",
-    borderBottom: `1px solid ${colors.cardBorder}`,
+    borderBottom: `1px solid var(--k-line)`,
   },
-  unifiedRow: { backgroundColor: "#fff" },
+  unifiedRow: { backgroundColor: "var(--k-surface)" },
   unifiedTd: {
     padding: "0.3rem 0.4rem",
     fontSize: "0.8rem",
-    borderBottom: `1px solid ${colors.cardBorder}`,
+    borderBottom: `1px solid var(--k-line)`,
     verticalAlign: "middle",
   },
 
@@ -2719,7 +2713,7 @@ const styles = {
     gap: "0.5rem",
     fontSize: "0.95rem",
     fontWeight: 700,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     marginBottom: "0.4rem",
   },
   stepNum: {
@@ -2729,7 +2723,7 @@ const styles = {
     width: 22,
     height: 22,
     borderRadius: "50%",
-    backgroundColor: colors.blue,
+    backgroundColor: "var(--k-blue)",
     color: "#fff",
     fontSize: "0.78rem",
     fontWeight: 800,
@@ -2738,7 +2732,7 @@ const styles = {
   stepHint: {
     margin: "0 0 0.6rem 30px",
     fontSize: "0.78rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     lineHeight: 1.4,
   },
   // Collapsible Step 1 (FBR Scenario picker) — clickable header bar that
@@ -2753,7 +2747,7 @@ const styles = {
     minHeight: "var(--ui-btn-h, 0px)",
     padding: "var(--ui-input-pad, 0.6rem 0.85rem)",
     borderRadius: 10,
-    border: `1px solid ${colors.cardBorder}`,
+    border: `1px solid var(--k-line)`,
     backgroundColor: "#f8faff",
     cursor: "pointer",
     fontFamily: "inherit",
@@ -2764,7 +2758,7 @@ const styles = {
   scenarioCollapseTitle: {
     fontSize: "0.92rem",
     fontWeight: 700,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     flexShrink: 0,
   },
   scenarioCollapseSummary: {
@@ -2773,30 +2767,30 @@ const styles = {
     gap: "0.4rem",
     flex: 1,
     fontSize: "0.82rem",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     flexWrap: "wrap",
     minWidth: 0,
   },
   scenarioCollapseSummaryMuted: {
     flex: 1,
     fontSize: "0.82rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     fontStyle: "italic",
   },
   scenarioCollapseMeta: {
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     fontSize: "0.78rem",
   },
   scenarioCollapseCode: {
     fontWeight: 700,
-    color: colors.blue,
+    color: "var(--k-blue)",
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
   },
   scenarioCollapseChevron: {
     display: "inline-flex",
     alignItems: "center",
     gap: "0.2rem",
-    color: colors.blue,
+    color: "var(--k-blue)",
     fontWeight: 600,
     fontSize: "0.78rem",
     flexShrink: 0,
@@ -2809,8 +2803,8 @@ const styles = {
     marginTop: "0.65rem",
     padding: "0.65rem 0.85rem",
     borderRadius: 10,
-    border: `1px solid ${colors.cardBorder}`,
-    backgroundColor: "#fff",
+    border: `1px solid var(--k-line)`,
+    backgroundColor: "var(--k-surface)",
   },
 
   scenarioGrid: {
@@ -2829,23 +2823,23 @@ const styles = {
     flexDirection: "column",
     gap: "0.3rem",
     transition: "all 0.15s",
-    backgroundColor: "#fff",
+    backgroundColor: "var(--k-surface)",
     fontFamily: "inherit",
   },
   scenarioCardHeader: { display: "flex", justifyContent: "space-between", alignItems: "center" },
   scenarioCode: {
     fontWeight: 800,
     fontSize: "0.95rem",
-    color: colors.blue,
+    color: "var(--k-blue)",
     fontFamily: "monospace",
   },
   scenarioSaleType: {
     fontSize: "0.82rem",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     fontWeight: 600,
     lineHeight: 1.25,
   },
-  scenarioRate: { fontSize: "0.74rem", color: colors.textSecondary },
+  scenarioRate: { fontSize: "0.74rem", color: "var(--k-muted)" },
   scenarioBadges: { display: "flex", flexWrap: "wrap", gap: "0.25rem", marginTop: "0.15rem" },
   scenarioBadge: {
     fontSize: "0.65rem",
@@ -2854,7 +2848,7 @@ const styles = {
     fontWeight: 700,
     letterSpacing: "0.02em",
   },
-  badgeBlue: { backgroundColor: "#e3f2fd", color: "#0d47a1" },
+  badgeBlue: { backgroundColor: "#e3f2fd", color: "var(--k-blue)" },
   badgeOrange: { backgroundColor: "#fff3e0", color: "#e65100" },
   badgePurple: { backgroundColor: "#f3e5f5", color: "#6a1b9a" },
   badgeYellow: { backgroundColor: "#fff8e1", color: "#a16e00" },
@@ -2868,7 +2862,7 @@ const styles = {
     borderRadius: 8,
     backgroundColor: "#e3f2fd",
     border: "1px solid #90caf9",
-    color: "#0d47a1",
+    color: "var(--k-blue)",
     fontSize: "0.82rem",
     lineHeight: 1.4,
   },
@@ -2924,7 +2918,7 @@ const styles = {
     padding: "0.1rem 0.4rem",
     borderRadius: 4,
     backgroundColor: "#e3f2fd",
-    color: "#0d47a1",
+    color: "var(--k-blue)",
     fontSize: "0.7rem",
     fontWeight: 800,
     fontFamily: "monospace",
@@ -2937,13 +2931,13 @@ const styles = {
     marginTop: "0.2rem",
     maxHeight: 260,
     overflowY: "auto",
-    backgroundColor: "#fff",
-    border: `1px solid ${colors.cardBorder}`,
+    backgroundColor: "var(--k-surface)",
+    border: `1px solid var(--k-line)`,
     borderRadius: 8,
-    boxShadow: "0 6px 20px rgba(0,0,0,0.08)",
+    boxShadow: "var(--k-card-shadow)",
     zIndex: 1200,
   },
-  hsLoading: { padding: "0.6rem 0.85rem", fontSize: "0.82rem", color: colors.textSecondary },
+  hsLoading: { padding: "0.6rem 0.85rem", fontSize: "0.82rem", color: "var(--k-muted)" },
   hsOption: {
     display: "flex",
     flexDirection: "column",
@@ -2951,21 +2945,21 @@ const styles = {
     width: "100%",
     padding: "0.5rem 0.75rem",
     border: "none",
-    borderBottom: `1px solid ${colors.cardBorder}`,
-    backgroundColor: "#fff",
+    borderBottom: `1px solid var(--k-line)`,
+    backgroundColor: "var(--k-surface)",
     textAlign: "left",
     cursor: "pointer",
     fontFamily: "inherit",
   },
   hsOptionCode: {
     fontWeight: 700,
-    color: colors.blue,
+    color: "var(--k-blue)",
     fontFamily: "monospace",
     fontSize: "0.85rem",
   },
   hsOptionDesc: {
     fontSize: "0.74rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     marginTop: 2,
     lineHeight: 1.3,
     whiteSpace: "nowrap",
@@ -2983,7 +2977,7 @@ const styles = {
     padding: "0.55rem 0.85rem",
     marginBottom: "0.5rem",
     borderRadius: 8,
-    border: `1px solid ${colors.cardBorder}`,
+    border: `1px solid var(--k-line)`,
     backgroundColor: "#f8faff",
   },
   bulkClearBtn: {
@@ -2993,9 +2987,9 @@ const styles = {
     gap: "0.3rem",
     padding: "0.35rem 0.7rem",
     borderRadius: 6,
-    border: `1px solid ${colors.danger}`,
-    backgroundColor: "#fff",
-    color: colors.danger,
+    border: `1px solid var(--k-danger)`,
+    backgroundColor: "var(--k-surface)",
+    color: "var(--k-danger)",
     fontSize: "0.78rem",
     fontWeight: 600,
     cursor: "pointer",

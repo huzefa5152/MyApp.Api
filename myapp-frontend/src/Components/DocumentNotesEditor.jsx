@@ -49,9 +49,9 @@ export default function DocumentNotesEditor({
                 height: "var(--ui-control-h, 34px)",
                 padding: 0,
                 boxShadow: "none",
-                border: "1px solid #cbd5e1",
+                border: "1px solid var(--k-line-strong)",
                 borderRadius: 6,
-                background: "#fff",
+                background: "var(--k-surface)",
                 fontSize: 13,
                 fontWeight: tag === "b" ? 700 : 400,
                 fontStyle: tag === "i" ? "italic" : "normal",
@@ -76,7 +76,7 @@ export default function DocumentNotesEditor({
             width: "100%",
             minHeight: 58,
             padding: "var(--ui-input-pad, 8px)",
-            border: "1px solid #cbd5e1",
+            border: "1px solid var(--k-line-strong)",
             borderRadius: 8,
             resize: "vertical",
           }}
@@ -86,9 +86,16 @@ export default function DocumentNotesEditor({
         (readOnly ? (
           <RichText text={value} />
         ) : (
-          <details style={{ marginTop: 4, fontSize: 12, color: "#64748b" }}>
+          <details style={{ marginTop: 4, fontSize: 12, color: "var(--k-muted)" }}>
             <summary style={{ cursor: "pointer" }}>Preview</summary>
-            <div style={{ marginTop: 4, padding: 8, border: "1px solid #e2e8f0", borderRadius: 8 }}>
+            <div
+              style={{
+                marginTop: 4,
+                padding: 8,
+                border: "1px solid var(--k-line)",
+                borderRadius: 8,
+              }}
+            >
               <RichText text={value} />
             </div>
           </details>

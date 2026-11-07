@@ -414,7 +414,7 @@ function UploadStep({
             </span>
           )}
           {templateReady === false && (
-            <span style={{ color: colors.danger }}>
+            <span style={{ color: "var(--k-danger)" }}>
               ✗ No Challan template uploaded for this company yet.
             </span>
           )}
@@ -498,7 +498,7 @@ function UploadStep({
                   <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
                     <span style={{ fontSize: "0.9rem", wordBreak: "break-all" }}>{f.name}</span>
                     {parsed ? (
-                      <small style={{ color: colors.textSecondary }}>
+                      <small style={{ color: "var(--k-muted)" }}>
                         Challan #{parsed.challanNumber}
                       </small>
                     ) : (
@@ -509,7 +509,7 @@ function UploadStep({
                   </div>
                   <span
                     style={{
-                      color: colors.textSecondary,
+                      color: "var(--k-muted)",
                       fontSize: "0.8rem",
                       whiteSpace: "nowrap",
                     }}
@@ -611,12 +611,12 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
           </b>{" "}
           ready to import
           {duplicateCount > 0 && (
-            <span style={{ color: colors.danger, marginLeft: "0.5rem" }}>
+            <span style={{ color: "var(--k-danger)", marginLeft: "0.5rem" }}>
               • <b>{duplicateCount}</b> already in system
             </span>
           )}
           {wrongCompanyCount > 0 && (
-            <span style={{ color: colors.danger, marginLeft: "0.5rem" }}>
+            <span style={{ color: "var(--k-danger)", marginLeft: "0.5rem" }}>
               • <b>{wrongCompanyCount}</b> wrong company
             </span>
           )}
@@ -629,9 +629,9 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
         const isBlocked = isWrongCo || isDup;
         const isValid = !isBlocked && row.challanNumber && row.clientId && row.items?.length;
         const borderColor = isBlocked
-          ? colors.danger
+          ? "var(--k-danger)"
           : isValid
-            ? colors.cardBorder
+            ? "var(--k-line)"
             : colors.warning;
         return (
           <div
@@ -648,8 +648,8 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
                   <span
                     style={{
                       ...styles.rowWarn,
-                      background: colors.dangerLight,
-                      color: colors.danger,
+                      background: "var(--k-danger-bg)",
+                      color: "var(--k-danger)",
                     }}
                   >
                     Wrong company
@@ -658,8 +658,8 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
                   <span
                     style={{
                       ...styles.rowWarn,
-                      background: colors.dangerLight,
-                      color: colors.danger,
+                      background: "var(--k-danger-bg)",
+                      color: "var(--k-danger)",
                     }}
                   >
                     Already imported
@@ -681,8 +681,8 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
               <div
                 style={{
                   ...styles.warnStrip,
-                  background: colors.dangerLight,
-                  color: colors.danger,
+                  background: "var(--k-danger-bg)",
+                  color: "var(--k-danger)",
                   fontWeight: 600,
                 }}
               >
@@ -695,8 +695,8 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
               <div
                 style={{
                   ...styles.warnStrip,
-                  background: colors.dangerLight,
-                  color: colors.danger,
+                  background: "var(--k-danger-bg)",
+                  color: "var(--k-danger)",
                   fontWeight: 600,
                 }}
               >
@@ -939,7 +939,7 @@ function ResultsStep({ results, onRestart }) {
                   {r.success ? (
                     <span style={{ color: colors.success, fontWeight: 600 }}>✓ Success</span>
                   ) : (
-                    <span style={{ color: colors.danger, fontWeight: 600 }}>✗ Failed</span>
+                    <span style={{ color: "var(--k-danger)", fontWeight: 600 }}>✗ Failed</span>
                   )}
                 </td>
                 <td className="k-muted">{r.error || (r.insertedId ? `ID ${r.insertedId}` : "")}</td>

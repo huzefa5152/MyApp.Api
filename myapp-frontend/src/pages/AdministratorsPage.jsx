@@ -672,7 +672,7 @@ const styles = {
     display: "grid",
     placeItems: "center",
     flexShrink: 0,
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
+    background: `linear-gradient(135deg, var(--k-blue), var(--k-teal))`,
     color: "#fff",
     fontWeight: 700,
     fontSize: "0.9rem",

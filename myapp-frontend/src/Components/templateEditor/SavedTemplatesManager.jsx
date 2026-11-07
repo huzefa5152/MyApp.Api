@@ -394,7 +394,7 @@ const s = {
   editingBadge: {
     fontSize: "0.62rem",
     fontWeight: 800,
-    color: "#0d47a1",
+    color: "var(--k-blue)",
     background: "#e3edff",
     padding: "1px 6px",
     borderRadius: 4,

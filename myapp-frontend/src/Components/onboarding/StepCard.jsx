@@ -88,7 +88,7 @@ const st = {
     alignItems: "center",
     gap: "0.8rem",
     padding: "calc(var(--k-gap) * 0.72) 1rem",
-    minHeight: 44,
+    minHeight: "var(--k-btn-h)",
   },
   badge: {
     width: "calc(var(--k-h) - 8px)",

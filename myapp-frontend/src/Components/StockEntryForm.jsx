@@ -344,7 +344,7 @@ export default function StockEntryForm({
                         <article
                           key={e.id}
                           style={{
-                            border: "1px solid #e8edf3",
+                            border: "1px solid var(--k-line)",
                             borderRadius: 10,
                             padding: 12,
                             overflowWrap: "anywhere",

@@ -658,9 +658,9 @@ const colors = {
 // Labels, inputs and the error box come from the themed formStyles (--ui-* tokens)
 // so the dialog follows the Classic / Workspace layout like every other dialog.
 const styles = {
-  intro: { margin: "0 0 0.6rem", fontSize: "0.78rem", color: colors.textSecondary },
+  intro: { margin: "0 0 0.6rem", fontSize: "0.78rem", color: "var(--k-muted)" },
   label: formStyles.label,
-  hint: { fontSize: "0.72rem", color: colors.textSecondary, margin: "0.35rem 0 0" },
+  hint: { fontSize: "0.72rem", color: "var(--k-muted)", margin: "0.35rem 0 0" },
   input: { ...formStyles.input, boxSizing: "border-box" },
   row: {
     display: "grid",
@@ -674,7 +674,7 @@ const styles = {
     gap: "0.4rem",
     cursor: "pointer",
     fontSize: "0.85rem",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     fontWeight: 600,
   },
   errorAlert: formStyles.error,
@@ -709,8 +709,8 @@ const styles = {
     marginLeft: "0.3rem",
     padding: "0.05rem 0.3rem",
     borderRadius: 4,
-    backgroundColor: "#f1f5f9",
-    color: "#475569",
+    backgroundColor: "var(--k-surface-3)",
+    color: "var(--k-muted)",
     fontSize: "0.62rem",
     fontWeight: 700,
     letterSpacing: "0.03em",
@@ -721,7 +721,7 @@ const styles = {
     padding: "0.1rem 0.4rem",
     borderRadius: 4,
     backgroundColor: "#e3f2fd",
-    color: colors.blue,
+    color: "var(--k-blue)",
     fontSize: "0.7rem",
     fontWeight: 800,
     fontFamily: "monospace",
@@ -734,7 +734,7 @@ const styles = {
     border: `1px solid ${colors.hintBorder}`,
     fontSize: "0.78rem",
   },
-  hintBoxTitle: { fontWeight: 700, color: colors.blue, marginBottom: "0.25rem" },
+  hintBoxTitle: { fontWeight: 700, color: "var(--k-blue)", marginBottom: "0.25rem" },
   hintRow: {
     display: "flex",
     flexWrap: "wrap",
@@ -742,17 +742,17 @@ const styles = {
     lineHeight: 1.4,
     marginBottom: "0.2rem",
   },
-  hintLabel: { color: colors.textSecondary },
+  hintLabel: { color: "var(--k-muted)" },
   hintNotes: {
     margin: "0.35rem 0 0 1.1rem",
     padding: 0,
     fontSize: "0.75rem",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
   },
   compactNote: {
     display: "block",
     fontSize: "0.72rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     marginTop: "0.2rem",
   },
 };

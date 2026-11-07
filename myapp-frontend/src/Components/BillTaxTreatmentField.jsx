@@ -1,4 +1,4 @@
-import { colors, formStyles } from "../theme";
+import { formStyles } from "../theme";
 export default function BillTaxTreatmentField({
   enabled,
   value = "FBR",
@@ -11,7 +11,7 @@ export default function BillTaxTreatmentField({
   return (
     <div
       style={{
-        border: `1px solid ${colors.cardBorder}`,
+        border: `1px solid var(--k-line)`,
         borderRadius: 10,
         padding: 14,
         marginBottom: 14,
@@ -35,7 +35,7 @@ export default function BillTaxTreatmentField({
               ...formStyles.input,
               display: "block",
               width: "100%",
-              minHeight: 44,
+              minHeight: "var(--k-btn-h)",
               marginTop: 6,
             }}
           >
@@ -64,7 +64,7 @@ export default function BillTaxTreatmentField({
                 ...formStyles.input,
                 display: "block",
                 width: "100%",
-                minHeight: 44,
+                minHeight: "var(--k-btn-h)",
                 marginTop: 6,
               }}
             />
@@ -72,7 +72,7 @@ export default function BillTaxTreatmentField({
         )}
       </div>
       {value !== "FBR" && (
-        <p style={{ color: colors.textSecondary, margin: "10px 0 0" }}>
+        <p style={{ color: "var(--k-muted)", margin: "10px 0 0" }}>
           Included in balances. Not sent to FBR.
         </p>
       )}

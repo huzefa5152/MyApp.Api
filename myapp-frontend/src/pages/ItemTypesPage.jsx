@@ -32,10 +32,10 @@ const colors = {
 
 const qtyColor = (it) =>
   it.availableQty == null
-    ? colors.textSecondary
+    ? "var(--k-muted)"
     : it.availableQty > 0
-      ? colors.teal
-      : colors.danger;
+      ? "var(--k-teal)"
+      : "var(--k-danger)";
 
 // Trim trailing zeros so 12.000 → "12" and 1.50 → "1.5". Keeps the
 // On-hand column readable for the common integer-qty case while still
@@ -283,7 +283,7 @@ export default function ItemTypesPage() {
                             {it.name}
                           </div>
                           {isFbr && (
-                            <div style={{ fontSize: "0.75rem", color: colors.blue }}>
+                            <div style={{ fontSize: "0.75rem", color: "var(--k-blue)" }}>
                               {it.isHsCodePartial
                                 ? "Needs complete sales HS code"
                                 : "FBR invoice classification"}
@@ -298,7 +298,7 @@ export default function ItemTypesPage() {
                         <td
                           style={{
                             fontFamily: "monospace",
-                            color: it.hsCode ? colors.blue : colors.textSecondary,
+                            color: it.hsCode ? "var(--k-blue)" : "var(--k-muted)",
                           }}
                         >
                           {isFbr ? it.hsCode : "Bills / challans"}
@@ -371,7 +371,7 @@ export default function ItemTypesPage() {
                           {it.name}
                         </h3>
                         {isFbr && (
-                          <div style={{ fontSize: "0.75rem", color: colors.blue }}>
+                          <div style={{ fontSize: "0.75rem", color: "var(--k-blue)" }}>
                             {it.isHsCodePartial
                               ? "Needs complete sales HS code"
                               : "FBR invoice classification"}
@@ -392,7 +392,7 @@ export default function ItemTypesPage() {
                           <span
                             style={{
                               fontFamily: "monospace",
-                              color: it.hsCode ? colors.blue : colors.textSecondary,
+                              color: it.hsCode ? "var(--k-blue)" : "var(--k-muted)",
                             }}
                           >
                             {isFbr ? it.hsCode : "Bills / challans"}

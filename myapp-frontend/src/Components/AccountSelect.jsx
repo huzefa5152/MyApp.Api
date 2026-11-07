@@ -46,7 +46,7 @@ const TYPE_COLOR = {
 const codeChip = {
   padding: "0.05rem 0.35rem",
   backgroundColor: "#eef2ff",
-  color: "#0d47a1",
+  color: "var(--k-blue)",
   fontFamily: "monospace",
   fontWeight: 700,
   fontSize: "0.7rem",

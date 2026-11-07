@@ -18,9 +18,9 @@ export function MergeFieldList({ fields, onInsert, dark }) {
   });
   const categories = Object.keys(grouped);
 
-  const catColor = dark ? "#999" : colors.textSecondary;
-  const codeColor = dark ? "#82b1ff" : colors.blue;
-  const labelColor = dark ? "#b3b3c0" : colors.textSecondary;
+  const catColor = dark ? "#999" : "var(--k-muted)";
+  const codeColor = dark ? "#82b1ff" : "var(--k-blue)";
+  const labelColor = dark ? "#b3b3c0" : "var(--k-muted)";
   const hoverBg = dark ? "rgba(255,255,255,0.08)" : "#e3f2fd";
 
   const renderField = (f, i) => (
@@ -68,7 +68,7 @@ export default function MergeFieldSidebar({ fields, onInsert, hint, stamps = [] 
       <div style={styles.scroll}>
         {stamps.length > 0 && (
           <div>
-            <div style={{ ...fieldStyles.cat, color: colors.textSecondary }}>Stamps</div>
+            <div style={{ ...fieldStyles.cat, color: "var(--k-muted)" }}>Stamps</div>
             {stamps.map((s) => (
               <button
                 key={s.id}
@@ -84,7 +84,7 @@ export default function MergeFieldSidebar({ fields, onInsert, hint, stamps = [] 
                     style={{
                       fontSize: "0.74rem",
                       fontWeight: 600,
-                      color: colors.textPrimary,
+                      color: "var(--k-ink)",
                       overflow: "hidden",
                       display: "-webkit-box",
                       WebkitLineClamp: 2,
@@ -95,7 +95,7 @@ export default function MergeFieldSidebar({ fields, onInsert, hint, stamps = [] 
                     {s.name}
                   </span>
                   <span
-                    style={{ ...fieldStyles.code, color: colors.blue }}
+                    style={{ ...fieldStyles.code, color: "var(--k-blue)" }}
                   >{`{{stamps.${s.slug}}}`}</span>
                 </span>
               </button>
@@ -156,16 +156,16 @@ const fieldStyles = {
     height: 34,
     objectFit: "contain",
     flexShrink: 0,
-    border: `1px solid ${colors.cardBorder}`,
+    border: `1px solid var(--k-line)`,
     borderRadius: 4,
-    background: "#fff",
+    background: "var(--k-surface)",
   },
 };
 
 const styles = {
   sidebar: {
     width: 240,
-    borderRight: `1px solid ${colors.cardBorder}`,
+    borderRight: `1px solid var(--k-line)`,
     display: "flex",
     flexDirection: "column",
     background: "var(--k-surface-2)",
@@ -175,8 +175,8 @@ const styles = {
     padding: "0.65rem 0.85rem",
     fontWeight: 700,
     fontSize: "var(--k-th-font)",
-    color: colors.textPrimary,
-    borderBottom: `1px solid ${colors.cardBorder}`,
+    color: "var(--k-ink)",
+    borderBottom: `1px solid var(--k-line)`,
     textTransform: "uppercase",
     letterSpacing: "0.5px",
     background: "var(--k-surface-3)",
@@ -184,9 +184,9 @@ const styles = {
   hint: {
     padding: "0.5rem 0.7rem",
     fontSize: "0.72rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     background: "#e8f4fd",
-    borderBottom: `1px solid ${colors.cardBorder}`,
+    borderBottom: `1px solid var(--k-line)`,
     lineHeight: 1.4,
   },
   scroll: {

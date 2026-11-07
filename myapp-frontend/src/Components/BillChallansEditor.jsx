@@ -14,16 +14,16 @@ const lineRow = {
   borderTop: "1px solid #d8e1eb",
   marginTop: 10,
   paddingTop: 10,
-  minHeight: 44,
+  minHeight: "var(--k-btn-h)",
   cursor: "pointer",
 };
 const tick = { width: 20, height: 20, flexShrink: 0, cursor: "pointer" };
 const button = {
-  minHeight: 44,
+  minHeight: "var(--k-btn-h)",
   padding: "0.5rem 0.8rem",
   border: "1px solid #ccd6e2",
   borderRadius: 6,
-  background: "#fff",
+  background: "var(--k-surface)",
   color: "#183c68",
   cursor: "pointer",
 };
@@ -219,7 +219,7 @@ export default function BillChallansEditor({
             data-admin-close=""
             type="button"
             disabled={saving}
-            style={{ ...formStyles.closeButton, minHeight: 44, minWidth: 44 }}
+            style={{ ...formStyles.closeButton, minHeight: "var(--k-btn-h)", minWidth: 44 }}
             onClick={onClose}
             aria-label="Close challan selection"
           >
@@ -259,7 +259,12 @@ export default function BillChallansEditor({
               onKeyDown={(e) => {
                 if (e.key === "Enter") e.preventDefault();
               }}
-              style={{ boxSizing: "border-box", width: "100%", minHeight: 44, padding: 8 }}
+              style={{
+                boxSizing: "border-box",
+                width: "100%",
+                minHeight: "var(--k-btn-h)",
+                padding: 8,
+              }}
             />
           </div>
           {hasMore && <p>Showing 100 available challans. Search by number or PO to find more.</p>}
@@ -326,7 +331,7 @@ export default function BillChallansEditor({
                 </button>
               )}
               {selected.has(c.id) && linked.has(c.id) && !c.items.some((i) => onBill.has(i.id)) && (
-                <p style={{ marginTop: 10, color: "#5f6d7e" }}>
+                <p style={{ marginTop: 10, color: "var(--k-muted)" }}>
                   Attached for reference: its lines are not billed on this bill.
                 </p>
               )}
@@ -411,7 +416,7 @@ export default function BillChallansEditor({
                             display: "block",
                             boxSizing: "border-box",
                             width: "100%",
-                            minHeight: 44,
+                            minHeight: "var(--k-btn-h)",
                             padding: 8,
                           }}
                         />
@@ -428,7 +433,9 @@ export default function BillChallansEditor({
             </section>
           ))}
           {snapshot && bill.salesOrders?.length === 1 && canAttachToOrder && (
-            <label style={{ display: "flex", gap: 8, alignItems: "center", minHeight: 44 }}>
+            <label
+              style={{ display: "flex", gap: 8, alignItems: "center", minHeight: "var(--k-btn-h)" }}
+            >
               <input
                 type="checkbox"
                 checked={attachAdded}

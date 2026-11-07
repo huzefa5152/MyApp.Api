@@ -389,7 +389,7 @@ export default function AccountingReportsPage() {
             <span>{data.netProfit >= 0 ? "Net profit" : "Net loss"}</span>
             <strong
               style={{
-                color: data.netProfit >= 0 ? colors.success : colors.danger,
+                color: data.netProfit >= 0 ? colors.success : "var(--k-danger)",
                 fontVariantNumeric: "tabular-nums",
               }}
             >

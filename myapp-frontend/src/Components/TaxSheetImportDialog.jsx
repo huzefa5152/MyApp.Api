@@ -221,7 +221,12 @@ export default function TaxSheetImportDialog({ companyId, onClose, onApplied }) 
                         }}
                       >
                         <span
-                          style={{ fontWeight: 700, color: "#0d47a1", minWidth: 34, flexShrink: 0 }}
+                          style={{
+                            fontWeight: 700,
+                            color: "var(--k-blue)",
+                            minWidth: 34,
+                            flexShrink: 0,
+                          }}
                         >
                           {i.invoiceNumber || "·"}
                         </span>
