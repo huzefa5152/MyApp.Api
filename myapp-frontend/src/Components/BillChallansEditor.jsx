@@ -363,7 +363,7 @@ export default function BillChallansEditor({
                           · {i.quantity} {i.unit}
                         </small>
                         {leaveOut.has(i.id) && (
-                          <small style={{ display: "block", color: "#8a5a00" }}>
+                          <small style={{ display: "block", color: "var(--k-warn-ink-2)" }}>
                             Will go back to the challan as pending
                           </small>
                         )}

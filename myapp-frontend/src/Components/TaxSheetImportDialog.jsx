@@ -171,8 +171,8 @@ export default function TaxSheetImportDialog({ companyId, onClose, onApplied }) 
                     alignItems: "center",
                     padding: "0.7rem 0.9rem",
                     borderRadius: 10,
-                    background: "#e8f5e9",
-                    color: "#2e7d32",
+                    background: "var(--k-success-bg)",
+                    color: "var(--k-success)",
                     fontWeight: 600,
                     fontSize: "0.88rem",
                   }}
@@ -269,7 +269,7 @@ export default function TaxSheetImportDialog({ companyId, onClose, onApplied }) 
 }
 
 function Stat({ label, value, tone }) {
-  const c = tone === "ok" ? "#2e7d32" : tone === "bad" ? "#c62828" : ink;
+  const c = tone === "ok" ? "var(--k-success)" : tone === "bad" ? "var(--k-danger-ink)" : ink;
   return (
     <div
       style={{

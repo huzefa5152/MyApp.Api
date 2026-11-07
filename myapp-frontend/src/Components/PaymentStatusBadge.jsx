@@ -7,25 +7,31 @@ import "../ui/shared-components.css";
 // badge at all). Status strings come from the server
 // (PaymentStatusCalculator): Paid / PartiallyPaid / Overdue / Unpaid.
 const MAP = {
-  Paid: { bg: "#e8f5e9", color: "#2e7d32", border: "#a5d6a7", label: "Paid", Icon: MdCheckCircle },
+  Paid: {
+    bg: "var(--k-success-bg)",
+    color: "var(--k-success)",
+    border: "var(--k-success-line)",
+    label: "Paid",
+    Icon: MdCheckCircle,
+  },
   PartiallyPaid: {
-    bg: "#e3f2fd",
-    color: "#1565c0",
-    border: "#90caf9",
+    bg: "var(--k-info-bg)",
+    color: "var(--k-blue-600)",
+    border: "var(--k-info-line)",
     label: "Partial",
     Icon: MdSchedule,
   },
   Overdue: {
-    bg: "#ffebee",
-    color: "#c62828",
-    border: "#ef9a9a",
+    bg: "var(--k-danger-bg-2)",
+    color: "var(--k-danger-ink)",
+    border: "var(--k-danger-line)",
     label: "Overdue",
     Icon: MdWarningAmber,
   },
   Unpaid: {
-    bg: "#eceff1",
+    bg: "var(--k-slate-bg)",
     color: "#546e7a",
-    border: "#b0bec5",
+    border: "var(--k-slate-line)",
     label: "Unpaid",
     Icon: MdRadioButtonUnchecked,
   },

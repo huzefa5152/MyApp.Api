@@ -17,7 +17,7 @@
   background: #edf7f5;
 }
 .customer-ledger .rw-kpi--lead .rw-kpi__value {
-  color: #00695c;
+  color: var(--k-teal-ink);
 }
 @media (max-width: 991.98px) {
   .customer-ledger .ledger-overview {

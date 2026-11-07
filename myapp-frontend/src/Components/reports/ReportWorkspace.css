@@ -368,9 +368,9 @@
   color: var(--k-blue);
 }
 .rw-notice--warn {
-  background: #fff8e1;
+  background: var(--k-warn-bg-2);
   border-color: #ffe0a3;
-  color: #8a5a00;
+  color: var(--k-warn-ink-2);
 }
 .rw-notice svg {
   flex-shrink: 0;
@@ -389,7 +389,7 @@
   font-weight: 700;
 }
 .rw-chip-ok {
-  background: #e8f5e9;
+  background: var(--k-success-bg);
   color: #1e7e34;
   border: 1px solid #c8e6c9;
 }
@@ -659,12 +659,12 @@
   border-color: #f5c6cb;
 }
 .rw-status--warn {
-  background: #fff8e1;
-  color: #8a5a00;
+  background: var(--k-warn-bg-2);
+  color: var(--k-warn-ink-2);
   border-color: #ffe0a3;
 }
 .rw-status--ok {
-  background: #e8f5e9;
+  background: var(--k-success-bg);
   color: #1e7e34;
   border-color: #c8e6c9;
 }

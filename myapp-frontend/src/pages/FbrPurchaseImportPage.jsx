@@ -42,22 +42,22 @@ import "./FbrPurchaseImportPage.css";
 const DECISION_CONFIG = {
   "will-import": {
     label: "Will import",
-    color: "#2e7d32",
-    bg: "#e8f5e9",
-    border: "#a5d6a7",
+    color: "var(--k-success)",
+    bg: "var(--k-success-bg)",
+    border: "var(--k-success-line)",
     icon: MdCheckCircle,
   },
   "product-will-be-created": {
     label: "Product to create",
     color: "var(--k-blue)",
-    bg: "#e3f2fd",
-    border: "#90caf9",
+    bg: "var(--k-info-bg)",
+    border: "var(--k-info-line)",
     icon: MdInventory,
   },
   "already-exists": {
     label: "Already in ERP",
     color: "var(--k-muted)",
-    bg: "#eceff1",
+    bg: "var(--k-slate-bg)",
     border: "var(--k-line-strong)",
     icon: MdInfo,
   },
@@ -68,7 +68,7 @@ const DECISION_CONFIG = {
   "skip-already-claimed": {
     label: "Already claimed",
     color: "var(--k-muted)",
-    bg: "#eceff1",
+    bg: "var(--k-slate-bg)",
     border: "var(--k-line-strong)",
     icon: MdInfo,
   },
@@ -77,52 +77,52 @@ const DECISION_CONFIG = {
   // legitimate FBR row, just not for ERP intake.
   "skip-unregistered-seller": {
     label: "Unregistered seller",
-    color: "#8a4b00",
-    bg: "#fff4e0",
-    border: "#ffcc80",
+    color: "var(--k-warn-ink)",
+    bg: "var(--k-warn-bg-3)",
+    border: "var(--k-warn-line)",
     icon: MdWarning,
   },
   "skip-cancelled": {
     label: "Cancelled",
     color: "var(--k-danger)",
-    bg: "#ffebee",
-    border: "#ef9a9a",
+    bg: "var(--k-danger-bg-2)",
+    border: "var(--k-danger-line)",
     icon: MdBlock,
   },
   "skip-wrong-type": {
     label: "Wrong invoice type",
     color: "var(--k-danger)",
-    bg: "#ffebee",
-    border: "#ef9a9a",
+    bg: "var(--k-danger-bg-2)",
+    border: "var(--k-danger-line)",
     icon: MdBlock,
   },
   "skip-no-hs-code": {
     label: "No HS Code",
-    color: "#8a4b00",
-    bg: "#fff4e0",
-    border: "#ffcc80",
+    color: "var(--k-warn-ink)",
+    bg: "var(--k-warn-bg-3)",
+    border: "var(--k-warn-line)",
     icon: MdWarning,
   },
   "skip-zero-qty": {
     label: "Zero / no qty",
-    color: "#8a4b00",
-    bg: "#fff4e0",
-    border: "#ffcc80",
+    color: "var(--k-warn-ink)",
+    bg: "var(--k-warn-bg-3)",
+    border: "var(--k-warn-line)",
     icon: MdWarning,
   },
   // Kept in the config for back-compat — filter doesn't emit it any more.
   "skip-no-description": {
     label: "No description",
-    color: "#8a4b00",
-    bg: "#fff4e0",
-    border: "#ffcc80",
+    color: "var(--k-warn-ink)",
+    bg: "var(--k-warn-bg-3)",
+    border: "var(--k-warn-line)",
     icon: MdWarning,
   },
   "failed-validation": {
     label: "Validation failed",
     color: "var(--k-danger)",
-    bg: "#ffebee",
-    border: "#ef9a9a",
+    bg: "var(--k-danger-bg-2)",
+    border: "var(--k-danger-line)",
     icon: MdError,
   },
 };
@@ -132,7 +132,7 @@ function decisionCfg(d) {
     DECISION_CONFIG[d] || {
       label: d,
       color: "var(--k-muted)",
-      bg: "#eceff1",
+      bg: "var(--k-slate-bg)",
       border: "var(--k-line-strong)",
       icon: MdInfo,
     }
@@ -530,8 +530,10 @@ export default function FbrPurchaseImportPage() {
               <div
                 style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}
               >
-                <MdCheckCircle size={20} color="#2e7d32" />
-                <strong style={{ fontSize: "calc(var(--k-font) + 0.1rem)", color: "#2e7d32" }}>
+                <MdCheckCircle size={20} color="var(--k-success)" />
+                <strong
+                  style={{ fontSize: "calc(var(--k-font) + 0.1rem)", color: "var(--k-success)" }}
+                >
                   Import committed
                 </strong>
                 <span
@@ -554,8 +556,8 @@ export default function FbrPurchaseImportPage() {
               <span
                 style={{
                   ...styles.chip,
-                  color: "#2e7d32",
-                  backgroundColor: "#e8f5e9",
+                  color: "var(--k-success)",
+                  backgroundColor: "var(--k-success-bg)",
                   border: "1px solid #a5d6a7",
                 }}
               >
@@ -590,7 +592,7 @@ export default function FbrPurchaseImportPage() {
                 style={{
                   ...styles.chip,
                   color: "var(--k-blue)",
-                  backgroundColor: "#e3f2fd",
+                  backgroundColor: "var(--k-info-bg)",
                   border: "1px solid #90caf9",
                 }}
               >
@@ -600,7 +602,7 @@ export default function FbrPurchaseImportPage() {
                 style={{
                   ...styles.chip,
                   color: "var(--k-blue)",
-                  backgroundColor: "#e3f2fd",
+                  backgroundColor: "var(--k-info-bg)",
                   border: "1px solid #90caf9",
                 }}
               >
@@ -610,7 +612,7 @@ export default function FbrPurchaseImportPage() {
                 style={{
                   ...styles.chip,
                   color: "var(--k-blue)",
-                  backgroundColor: "#e3f2fd",
+                  backgroundColor: "var(--k-info-bg)",
                   border: "1px solid #90caf9",
                 }}
               >
@@ -620,7 +622,7 @@ export default function FbrPurchaseImportPage() {
                 style={{
                   ...styles.chip,
                   color: "var(--k-blue)",
-                  backgroundColor: "#e3f2fd",
+                  backgroundColor: "var(--k-info-bg)",
                   border: "1px solid #90caf9",
                 }}
               >
@@ -672,8 +674,8 @@ export default function FbrPurchaseImportPage() {
                 marginBottom: "0.4rem",
               }}
             >
-              <MdWarning color="#e65100" />
-              <strong style={{ color: "#e65100" }}>Workbook warnings</strong>
+              <MdWarning color="var(--k-warn)" />
+              <strong style={{ color: "var(--k-warn)" }}>Workbook warnings</strong>
             </div>
             <ul
               style={{

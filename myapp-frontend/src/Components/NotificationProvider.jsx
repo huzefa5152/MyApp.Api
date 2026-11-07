@@ -4,7 +4,7 @@ import "../ui/shared-components.css";
 
 const severityColors = {
   error: { bg: "#fdeded", border: "#f5c6cb", text: "#842029", icon: "!" },
-  warning: { bg: "#fff3cd", border: "#ffecb5", text: "#664d03", icon: "⚠" },
+  warning: { bg: "var(--k-warn-bg-5)", border: "#ffecb5", text: "#664d03", icon: "⚠" },
   success: { bg: "#d1e7dd", border: "#badbcc", text: "#0f5132", icon: "✓" },
   info: { bg: "#cff4fc", border: "#b6effb", text: "#055160", icon: "i" },
 };

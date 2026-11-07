@@ -651,7 +651,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                   padding: "0.75rem",
                   borderRadius: 10,
                   border: "1px solid #0d47a130",
-                  backgroundColor: "#e3f2fd",
+                  backgroundColor: "var(--k-info-bg)",
                 }}
               >
                 <p
@@ -748,7 +748,9 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                   <label style={label}>
                     FBR Bearer Token{" "}
                     {company?.hasFbrToken && (
-                      <span style={{ color: "#28a745", fontSize: "0.75rem" }}>(set)</span>
+                      <span style={{ color: "var(--k-success-alt)", fontSize: "0.75rem" }}>
+                        (set)
+                      </span>
                     )}
                   </label>
                   <input
@@ -1054,7 +1056,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                   padding: "0.75rem",
                   borderRadius: 10,
                   border: "1px solid #00695c30",
-                  backgroundColor: "#e0f2f1",
+                  backgroundColor: "var(--k-teal-bg)",
                 }}
               >
                 <p
@@ -1062,7 +1064,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                     margin: "0 0 0.6rem",
                     fontWeight: 700,
                     fontSize: "0.85rem",
-                    color: "#00695c",
+                    color: "var(--k-teal-ink)",
                   }}
                 >
                   Inventory Module

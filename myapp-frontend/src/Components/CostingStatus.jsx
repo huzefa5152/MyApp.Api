@@ -23,7 +23,7 @@ export default function CostingStatus({ document, onOpen }) {
         borderRadius: 6,
         fontSize: 12,
         lineHeight: 1.5,
-        background: complete ? "#e8f5e9" : count > 0 ? "#fff3e0" : "#f1f5f9",
+        background: complete ? "var(--k-success-bg)" : count > 0 ? "var(--k-warn-bg)" : "#f1f5f9",
         color: complete ? "#256029" : count > 0 ? "#92400e" : "#475569",
       }}
     >

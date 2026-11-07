@@ -169,11 +169,11 @@
 }
 .mcp-catalog-badge.is-active::before,
 .mcp-badge.is-ok::before {
-  background: #28a745;
+  background: var(--k-success-alt);
 }
 .mcp-badge.is-warn {
-  background: #fff4e5;
-  color: #8a4b00;
+  background: var(--k-warn-bg-4);
+  color: var(--k-warn-ink);
 }
 .mcp-badge.is-warn::before {
   background: #fd7e14;
@@ -183,7 +183,7 @@
   color: #a52834;
 }
 .mcp-badge.is-bad::before {
-  background: #dc3545;
+  background: var(--k-danger);
 }
 .mcp-chips {
   display: flex;
@@ -200,8 +200,8 @@
   overflow-wrap: anywhere;
 }
 .mcp-chip.is-warn {
-  color: #8a4b00;
-  background: #fff4e5;
+  color: var(--k-warn-ink);
+  background: var(--k-warn-bg-4);
 }
 
 /* Connection switches */
@@ -417,8 +417,8 @@
   padding: 0.15rem 0.35rem;
 }
 .mcp-catalog-tool-kind.is-write {
-  color: #8a4b00;
-  background: #fff4e5;
+  color: var(--k-warn-ink);
+  background: var(--k-warn-bg-4);
 }
 .mcp-catalog-tool-choices {
   display: flex;
@@ -549,7 +549,7 @@
 }
 .mcp-catalog-footer .mcp-catalog-help {
   font-weight: 600;
-  color: #8a4b00;
+  color: var(--k-warn-ink);
 }
 .mcp-pager {
   display: flex;
@@ -666,7 +666,7 @@
   margin-top: 0.05rem;
 }
 .mcp-status.is-on svg {
-  color: #28a745;
+  color: var(--k-success-alt);
 }
 .mcp-status.is-off svg {
   color: #fd7e14;

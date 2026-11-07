@@ -67,14 +67,14 @@ import { useConfirm } from "../Components/ConfirmDialog";
 
 const FULFIL_COLORS = {
   "Not Delivered": "var(--k-muted)",
-  "Partially Delivered": "#f57c00",
-  "Fully Delivered": "#28a745",
-  "Over Delivered": "#7b1fa2",
+  "Partially Delivered": "var(--k-warn-2)",
+  "Fully Delivered": "var(--k-success-alt)",
+  "Over Delivered": "var(--k-purple-2)",
 };
 const INVOICE_COLORS = {
   Uninvoiced: "var(--k-muted)",
-  "Partially Invoiced": "#f57c00",
-  Invoiced: "#28a745",
+  "Partially Invoiced": "var(--k-warn-2)",
+  Invoiced: "var(--k-success-alt)",
 };
 
 export default function SalesOrderPage() {
@@ -564,7 +564,7 @@ export default function SalesOrderPage() {
                           <IconButton
                             style={{
                               ...st.actBtn,
-                              color: "#2e7d32",
+                              color: "var(--k-success)",
                               opacity: exportingId === o.id + "-excel" ? 0.5 : undefined,
                             }}
                             icon={MdGridOn}

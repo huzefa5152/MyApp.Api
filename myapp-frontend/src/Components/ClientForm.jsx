@@ -455,7 +455,7 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
                           style={{
                             fontSize: "var(--k-font-sm)",
                             color: fbrCheck.result.startsWith("FBR:")
-                              ? "#1b5e20"
+                              ? "var(--k-success-strong)"
                               : "var(--k-danger)",
                           }}
                         >

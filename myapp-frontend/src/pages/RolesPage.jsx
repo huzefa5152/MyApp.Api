@@ -52,7 +52,7 @@ const colors = {
   textPrimary: "var(--k-ink)",
   textSecondary: "var(--k-muted)",
   danger: "var(--k-danger)",
-  warn: "#b26a00",
+  warn: "var(--k-warn-ink-3)",
 };
 
 /**

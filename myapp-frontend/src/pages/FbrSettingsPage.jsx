@@ -382,7 +382,7 @@ const styles = {
     width: 26,
     height: 26,
     borderRadius: 6,
-    backgroundColor: "#e3f2fd",
+    backgroundColor: "var(--k-info-bg)",
     color: "var(--k-blue)",
     fontSize: "0.78rem",
     fontWeight: 700,

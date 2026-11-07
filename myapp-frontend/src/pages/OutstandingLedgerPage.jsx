@@ -68,10 +68,10 @@ const STATUSES = [
 
 // Payment-status pill colours (mirrors the invoice list badges).
 const STATUS_STYLE = {
-  Unpaid: { bg: "#fff4e0", fg: "#8a4b00" },
-  PartiallyPaid: { bg: "#e3f2fd", fg: "#0277bd" },
-  Paid: { bg: "#e8f5e9", fg: "#2e7d32" },
-  Overdue: { bg: "#ffebee", fg: "#c62828" },
+  Unpaid: { bg: "var(--k-warn-bg-3)", fg: "var(--k-warn-ink)" },
+  PartiallyPaid: { bg: "var(--k-info-bg)", fg: "#0277bd" },
+  Paid: { bg: "var(--k-success-bg)", fg: "var(--k-success)" },
+  Overdue: { bg: "var(--k-danger-bg-2)", fg: "var(--k-danger-ink)" },
 };
 
 const money = (n) =>
@@ -349,7 +349,7 @@ export default function OutstandingLedgerPage() {
             style={{
               ...tdR,
               fontWeight: 700,
-              color: row.balance > 0 ? "#b71c1c" : "var(--k-teal)",
+              color: row.balance > 0 ? "var(--k-danger-ink-2)" : "var(--k-teal)",
             }}
           >
             {money(row.balance)}
@@ -699,7 +699,7 @@ export default function OutstandingLedgerPage() {
                           style={{
                             ...card.val,
                             fontWeight: 800,
-                            color: row.balance > 0 ? "#b71c1c" : "var(--k-teal)",
+                            color: row.balance > 0 ? "var(--k-danger-ink-2)" : "var(--k-teal)",
                           }}
                         >
                           {money(row.balance)}

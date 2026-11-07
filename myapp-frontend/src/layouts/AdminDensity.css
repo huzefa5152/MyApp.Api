@@ -179,7 +179,7 @@ body.admin-ui :is(.dl-main, [data-admin-dialog]) textarea {
   min-height: 72px;
 }
 body.admin-ui :is(button, a, input, select, textarea, [tabindex]):focus-visible {
-  outline: 2px solid #0d47a1 !important;
+  outline: 2px solid var(--k-blue) !important;
   outline-offset: 3px;
 }
 body.admin-ui .dl-sidebar :is(button, a):focus-visible,
@@ -310,9 +310,9 @@ body.admin-ui .admin-skip-link {
   z-index: 12000;
   transform: translateY(-160%);
   padding: 10px 14px;
-  background: #fff;
-  color: #0d47a1;
-  border: 2px solid #0d47a1;
+  background: var(--k-surface);
+  color: var(--k-blue);
+  border: 2px solid var(--k-blue);
   border-radius: 8px;
 }
 body.admin-ui .admin-skip-link:focus {
@@ -555,11 +555,11 @@ html:not([data-ui-layout="workspace"]) body.admin-ui .dl-main [data-admin-toolba
 /* Consistent visual grouping for create and edit workflows. */
 html:not([data-ui-layout="workspace"]) body.admin-ui :is(.admin-details-panel, .admin-items-panel) {
   min-width: 0;
-  border: 1px solid #e8edf3;
+  border: 1px solid var(--k-line);
   border-radius: 10px;
   padding: 14px;
   margin-bottom: 16px;
-  background: #fff;
+  background: var(--k-surface);
 }
 html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] .admin-section-heading {
   display: flex;
@@ -567,18 +567,18 @@ html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-dialog] .admin-
   gap: 8px;
   margin: 0 0 14px;
   padding: 0 0 10px;
-  border-bottom: 1px solid #e8edf3;
+  border-bottom: 1px solid var(--k-line);
   font-size: 13px !important;
   font-weight: 700;
   line-height: 1.4;
-  color: #0d47a1;
+  color: var(--k-blue);
 }
 html:not([data-ui-layout="workspace"]) body.admin-ui .admin-section-heading::before {
   content: "";
   width: 3px;
   height: 15px;
   border-radius: 3px;
-  background: #00897b;
+  background: var(--k-teal);
   flex-shrink: 0;
 }
 html:not([data-ui-layout="workspace"])
@@ -593,7 +593,7 @@ html:not([data-ui-layout="workspace"]) body.admin-ui .admin-items-panel > div:fi
 }
 html:not([data-ui-layout="workspace"]) body.admin-ui .admin-items-panel > div:first-child > label {
   font-weight: 700;
-  color: #0d47a1;
+  color: var(--k-blue);
 }
 html:not([data-ui-layout="workspace"]) body.admin-ui [data-admin-field] {
   min-width: 0;
@@ -602,7 +602,7 @@ html:not([data-ui-layout="workspace"])
   body.admin-ui
   [data-admin-dialog]
   :is(input, select, textarea):not(:disabled):hover {
-  border-color: #00897b;
+  border-color: var(--k-teal);
 }
 html:not([data-ui-layout="workspace"])
   body.admin-ui
@@ -882,7 +882,7 @@ body.admin-ui [data-admin-dialog] .admin-section-heading-row {
   gap: 8px;
   margin: 0 0 14px;
   padding: 0 0 8px;
-  border-bottom: 1px solid #e8edf3;
+  border-bottom: 1px solid var(--k-line);
 }
 body.admin-ui [data-admin-dialog] .admin-section-heading-row > .admin-section-heading {
   margin: 0;

@@ -23,7 +23,7 @@ import {
 // Note-kind accent (Credit = purple, Debit = teal) for the Generate button.
 const colors = {
   purple: "#5e35b1",
-  teal: "#00695c",
+  teal: "var(--k-teal-ink)",
 };
 
 // FBR's OFFICIAL note reasons — the enumerated list from IRIS (bulk-import

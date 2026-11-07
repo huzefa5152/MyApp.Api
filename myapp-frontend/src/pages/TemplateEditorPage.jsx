@@ -833,7 +833,7 @@ export default function TemplateEditorPage() {
             zIndex: 9999,
             padding: "0.75rem 1.25rem",
             borderRadius: 10,
-            background: toast.type === "error" ? "var(--k-danger)" : "#28a745",
+            background: toast.type === "error" ? "var(--k-danger)" : "var(--k-success-alt)",
             color: "#fff",
             fontWeight: 600,
             fontSize: "0.9rem",
@@ -1331,7 +1331,7 @@ const styles = {
     fontWeight: 600,
     color: "var(--k-ink)",
   },
-  unsaved: { fontSize: "var(--k-font-sm)", color: "#e65100", fontWeight: 600 },
+  unsaved: { fontSize: "var(--k-font-sm)", color: "var(--k-warn)", fontWeight: 600 },
   topBar: {
     display: "flex",
     justifyContent: "space-between",

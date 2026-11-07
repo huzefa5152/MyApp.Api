@@ -22,20 +22,20 @@ import { Facts, TableWrap, Loading } from "../ui/Kit";
 
 const FULFIL_COLORS = {
   "Not Delivered": "var(--k-muted)",
-  "Partially Delivered": "#f57c00",
-  "Fully Delivered": "#28a745",
-  "Over Delivered": "#7b1fa2",
+  "Partially Delivered": "var(--k-warn-2)",
+  "Fully Delivered": "var(--k-success-alt)",
+  "Over Delivered": "var(--k-purple-2)",
 };
 const INVOICE_COLORS = {
   Uninvoiced: "var(--k-muted)",
-  "Partially Invoiced": "#f57c00",
-  Invoiced: "#28a745",
+  "Partially Invoiced": "var(--k-warn-2)",
+  Invoiced: "var(--k-success-alt)",
 };
 const LINE_COLORS = {
   Pending: "var(--k-muted)",
-  Partial: "#f57c00",
-  Complete: "#28a745",
-  Over: "#7b1fa2",
+  Partial: "var(--k-warn-2)",
+  Complete: "var(--k-success-alt)",
+  Over: "var(--k-purple-2)",
 };
 
 /**

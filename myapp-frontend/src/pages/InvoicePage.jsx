@@ -114,8 +114,8 @@ const PILL_TONE = {
   amber: { background: "#FAEEDA", color: "#633806" },
   green: { background: "#E1F5EE", color: "#085041" },
   red: { background: "#FCEBEB", color: "#791F1F" },
-  purple: { background: "#ede7f6", color: "#4527a0" },
-  teal: { background: "#e0f2f1", color: "#00695c" },
+  purple: { background: "var(--k-purple-bg)", color: "var(--k-purple)" },
+  teal: { background: "var(--k-teal-bg)", color: "var(--k-teal-ink)" },
   gray: { background: "var(--k-surface-3)", color: "var(--k-muted)" },
 };
 function statusPill(tone, Icon, label, title) {
@@ -308,24 +308,24 @@ const tint = (bg, fg, border = "transparent") => ({
   borderColor: border,
 });
 const TONE = {
-  view: tint("#e3f2fd", "var(--k-blue)", "#90caf9"),
-  openTeal: tint("#e0f2f1", "#00695c", "#80cbc4"),
-  print: tint("#f3e5f5", "#7b1fa2"),
-  tax: tint("#e8f5e9", "#2e7d32"),
-  pdf: tint("#ffebee", "#c62828"),
-  excel: tint("#e8f5e9", "#1b5e20"),
-  reset: tint("#fff8e1", "#8a6d00", "#ffe082"),
-  validate: tint("#fff3e0", "#e65100"),
-  validated: tint("#e8f5e9", "#2e7d32"),
-  submit: tint("#e3f2fd", "var(--k-blue)"),
-  edit: tint("#fff3e0", "#e65100", "#ffcc80"),
-  include: tint("#e8f5e9", "#2e7d32", "#a5d6a7"),
-  exclude: tint("#eceff1", "#546e7a", "#b0bec5"),
-  deliver: tint("#e8f5e9", "#2e7d32", "#a5d6a7"),
-  revert: tint("#fff8e1", "#8a6d00", "#ffe082"),
-  delete: tint("#ffebee", "#c62828", "#ef9a9a"),
-  void: tint("#fff8e1", "#b26a00", "#ffe082"),
-  reverse: tint("#ede7f6", "#5e35b1", "#b39ddb"),
+  view: tint("var(--k-info-bg)", "var(--k-blue)", "var(--k-info-line)"),
+  openTeal: tint("var(--k-teal-bg)", "var(--k-teal-ink)", "var(--k-teal-line)"),
+  print: tint("var(--k-purple-bg-2)", "var(--k-purple-2)"),
+  tax: tint("var(--k-success-bg)", "var(--k-success)"),
+  pdf: tint("var(--k-danger-bg-2)", "var(--k-danger-ink)"),
+  excel: tint("var(--k-success-bg)", "var(--k-success-strong)"),
+  reset: tint("var(--k-warn-bg-2)", "#8a6d00", "#ffe082"),
+  validate: tint("var(--k-warn-bg)", "var(--k-warn)"),
+  validated: tint("var(--k-success-bg)", "var(--k-success)"),
+  submit: tint("var(--k-info-bg)", "var(--k-blue)"),
+  edit: tint("var(--k-warn-bg)", "var(--k-warn)", "var(--k-warn-line)"),
+  include: tint("var(--k-success-bg)", "var(--k-success)", "var(--k-success-line)"),
+  exclude: tint("var(--k-slate-bg)", "#546e7a", "var(--k-slate-line)"),
+  deliver: tint("var(--k-success-bg)", "var(--k-success)", "var(--k-success-line)"),
+  revert: tint("var(--k-warn-bg-2)", "#8a6d00", "#ffe082"),
+  delete: tint("var(--k-danger-bg-2)", "var(--k-danger-ink)", "var(--k-danger-line)"),
+  void: tint("var(--k-warn-bg-2)", "var(--k-warn-ink-3)", "#ffe082"),
+  reverse: tint("var(--k-purple-bg)", "#5e35b1", "#b39ddb"),
   correct: tint("#d6eee8", "#0a5d50", "#b6ddd3"),
 };
 
@@ -1472,8 +1472,8 @@ export default function InvoicePage({ mode = "invoices" }) {
                           fontSize: "0.78rem",
                           padding: "0.15rem 0.5rem",
                           borderRadius: 12,
-                          backgroundColor: "#fff8e1",
-                          color: "#e65100",
+                          backgroundColor: "var(--k-warn-bg-2)",
+                          color: "var(--k-warn)",
                           border: "1px solid #ffcc80",
                           fontWeight: 700,
                         }}
@@ -1540,7 +1540,7 @@ export default function InvoicePage({ mode = "invoices" }) {
             {!isBillsMode && canDocsDeliver && pendingHandoverCount > 0 && (
               <div className="k-card" style={styles.bulkBar}>
                 <div style={styles.bulkLead}>
-                  <MdLocalShipping size={18} color="#e65100" />
+                  <MdLocalShipping size={18} color="var(--k-warn)" />
                   <span style={styles.bulkText}>
                     Documents: {pendingHandoverCount} pending on this page
                   </span>
@@ -1548,7 +1548,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                 <div style={styles.bulkActions}>
                   <Button
                     size="sm"
-                    style={tint("#2e7d32", "#fff")}
+                    style={tint("var(--k-success)", "#fff")}
                     disabled={handoverBulkBusy}
                     onClick={openBulkHandover}
                     title="Mark every pending invoice matching the current filters as documents delivered"

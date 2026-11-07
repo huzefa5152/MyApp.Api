@@ -38,12 +38,12 @@ import {
 } from "../ui/Kit";
 
 const colors = {
-  success: "#2e7d32",
-  successBg: "#e8f5e9",
+  success: "var(--k-success)",
+  successBg: "var(--k-success-bg)",
   danger: "var(--k-danger)",
   dangerLight: "var(--k-danger-bg)",
-  warn: "#f57c00",
-  warnBg: "#fff8e1",
+  warn: "var(--k-warn-2)",
+  warnBg: "var(--k-warn-bg-2)",
 };
 
 /**

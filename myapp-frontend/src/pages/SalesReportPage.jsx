@@ -1253,7 +1253,7 @@ const nowrap = { whiteSpace: "nowrap" };
 // Page-specific tints (expanded invoice band, grand-total band, PDF glyph).
 const bandBg = "#f0f7ff";
 const totalBg = "#eef4ff";
-const pdfRed = "#b71c1c";
+const pdfRed = "var(--k-danger-ink-2)";
 const totalBand = { background: totalBg, borderTop: "2px solid var(--k-blue)" };
 
 // Filter row inside the controls card — wraps on narrow screens.

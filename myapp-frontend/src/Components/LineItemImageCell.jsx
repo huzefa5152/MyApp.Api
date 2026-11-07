@@ -58,7 +58,7 @@ export default function LineItemImageCell({
           padding: 0,
           border: "1px dashed #d0d7e2",
           borderRadius: 7,
-          background: "#f8f9fb",
+          background: "var(--k-surface-2)",
           display: "grid",
           placeItems: "center",
           boxShadow: "none",
@@ -96,7 +96,7 @@ export default function LineItemImageCell({
         </button>
       )}
       {error && (
-        <span role="alert" style={{ color: "#dc3545", fontSize: 11 }}>
+        <span role="alert" style={{ color: "var(--k-danger)", fontSize: 11 }}>
           {error}
         </span>
       )}

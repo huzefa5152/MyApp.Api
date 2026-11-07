@@ -432,7 +432,7 @@ export default function PurchaseDebitNoteForm({
                       display: "inline-flex",
                       alignItems: "center",
                       gap: "0.25rem",
-                      background: "#e3f2fd",
+                      background: "var(--k-info-bg)",
                       color: "var(--k-blue)",
                       border: "none",
                     }}

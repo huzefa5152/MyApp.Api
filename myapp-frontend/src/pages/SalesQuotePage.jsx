@@ -60,7 +60,11 @@ import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
 
 // Status is derived server-side (never operator-set): Active / Expired / Accepted.
-const STATUS_COLORS = { Active: "var(--k-blue)", Expired: "#f57c00", Accepted: "#28a745" };
+const STATUS_COLORS = {
+  Active: "var(--k-blue)",
+  Expired: "var(--k-warn-2)",
+  Accepted: "var(--k-success-alt)",
+};
 
 export default function SalesQuotePage() {
   const confirm = useConfirm();
@@ -376,7 +380,13 @@ export default function SalesQuotePage() {
                         </span>
                         {Number(q.subtotal) === 0 &&
                           !(q.items || []).some((i) => Number(i.discountAmount) > 0) && (
-                            <span style={{ ...st.badge, color: "#9a5700", background: "#fff3e0" }}>
+                            <span
+                              style={{
+                                ...st.badge,
+                                color: "#9a5700",
+                                background: "var(--k-warn-bg)",
+                              }}
+                            >
                               Needs pricing
                             </span>
                           )}
@@ -450,7 +460,7 @@ export default function SalesQuotePage() {
                         <IconButton
                           style={{
                             ...st.actBtn,
-                            color: "#2e7d32",
+                            color: "var(--k-success)",
                             opacity: exportingId === q.id + "-excel" ? 0.5 : undefined,
                           }}
                           icon={MdGridOn}

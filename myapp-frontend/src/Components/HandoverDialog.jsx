@@ -106,7 +106,7 @@ export default function HandoverDialog({
             style={{
               ...formStyles.button,
               ...formStyles.submit,
-              backgroundColor: "#2e7d32",
+              backgroundColor: "var(--k-success)",
               opacity: busy ? 0.6 : 1,
             }}
             onClick={submit}

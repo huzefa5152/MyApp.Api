@@ -22,9 +22,9 @@ const colors = {
   textSecondary: "var(--k-muted)",
   inputBg: "var(--k-surface-2)",
   inputBorder: "var(--k-line-strong)",
-  successBg: "#e8f5e9",
-  successFg: "#2e7d32",
-  successBorder: "#a5d6a7",
+  successBg: "var(--k-success-bg)",
+  successFg: "var(--k-success)",
+  successBorder: "var(--k-success-line)",
 };
 
 /**

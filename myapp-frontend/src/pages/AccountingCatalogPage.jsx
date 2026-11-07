@@ -304,7 +304,7 @@ function NotBuiltYet({ report, onBack }) {
       <h3 style={{ margin: "0 0 0.5rem", color: "var(--k-ink)" }}>{report.title}</h3>
       <p style={{ margin: "0 0 0.75rem" }}>{report.blurb}</p>
       {report.blockedReason ? (
-        <p style={{ margin: "0 0 1rem", color: "#8a5a00", fontWeight: 600 }}>
+        <p style={{ margin: "0 0 1rem", color: "var(--k-warn-ink-2)", fontWeight: 600 }}>
           {report.blockedReason}
         </p>
       ) : (
@@ -1097,8 +1097,8 @@ const st = {
     fontWeight: 800,
     textTransform: "uppercase",
     letterSpacing: "0.05em",
-    color: "#8a5a00",
-    background: "#fff8e1",
+    color: "var(--k-warn-ink-2)",
+    background: "var(--k-warn-bg-2)",
     border: "1px solid #ffe0a3",
     borderRadius: 20,
     padding: "0.15rem 0.5rem",
@@ -1192,7 +1192,7 @@ const st = {
     minHeight: 34,
     padding: "0 0.8rem",
     borderRadius: 22,
-    background: "#e8f5e9",
+    background: "var(--k-success-bg)",
     color: colors.success,
     border: "1px solid #c8e6c9",
     fontSize: "0.82rem",
@@ -1298,7 +1298,7 @@ const st = {
     overflow: "hidden",
     lineHeight: 1.35,
   },
-  cellAmber: { background: "#fff8e1", color: "#b26a00", fontWeight: 700 },
+  cellAmber: { background: "var(--k-warn-bg-2)", color: "var(--k-warn-ink-3)", fontWeight: 700 },
   cellRed: { background: "var(--k-danger-bg)", color: "var(--k-danger)", fontWeight: 700 },
 
   cardList: { display: "flex", flexDirection: "column", gap: "0.7rem" },

@@ -67,7 +67,7 @@
   color: var(--k-muted);
 }
 .isd-status--ok {
-  color: #00695c;
+  color: var(--k-teal-ink);
   background: #e1f3ef;
 }
 .isd-status--warn {

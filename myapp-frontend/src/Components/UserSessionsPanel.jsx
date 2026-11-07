@@ -39,7 +39,7 @@ import {
 const TABLE_MIN = 1000;
 const PHONE = 760;
 const STATUS_TONE = {
-  "Recently active": { bg: "#eafbef", fg: "#1b6e34", dot: "#28a745" },
+  "Recently active": { bg: "#eafbef", fg: "#1b6e34", dot: "var(--k-success-alt)" },
   "Signed in": { bg: "#e7f0fb", fg: "var(--k-blue)", dot: "var(--k-blue)" },
   Expired: { bg: "#eef1f5", fg: "var(--k-muted)", dot: "#9aa6b5" },
   Revoked: { bg: "var(--k-danger-bg)", fg: "#a52834", dot: "var(--k-danger)" },

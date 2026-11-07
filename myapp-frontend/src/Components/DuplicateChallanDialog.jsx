@@ -63,13 +63,13 @@ export default function DuplicateChallanDialog({ open, challanNumber, onConfirm,
               width: 56,
               height: 56,
               borderRadius: "50%",
-              background: "#ede7f6",
+              background: "var(--k-purple-bg)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <MdContentCopy size={28} color="#4527a0" />
+            <MdContentCopy size={28} color="var(--k-purple)" />
           </div>
         </div>
 
@@ -186,7 +186,7 @@ const S = {
   confirmBtn: {
     ...formStyles.button,
     flex: 1,
-    background: "#4527a0",
+    background: "var(--k-purple)",
     color: "#fff",
   },
 };

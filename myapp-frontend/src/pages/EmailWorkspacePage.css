@@ -637,11 +637,11 @@
   opacity: 0.8;
 }
 .ew-status--kept {
-  color: #00695c;
-  background: #e0f2f1;
+  color: var(--k-teal-ink);
+  background: var(--k-teal-bg);
 }
 .ew-status--suggested {
-  color: #8a5a00;
+  color: var(--k-warn-ink-2);
   background: #fff4dc;
 }
 .ew-status--ignored {

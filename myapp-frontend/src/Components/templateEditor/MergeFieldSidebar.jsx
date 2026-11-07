@@ -15,7 +15,7 @@ export function MergeFieldList({ fields, onInsert, dark }) {
   const catColor = dark ? "#999" : "var(--k-muted)";
   const codeColor = dark ? "#82b1ff" : "var(--k-blue)";
   const labelColor = dark ? "#b3b3c0" : "var(--k-muted)";
-  const hoverBg = dark ? "rgba(255,255,255,0.08)" : "#e3f2fd";
+  const hoverBg = dark ? "rgba(255,255,255,0.08)" : "var(--k-info-bg)";
 
   const renderField = (f, i) => (
     <button
@@ -69,7 +69,7 @@ export default function MergeFieldSidebar({ fields, onInsert, hint, stamps = [] 
                 style={fieldStyles.stampBtn}
                 onClick={() => insertStamp(s)}
                 title={`Insert {{stamps.${s.slug}}} as an image`}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#e3f2fd")}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--k-info-bg)")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
               >
                 <img src={s.url} alt="" style={fieldStyles.stampThumb} />

@@ -615,7 +615,8 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                         return (
                           <div key={m.clientId} className="pf-member">
                             <div className="pf-member__company">
-                              <MdCheckCircle size={14} color="#28a745" /> {m.companyName}
+                              <MdCheckCircle size={14} color="var(--k-success-alt)" />{" "}
+                              {m.companyName}
                             </div>
                             <div className="pf-member__site">
                               {m.site || <em style={{ color: "var(--k-faint)" }}>(no sites)</em>}

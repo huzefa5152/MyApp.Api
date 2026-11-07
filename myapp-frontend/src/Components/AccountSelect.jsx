@@ -36,10 +36,10 @@ const TYPE_LABEL = {
   Expense: "Expenses",
 };
 const TYPE_COLOR = {
-  Asset: { fg: "#0d5c63", bg: "#e0f2f1" },
-  Liability: { fg: "#8a5a00", bg: "#fff3cd" },
-  Equity: { fg: "#5b3fa3", bg: "#ede7f6" },
-  Income: { fg: "#1b5e20", bg: "#e8f5e9" },
+  Asset: { fg: "#0d5c63", bg: "var(--k-teal-bg)" },
+  Liability: { fg: "var(--k-warn-ink-2)", bg: "var(--k-warn-bg-5)" },
+  Equity: { fg: "#5b3fa3", bg: "var(--k-purple-bg)" },
+  Income: { fg: "var(--k-success-strong)", bg: "var(--k-success-bg)" },
   Expense: { fg: "#b3261e", bg: "#fdecea" },
 };
 

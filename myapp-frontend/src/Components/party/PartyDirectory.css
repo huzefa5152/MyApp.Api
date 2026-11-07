@@ -261,8 +261,8 @@
   color: #5e35b1;
 }
 .pd-badge--none {
-  background: #fff4e5;
-  color: #b26a00;
+  background: var(--k-warn-bg-4);
+  color: var(--k-warn-ink-3);
 }
 
 .pd-ids {

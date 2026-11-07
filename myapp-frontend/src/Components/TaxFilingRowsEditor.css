@@ -306,7 +306,7 @@
   flex-wrap: wrap;
   gap: 10px 20px;
   padding: 16px;
-  background: #e3f2fd;
+  background: var(--k-info-bg);
   border: 1px solid var(--k-focus);
   border-radius: 10px;
   font-size: 0.875rem;

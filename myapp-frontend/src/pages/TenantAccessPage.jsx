@@ -31,7 +31,7 @@ const colors = {
   cardBorder: "var(--k-line)",
   textPrimary: "var(--k-ink)",
   textSecondary: "var(--k-muted)",
-  success: "#28a745",
+  success: "var(--k-success-alt)",
   successLight: "#eafbef",
 };
 

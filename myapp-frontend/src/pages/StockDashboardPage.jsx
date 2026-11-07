@@ -801,8 +801,8 @@ function DrillPanel({ rows, loading, uom }) {
 }
 
 // Semantic movement colours (IN green / OUT red) and the expanded-row band stay fixed across themes.
-const IN_COLOR = "#2e7d32";
-const OUT_COLOR = "#c62828";
+const IN_COLOR = "var(--k-success)";
+const OUT_COLOR = "var(--k-danger-ink)";
 const BAND_BG = "#f0f7ff";
 
 const smallCell = { fontSize: "var(--k-font-sm)" };
@@ -846,7 +846,7 @@ const drillStyles = {
     borderRadius: 5,
     letterSpacing: "0.03em",
   },
-  dirIn: { backgroundColor: "#e8f5e9", color: IN_COLOR },
+  dirIn: { backgroundColor: "var(--k-success-bg)", color: IN_COLOR },
   dirOut: { backgroundColor: "#fdecea", color: OUT_COLOR },
   qty: { fontSize: "var(--k-font)", fontWeight: 700, minWidth: 70 },
   srcChip: {
@@ -857,7 +857,7 @@ const drillStyles = {
     padding: "0.12rem 0.45rem",
     borderRadius: 5,
   },
-  srcAdjust: { backgroundColor: "#fff3e0", color: "#e65100" },
+  srcAdjust: { backgroundColor: "var(--k-warn-bg)", color: "var(--k-warn)" },
   date: { fontSize: "0.76rem", color: "var(--k-muted)", marginLeft: "auto" },
   bal: {
     fontSize: "0.74rem",

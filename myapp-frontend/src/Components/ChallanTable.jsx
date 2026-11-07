@@ -97,7 +97,7 @@ export default function ChallanTable({
                   ? `Duplicate of #${c.duplicatedFromChallanNumber}`
                   : "Duplicate"
               }
-              style={{ color: "#4527a0", display: "inline-flex" }}
+              style={{ color: "var(--k-purple)", display: "inline-flex" }}
             >
               <MdContentCopy size={13} />
             </span>
@@ -105,7 +105,7 @@ export default function ChallanTable({
           {c.warnings && c.warnings.length > 0 && (
             <span
               title={`FBR setup issues:\n• ${c.warnings.join("\n• ")}`}
-              style={{ color: "#e65100", display: "inline-flex" }}
+              style={{ color: "var(--k-warn)", display: "inline-flex" }}
             >
               <MdWarning size={14} />
             </span>
@@ -388,14 +388,14 @@ const baseBtn = {
   padding: 0,
 };
 const btnStyles = {
-  view: { ...baseBtn, backgroundColor: "#e3f2fd", color: "var(--k-blue)" },
-  print: { ...baseBtn, backgroundColor: "#f3e5f5", color: "#7b1fa2" },
+  view: { ...baseBtn, backgroundColor: "var(--k-info-bg)", color: "var(--k-blue)" },
+  print: { ...baseBtn, backgroundColor: "var(--k-purple-bg-2)", color: "var(--k-purple-2)" },
   pdf: { ...baseBtn, backgroundColor: "var(--k-danger-bg)", color: "var(--k-danger)" },
-  excel: { ...baseBtn, backgroundColor: "#e8f5e9", color: "#2e7d32" },
-  edit: { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },
-  duplicate: { ...baseBtn, backgroundColor: "#ede7f6", color: "#4527a0" },
-  generateBill: { ...baseBtn, backgroundColor: "#e0f2f1", color: "#00695c" },
-  link: { ...baseBtn, backgroundColor: "#e3f2fd", color: "var(--k-blue)" },
+  excel: { ...baseBtn, backgroundColor: "var(--k-success-bg)", color: "var(--k-success)" },
+  edit: { ...baseBtn, backgroundColor: "var(--k-warn-bg)", color: "var(--k-warn)" },
+  duplicate: { ...baseBtn, backgroundColor: "var(--k-purple-bg)", color: "var(--k-purple)" },
+  generateBill: { ...baseBtn, backgroundColor: "var(--k-teal-bg)", color: "var(--k-teal-ink)" },
+  link: { ...baseBtn, backgroundColor: "var(--k-info-bg)", color: "var(--k-blue)" },
   cancel: { ...baseBtn, backgroundColor: "#fce4ec", color: "var(--k-danger)" },
   delete: { ...baseBtn, backgroundColor: "var(--k-danger-bg)", color: "var(--k-danger)" },
 };

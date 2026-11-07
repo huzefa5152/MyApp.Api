@@ -7,7 +7,11 @@ import AttachmentManager from "./AttachmentManager";
 import { Facts, TableWrap } from "../ui/Kit";
 
 // Read-only view of a Sales Quote: header + meta + items + totals + notes.
-const STATUS_COLORS = { Active: "var(--k-blue)", Expired: "#f57c00", Accepted: "#28a745" };
+const STATUS_COLORS = {
+  Active: "var(--k-blue)",
+  Expired: "var(--k-warn-2)",
+  Accepted: "var(--k-success-alt)",
+};
 
 const fmtDate = (d) => {
   if (!d) return "—";

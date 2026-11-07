@@ -151,7 +151,7 @@ export default function PaymentHistoryDialog({ mode, companyId, doc, onClose }) 
                           <span
                             style={{
                               marginLeft: 6,
-                              color: "#b26a00",
+                              color: "var(--k-warn-ink-3)",
                               fontSize: "0.7rem",
                               fontWeight: 700,
                             }}

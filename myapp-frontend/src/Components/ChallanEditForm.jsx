@@ -513,8 +513,8 @@ const styles = {
     padding: "0.65rem 0.85rem",
     borderRadius: "var(--k-radius)",
     border: "1px solid #b39ddb",
-    backgroundColor: "#ede7f6",
-    color: "#4527a0",
+    backgroundColor: "var(--k-purple-bg)",
+    color: "var(--k-purple)",
     fontSize: "var(--k-font-sm)",
     marginBottom: "0.75rem",
     lineHeight: 1.45,
@@ -522,7 +522,7 @@ const styles = {
   lockedHint: {
     fontWeight: 400,
     fontSize: "0.72rem",
-    color: "#4527a0",
+    color: "var(--k-purple)",
     marginLeft: 4,
   },
   labelHint: {

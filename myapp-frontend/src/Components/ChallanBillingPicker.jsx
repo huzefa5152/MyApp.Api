@@ -65,7 +65,7 @@ export default function ChallanBillingPicker({ challans, selectedIds, onChange }
             style={{
               ...button,
               flex: 1,
-              background: tab === id ? "#e3f2fd" : "#fff",
+              background: tab === id ? "var(--k-info-bg)" : "#fff",
               fontWeight: tab === id ? 700 : 400,
             }}
           >
@@ -155,7 +155,7 @@ export default function ChallanBillingPicker({ challans, selectedIds, onChange }
                     padding: 8,
                     border: "1px solid var(--k-line-strong)",
                     borderRadius: 8,
-                    background: selectedIds.includes(c.id) ? "#e3f2fd" : "#fff",
+                    background: selectedIds.includes(c.id) ? "var(--k-info-bg)" : "#fff",
                     cursor: "pointer",
                   }}
                 >

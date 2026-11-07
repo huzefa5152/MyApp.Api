@@ -356,7 +356,7 @@ function PayloadPanel({ payload, itemCount, originalLineCount, fmtNum, fmtQty })
       <div style={s.itemsHeader}>
         Items in FBR payload ({itemCount})
         {originalLineCount !== itemCount && (
-          <span style={{ color: "#2e7d32", marginLeft: "0.4rem", fontSize: "0.78rem" }}>
+          <span style={{ color: "var(--k-success)", marginLeft: "0.4rem", fontSize: "0.78rem" }}>
             (grouped from {originalLineCount} bill line{originalLineCount === 1 ? "" : "s"})
           </span>
         )}
@@ -534,9 +534,21 @@ const s = {
     fontWeight: 700,
     whiteSpace: "nowrap",
   },
-  badgeReady: { background: "#e3f2fd", color: "var(--k-blue)", border: "1px solid #90caf9" },
-  badgeValidated: { background: "#e8f5e9", color: "#1b5e20", border: "1px solid #a5d6a7" },
-  badgeSubmitted: { background: "#e0f2f1", color: "#00695c", border: "1px solid #80cbc4" },
+  badgeReady: {
+    background: "var(--k-info-bg)",
+    color: "var(--k-blue)",
+    border: "1px solid #90caf9",
+  },
+  badgeValidated: {
+    background: "var(--k-success-bg)",
+    color: "var(--k-success-strong)",
+    border: "1px solid #a5d6a7",
+  },
+  badgeSubmitted: {
+    background: "var(--k-teal-bg)",
+    color: "var(--k-teal-ink)",
+    border: "1px solid #80cbc4",
+  },
   badgeFailed: {
     background: "var(--k-danger-bg)",
     color: "var(--k-danger)",
@@ -578,7 +590,7 @@ const s = {
     margin: "0.5rem 0 0",
     padding: "0.7rem 0.9rem",
     background: "#0a1628",
-    color: "#e8f5e9",
+    color: "var(--k-success-bg)",
     border: "1px solid #1a2332",
     borderRadius: 6,
     fontSize: "0.75rem",

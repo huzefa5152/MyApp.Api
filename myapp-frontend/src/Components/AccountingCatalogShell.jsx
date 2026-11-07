@@ -603,7 +603,7 @@ function AgingFooter({ aging, owed }) {
 const AGING_TONE = {
   zero: { color: "var(--k-muted)", fontWeight: 600 },
   ok: { color: "var(--k-ink)" },
-  warn: { color: "#b26a00" },
+  warn: { color: "var(--k-warn-ink-3)" },
   bad: { color: "var(--k-danger)" },
 };
 const AGING_BAR = {

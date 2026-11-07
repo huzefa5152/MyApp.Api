@@ -70,6 +70,45 @@
   --k-stat-value: 1.35rem;
 }
 
+/* Status and accent palette. One value in every theme today; a theme that needs
+   different status colours (a dark one) overrides these. */
+:root {
+  --k-success: #2e7d32;
+  --k-success-strong: #1b5e20;
+  --k-success-alt: #28a745;
+  --k-success-bg: #e8f5e9;
+  --k-success-line: #a5d6a7;
+  --k-warn: #e65100;
+  --k-warn-2: #f57c00;
+  --k-warn-ink: #8a4b00;
+  --k-warn-ink-2: #8a5a00;
+  --k-warn-ink-3: #b26a00;
+  --k-warn-bg: #fff3e0;
+  --k-warn-bg-2: #fff8e1;
+  --k-warn-bg-3: #fff4e0;
+  --k-warn-bg-4: #fff4e5;
+  --k-warn-bg-5: #fff3cd;
+  --k-warn-line: #ffcc80;
+  --k-info-bg: #e3f2fd;
+  --k-info-line: #90caf9;
+  --k-info-line-2: #bbdefb;
+  --k-danger-ink: #c62828;
+  --k-danger-ink-2: #b71c1c;
+  --k-danger-bg-2: #ffebee;
+  --k-danger-line: #ef9a9a;
+  --k-purple: #4527a0;
+  --k-purple-2: #7b1fa2;
+  --k-purple-3: #6a1b9a;
+  --k-purple-bg: #ede7f6;
+  --k-purple-bg-2: #f3e5f5;
+  --k-teal-ink: #00695c;
+  --k-teal-bg: #e0f2f1;
+  --k-teal-line: #80cbc4;
+  --k-slate: #37474f;
+  --k-slate-bg: #eceff1;
+  --k-slate-line: #b0bec5;
+}
+
 [data-ui-layout="workspace"] {
   --k-faint: #8a97a8;
   --k-danger: #c62828;

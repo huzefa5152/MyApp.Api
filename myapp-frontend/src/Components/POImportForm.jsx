@@ -44,7 +44,7 @@ import { Alert, Button, EmptyState, Field, IconButton, Tabs } from "../ui/Kit";
 
 const colors = {
   textSecondary: "var(--k-muted)",
-  success: "#28a745",
+  success: "var(--k-success-alt)",
 };
 
 // Per-target wiring — one PO-import wizard drives three destinations.

@@ -79,9 +79,9 @@ const s = {
     flexShrink: 0,
     borderRadius: "50%",
     border: "2px solid #d6e3f3",
-    borderTopColor: "#0d47a1",
+    borderTopColor: "var(--k-blue)",
     animation: "rnSpin 800ms linear infinite",
   },
-  title: { fontWeight: 700, fontSize: "0.9rem", color: "#1a2332" },
-  text: { fontSize: "0.8rem", color: "#5f6d7e", lineHeight: 1.45 },
+  title: { fontWeight: 700, fontSize: "0.9rem", color: "var(--k-ink)" },
+  text: { fontSize: "0.8rem", color: "var(--k-muted)", lineHeight: 1.45 },
 };

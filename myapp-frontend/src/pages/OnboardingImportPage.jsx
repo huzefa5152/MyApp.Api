@@ -689,9 +689,24 @@ function Page({ companyName, children }) {
 }
 
 const TONES = {
-  info: { icon: MdInfo, color: "var(--k-blue)", bg: "#e3f2fd", border: "#90caf9" },
-  warning: { icon: MdWarning, color: "#8a4b00", bg: "#fff4e0", border: "#ffcc80" },
-  error: { icon: MdError, color: "var(--k-danger)", bg: "#ffebee", border: "#ef9a9a" },
+  info: {
+    icon: MdInfo,
+    color: "var(--k-blue)",
+    bg: "var(--k-info-bg)",
+    border: "var(--k-info-line)",
+  },
+  warning: {
+    icon: MdWarning,
+    color: "var(--k-warn-ink)",
+    bg: "var(--k-warn-bg-3)",
+    border: "var(--k-warn-line)",
+  },
+  error: {
+    icon: MdError,
+    color: "var(--k-danger)",
+    bg: "var(--k-danger-bg-2)",
+    border: "var(--k-danger-line)",
+  },
 };
 
 function Notice({ tone = "info", children, onClose }) {

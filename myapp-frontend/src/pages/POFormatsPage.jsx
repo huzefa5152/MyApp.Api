@@ -19,10 +19,10 @@ import {
 } from "../ui/Kit";
 
 const colors = {
-  success: "#28a745",
-  successLight: "#e8f5e9",
+  success: "var(--k-success-alt)",
+  successLight: "var(--k-success-bg)",
   primary: "var(--k-blue)",
-  primaryLight: "#e3f2fd",
+  primaryLight: "var(--k-info-bg)",
 };
 
 export default function POFormatsPage() {

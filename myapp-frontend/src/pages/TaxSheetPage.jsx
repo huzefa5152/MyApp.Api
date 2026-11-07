@@ -806,9 +806,9 @@ export default function TaxSheetPage() {
 
 // Page-specific tints (HS-code pill, grand-total band, transfer accent).
 const totalBg = "#eef4ff";
-const transferOrange = "#e65100";
+const transferOrange = "var(--k-warn)";
 const pill = {
-  background: "#fff4e5",
+  background: "var(--k-warn-bg-4)",
   color: "#a15c00",
   padding: "2px 8px",
   borderRadius: 6,

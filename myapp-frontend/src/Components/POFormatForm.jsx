@@ -15,7 +15,7 @@ import useScrollToError from "../hooks/useScrollToError";
 import { Field, Alert } from "../ui/Kit";
 
 const colors = {
-  success: "#28a745",
+  success: "var(--k-success-alt)",
 };
 
 // Each form is mounted for one company; changing company closes the form.

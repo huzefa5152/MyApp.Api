@@ -79,7 +79,7 @@ const st = {
   // marginTop: 0 — the parent stacks steps with its own gap; cancel the kit's `.k-card + .k-card` margin.
   card: { overflow: "hidden", marginTop: 0 },
   cardActive: {
-    borderColor: "#90caf9",
+    borderColor: "var(--k-info-line)",
     boxShadow: "0 0 0 1px #90caf9, 0 6px 18px rgba(13,71,161,0.08)",
   },
   cardWaiting: { opacity: 0.6 },
@@ -103,7 +103,7 @@ const st = {
     fontSize: "var(--k-font)",
   },
   badgeDone: { background: "var(--k-teal)" },
-  badgeWaiting: { background: "#b0bec5" },
+  badgeWaiting: { background: "var(--k-slate-line)" },
   titles: { display: "flex", flexDirection: "column", gap: 2, flex: 1, minWidth: 0 },
   title: { fontSize: "calc(var(--k-font) + 0.1rem)", fontWeight: 800, color: "var(--k-ink)" },
   summary: {

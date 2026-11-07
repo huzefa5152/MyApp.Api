@@ -90,7 +90,7 @@ const styles = {
   },
   optionActive: {
     borderColor: "var(--k-blue, #0d47a1)",
-    backgroundColor: "#e3f2fd",
+    backgroundColor: "var(--k-info-bg)",
     fontWeight: 600,
   },
   optionDisabled: { opacity: 0.6, cursor: "not-allowed" },

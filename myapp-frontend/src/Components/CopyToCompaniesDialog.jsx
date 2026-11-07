@@ -238,6 +238,6 @@ const styles = {
     userSelect: "none",
     transition: "background-color 0.15s, border-color 0.15s",
   },
-  rowActive: { borderColor: "var(--k-blue)", backgroundColor: "#e3f2fd" },
+  rowActive: { borderColor: "var(--k-blue)", backgroundColor: "var(--k-info-bg)" },
   muted: { color: "#94a3b8", fontWeight: 400, fontSize: "var(--k-font-sm)" },
 };

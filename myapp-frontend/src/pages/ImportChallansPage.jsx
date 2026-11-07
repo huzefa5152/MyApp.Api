@@ -32,9 +32,9 @@ const colors = {
   cardBorder: "var(--k-line)",
   danger: "var(--k-danger)",
   dangerLight: "var(--k-danger-bg)",
-  success: "#28a745",
+  success: "var(--k-success-alt)",
   warning: "#f59f00",
-  warningLight: "#fff8e1",
+  warningLight: "var(--k-warn-bg-2)",
 };
 
 // A file is recognized as a Delivery Challan if its name starts with

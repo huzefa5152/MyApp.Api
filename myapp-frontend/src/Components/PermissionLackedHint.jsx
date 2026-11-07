@@ -24,7 +24,7 @@ export default function PermissionLackedHint({ perm, what, inline = false }) {
   );
 }
 
-const colors = { warn: "#e65100" };
+const colors = { warn: "var(--k-warn)" };
 const styles = {
   permHintBlock: {
     display: "inline-flex",
@@ -32,8 +32,8 @@ const styles = {
     gap: "0.35rem",
     padding: "0.45rem 0.75rem",
     borderRadius: 6,
-    backgroundColor: "#fff8e1",
-    border: `1px solid ${colors.warn}30`,
+    backgroundColor: "var(--k-warn-bg-2)",
+    border: `1px solid color-mix(in srgb, ${colors.warn} 19%, transparent)`,
     color: colors.warn,
     fontSize: "0.78rem",
     lineHeight: 1.35,

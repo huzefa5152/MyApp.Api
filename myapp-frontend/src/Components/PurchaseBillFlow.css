@@ -84,7 +84,7 @@
 .purchase-category-option input {
   width: 18px;
   height: 18px;
-  accent-color: #0d47a1;
+  accent-color: var(--k-blue);
   flex-shrink: 0;
 }
 .purchase-category-icon {
@@ -144,7 +144,7 @@
   margin-top: 5px;
 }
 .purchase-category-step .purchase-category-warning {
-  background: #fff8e1;
+  background: var(--k-warn-bg-2);
   color: #8a5300;
   padding: 12px;
   border-radius: 8px;

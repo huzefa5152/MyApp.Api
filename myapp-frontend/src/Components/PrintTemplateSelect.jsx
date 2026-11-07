@@ -35,7 +35,7 @@ export default function PrintTemplateSelect({ picker, style }) {
           ...style,
         }}
       >
-        <MdErrorOutline size={15} color="#c62828" aria-hidden="true" />
+        <MdErrorOutline size={15} color="var(--k-danger-ink)" aria-hidden="true" />
         <select
           className="filter-select"
           aria-label="Print template"

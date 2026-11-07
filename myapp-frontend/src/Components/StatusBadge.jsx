@@ -4,18 +4,18 @@
 import "../ui/shared-components.css";
 
 export const statusTones = {
-  pending: { bg: "#fff3e0", color: "#e65100", border: "#e6510030" },
-  imported: { bg: "#f3e5f5", color: "#6a1b9a", border: "#6a1b9a30" },
-  info: { bg: "#e3f2fd", color: "#0d47a1", border: "#0d47a130" },
-  success: { bg: "#e8f5e9", color: "#2e7d32", border: "#2e7d3230" },
-  danger: { bg: "#ffebee", color: "#c62828", border: "#c6282830" },
-  warning: { bg: "#fff8e1", color: "#b26a00", border: "#b26a0030" },
-  neutral: { bg: "#eceff1", color: "#546e7a", border: "#b0bec530" },
+  pending: { bg: "var(--k-warn-bg)", color: "var(--k-warn)", border: "#e6510030" },
+  imported: { bg: "var(--k-purple-bg-2)", color: "var(--k-purple-3)", border: "#6a1b9a30" },
+  info: { bg: "var(--k-info-bg)", color: "var(--k-blue)", border: "#0d47a130" },
+  success: { bg: "var(--k-success-bg)", color: "var(--k-success)", border: "#2e7d3230" },
+  danger: { bg: "var(--k-danger-bg-2)", color: "var(--k-danger-ink)", border: "#c6282830" },
+  warning: { bg: "var(--k-warn-bg-2)", color: "var(--k-warn-ink-3)", border: "#b26a0030" },
+  neutral: { bg: "var(--k-slate-bg)", color: "#546e7a", border: "#b0bec530" },
   setup: { bg: "#fce4ec", color: "#880e4f", border: "#880e4f30" },
-  duplicate: { bg: "#ede7f6", color: "#4527a0", border: "#4527a040" },
-  submitted: { bg: "#e8f5e9", color: "#1b5e20", border: "#1b5e2030" },
-  ready: { bg: "#e3f2fd", color: "#0d47a1", border: "#0d47a130" },
-  excluded: { bg: "#eceff1", color: "#455a64", border: "#45596430" },
+  duplicate: { bg: "var(--k-purple-bg)", color: "var(--k-purple)", border: "#4527a040" },
+  submitted: { bg: "var(--k-success-bg)", color: "var(--k-success-strong)", border: "#1b5e2030" },
+  ready: { bg: "var(--k-info-bg)", color: "var(--k-blue)", border: "#0d47a130" },
+  excluded: { bg: "var(--k-slate-bg)", color: "#455a64", border: "#45596430" },
 };
 
 // Status string → tone — covers every server status name in this app.

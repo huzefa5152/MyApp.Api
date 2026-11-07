@@ -22,7 +22,7 @@ const variants = {
     btnHover: "#b02a37",
   },
   warning: {
-    bg: "#fff3cd",
+    bg: "var(--k-warn-bg-5)",
     color: "#664d03",
     border: "#ffecb5",
     icon: <MdWarning size={28} color="#fd7e14" />,

@@ -51,8 +51,8 @@ const colors = {
   inputBg: "var(--k-surface-2)",
   inputBorder: "var(--k-line-strong)",
   danger: "var(--k-danger)",
-  warn: "#e65100",
-  ok: "#2e7d32",
+  warn: "var(--k-warn)",
+  ok: "var(--k-success)",
 };
 
 /**

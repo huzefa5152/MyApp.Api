@@ -486,7 +486,7 @@ export default function CommonSupplierForm({ groupId, onClose, onSaved, onChange
                       {detail.members.map((m) => (
                         <div key={m.supplierId} className="pf-member">
                           <div className="pf-member__company">
-                            <MdCheckCircle size={14} color="#28a745" />{" "}
+                            <MdCheckCircle size={14} color="var(--k-success-alt)" />{" "}
                             <span style={s.clamp2}>{m.companyName}</span>
                           </div>
                           <div className="pf-member__site">

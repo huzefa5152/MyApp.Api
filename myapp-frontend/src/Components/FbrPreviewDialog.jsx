@@ -155,7 +155,7 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
                   {origLineCount} bill {origLineCount === 1 ? "line" : "lines"} → {itemCount} FBR{" "}
                   {itemCount === 1 ? "item" : "items"}
                   {origLineCount !== itemCount && (
-                    <span style={{ color: "#2e7d32", marginLeft: "0.4rem" }}>
+                    <span style={{ color: "var(--k-success)", marginLeft: "0.4rem" }}>
                       (grouped by Item Type — same as Tax Invoice print)
                     </span>
                   )}
@@ -374,7 +374,7 @@ const s = {
     margin: "0.5rem 0 0",
     padding: "0.75rem 1rem",
     background: "#0a1628",
-    color: "#e8f5e9",
+    color: "var(--k-success-bg)",
     border: "1px solid #1a2332",
     borderRadius: 8,
     fontSize: "0.78rem",

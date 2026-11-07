@@ -47,8 +47,8 @@ export default function PurchaseBillTable({
                 borderRadius: 6,
                 fontSize: "0.7rem",
                 fontWeight: 600,
-                background: "#e0f2f1",
-                color: "#00695c",
+                background: "var(--k-teal-bg)",
+                color: "var(--k-teal-ink)",
               }}
             >
               {b.source === "auto-cost" ? "From costs" : "Local direct purchase"}

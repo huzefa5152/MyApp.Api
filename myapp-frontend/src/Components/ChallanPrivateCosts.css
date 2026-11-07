@@ -47,7 +47,7 @@
   border: 1px solid var(--k-line-strong);
   border-radius: 7px;
   background: white;
-  color: #00695c;
+  color: var(--k-teal-ink);
   cursor: pointer;
 }
 .challan-private-bulk > button:disabled {
@@ -157,7 +157,7 @@
   border: 0;
   background: transparent;
   padding: 4px 0;
-  color: #00695c;
+  color: var(--k-teal-ink);
   font: inherit;
   font-weight: 600;
   cursor: pointer;

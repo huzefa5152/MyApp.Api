@@ -22,7 +22,7 @@ import {
 
 const levelBadge = {
   Error: { bg: "#fdeded", color: "#842029", icon: <MdBugReport size={14} /> },
-  Warning: { bg: "#fff3cd", color: "#664d03", icon: <MdWarning size={14} /> },
+  Warning: { bg: "var(--k-warn-bg-5)", color: "#664d03", icon: <MdWarning size={14} /> },
   Info: { bg: "#cff4fc", color: "#055160", icon: <MdInfo size={14} /> },
 };
 
@@ -126,7 +126,7 @@ export default function AuditLogsPage() {
               <span style={{ ...chip, background: "var(--k-danger-bg)", color: "#842029" }}>
                 {summary.errorsLast24h} errors (24h)
               </span>
-              <span style={{ ...chip, background: "#fff3cd", color: "#664d03" }}>
+              <span style={{ ...chip, background: "var(--k-warn-bg-5)", color: "#664d03" }}>
                 {summary.warningsLast24h} warnings (24h)
               </span>
             </>

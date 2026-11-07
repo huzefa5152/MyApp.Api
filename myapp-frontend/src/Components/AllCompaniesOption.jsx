@@ -43,7 +43,7 @@ const box = {
   fontSize: "var(--k-font)",
   cursor: "pointer",
 };
-const on = { borderColor: "#8a4b00", background: "#fff4e5" };
+const on = { borderColor: "var(--k-warn-ink)", background: "var(--k-warn-bg-4)" };
 const help = {
   display: "block",
   fontSize: "0.76rem",
@@ -58,7 +58,7 @@ const warn = {
   marginTop: "0.5rem",
   padding: "0.6rem 0.8rem",
   borderRadius: "var(--k-radius)",
-  background: "#fff3cd",
+  background: "var(--k-warn-bg-5)",
   color: "#664d03",
   border: "1px solid #ffecb5",
   fontSize: "var(--k-font-sm)",

@@ -234,7 +234,7 @@ export default function InvoiceTable({
                 fontSize: 10,
                 fontWeight: 700,
                 lineHeight: 1.2,
-                color: i.documentType === 10 ? "#5e35b1" : "#00695c",
+                color: i.documentType === 10 ? "#5e35b1" : "var(--k-teal-ink)",
               }}
               title={
                 i.originalInvoiceNumber
@@ -283,7 +283,7 @@ export default function InvoiceTable({
                 lineHeight: 1.2,
                 padding: "2px 6px",
                 borderRadius: 6,
-                background: "#ede7f6",
+                background: "var(--k-purple-bg)",
                 color: "#5e35b1",
                 border: "1px solid #b39ddb",
               }}
@@ -304,8 +304,8 @@ export default function InvoiceTable({
                 lineHeight: 1.2,
                 padding: "2px 6px",
                 borderRadius: 6,
-                background: "#e0f2f1",
-                color: "#00695c",
+                background: "var(--k-teal-bg)",
+                color: "var(--k-teal-ink)",
                 border: "1px solid #80cbc4",
               }}
               title={`A Debit Note (#${i.adjustedByDebitNoteNumber}) adjusts this invoice upward.`}
@@ -581,7 +581,7 @@ export default function InvoiceTable({
             data-primary
             style={{
               ...btn.neutral,
-              backgroundColor: "#fff8e1",
+              backgroundColor: "var(--k-warn-bg-2)",
               color: "#8a6d00",
               border: "1px solid #ffe082",
             }}
@@ -608,7 +608,7 @@ export default function InvoiceTable({
                   style={{
                     ...btn.fbrValidate,
                     ...(fbrValidated.has(inv.id)
-                      ? { backgroundColor: "#e8f5e9", color: "#2e7d32" }
+                      ? { backgroundColor: "var(--k-success-bg)", color: "var(--k-success)" }
                       : {}),
                   }}
                   disabled={!!fbrLoading || !inv.fbrReady}
@@ -700,9 +700,9 @@ export default function InvoiceTable({
               data-primary={inv.isFbrExcluded || undefined}
               style={{
                 ...btn.neutral,
-                backgroundColor: inv.isFbrExcluded ? "#e8f5e9" : "#eceff1",
-                color: inv.isFbrExcluded ? "#2e7d32" : "#546e7a",
-                border: `1px solid ${inv.isFbrExcluded ? "#a5d6a7" : "#b0bec5"}`,
+                backgroundColor: inv.isFbrExcluded ? "var(--k-success-bg)" : "var(--k-slate-bg)",
+                color: inv.isFbrExcluded ? "var(--k-success)" : "#546e7a",
+                border: `1px solid ${inv.isFbrExcluded ? "var(--k-success-line)" : "var(--k-slate-line)"}`,
               }}
               onClick={() => onToggleFbrExcluded?.(inv)}
               label={
@@ -811,19 +811,19 @@ export default function InvoiceTable({
 // (print / PDF / XLS / FBR / edit / delete …) still reads at a glance.
 const baseBtn = { border: "none" };
 const btn = {
-  view: { ...baseBtn, backgroundColor: "#e3f2fd", color: "var(--k-blue)" },
-  teal: { ...baseBtn, backgroundColor: "#e0f2f1", color: "#00695c" },
-  print: { ...baseBtn, backgroundColor: "#f3e5f5", color: "#7b1fa2" },
-  tax: { ...baseBtn, backgroundColor: "#e0f2f1", color: "#00695c" },
+  view: { ...baseBtn, backgroundColor: "var(--k-info-bg)", color: "var(--k-blue)" },
+  teal: { ...baseBtn, backgroundColor: "var(--k-teal-bg)", color: "var(--k-teal-ink)" },
+  print: { ...baseBtn, backgroundColor: "var(--k-purple-bg-2)", color: "var(--k-purple-2)" },
+  tax: { ...baseBtn, backgroundColor: "var(--k-teal-bg)", color: "var(--k-teal-ink)" },
   pdf: { ...baseBtn, backgroundColor: "var(--k-danger-bg)", color: "var(--k-danger)" },
-  excel: { ...baseBtn, backgroundColor: "#e8f5e9", color: "#2e7d32" },
-  edit: { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },
+  excel: { ...baseBtn, backgroundColor: "var(--k-success-bg)", color: "var(--k-success)" },
+  edit: { ...baseBtn, backgroundColor: "var(--k-warn-bg)", color: "var(--k-warn)" },
   delete: { ...baseBtn, backgroundColor: "var(--k-danger-bg)", color: "var(--k-danger)" },
-  void: { ...baseBtn, backgroundColor: "#fff8e1", color: "#b26a00" },
-  reverse: { ...baseBtn, backgroundColor: "#ede7f6", color: "#5e35b1" },
-  fbrValidate: { ...baseBtn, backgroundColor: "#e3f2fd", color: "var(--k-blue)" },
+  void: { ...baseBtn, backgroundColor: "var(--k-warn-bg-2)", color: "var(--k-warn-ink-3)" },
+  reverse: { ...baseBtn, backgroundColor: "var(--k-purple-bg)", color: "#5e35b1" },
+  fbrValidate: { ...baseBtn, backgroundColor: "var(--k-info-bg)", color: "var(--k-blue)" },
   fbrSubmit: { ...baseBtn, backgroundColor: "#e8eaf6", color: "#1a237e" },
   neutral: { ...baseBtn, backgroundColor: "var(--k-surface-3)", color: "#546e7a" },
-  handoverMark: { ...baseBtn, backgroundColor: "#e8f5e9", color: "#2e7d32" },
-  handoverRevert: { ...baseBtn, backgroundColor: "#fff8e1", color: "#8a6d00" },
+  handoverMark: { ...baseBtn, backgroundColor: "var(--k-success-bg)", color: "var(--k-success)" },
+  handoverRevert: { ...baseBtn, backgroundColor: "var(--k-warn-bg-2)", color: "#8a6d00" },
 };

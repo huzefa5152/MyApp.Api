@@ -432,7 +432,9 @@ export default function AttachChallanToOrderModal({
                   return (
                     <div key={s2.id} style={s.previewRow}>
                       <span style={s.pDesc}>{richTextToPlain(s2.description || "")}</span>
-                      <span style={{ ...s.pQty, color: p.over ? "#e65100" : "var(--k-teal)" }}>
+                      <span
+                        style={{ ...s.pQty, color: p.over ? "var(--k-warn)" : "var(--k-teal)" }}
+                      >
                         {fmtQty(p.projected)}/{fmtQty(p.ordered)}
                         {p.over ? " ⚠ over" : ""}
                       </span>

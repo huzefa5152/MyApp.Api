@@ -435,7 +435,7 @@ function Dashboard({
           <Metric
             label="Expenses"
             icon={MdTrendingDown}
-            accent="#c62828"
+            accent="var(--k-danger-ink)"
             value={fmtMoney(summary.expenses)}
             sub="Cost of sales and running costs"
             hint="Every expense account in the Profit & Loss, cost of sales included."
@@ -444,7 +444,7 @@ function Dashboard({
           <Metric
             label={netProfit >= 0 ? "Net profit" : "Net loss"}
             icon={MdAttachMoney}
-            accent={netProfit >= 0 ? "#2e7d32" : "#c62828"}
+            accent={netProfit >= 0 ? "var(--k-success)" : "var(--k-danger-ink)"}
             value={fmtMoney(netProfit)}
             tone={netProfit >= 0 ? "good" : "bad"}
             sub={netMargin != null ? `${pct(netMargin)} of revenue` : "Revenue − expenses"}
@@ -502,7 +502,7 @@ function Dashboard({
           <Metric
             label="Received"
             icon={MdReceiptLong}
-            accent="#2e7d32"
+            accent="var(--k-success)"
             value={fmtMoney(summary.receiptsTotal)}
             sub={`${summary.receiptCount || 0} receipt${summary.receiptCount === 1 ? "" : "s"}`}
             to={reportLink("receipts-register")}
@@ -518,7 +518,7 @@ function Dashboard({
           <Metric
             label="Net cash movement"
             icon={MdSwapVert}
-            accent={netCash >= 0 ? "#2e7d32" : "#c62828"}
+            accent={netCash >= 0 ? "var(--k-success)" : "var(--k-danger-ink)"}
             value={fmtMoney(netCash)}
             tone={netCash >= 0 ? "good" : "bad"}
             sub="Received − paid out"
@@ -528,7 +528,7 @@ function Dashboard({
           <Metric
             label="Cheques in hand"
             icon={MdCallReceived}
-            accent="#2e7d32"
+            accent="var(--k-success)"
             value={fmtMoney(summary.pdcIn?.amount)}
             sub={chequeSub(summary.pdcIn)}
             tone={summary.pdcIn?.dueSoonCount > 0 ? "warn" : undefined}
@@ -684,7 +684,7 @@ function Dashboard({
           />
           <Metric
             label="WHT payable"
-            accent="#e65100"
+            accent="var(--k-warn)"
             value={fmtMoney(summary.withholdingPayable)}
             sub="Withheld by you, owed to FBR"
           />
@@ -860,7 +860,7 @@ function GlResultBanner({ result, onDismiss }) {
   ].filter(([, v]) => Number(v || 0) > 0);
   return (
     <div className="cc-success">
-      <MdCheckCircle size={20} style={{ color: "#2e7d32", flexShrink: 0 }} />
+      <MdCheckCircle size={20} style={{ color: "var(--k-success)", flexShrink: 0 }} />
       <div style={{ flex: 1, minWidth: 200 }}>
         <div style={{ fontWeight: 700, fontSize: "var(--k-font)" }}>Ledger rebuilt</div>
         <div style={st.resultChips}>
@@ -892,7 +892,10 @@ function GlHealthFooter({ status, canManage, rebuilding, onRebuild }) {
       </span>
       <span style={st.glFooterDot}>·</span>
       <span
-        style={{ ...st.glFooterItem, color: status.isBalanced ? "#2e7d32" : "var(--k-danger)" }}
+        style={{
+          ...st.glFooterItem,
+          color: status.isBalanced ? "var(--k-success)" : "var(--k-danger)",
+        }}
       >
         {status.isBalanced ? (
           <>

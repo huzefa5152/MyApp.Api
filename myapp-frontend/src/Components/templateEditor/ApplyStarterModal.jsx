@@ -244,8 +244,8 @@ const s = {
   rec: {
     fontSize: "0.6rem",
     fontWeight: 800,
-    color: "#1b5e20",
-    background: "#e8f5e9",
+    color: "var(--k-success-strong)",
+    background: "var(--k-success-bg)",
     padding: "1px 6px",
     borderRadius: 5,
     textTransform: "uppercase",

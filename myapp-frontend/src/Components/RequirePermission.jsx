@@ -126,8 +126,8 @@ const styles = {
     height: 52,
     margin: "0 auto 0.9rem",
     borderRadius: "50%",
-    backgroundColor: "#fff8e1",
-    color: "#e65100",
+    backgroundColor: "var(--k-warn-bg-2)",
+    color: "var(--k-warn)",
   },
   title: {
     margin: "0 0 0.6rem",

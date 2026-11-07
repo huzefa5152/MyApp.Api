@@ -72,10 +72,10 @@ const statusTone = (m) =>
 const AVATAR_TINTS = [
   "var(--k-blue)",
   "var(--k-teal)",
-  "#6a1b9a",
+  "var(--k-purple-3)",
   "#c2185b",
   "#ef6c00",
-  "#2e7d32",
+  "var(--k-success)",
   "#455a64",
   "var(--k-blue)",
 ];
