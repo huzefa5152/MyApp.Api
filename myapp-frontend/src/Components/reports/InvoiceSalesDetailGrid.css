@@ -87,7 +87,7 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
-  min-height: 44px;
+  min-height: var(--k-btn-h);
   max-width: 100%;
   padding: 8px 10px;
   background: var(--k-surface-3);

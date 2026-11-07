@@ -60,7 +60,7 @@
     max-width: none;
   }
   .payment-dialog button {
-    min-height: 44px;
+    min-height: var(--k-btn-h);
   }
 }
 
@@ -104,7 +104,7 @@
   justify-content: space-between;
   gap: 8px;
   width: 100%;
-  min-height: 44px;
+  min-height: var(--k-btn-h);
   padding: 6px 0;
   background: none;
   border: 0;

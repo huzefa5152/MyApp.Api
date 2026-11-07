@@ -59,7 +59,7 @@
     outline-offset: -2px;
   }
   .records-viewport:focus-visible {
-    outline: 2px solid #0d47a1;
+    outline: 2px solid var(--k-blue);
   }
   .records-viewport [data-admin-table-region] {
     max-height: none !important;
@@ -75,9 +75,9 @@
     background: #f5f8fc;
   }
   .records-viewport > .pagination-bar {
-    background: #fff;
+    background: var(--k-surface);
     padding: 10px;
-    border-top: 1px solid #e8edf3;
+    border-top: 1px solid var(--k-line);
   }
   .records-viewport .card-grid {
     align-content: start;
@@ -120,7 +120,7 @@
 }
 @media screen and (max-width: 767px) {
   .list-filters {
-    background: #fff;
+    background: var(--k-surface);
     border: 1px solid #dce4ef;
     border-radius: 10px;
     margin-bottom: 10px;
@@ -129,9 +129,9 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    min-height: 44px;
+    min-height: var(--k-btn-h);
     padding: 10px 12px;
-    color: #0d47a1;
+    color: var(--k-blue);
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
@@ -146,7 +146,7 @@
     font-weight: 400;
   }
   .list-filters > summary:focus-visible {
-    outline: 2px solid #0d47a1;
+    outline: 2px solid var(--k-blue);
     outline-offset: -2px;
   }
   .list-filters > .list-filters-content {

@@ -1,5 +1,5 @@
 .document-lines-page {
-  color: #1a2332;
+  color: var(--k-ink);
   font-size: 13px;
 }
 .document-lines-heading {
@@ -15,7 +15,7 @@
 }
 .document-lines-heading p {
   margin: 3px 0 0;
-  color: #64748b;
+  color: var(--k-muted);
   font-size: 13px;
 }
 .document-lines-icon {
@@ -26,15 +26,15 @@
   flex-shrink: 0;
   border-radius: 12px;
   color: white;
-  background: linear-gradient(135deg, #0d47a1, #00897b);
+  background: var(--k-primary-bg);
 }
 .document-lines-filters {
   display: flex;
   flex-wrap: wrap;
   align-items: end;
   gap: 8px 10px;
-  border: 1px solid #e8edf3;
-  background: #fff;
+  border: 1px solid var(--k-line);
+  background: var(--k-surface);
 }
 .document-lines-filters > label {
   flex: 1 1 145px;
@@ -57,8 +57,8 @@
 .document-lines-columns {
   margin: 10px 0;
   padding: 0 12px;
-  border: 1px solid #e8edf3;
-  background: #fff;
+  border: 1px solid var(--k-line);
+  background: var(--k-surface);
   border-radius: 9px;
 }
 .document-lines-columns summary {
@@ -69,7 +69,7 @@
 .document-lines-columns summary span {
   margin-left: 6px;
   font-size: 12px;
-  color: #64748b;
+  color: var(--k-muted);
   font-weight: 400;
 }
 .document-lines-column-grid {
@@ -82,7 +82,7 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  min-height: 44px;
+  min-height: var(--k-btn-h);
   cursor: pointer;
   font-size: 12px;
 }
@@ -93,8 +93,8 @@
   margin: 4px 0 10px;
 }
 .document-lines-results {
-  border: 1px solid #e8edf3;
-  background: #fff;
+  border: 1px solid var(--k-line);
+  background: var(--k-surface);
   border-radius: 12px;
   overflow: hidden;
 }
@@ -104,7 +104,7 @@
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  border-bottom: 1px solid #e8edf3;
+  border-bottom: 1px solid var(--k-line);
 }
 .document-lines-toolbar strong {
   margin-right: auto;
@@ -112,7 +112,7 @@
 .document-lines-empty {
   padding: 32px 16px;
   text-align: center;
-  color: #64748b;
+  color: var(--k-muted);
 }
 .document-lines-table {
   overflow: auto;
@@ -141,7 +141,7 @@
 }
 .document-lines-page button:focus-visible,
 .document-lines-page summary:focus-visible {
-  outline: 2px solid #00897b;
+  outline: 2px solid var(--k-teal);
   outline-offset: 2px;
 }
 @media (max-width: 600px) {

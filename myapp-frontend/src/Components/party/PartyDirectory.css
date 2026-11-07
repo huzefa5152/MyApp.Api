@@ -408,7 +408,7 @@
 @media (pointer: coarse) {
   .pd-btn,
   .pd-chip {
-    min-height: 44px;
+    min-height: var(--k-btn-h);
   }
   .pd-btn--icon {
     width: 44px;
@@ -503,7 +503,7 @@
 .pf-head__close {
   flex-shrink: 0;
   width: 44px;
-  height: 44px;
+  height: var(--k-btn-h);
   min-width: 44px;
   padding: 0;
   margin: 0;

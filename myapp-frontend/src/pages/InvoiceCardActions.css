@@ -5,7 +5,7 @@
 }
 .invoice-card-actions > button {
   min-width: 0 !important;
-  min-height: 44px;
+  min-height: var(--k-btn-h);
   flex: 1 1 auto;
   justify-content: center;
   padding: 8px !important;
@@ -18,8 +18,8 @@
   flex-shrink: 0;
 }
 .invoice-card-actions > .card-actions-more {
-  flex: 0 0 44px;
-  width: 44px !important;
+  flex: 0 0 var(--k-btn-h);
+  width: var(--k-btn-h) !important;
   height: auto !important;
   margin-left: 0 !important;
 }

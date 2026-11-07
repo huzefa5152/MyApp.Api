@@ -499,7 +499,7 @@ html:not([data-ui-layout="workspace"]) .inventory-page .stock-table td {
     padding: 0 12px;
   }
   .inventory-page .inventory-tabs button {
-    min-height: 44px;
+    min-height: var(--k-btn-h);
   }
   .inventory-toolbar {
     padding: 12px;
@@ -510,20 +510,20 @@ html:not([data-ui-layout="workspace"]) .inventory-page .stock-table td {
     max-width: none;
   }
   .inventory-search input {
-    min-height: 44px;
+    min-height: var(--k-btn-h);
   }
   .inventory-actions {
     width: 100%;
   }
   .inventory-page .inventory-actions button {
-    min-height: 44px;
+    min-height: var(--k-btn-h);
     flex: 1;
   }
   .inventory-page .inventory-actions select {
     flex: 1 1 calc(50% - 8px);
     width: calc(50% - 8px);
     max-width: none;
-    min-height: 44px;
+    min-height: var(--k-btn-h);
   }
   .inventory-more > button {
     min-width: 44px;
@@ -538,7 +538,7 @@ html:not([data-ui-layout="workspace"]) .inventory-page .stock-table td {
     justify-content: center;
   }
   .inventory-page .inventory-reverse {
-    min-height: 44px;
+    min-height: var(--k-btn-h);
   }
 }
 .inventory-page .inventory-item-link {

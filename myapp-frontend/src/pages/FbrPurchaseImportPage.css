@@ -147,7 +147,7 @@
   .fbr-imp-invoice-header__meta {
     width: 100%;
     justify-content: space-between !important;
-    border-top: 1px dashed #eef2f7;
+    border-top: 1px dashed var(--k-line);
     padding-top: 0.4rem;
   }
 }
@@ -170,8 +170,8 @@
 
 /* ---------- Mobile line cards ---------- */
 .fbr-imp-line-card {
-  background: #fff;
-  border: 1px solid #e8edf3;
+  background: var(--k-surface);
+  border: 1px solid var(--k-line);
   border-radius: 10px;
   padding: 0.65rem 0.75rem;
   display: flex;
@@ -189,16 +189,16 @@
 
 .fbr-imp-line-card__row-num {
   font-size: 0.72rem;
-  color: #5f6d7e;
+  color: var(--k-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 .fbr-imp-line-card__hs {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.78rem;
-  color: #1a2332;
+  color: var(--k-ink);
   background: #f5f8fc;
-  border: 1px solid #e8edf3;
+  border: 1px solid var(--k-line);
   border-radius: 6px;
   padding: 0.2rem 0.45rem;
   display: inline-block;
@@ -207,7 +207,7 @@
 
 .fbr-imp-line-card__desc {
   font-size: 0.85rem;
-  color: #1a2332;
+  color: var(--k-ink);
   line-height: 1.4;
   word-break: break-word;
 }
@@ -217,7 +217,7 @@
   grid-template-columns: repeat(3, 1fr);
   gap: 0.4rem 0.55rem;
   padding-top: 0.4rem;
-  border-top: 1px dashed #eef2f7;
+  border-top: 1px dashed var(--k-line);
 }
 
 .fbr-imp-line-card__field {
@@ -229,7 +229,7 @@
 
 .fbr-imp-line-card__field-label {
   font-size: 0.62rem;
-  color: #5f6d7e;
+  color: var(--k-muted);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -237,7 +237,7 @@
 
 .fbr-imp-line-card__field-value {
   font-size: 0.82rem;
-  color: #1a2332;
+  color: var(--k-ink);
   font-weight: 600;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   overflow-wrap: anywhere;
@@ -250,14 +250,14 @@
 
 .fbr-imp-line-card__match {
   font-size: 0.78rem;
-  color: #1a2332;
+  color: var(--k-ink);
   padding-top: 0.35rem;
-  border-top: 1px dashed #eef2f7;
+  border-top: 1px dashed var(--k-line);
 }
 
 .fbr-imp-line-card__match-label {
   font-size: 0.62rem;
-  color: #5f6d7e;
+  color: var(--k-muted);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;

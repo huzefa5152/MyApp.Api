@@ -1,22 +1,22 @@
 .ew .ew-reader > .ew-conversation {
   order: 3;
   margin-top: 20px;
-  border-top: 1px solid #e8edf3;
+  border-top: 1px solid var(--k-line);
   padding-top: 16px;
   min-width: 0;
 }
 .ew .ew-thread-message {
-  border: 1px solid #e8edf3;
+  border: 1px solid var(--k-line);
   border-radius: 12px;
   padding: 12px;
   margin: 10px 0;
-  background: #f8f9fb;
+  background: var(--k-surface-2);
 }
 .ew .ew-thread-message > summary {
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr);
   gap: 4px 8px;
-  min-height: 44px;
+  min-height: var(--k-btn-h);
   width: 100%;
   cursor: pointer;
   overflow-wrap: anywhere;
@@ -32,7 +32,7 @@
 }
 .ew-thread-message summary span {
   display: block;
-  color: #5f6d7e;
+  color: var(--k-muted);
   font-size: 0.85rem;
 }
 .ew-thread-text {
@@ -40,7 +40,7 @@
   overflow-wrap: anywhere;
 }
 .ew-reply {
-  border: 1px solid #d0d7e2;
+  border: 1px solid var(--k-line-strong);
   border-radius: 12px;
   padding: clamp(12px, 2vw, 20px);
   margin-top: 16px;
@@ -58,7 +58,7 @@
 }
 .ew-reply label {
   display: block;
-  color: #5f6d7e;
+  color: var(--k-muted);
   font-weight: 600;
   margin: 12px 0;
 }
@@ -67,16 +67,16 @@
   box-sizing: border-box;
   min-height: 88px;
   border-radius: 8px;
-  border: 1px solid #d0d7e2;
+  border: 1px solid var(--k-line-strong);
   padding: 12px;
   font: inherit;
-  color: #1a2332;
+  color: var(--k-ink);
 }
 .ew-email[data-unread="true"] .ew-subject {
   font-weight: 800;
 }
 .ew-email[data-unread="true"] {
-  border-left: 3px solid #0d47a1;
+  border-left: 3px solid var(--k-blue);
 }
 @media (max-width: 759px) {
   .ew-reply .ew-actions button {
