@@ -4,8 +4,6 @@ import {
   MdAdd,
   MdDelete,
   MdSwapHoriz,
-  MdSearch,
-  MdBusiness,
   MdCalendarToday,
   MdNotes,
   MdEdit,
@@ -19,7 +17,18 @@ import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
-import { colors, dropdownStyles, formStyles, modalSizes } from "../theme";
+import { formStyles, modalSizes } from "../theme";
+import {
+  Alert,
+  Button,
+  CompanyPicker,
+  EmptyState,
+  Loading,
+  PageHeader,
+  SearchBox,
+  Toolbar,
+  ToolbarSpacer,
+} from "../ui/Kit";
 import BankCashSelect from "../Components/BankCashSelect";
 import AttachmentManager from "../Components/AttachmentManager";
 import {
@@ -51,7 +60,7 @@ const fmtDate = (d) =>
 
 // Transfers are neutral money movement (neither in nor out) — teal accent
 // distinguishes them from Receipts (green) and Payments (blue).
-const accent = colors.teal;
+const accent = "var(--k-teal)";
 
 /**
  * Inter-account transfers — move money between two bank/cash accounts
@@ -60,7 +69,7 @@ const accent = colors.teal;
  * accounting.transfers.*.
  */
 export default function TransfersPage() {
-  const { companies, selectedCompany, setSelectedCompany } = useCompany();
+  const { selectedCompany } = useCompany();
   const { has } = usePermissions();
   const confirm = useConfirm();
   const canView = has("accounting.transfers.view");
@@ -179,11 +188,7 @@ export default function TransfersPage() {
   };
 
   if (!canView) {
-    return (
-      <div style={{ padding: "2rem", color: colors.textSecondary }}>
-        You don't have permission to view transfers.
-      </div>
-    );
+    return <Alert tone="warn">You don't have permission to view transfers.</Alert>;
   }
 
   // Sum of what's shown on this page — a quick "money on screen" cue.
@@ -191,77 +196,41 @@ export default function TransfersPage() {
 
   return (
     <div>
-      <div style={st.headerRow}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-          <span style={{ ...st.headerIcon, background: `${accent}15`, color: accent }}>
-            <MdSwapHoriz size={24} />
-          </span>
-          <div>
-            <h2 style={st.h2}>Transfers</h2>
-            <div style={st.subtitle}>Money moved between bank / cash accounts</div>
-          </div>
-        </div>
-        {canCreate && companyId && (
-          <button
-            style={{ ...st.primaryBtn, background: accent }}
-            onClick={() => setShowForm(true)}
-          >
-            <MdAdd size={18} /> New Transfer
-          </button>
-        )}
-      </div>
+      <PageHeader
+        icon={MdSwapHoriz}
+        tone="teal"
+        title="Transfers"
+        subtitle="Money moved between bank / cash accounts"
+        actions={
+          canCreate &&
+          companyId && (
+            <Button variant="teal" icon={MdAdd} onClick={() => setShowForm(true)}>
+              New Transfer
+            </Button>
+          )
+        }
+      />
 
-      {companies.length > 0 && companies.length > 1 && (
-        <div
-          style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}
-        >
-          <MdBusiness size={20} color={colors.blue} />
-          <select
-            style={dropdownStyles.base}
-            value={selectedCompany?.id || ""}
-            onChange={(e) =>
-              setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))
-            }
-          >
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.brandName || c.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
+      <CompanyPicker />
 
       {!companyId ? (
-        <div style={st.empty}>Select a company to view transfers.</div>
+        <EmptyState icon={MdSwapHoriz}>Select a company to view transfers.</EmptyState>
       ) : (
         <>
-          <div data-admin-toolbar="" style={st.toolbar}>
-            <div style={{ position: "relative", flex: "1 1 240px", minWidth: 0, maxWidth: 360 }}>
-              <MdSearch
-                size={18}
-                style={{
-                  position: "absolute",
-                  left: 10,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  color: colors.textSecondary,
-                }}
-              />
-              <input
-                style={{ ...dropdownStyles.base, width: "100%", paddingLeft: 34 }}
-                placeholder="Search transfers…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    setPage(1);
-                    fetchRows(1);
-                  }
-                }}
-              />
-            </div>
+          <Toolbar data-admin-toolbar="">
+            <SearchBox
+              value={search}
+              onChange={setSearch}
+              placeholder="Search transfers…"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  setPage(1);
+                  fetchRows(1);
+                }
+              }}
+            />
             {canPrintTransfer && tplPicker.canChoose && <PrintTemplateSelect picker={tplPicker} />}
+            <ToolbarSpacer />
             {rows.length > 0 && (
               <div style={st.pageSummary}>
                 <span style={st.pageSummaryCount}>{totalCount} transfers</span>
@@ -269,13 +238,13 @@ export default function TransfersPage() {
                 <span>Rs {fmtMoney(pageTotal)} on this page</span>
               </div>
             )}
-          </div>
+          </Toolbar>
 
           <RecordsViewport label="Transfers records">
             {loading ? (
-              <div style={st.empty}>Loading…</div>
+              <Loading>Loading transfers…</Loading>
             ) : rows.length === 0 ? (
-              <div style={st.empty}>No transfers yet.</div>
+              <EmptyState icon={MdSwapHoriz} title="No transfers yet." />
             ) : (
               <div style={st.grid}>
                 {rows.map((t) => (
@@ -385,7 +354,7 @@ function TransferCard({
   const noTpl = tplPicker?.noTemplate;
   const noTplReason = tplPicker?.noTemplateReason;
   return (
-    <div style={st.card}>
+    <div className="k-card" style={st.card}>
       <div style={{ ...st.accentStrip, background: accent }} />
       <div style={st.cardBody}>
         <div style={st.cardTop}>
@@ -421,45 +390,41 @@ function TransferCard({
         {(onView || canEdit || canDelete || canPrint) && (
           <div style={st.cardActions}>
             {onView && (
-              <button style={st.viewBtn} onClick={onView} title="View transfer">
-                <MdVisibility size={16} /> View
-              </button>
+              <Button size="sm" icon={MdVisibility} onClick={onView} title="View transfer">
+                View
+              </Button>
             )}
             {canPrint && (
-              <button
-                style={{
-                  ...st.printBtn,
-                  ...(noTpl ? { opacity: 0.5, cursor: "not-allowed" } : {}),
-                }}
+              <Button
+                size="sm"
+                icon={MdPrint}
                 disabled={noTpl}
                 title={noTpl ? noTplReason : "Print transfer"}
                 onClick={onPrint}
               >
-                <MdPrint size={16} /> Print
-              </button>
+                Print
+              </Button>
             )}
             {canPrint && (
-              <button
-                style={{
-                  ...st.pdfBtn,
-                  ...(noTpl || exportingId === t.id ? { opacity: 0.5, cursor: "not-allowed" } : {}),
-                }}
+              <Button
+                size="sm"
+                icon={MdPictureAsPdf}
                 disabled={noTpl || !!exportingId}
                 title={noTpl ? noTplReason : "Download PDF"}
                 onClick={onExportPdf}
               >
-                <MdPictureAsPdf size={16} /> PDF
-              </button>
+                PDF
+              </Button>
             )}
             {canEdit && (
-              <button style={st.editBtn} onClick={onEdit} title="Edit">
-                <MdEdit size={16} /> Edit
-              </button>
+              <Button size="sm" icon={MdEdit} onClick={onEdit} title="Edit">
+                Edit
+              </Button>
             )}
             {canDelete && (
-              <button style={st.delBtn} onClick={onDelete} title="Delete">
-                <MdDelete size={16} /> Delete
-              </button>
+              <Button size="sm" variant="danger" icon={MdDelete} onClick={onDelete} title="Delete">
+                Delete
+              </Button>
             )}
           </div>
         )}
@@ -517,13 +482,13 @@ function ViewTransferModal({ t, canEdit, onEdit, onClose }) {
           </div>
         </div>
         <div style={st.viewFooter}>
-          <button data-admin-close="" type="button" style={st.editBtn} onClick={onClose}>
+          <Button data-admin-close="" onClick={onClose}>
             Close
-          </button>
+          </Button>
           {canEdit && (
-            <button type="button" style={st.viewBtn} onClick={onEdit}>
-              <MdEdit size={16} /> Edit
-            </button>
+            <Button variant="primary" icon={MdEdit} onClick={onEdit}>
+              Edit
+            </Button>
           )}
         </div>
       </div>
@@ -759,59 +724,20 @@ const sameHint = {
   marginTop: "-0.25rem",
   marginBottom: "0.75rem",
   fontSize: "0.78rem",
-  color: colors.danger,
+  color: "var(--k-danger)",
   fontWeight: 600,
 };
 
 const st = {
-  headerRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: "0.75rem",
-    flexWrap: "wrap",
-    marginBottom: "1rem",
-  },
-  headerIcon: {
-    display: "grid",
-    placeItems: "center",
-    width: 44,
-    height: 44,
-    padding: 0,
-    borderRadius: 12,
-    flexShrink: 0,
-  },
-  h2: { margin: 0, fontSize: "1.4rem", color: colors.textPrimary, lineHeight: 1.1 },
-  subtitle: { fontSize: "0.8rem", color: colors.textSecondary, marginTop: 2 },
-  primaryBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "0.55rem 1rem",
-    minHeight: 44,
-    borderRadius: 8,
-    border: "none",
-    color: "#fff",
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  toolbar: {
-    display: "flex",
-    gap: "0.75rem",
-    flexWrap: "wrap",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: "1rem",
-  },
   pageSummary: {
     display: "flex",
     alignItems: "center",
     gap: 6,
     fontSize: "0.8rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     flexWrap: "wrap",
   },
-  pageSummaryCount: { fontWeight: 700, color: colors.textPrimary },
+  pageSummaryCount: { fontWeight: 700, color: "var(--k-ink)" },
   pageSummaryDot: { opacity: 0.5 },
 
   grid: {
@@ -821,10 +747,6 @@ const st = {
     alignItems: "start",
   },
   card: {
-    background: colors.cardBg,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 14,
-    boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
     position: "relative",
     overflow: "hidden",
     display: "flex",
@@ -847,7 +769,7 @@ const st = {
   accountsRow: { display: "flex", alignItems: "center", gap: 6, marginTop: 8, flexWrap: "wrap" },
   accountName: {
     fontSize: "0.88rem",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     fontWeight: 700,
     overflow: "hidden",
     display: "-webkit-box",
@@ -862,7 +784,7 @@ const st = {
     alignItems: "center",
     gap: 4,
     fontSize: "0.78rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
   },
 
   descRow: {
@@ -870,7 +792,7 @@ const st = {
     gap: 5,
     marginTop: 8,
     fontSize: "0.8rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     lineHeight: 1.4,
   },
   descText: {
@@ -887,34 +809,20 @@ const st = {
     marginTop: 10,
     flexWrap: "wrap",
   },
-  viewBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 5,
-    minHeight: 44,
-    padding: "0.35rem 0.8rem",
-    borderRadius: 8,
-    border: `1px solid ${colors.cardBorder}`,
-    background: "#fff",
-    color: colors.blue,
-    fontSize: "0.78rem",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
   viewFooter: {
     display: "flex",
     justifyContent: "flex-end",
     gap: "0.6rem",
     flexWrap: "wrap",
     padding: "0.9rem clamp(1rem, 2vw, 1.5rem)",
-    borderTop: `1px solid ${colors.cardBorder}`,
+    borderTop: "1px solid var(--k-line)",
     flexShrink: 0,
   },
   vRow: {
     display: "flex",
     gap: "0.75rem",
     padding: "0.4rem 0",
-    borderBottom: `1px solid ${colors.cardBorder}`,
+    borderBottom: "1px solid var(--k-line)",
   },
   vLabel: {
     flex: "0 0 130px",
@@ -922,86 +830,7 @@ const st = {
     fontWeight: 700,
     textTransform: "uppercase",
     letterSpacing: "0.03em",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
   },
-  vValue: { flex: 1, fontSize: "0.9rem", color: colors.textPrimary, wordBreak: "break-word" },
-  printBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 5,
-    minHeight: 44,
-    padding: "0.35rem 0.8rem",
-    borderRadius: 8,
-    border: `1px solid ${colors.cardBorder}`,
-    background: "#fff",
-    color: "#4527a0",
-    fontSize: "0.78rem",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  pdfBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 5,
-    minHeight: 44,
-    padding: "0.35rem 0.8rem",
-    borderRadius: 8,
-    border: `1px solid ${colors.cardBorder}`,
-    background: "#fff",
-    color: "#ad1457",
-    fontSize: "0.78rem",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  editBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 5,
-    minHeight: 44,
-    padding: "0.35rem 0.8rem",
-    borderRadius: 8,
-    border: `1px solid ${colors.cardBorder}`,
-    background: "#fff",
-    color: "#e65100",
-    fontSize: "0.78rem",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  delBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 5,
-    minHeight: 44,
-    padding: "0.35rem 0.8rem",
-    borderRadius: 8,
-    border: `1px solid ${colors.cardBorder}`,
-    background: "#fff",
-    color: colors.danger,
-    fontSize: "0.78rem",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-
-  pagination: {
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: "1rem",
-    marginTop: "1.25rem",
-  },
-  pageBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-    padding: "0.45rem 0.8rem",
-    minHeight: 44,
-    borderRadius: 8,
-    border: `1px solid ${colors.cardBorder}`,
-    background: "#fff",
-    color: colors.blue,
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  pageInfo: { fontSize: "0.85rem", color: colors.textSecondary },
-  empty: { padding: "2rem", textAlign: "center", color: colors.textSecondary },
+  vValue: { flex: 1, fontSize: "0.9rem", color: "var(--k-ink)", wordBreak: "break-word" },
 };

@@ -3,10 +3,8 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   MdAccountBalance,
   MdAdd,
-  MdSearch,
   MdVisibility,
   MdClose,
-  MdBusiness,
   MdFactCheck,
   MdUploadFile,
   MdEdit,
@@ -18,7 +16,19 @@ import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
-import { colors, formStyles, modalSizes, dropdownStyles } from "../theme";
+import { formStyles, modalSizes } from "../theme";
+import {
+  Alert,
+  Button,
+  CompanyPicker,
+  EmptyState,
+  IconButton,
+  Loading,
+  PageHeader,
+  SearchBox,
+  TableWrap,
+  Toolbar,
+} from "../ui/Kit";
 import {
   getBankCashAccounts,
   updateAccount,
@@ -33,6 +43,10 @@ import ReconcileModal from "../Components/ReconcileModal";
 import StatementImportModal from "../Components/StatementImportModal";
 import useIsNarrow from "../hooks/useIsNarrow";
 import useScrollToError from "../hooks/useScrollToError";
+
+// Semantic amount colours: red owes, green is money coming in.
+const NEGATIVE = "var(--k-danger)";
+const POSITIVE = "#1b7a3d";
 
 // "- PKR 10,306,052.29" for negatives, "PKR 3,517,780.34" otherwise — matches
 // the reference product's bank-list convention.
@@ -64,7 +78,7 @@ function flattenGroups(nodes, depth = 0, out = []) {
  * is the friendly front door for them. Gated by accounting.coa.*.
  */
 export default function BankCashAccountsPage() {
-  const { companies, selectedCompany, setSelectedCompany } = useCompany();
+  const { selectedCompany } = useCompany();
   const { has } = usePermissions();
   const confirm = useConfirm();
   const canView = has("accounting.coa.view");
@@ -201,83 +215,50 @@ export default function BankCashAccountsPage() {
   };
 
   if (!canView) {
-    return (
-      <div style={{ padding: "2rem", color: colors.textSecondary }}>
-        You don't have permission to view bank &amp; cash accounts.
-      </div>
-    );
+    return <Alert tone="warn">You don't have permission to view bank &amp; cash accounts.</Alert>;
   }
 
   return (
     <div>
-      <div style={st.headerRow}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <div data-admin-page-icon="" style={st.headerIcon}>
-            <MdAccountBalance size={26} color="#fff" />
-          </div>
-          <div>
-            <h2 style={st.h2}>Bank &amp; Cash Accounts</h2>
-            <p style={st.subtitle}>
-              Each account's live balance — click a row to see the transactions behind it.
-            </p>
-          </div>
-        </div>
-        {canManage && (
-          <button
-            style={st.primaryBtn}
-            onClick={() => setShowCreate(true)}
-            title="Create a new bank or cash account"
-          >
-            <MdAdd size={18} /> New Bank / Cash Account
-          </button>
-        )}
-      </div>
+      <PageHeader
+        icon={MdAccountBalance}
+        tone="blue"
+        title="Bank &amp; Cash Accounts"
+        subtitle="Each account's live balance — click a row to see the transactions behind it."
+        actions={
+          canManage && (
+            <Button
+              variant="primary"
+              icon={MdAdd}
+              onClick={() => setShowCreate(true)}
+              title="Create a new bank or cash account"
+            >
+              New Bank / Cash Account
+            </Button>
+          )
+        }
+      />
 
-      {companies.length > 0 && companies.length > 1 && (
-        <div
-          style={{ marginBottom: "0.85rem", display: "flex", alignItems: "center", gap: "0.75rem" }}
-        >
-          <MdBusiness size={20} color={colors.blue} />
-          <select
-            style={dropdownStyles.base}
-            value={selectedCompany?.id || ""}
-            onChange={(e) =>
-              setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))
-            }
-          >
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.brandName || c.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
+      <CompanyPicker />
 
-      <div data-admin-toolbar="" style={st.toolbar}>
-        <div style={st.searchWrap}>
-          <MdSearch size={18} color={colors.textSecondary} />
-          <input
-            style={st.searchInput}
-            placeholder="Search by name or code…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
+      <Toolbar data-admin-toolbar="">
+        <SearchBox value={search} onChange={setSearch} placeholder="Search by name or code…" />
         {glOff && <span style={st.glChipOff}>GL off — balances show opening only</span>}
-      </div>
+      </Toolbar>
 
       <RecordsViewport label="Bank and cash records">
         {!companyId ? (
-          <div style={st.empty}>Select a company to view its bank &amp; cash accounts.</div>
+          <EmptyState icon={MdAccountBalance}>
+            Select a company to view its bank &amp; cash accounts.
+          </EmptyState>
         ) : loading ? (
-          <div style={st.empty}>Loading…</div>
+          <Loading>Loading accounts…</Loading>
         ) : filtered.length === 0 ? (
-          <div style={st.empty}>
+          <EmptyState icon={MdAccountBalance}>
             {accounts.length === 0
               ? "No bank or cash accounts yet. Create one, or add an account with control type “Bank & Cash” in Chart of Accounts."
               : "No accounts match your search."}
-          </div>
+          </EmptyState>
         ) : isNarrow ? (
           // Mobile: the up-to-8-column table becomes stacked cards. Every
           // column is preserved (balance + the reconcile figures + the
@@ -289,6 +270,7 @@ export default function BankCashAccountsPage() {
               return (
                 <div
                   key={a.id}
+                  className="k-card"
                   style={{ ...st.acctCard, opacity: a.isActive === false ? 0.65 : 1 }}
                   onClick={() => setLedgerAccount({ id: a.id, name: a.name, code: a.code })}
                   title="View transactions"
@@ -306,7 +288,7 @@ export default function BankCashAccountsPage() {
                       style={{
                         fontWeight: 800,
                         fontSize: "1rem",
-                        color: bal < 0 ? "#b71c1c" : colors.textPrimary,
+                        color: bal < 0 ? NEGATIVE : "var(--k-ink)",
                         whiteSpace: "nowrap",
                       }}
                     >
@@ -320,8 +302,7 @@ export default function BankCashAccountsPage() {
                         <span
                           style={{
                             ...st.acctMetaValue,
-                            color:
-                              (Number(a.clearedBalance) || 0) < 0 ? "#b71c1c" : colors.textPrimary,
+                            color: (Number(a.clearedBalance) || 0) < 0 ? NEGATIVE : "var(--k-ink)",
                           }}
                         >
                           {money(a.clearedBalance)}
@@ -332,7 +313,7 @@ export default function BankCashAccountsPage() {
                         <span
                           style={{
                             ...st.acctMetaValue,
-                            color: a.pendingDeposits ? "#1b7a3d" : colors.textSecondary,
+                            color: a.pendingDeposits ? POSITIVE : "var(--k-muted)",
                           }}
                         >
                           {a.pendingDeposits ? money(a.pendingDeposits) : "—"}
@@ -343,7 +324,7 @@ export default function BankCashAccountsPage() {
                         <span
                           style={{
                             ...st.acctMetaValue,
-                            color: a.pendingWithdrawals ? "#b71c1c" : colors.textSecondary,
+                            color: a.pendingWithdrawals ? NEGATIVE : "var(--k-muted)",
                           }}
                         >
                           {a.pendingWithdrawals ? money(a.pendingWithdrawals) : "—"}
@@ -354,7 +335,7 @@ export default function BankCashAccountsPage() {
                         {a.uncategorizedCount && canManageReconciliation ? (
                           <button
                             type="button"
-                            style={{ ...st.reviewLink, color: colors.blue }}
+                            style={st.reviewLink}
                             onClick={(e) => {
                               e.stopPropagation();
                               setImportAccount({ id: a.id, name: a.name, code: a.code });
@@ -369,83 +350,76 @@ export default function BankCashAccountsPage() {
                     </div>
                   )}
                   <div style={st.acctActions}>
-                    <button
-                      type="button"
-                      style={st.acctActionBtn}
+                    <Button
+                      size="sm"
+                      icon={MdVisibility}
                       onClick={(e) => {
                         e.stopPropagation();
                         setLedgerAccount({ id: a.id, name: a.name, code: a.code });
                       }}
                     >
-                      <MdVisibility size={16} /> Ledger
-                    </button>
+                      Ledger
+                    </Button>
                     {canManage && (
-                      <button
-                        type="button"
-                        style={st.acctActionBtn}
+                      <Button
+                        size="sm"
+                        icon={MdEdit}
                         onClick={(e) => {
                           e.stopPropagation();
                           setEditAccount(a);
                         }}
                       >
-                        <MdEdit size={16} /> Edit
-                      </button>
+                        Edit
+                      </Button>
                     )}
                     {canReconcile && a.isActive !== false && (
-                      <button
-                        type="button"
-                        style={st.acctActionBtn}
+                      <Button
+                        size="sm"
+                        icon={MdFactCheck}
                         onClick={(e) => {
                           e.stopPropagation();
                           setReconcileAccount({ id: a.id, name: a.name, code: a.code });
                         }}
                       >
-                        <MdFactCheck size={16} /> Reconcile
-                      </button>
+                        Reconcile
+                      </Button>
                     )}
                     {canManageReconciliation && a.isActive !== false && (
-                      <button
-                        type="button"
-                        style={st.acctActionBtn}
+                      <Button
+                        size="sm"
+                        icon={MdUploadFile}
                         onClick={(e) => {
                           e.stopPropagation();
                           setImportAccount({ id: a.id, name: a.name, code: a.code });
                         }}
                       >
-                        <MdUploadFile size={16} /> Import
-                      </button>
+                        Import
+                      </Button>
                     )}
                     {canManage && (
-                      <button
-                        type="button"
-                        style={st.acctActionBtn}
+                      <Button
+                        size="sm"
+                        icon={a.isActive === false ? MdCheckCircle : MdBlock}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleToggleActive(a);
                         }}
                       >
-                        {a.isActive === false ? (
-                          <>
-                            <MdCheckCircle size={16} /> Reactivate
-                          </>
-                        ) : (
-                          <>
-                            <MdBlock size={16} /> Deactivate
-                          </>
-                        )}
-                      </button>
+                        {a.isActive === false ? "Reactivate" : "Deactivate"}
+                      </Button>
                     )}
                     {canDeleteRow(a) && (
-                      <button
-                        type="button"
-                        style={{ ...st.acctActionBtn, color: "#b71c1c", borderColor: "#f3c0c0" }}
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        icon={MdDelete}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleDelete(a);
                         }}
                       >
-                        <MdDelete size={16} /> Delete
-                      </button>
+                        Delete
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -466,7 +440,7 @@ export default function BankCashAccountsPage() {
                 <span
                   style={{
                     fontWeight: 800,
-                    color: total < 0 ? "#b71c1c" : colors.textPrimary,
+                    color: total < 0 ? NEGATIVE : "var(--k-ink)",
                     whiteSpace: "nowrap",
                   }}
                 >
@@ -498,47 +472,44 @@ export default function BankCashAccountsPage() {
             </div>
           </div>
         ) : (
-          <div data-admin-table-region="" style={st.tableWrap}>
-            <table style={st.table}>
+          <TableWrap>
+            <table className="k-table">
               <thead>
                 <tr>
-                  <th style={st.th}>Name</th>
-                  <th style={{ ...st.th, width: 100 }}>Code</th>
-                  {canReconcile && <th style={{ ...st.th, textAlign: "right" }}>Cleared</th>}
-                  {canReconcile && <th style={{ ...st.th, textAlign: "right" }}>Pending In</th>}
-                  {canReconcile && <th style={{ ...st.th, textAlign: "right" }}>Pending Out</th>}
-                  {canReconcile && <th style={{ ...st.th, textAlign: "center" }}>Uncategorized</th>}
-                  <th style={{ ...st.th, textAlign: "right" }}>Actual Balance</th>
-                  <th style={{ ...st.th, textAlign: "center" }}>Actions</th>
+                  <th>Name</th>
+                  <th style={{ width: 100 }}>Code</th>
+                  {canReconcile && <th className="k-num">Cleared</th>}
+                  {canReconcile && <th className="k-num">Pending In</th>}
+                  {canReconcile && <th className="k-num">Pending Out</th>}
+                  {canReconcile && <th style={{ textAlign: "center" }}>Uncategorized</th>}
+                  <th className="k-num">Actual Balance</th>
+                  <th style={{ textAlign: "center" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((a) => (
                   <tr
                     key={a.id}
-                    style={{ ...st.tr, opacity: a.isActive === false ? 0.6 : 1 }}
+                    style={{ cursor: "pointer", opacity: a.isActive === false ? 0.6 : 1 }}
                     onClick={() => setLedgerAccount({ id: a.id, name: a.name, code: a.code })}
                     title="View transactions"
                   >
-                    <td style={st.td}>
+                    <td>
                       <span style={st.accName}>{a.name}</span>
                       {a.isActive === false && <span style={st.inactiveBadge}>inactive</span>}
                     </td>
-                    <td style={st.td}>
+                    <td>
                       {a.code ? (
                         <span style={st.code}>{a.code}</span>
                       ) : (
-                        <span style={st.muted}>—</span>
+                        <span className="k-muted">—</span>
                       )}
                     </td>
                     {canReconcile && (
                       <td
+                        className="k-num"
                         style={{
-                          ...st.td,
-                          textAlign: "right",
-                          color:
-                            (Number(a.clearedBalance) || 0) < 0 ? "#b71c1c" : colors.textSecondary,
-                          whiteSpace: "nowrap",
+                          color: (Number(a.clearedBalance) || 0) < 0 ? NEGATIVE : "var(--k-muted)",
                         }}
                       >
                         {money(a.clearedBalance)}
@@ -546,34 +517,26 @@ export default function BankCashAccountsPage() {
                     )}
                     {canReconcile && (
                       <td
-                        style={{
-                          ...st.td,
-                          textAlign: "right",
-                          color: a.pendingDeposits ? "#1b7a3d" : colors.textSecondary,
-                          whiteSpace: "nowrap",
-                        }}
+                        className="k-num"
+                        style={{ color: a.pendingDeposits ? POSITIVE : "var(--k-muted)" }}
                       >
                         {a.pendingDeposits ? money(a.pendingDeposits) : "—"}
                       </td>
                     )}
                     {canReconcile && (
                       <td
-                        style={{
-                          ...st.td,
-                          textAlign: "right",
-                          color: a.pendingWithdrawals ? "#b71c1c" : colors.textSecondary,
-                          whiteSpace: "nowrap",
-                        }}
+                        className="k-num"
+                        style={{ color: a.pendingWithdrawals ? NEGATIVE : "var(--k-muted)" }}
                       >
                         {a.pendingWithdrawals ? money(a.pendingWithdrawals) : "—"}
                       </td>
                     )}
                     {canReconcile && (
-                      <td style={{ ...st.td, textAlign: "center", whiteSpace: "nowrap" }}>
+                      <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
                         {a.uncategorizedCount && canManageReconciliation ? (
                           <button
                             type="button"
-                            style={{ ...st.reviewLink, color: colors.blue }}
+                            style={st.reviewLink}
                             title="Import / categorize statement lines"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -583,22 +546,20 @@ export default function BankCashAccountsPage() {
                             {a.uncategorizedCount} to review
                           </button>
                         ) : (
-                          <span style={st.muted}>—</span>
+                          <span className="k-muted">—</span>
                         )}
                       </td>
                     )}
                     <td
+                      className="k-num"
                       style={{
-                        ...st.td,
-                        textAlign: "right",
                         fontWeight: 700,
-                        color: (Number(a.balance) || 0) < 0 ? "#b71c1c" : colors.textPrimary,
-                        whiteSpace: "nowrap",
+                        color: (Number(a.balance) || 0) < 0 ? NEGATIVE : undefined,
                       }}
                     >
                       {money(a.balance)}
                     </td>
-                    <td style={{ ...st.td, textAlign: "center" }}>
+                    <td style={{ textAlign: "center" }}>
                       <div
                         style={{
                           display: "inline-flex",
@@ -607,81 +568,72 @@ export default function BankCashAccountsPage() {
                           justifyContent: "center",
                         }}
                       >
-                        <button
-                          style={st.iconBtn}
-                          title="View ledger"
+                        <IconButton
+                          label="View ledger"
+                          icon={MdVisibility}
+                          size={17}
                           onClick={(e) => {
                             e.stopPropagation();
                             setLedgerAccount({ id: a.id, name: a.name, code: a.code });
                           }}
-                        >
-                          <MdVisibility size={17} />
-                        </button>
+                        />
                         {canManage && (
-                          <button
-                            style={st.iconBtn}
-                            title="Edit account"
+                          <IconButton
+                            label="Edit account"
+                            icon={MdEdit}
+                            size={17}
                             onClick={(e) => {
                               e.stopPropagation();
                               setEditAccount(a);
                             }}
-                          >
-                            <MdEdit size={17} />
-                          </button>
+                          />
                         )}
                         {canReconcile && a.isActive !== false && (
-                          <button
-                            style={st.iconBtn}
-                            title="Reconcile this account"
+                          <IconButton
+                            label="Reconcile this account"
+                            icon={MdFactCheck}
+                            size={17}
                             onClick={(e) => {
                               e.stopPropagation();
                               setReconcileAccount({ id: a.id, name: a.name, code: a.code });
                             }}
-                          >
-                            <MdFactCheck size={17} />
-                          </button>
+                          />
                         )}
                         {canManageReconciliation && a.isActive !== false && (
-                          <button
-                            style={st.iconBtn}
-                            title="Import bank statement"
+                          <IconButton
+                            label="Import bank statement"
+                            icon={MdUploadFile}
+                            size={17}
                             onClick={(e) => {
                               e.stopPropagation();
                               setImportAccount({ id: a.id, name: a.name, code: a.code });
                             }}
-                          >
-                            <MdUploadFile size={17} />
-                          </button>
+                          />
                         )}
                         {canManage && (
-                          <button
-                            style={st.iconBtn}
-                            title={
+                          <IconButton
+                            label={
                               a.isActive === false ? "Reactivate account" : "Deactivate account"
                             }
+                            icon={a.isActive === false ? MdCheckCircle : MdBlock}
+                            size={17}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleToggleActive(a);
                             }}
-                          >
-                            {a.isActive === false ? (
-                              <MdCheckCircle size={17} />
-                            ) : (
-                              <MdBlock size={17} />
-                            )}
-                          </button>
+                          />
                         )}
                         {canDeleteRow(a) && (
-                          <button
-                            style={{ ...st.iconBtn, color: "#b71c1c" }}
-                            title="Delete account"
+                          <IconButton
+                            danger
+                            label="Delete account"
+                            icon={MdDelete}
+                            size={17}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleDelete(a);
                             }}
-                          >
-                            <MdDelete size={17} />
-                          </button>
+                          />
                         )}
                       </div>
                     </td>
@@ -690,42 +642,21 @@ export default function BankCashAccountsPage() {
               </tbody>
               <tfoot>
                 <tr>
-                  <td style={st.footTd} colSpan={2}>
+                  <td colSpan={2}>
                     {filtered.length} account{filtered.length === 1 ? "" : "s"}
                   </td>
                   {canReconcile && (
-                    <td
-                      style={{
-                        ...st.footTd,
-                        textAlign: "right",
-                        fontWeight: 800,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
+                    <td className="k-num">
                       {money(filtered.reduce((s, a) => s + (Number(a.clearedBalance) || 0), 0))}
                     </td>
                   )}
                   {canReconcile && (
-                    <td
-                      style={{
-                        ...st.footTd,
-                        textAlign: "right",
-                        fontWeight: 800,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
+                    <td className="k-num">
                       {money(filtered.reduce((s, a) => s + (Number(a.pendingDeposits) || 0), 0))}
                     </td>
                   )}
                   {canReconcile && (
-                    <td
-                      style={{
-                        ...st.footTd,
-                        textAlign: "right",
-                        fontWeight: 800,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
+                    <td className="k-num">
                       {money(filtered.reduce((s, a) => s + (Number(a.pendingWithdrawals) || 0), 0))}
                     </td>
                   )}
@@ -736,33 +667,17 @@ export default function BankCashAccountsPage() {
                         0,
                       );
                       return (
-                        <td
-                          style={{
-                            ...st.footTd,
-                            textAlign: "center",
-                            fontWeight: 800,
-                            whiteSpace: "nowrap",
-                          }}
-                        >
+                        <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
                           {c ? `${c} to review` : ""}
                         </td>
                       );
                     })()}
-                  <td
-                    style={{
-                      ...st.footTd,
-                      textAlign: "right",
-                      fontWeight: 800,
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {money(total)}
-                  </td>
-                  <td style={st.footTd} />
+                  <td className="k-num">{money(total)}</td>
+                  <td />
                 </tr>
               </tfoot>
             </table>
-          </div>
+          </TableWrap>
         )}
       </RecordsViewport>
 
@@ -930,10 +845,11 @@ function EditBankCashModal({ companyId, assetGroups, account, onClose, onSaved }
             <div>
               <label style={st.label}>Group</label>
               {assetGroups.length === 0 ? (
-                <div style={st.muted}>No account groups found.</div>
+                <div className="k-muted">No account groups found.</div>
               ) : (
                 <select
-                  style={{ ...dropdownStyles.base, width: "100%" }}
+                  className="k-select"
+                  style={{ width: "100%" }}
                   value={groupId}
                   onChange={(e) => setGroupId(e.target.value)}
                 >
@@ -955,7 +871,9 @@ function EditBankCashModal({ companyId, assetGroups, account, onClose, onSaved }
                   step="0.01"
                   style={{
                     ...formStyles.input,
-                    ...(isInactive ? { background: colors.inputBg, cursor: "not-allowed" } : {}),
+                    ...(isInactive
+                      ? { background: "var(--k-input-bg)", cursor: "not-allowed" }
+                      : {}),
                   }}
                   value={opening}
                   disabled={isInactive}
@@ -966,7 +884,8 @@ function EditBankCashModal({ companyId, assetGroups, account, onClose, onSaved }
               <div style={{ flex: 1, minWidth: 140 }}>
                 <label style={st.label}>Balance is</label>
                 <select
-                  style={{ ...dropdownStyles.base, width: "100%" }}
+                  className="k-select"
+                  style={{ width: "100%" }}
                   value={isDebit ? "debit" : "credit"}
                   disabled={isInactive}
                   onChange={(e) => setIsDebit(e.target.value === "debit")}
@@ -987,31 +906,20 @@ function EditBankCashModal({ companyId, assetGroups, account, onClose, onSaved }
             ) : null}
 
             {error && (
-              <div ref={errRef} style={st.error}>
-                {error}
+              <div ref={errRef}>
+                <Alert tone="error">{error}</Alert>
               </div>
             )}
           </form>
         </div>
 
         <div data-admin-footer="" style={st.footer}>
-          <button
-            data-admin-close=""
-            type="button"
-            style={st.secondaryBtn}
-            onClick={onClose}
-            disabled={saving}
-          >
+          <Button data-admin-close="" onClick={onClose} disabled={saving}>
             Cancel
-          </button>
-          <button
-            type="button"
-            style={{ ...st.primaryBtn, opacity: saving ? 0.6 : 1 }}
-            onClick={doSave}
-            disabled={saving}
-          >
+          </Button>
+          <Button variant="primary" onClick={doSave} disabled={saving}>
             {saving ? "Saving…" : "Save changes"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -1019,169 +927,38 @@ function EditBankCashModal({ companyId, assetGroups, account, onClose, onSaved }
 }
 
 const st = {
-  headerRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: "0.75rem",
-    flexWrap: "wrap",
-    marginBottom: "1rem",
-  },
-  headerIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 12,
-    background: colors.blue,
-    display: "grid",
-    placeItems: "center",
-    flexShrink: 0,
-  },
-  h2: { margin: 0, fontSize: "1.4rem", color: colors.textPrimary },
-  subtitle: { margin: "2px 0 0", fontSize: "0.82rem", color: colors.textSecondary },
-  primaryBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "0.55rem 1rem",
-    minHeight: 44,
-    borderRadius: 8,
-    border: "none",
-    background: colors.blue,
-    color: "#fff",
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  secondaryBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "0.55rem 1rem",
-    minHeight: 44,
-    borderRadius: 8,
-    border: `1px solid ${colors.inputBorder}`,
-    background: "#fff",
-    color: colors.blue,
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  toolbar: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.75rem",
-    flexWrap: "wrap",
-    marginBottom: "0.85rem",
-  },
-  searchWrap: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    flex: 1,
-    minWidth: 200,
-    maxWidth: 360,
-    background: "#fff",
-    border: `1px solid ${colors.inputBorder}`,
-    borderRadius: 8,
-    padding: "0 10px",
-    minHeight: 44,
-  },
-  searchInput: {
-    flex: 1,
-    border: "none",
-    outline: "none",
-    fontSize: "0.9rem",
-    background: "transparent",
-    color: colors.textPrimary,
-  },
   glChipOff: {
     fontSize: "0.72rem",
     fontWeight: 700,
-    color: colors.textSecondary,
-    background: colors.inputBg,
-    border: `1px solid ${colors.cardBorder}`,
+    color: "var(--k-muted)",
+    background: "var(--k-input-bg)",
+    border: "1px solid var(--k-line)",
     padding: "3px 10px",
     borderRadius: 12,
     whiteSpace: "nowrap",
-  },
-  tableWrap: {
-    overflowX: "auto",
-    background: colors.cardBg,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 12,
-    boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
-  },
-  table: { width: "100%", borderCollapse: "collapse", minWidth: 480 },
-  th: {
-    textAlign: "left",
-    fontSize: "0.72rem",
-    fontWeight: 800,
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-    color: colors.textSecondary,
-    padding: "12px 14px",
-    borderBottom: `2px solid ${colors.cardBorder}`,
-    whiteSpace: "nowrap",
-  },
-  tr: { cursor: "pointer", borderBottom: `1px solid ${colors.cardBorder}` },
-  td: {
-    padding: "11px 14px",
-    fontSize: "0.88rem",
-    color: colors.textPrimary,
-    verticalAlign: "middle",
-  },
-  footTd: {
-    padding: "12px 14px",
-    fontSize: "0.82rem",
-    color: colors.textSecondary,
-    borderTop: `2px solid ${colors.cardBorder}`,
-    background: colors.inputBg,
   },
   accName: { fontWeight: 600 },
   code: {
     fontFamily: "monospace",
     fontSize: "0.75rem",
-    color: colors.textSecondary,
-    background: colors.inputBg,
+    color: "var(--k-muted)",
+    background: "var(--k-input-bg)",
     padding: "1px 6px",
     borderRadius: 4,
   },
-  muted: { color: colors.textSecondary, fontSize: "0.82rem" },
   reviewLink: {
     border: "none",
     background: "transparent",
     padding: 0,
+    color: "var(--k-blue)",
     fontSize: "0.82rem",
     fontWeight: 700,
     cursor: "pointer",
     textDecoration: "underline",
   },
-  iconBtn: {
-    display: "grid",
-    placeItems: "center",
-    width: 34,
-    height: 34,
-    padding: 0,
-    borderRadius: 8,
-    border: "none",
-    background: "transparent",
-    color: colors.blue,
-    cursor: "pointer",
-  },
-  empty: {
-    padding: "2.5rem 1rem",
-    textAlign: "center",
-    color: colors.textSecondary,
-    background: colors.cardBg,
-    border: `1px dashed ${colors.inputBorder}`,
-    borderRadius: 12,
-  },
-
   // Mobile stacked-card fallback for the accounts table (<768px).
   cardList: { display: "flex", flexDirection: "column", gap: "0.6rem" },
   acctCard: {
-    background: colors.cardBg,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 12,
-    boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
     padding: "0.8rem 0.9rem",
     cursor: "pointer",
     display: "flex",
@@ -1197,7 +974,7 @@ const st = {
   // Line-clamp long account names — never nowrap+ellipsis (CLAUDE.md §3).
   acctName: {
     fontWeight: 700,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     fontSize: "0.95rem",
     minWidth: 0,
     overflow: "hidden",
@@ -1211,7 +988,7 @@ const st = {
     justifyContent: "space-between",
     gap: 8,
     padding: "0.45rem 0.6rem",
-    background: colors.inputBg,
+    background: "var(--k-input-bg)",
     borderRadius: 8,
   },
   acctBalLabel: {
@@ -1219,7 +996,7 @@ const st = {
     fontWeight: 700,
     textTransform: "uppercase",
     letterSpacing: "0.05em",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
   },
   acctMetaGrid: {
     display: "grid",
@@ -1232,13 +1009,13 @@ const st = {
     fontWeight: 700,
     textTransform: "uppercase",
     letterSpacing: "0.05em",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
   },
   acctMetaValue: {
     display: "block",
     fontSize: "0.85rem",
     fontWeight: 600,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     fontVariantNumeric: "tabular-nums",
   },
   acctActions: {
@@ -1246,25 +1023,11 @@ const st = {
     flexWrap: "wrap",
     gap: 6,
     paddingTop: "0.5rem",
-    borderTop: `1px solid ${colors.cardBorder}`,
-  },
-  acctActionBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 5,
-    minHeight: 44,
-    padding: "0.35rem 0.8rem",
-    borderRadius: 8,
-    border: `1px solid ${colors.cardBorder}`,
-    background: "#fff",
-    color: colors.blue,
-    fontSize: "0.8rem",
-    fontWeight: 600,
-    cursor: "pointer",
+    borderTop: "1px solid var(--k-line)",
   },
   acctTotalsCard: {
-    background: colors.inputBg,
-    border: `1px solid ${colors.cardBorder}`,
+    background: "var(--k-input-bg)",
+    border: "1px solid var(--k-line)",
     borderRadius: 12,
     padding: "0.7rem 0.9rem",
     display: "flex",
@@ -1277,7 +1040,7 @@ const st = {
     gap: "0.6rem",
     flexWrap: "wrap",
     padding: "0.9rem clamp(1rem, 2vw, 1.5rem)",
-    borderTop: `1px solid ${colors.cardBorder}`,
+    borderTop: "1px solid var(--k-line)",
     flexShrink: 0,
   },
   fieldRow: { display: "flex", gap: "0.75rem", flexWrap: "wrap" },
@@ -1285,18 +1048,10 @@ const st = {
     display: "block",
     fontSize: "0.75rem",
     fontWeight: 700,
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     marginBottom: 4,
     textTransform: "uppercase",
     letterSpacing: "0.03em",
-  },
-  error: {
-    color: "#b71c1c",
-    fontSize: "0.82rem",
-    background: "#ffebee",
-    border: "1px solid #ffcdd2",
-    borderRadius: 8,
-    padding: "8px 12px",
   },
   inactiveBadge: {
     marginLeft: 6,
@@ -1304,9 +1059,9 @@ const st = {
     fontWeight: 800,
     textTransform: "uppercase",
     letterSpacing: "0.04em",
-    color: "#607d8b",
-    background: "#eceff1",
-    border: "1px solid #cfd8dc",
+    color: "var(--k-muted)",
+    background: "var(--k-surface-2)",
+    border: "1px solid var(--k-line)",
     borderRadius: 10,
     padding: "1px 7px",
     verticalAlign: "middle",
@@ -1314,17 +1069,17 @@ const st = {
   },
   noteInfo: {
     fontSize: "0.8rem",
-    color: colors.textPrimary,
-    background: "#e8f2fb",
-    border: `1px solid ${colors.blue}33`,
+    color: "var(--k-ink)",
+    background: "var(--k-surface-3)",
+    border: "1px solid var(--k-line)",
     borderRadius: 8,
     padding: "8px 12px",
   },
   noteMuted: {
     fontSize: "0.8rem",
-    color: colors.textSecondary,
-    background: colors.inputBg,
-    border: `1px solid ${colors.cardBorder}`,
+    color: "var(--k-muted)",
+    background: "var(--k-input-bg)",
+    border: "1px solid var(--k-line)",
     borderRadius: 8,
     padding: "8px 12px",
   },
