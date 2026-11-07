@@ -50,5 +50,8 @@ namespace MyApp.Api.DTOs
 
         [MinLength(6)]
         public string? Password { get; set; }
+
+        /// <summary>Seed admin only. Null leaves the lock as it is.</summary>
+        public bool? CompanyChangesLocked { get; set; }
     }
 }

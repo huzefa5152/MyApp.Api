@@ -68,8 +68,32 @@ namespace MyApp.Api.Services.Implementations
                     if (policy.WritesGranted && policy.WritesEnabled) set.Add("mcp.write.use");
                 }
             }
+            if (await CompanyChangesLockedAsync(userId)) set.ExceptWith(CompanyChangeKeys);
             _requestPermissions[userId] = set;
             return set;
+        }
+
+        private static readonly string[] CompanyChangeKeys =
+        {
+            "companies.manage.create", "companies.manage.update",
+            "companies.manage.delete", "companies.manage.fbrtoken",
+        };
+
+        // Walks up CreatedByUserId so a locked account cannot get round the lock
+        // by creating another administrator.
+        private async Task<bool> CompanyChangesLockedAsync(int userId)
+        {
+            var seen = new HashSet<int>();
+            int? current = userId;
+            while (current is int id && !IsSeedAdmin(id) && seen.Add(id))
+            {
+                var row = await _context.Users.AsNoTracking().Where(u => u.Id == id)
+                    .Select(u => new { u.CompanyChangesLocked, u.CreatedByUserId }).FirstOrDefaultAsync();
+                if (row == null) return false;
+                if (row.CompanyChangesLocked) return true;
+                current = row.CreatedByUserId;
+            }
+            return false;
         }
 
         public void InvalidateUser(int userId)
