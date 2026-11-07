@@ -92,7 +92,7 @@
   padding: 0.5rem var(--k-input-pad-x, 0.85rem);
   border-radius: var(--k-radius, 10px);
   border: 1px solid var(--cc-line-strong);
-  background: var(--k-input-bg, #fff);
+  background: var(--k-input-bg, var(--k-surface));
   color: var(--cc-ink);
   font: inherit;
   font-size: var(--k-font, 0.85rem);
@@ -109,7 +109,7 @@
 .cc-hero-select:focus-visible,
 .cc-hero-date:focus-visible,
 .cc-hero-btn:focus-visible {
-  outline: 2px solid var(--k-focus, #1565c0);
+  outline: 2px solid var(--k-focus, var(--k-blue-600));
   outline-offset: 2px;
 }
 .cc-hero-btn {
@@ -117,7 +117,7 @@
   padding: var(--k-btn-pad, 0 1.05rem);
   border-radius: var(--k-radius, 10px);
   border: 1px solid transparent;
-  background: var(--k-primary-bg, #0d47a1);
+  background: var(--k-primary-bg, var(--k-blue));
   color: #fff;
   font: inherit;
   font-size: var(--k-btn-font, 0.85rem);
@@ -183,7 +183,7 @@
 :root:not([data-ui-layout]) .cc-hero-btn {
   padding: 0.5rem 1.05rem;
   border-color: rgba(255, 255, 255, 0.55);
-  background: #fff;
+  background: var(--k-surface);
   color: var(--cc-blue);
   font-size: 0.85rem;
 }
@@ -223,7 +223,7 @@
   transform: var(--k-lift, none);
 }
 .cc-action:focus-visible {
-  outline: 2px solid var(--k-focus, #1565c0);
+  outline: 2px solid var(--k-focus, var(--k-blue-600));
   outline-offset: 2px;
 }
 .cc-action__icon {
@@ -358,7 +358,7 @@
   box-shadow: var(--k-primary-shadow, none);
 }
 .cc-metric--link:focus-visible {
-  outline: 2px solid var(--k-focus, #1565c0);
+  outline: 2px solid var(--k-focus, var(--k-blue-600));
   outline-offset: 2px;
 }
 .cc-metric__accent {
@@ -505,7 +505,7 @@
   background: var(--cc-card);
 }
 .cc-attention__row--link:focus-visible {
-  outline: 2px solid var(--k-focus, #1565c0);
+  outline: 2px solid var(--k-focus, var(--k-blue-600));
   outline-offset: 2px;
 }
 .cc-attention__dot {
@@ -669,7 +669,7 @@
   background: var(--cc-soft);
 }
 .cc-aging__legend a:focus-visible {
-  outline: 2px solid var(--k-focus, #1565c0);
+  outline: 2px solid var(--k-focus, var(--k-blue-600));
   outline-offset: 1px;
 }
 .cc-aging__legend i {
@@ -721,7 +721,7 @@
   background: var(--cc-soft);
 }
 .cc-table__row--link:focus-visible {
-  outline: 2px solid var(--k-focus, #1565c0);
+  outline: 2px solid var(--k-focus, var(--k-blue-600));
   outline-offset: -2px;
 }
 .cc-table__name {
@@ -824,7 +824,7 @@
   margin-bottom: var(--cc-gap);
   border-radius: var(--k-radius, 10px);
   border: 1px solid rgba(249, 168, 37, 0.45);
-  background: #fff8e1;
+  background: var(--k-warn-bg-2);
   color: #6d4c00;
   font-size: var(--k-font, 0.83rem);
 }

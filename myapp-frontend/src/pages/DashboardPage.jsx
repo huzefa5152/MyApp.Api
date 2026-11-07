@@ -92,8 +92,8 @@ const PERIOD_STORAGE_KEY = "dashboardPeriod";
 const accents = {
   sales: "var(--k-blue)",
   purchases: "var(--k-teal)",
-  fbr: "#6a1b9a",
-  inventory: "#e65100",
+  fbr: "var(--k-purple-3)",
+  inventory: "var(--k-warn)",
 };
 
 function formatPkr(v) {
@@ -473,7 +473,7 @@ function CommandCentre({ data, has, periodLabel }) {
             <Metric
               label="Collected"
               icon={MdCallReceived}
-              accent="#2e7d32"
+              accent="var(--k-success)"
               value={fmtMoney(cash.collections)}
               delta={change(cash.collections, cash.collectionsPrev)}
               sub={plural(cash.collectionCount, "receipt")}
@@ -485,7 +485,7 @@ function CommandCentre({ data, has, periodLabel }) {
             <Metric
               label="Paid out"
               icon={MdCallMade}
-              accent="#37474f"
+              accent="var(--k-slate)"
               value={fmtMoney(cash.payments)}
               delta={change(cash.payments, cash.paymentsPrev)}
               higherIsBetter={false}
@@ -533,7 +533,7 @@ function CommandCentre({ data, has, periodLabel }) {
               <Metric
                 label="You owe suppliers"
                 icon={MdCallMade}
-                accent="#e65100"
+                accent="var(--k-warn)"
                 value={fmtMoney(payables.total)}
                 sub={
                   payables.overdue > 0
@@ -548,7 +548,7 @@ function CommandCentre({ data, has, periodLabel }) {
               <Metric
                 label="Challans to bill"
                 icon={MdLocalShipping}
-                accent="#f57c00"
+                accent="var(--k-warn-2)"
                 value={work.challansAwaitingBilling.toLocaleString("en-PK")}
                 sub={
                   work.challansAwaitingBilling > 0
@@ -826,8 +826,8 @@ function SectionCard({ title, accent, icon, children, headerExtra = null }) {
           width: 32,
           height: 32,
           borderRadius: "var(--k-radius)",
-          background: `${accent}12`,
-          border: `1px solid ${accent}2e`,
+          background: `color-mix(in srgb, ${accent} 7%, transparent)`,
+          border: `1px solid color-mix(in srgb, ${accent} 18%, transparent)`,
           color: accent,
           flexShrink: 0,
         }}
@@ -943,12 +943,17 @@ function FbrSection({ data }) {
         <Funnel
           label="Pending"
           value={data.pendingSubmission}
-          color="#f57c00"
+          color="var(--k-warn-2)"
           icon={MdHourglassEmpty}
         />
         <Funnel label="Validated" value={data.validated} color="#0277bd" icon={MdCheckCircle} />
-        <Funnel label="Submitted" value={data.submitted} color="#2e7d32" icon={MdCloudDone} />
-        <Funnel label="Failed" value={data.failed} color="#c62828" icon={MdError} />
+        <Funnel
+          label="Submitted"
+          value={data.submitted}
+          color="var(--k-success)"
+          icon={MdCloudDone}
+        />
+        <Funnel label="Failed" value={data.failed} color="var(--k-danger-ink)" icon={MdError} />
       </div>
 
       {data.excluded > 0 && (
@@ -963,9 +968,13 @@ function FbrSection({ data }) {
       <div>
         <div style={styles.subHeading}>Reconciliation (Annexure-A vs Purchase Bills)</div>
         <div style={styles.reconRow}>
-          <ReconChip label="Pending" value={data.reconciliationPending} color="#f57c00" />
-          <ReconChip label="Matched" value={data.reconciliationMatched} color="#2e7d32" />
-          <ReconChip label="Disputed" value={data.reconciliationDisputed} color="#c62828" />
+          <ReconChip label="Pending" value={data.reconciliationPending} color="var(--k-warn-2)" />
+          <ReconChip label="Matched" value={data.reconciliationMatched} color="var(--k-success)" />
+          <ReconChip
+            label="Disputed"
+            value={data.reconciliationDisputed}
+            color="var(--k-danger-ink)"
+          />
         </div>
       </div>
     </SectionCard>
@@ -1077,7 +1086,7 @@ function Funnel({ label, value, color, icon }) {
       className="dash-funnel-card"
       style={{
         ...styles.funnelCard,
-        borderColor: `${color}33`,
+        borderColor: `color-mix(in srgb, ${color} 20%, transparent)`,
       }}
     >
       <div
@@ -1088,8 +1097,8 @@ function Funnel({ label, value, color, icon }) {
           width: 28,
           height: 28,
           borderRadius: "calc(var(--k-radius) - 2px)",
-          background: `${color}12`,
-          border: `1px solid ${color}2e`,
+          background: `color-mix(in srgb, ${color} 7%, transparent)`,
+          border: `1px solid color-mix(in srgb, ${color} 18%, transparent)`,
           color,
         }}
       >
@@ -1132,8 +1141,8 @@ function ReconChip({ label, value, color }) {
         gap: "0.45rem",
         padding: "0.3rem 0.75rem",
         borderRadius: 999,
-        border: `1px solid ${color}40`,
-        backgroundColor: `${color}0d`,
+        border: `1px solid color-mix(in srgb, ${color} 25%, transparent)`,
+        backgroundColor: `color-mix(in srgb, ${color} 5%, transparent)`,
       }}
     >
       <span style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)", fontWeight: 600 }}>

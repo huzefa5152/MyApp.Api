@@ -124,7 +124,7 @@ export default function ByCounterpartyCard({
             overflowY: "auto",
             // Custom thin scrollbar to match the rest of the app
             scrollbarWidth: "thin",
-            scrollbarColor: `${accent}aa var(--k-surface-3)`,
+            scrollbarColor: `color-mix(in srgb, ${accent} 67%, transparent) var(--k-surface-3)`,
             paddingRight: "0.25rem",
           }}
         >
@@ -153,8 +153,12 @@ export default function ByCounterpartyCard({
                   alignItems: "center",
                   gap: "0.5rem",
                   padding: "0.45rem 0.55rem",
-                  background: isHi ? `${accent}10` : "transparent",
-                  border: isHi ? `1px solid ${accent}55` : "1px solid transparent",
+                  background: isHi
+                    ? `color-mix(in srgb, ${accent} 6%, transparent)`
+                    : "transparent",
+                  border: isHi
+                    ? `1px solid color-mix(in srgb, ${accent} 33%, transparent)`
+                    : "1px solid transparent",
                   borderRadius: "calc(var(--k-radius) - 2px)",
                   textAlign: "left",
                   cursor: "pointer",
@@ -263,7 +267,7 @@ function TitleWithSwatch({ title, accent }) {
           height: 10,
           borderRadius: 3,
           background: accent,
-          boxShadow: `0 0 0 4px ${accent}1a`,
+          boxShadow: `0 0 0 4px color-mix(in srgb, ${accent} 10%, transparent)`,
           flexShrink: 0,
           marginRight: "0.1rem",
         }}

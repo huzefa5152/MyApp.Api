@@ -75,7 +75,7 @@ export default function KpiCard({
   value,
   prevValue,
   // Color of the accent strip + sparkline. Each section uses its own.
-  accent = "#0d47a1",
+  accent = "var(--k-blue)",
   // Override formatter for non-money values (counts, etc).
   format = formatPkr,
   // 12-point trend array for the sparkline. Optional.
@@ -100,13 +100,13 @@ export default function KpiCard({
   }
 
   // Pick the colour + icon based on direction × goodness.
-  let deltaColor = "#5f6d7e";
+  let deltaColor = "var(--k-muted)";
   let deltaBg = "rgba(95, 109, 126, 0.10)";
   let deltaIcon = MdTrendingFlat;
   if (deltaPct != null && deltaPct !== 0 && deltaPct !== Infinity) {
     const positive = deltaPct > 0;
     const good = higherIsBetter ? positive : !positive;
-    deltaColor = good ? "#15803d" : "#c62828";
+    deltaColor = good ? "#15803d" : "var(--k-danger-ink)";
     deltaBg = good ? "rgba(21, 128, 61, 0.10)" : "rgba(198, 40, 40, 0.09)";
     deltaIcon = positive ? MdTrendingUp : MdTrendingDown;
   } else if (deltaPct === Infinity) {
@@ -145,7 +145,7 @@ export default function KpiCard({
           inset: "0 auto auto 0",
           width: "100%",
           height: 3,
-          background: `linear-gradient(90deg, ${accent} 0%, ${accent}99 45%, transparent 100%)`,
+          background: `linear-gradient(90deg, ${accent} 0%, color-mix(in srgb, ${accent} 60%, transparent) 45%, transparent 100%)`,
         }}
       />
 
@@ -173,8 +173,8 @@ export default function KpiCard({
               width: 26,
               height: 26,
               borderRadius: 8,
-              background: `${accent}14`,
-              border: `1px solid ${accent}2e`,
+              background: `color-mix(in srgb, ${accent} 8%, transparent)`,
+              border: `1px solid color-mix(in srgb, ${accent} 18%, transparent)`,
               color: accent,
               flexShrink: 0,
             }}

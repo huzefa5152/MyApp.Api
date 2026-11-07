@@ -14,7 +14,7 @@ function formatNumber(v, mode) {
 
 export default function TopList({
   items,
-  accent = "#0d47a1",
+  accent = "var(--k-blue)",
   // "money" formats as Rs. X,YYY ; "qty" or anything else as plain
   // numbers. Used for stock-movement top items where Value = qty.
   valueMode = "money",
@@ -113,7 +113,7 @@ export default function TopList({
                 style={{
                   height: "100%",
                   width: `${widthPct}%`,
-                  background: `linear-gradient(90deg, ${accent} 0%, ${accent}99 100%)`,
+                  background: `linear-gradient(90deg, ${accent} 0%, color-mix(in srgb, ${accent} 60%, transparent) 100%)`,
                   borderRadius: 99,
                 }}
               />

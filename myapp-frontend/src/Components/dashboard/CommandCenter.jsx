@@ -150,7 +150,7 @@ export function Metric({
   higherIsBetter = true,
   tone,
   to,
-  accent = "#0d47a1",
+  accent = "var(--k-blue)",
   icon: Icon,
 }) {
   let deltaEl = null;
@@ -176,7 +176,10 @@ export function Metric({
       <span className="cc-metric__accent" style={{ background: accent }} aria-hidden />
       <span className="cc-metric__label">
         {Icon && (
-          <span className="cc-metric__icon" style={{ color: accent, background: `${accent}14` }}>
+          <span
+            className="cc-metric__icon"
+            style={{ color: accent, background: `color-mix(in srgb, ${accent} 8%, transparent)` }}
+          >
             <Icon size={15} aria-hidden />
           </span>
         )}
@@ -460,11 +463,11 @@ export function TrendChart({ points, bars, line = null, height = 220, ariaLabel 
 // ── Aging bar ────────────────────────────────────────────────────────────
 
 export const AGING = [
-  { key: "current", label: "Not yet due", color: "#2e7d32" },
+  { key: "current", label: "Not yet due", color: "var(--k-success)" },
   { key: "days1To30", label: "1–30 days", color: "#9ccc65" },
   { key: "days31To60", label: "31–60 days", color: "#f9a825" },
   { key: "days61To90", label: "61–90 days", color: "#ef6c00" },
-  { key: "over90", label: "Over 90 days", color: "#c62828" },
+  { key: "over90", label: "Over 90 days", color: "var(--k-danger-ink)" },
 ];
 
 /**
