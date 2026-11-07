@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import SearchableSelect from "./SearchableSelect";
 import ItemTypeForm from "./ItemTypeForm";
 import LineItemsEditor from "./LineItemsEditor";
+import { NON_HS_EMPTY_MESSAGE } from "./SearchableItemTypeSelect";
 import { MdPersonAdd } from "react-icons/md";
 import ClientForm from "./ClientForm";
 import PermissionLackedHint from "./PermissionLackedHint";
@@ -458,6 +459,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
               units={units}
               showItemType
               itemTypes={nonHsItemTypes}
+              itemTypeEmptyMessage={NON_HS_EMPTY_MESSAGE}
               canCreateItemType={canCreateItemType}
               onAddItemType={() => setShowAddItemType(true)}
               showUnitPrice

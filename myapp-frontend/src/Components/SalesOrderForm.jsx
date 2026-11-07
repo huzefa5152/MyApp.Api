@@ -6,6 +6,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import SearchableSelect from "./SearchableSelect";
 import ItemTypeForm from "./ItemTypeForm";
 import LineItemsEditor from "./LineItemsEditor";
+import { NON_HS_EMPTY_MESSAGE } from "./SearchableItemTypeSelect";
 import useScrollToError from "../hooks/useScrollToError";
 import { MdPersonAdd } from "react-icons/md";
 import ClientForm from "./ClientForm";
@@ -500,6 +501,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
               units={units}
               showItemType
               itemTypes={nonHsItemTypes}
+              itemTypeEmptyMessage={NON_HS_EMPTY_MESSAGE}
               canCreateItemType={canCreateItemType}
               onAddItemType={() => setShowAddItemType(true)}
               showUnitPrice
