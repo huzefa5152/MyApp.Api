@@ -71,10 +71,10 @@ company_id = companies[0]["id"]
 created = []
 
 
-def new_user(token, prefix, role_ids=None):
+def new_user(token, prefix, role_ids=None, **extra):
     name = f"{prefix}_{uuid.uuid4().hex[:8]}"
     body = {"username": name, "password": PASSWORD, "fullName": name, "role": role["name"],
-            "companyIds": [company_id]}
+            "companyIds": [company_id], **extra}
     st, data = call("POST", "/api/users", token, body)
     if st in (200, 201):
         created.append(data["id"])
@@ -109,6 +109,16 @@ try:
         check("administrator cannot read the lock", row.get("companyChangesLocked") is None, row)
     else:
         check("administrator can create a user for the lock checks", False, st)
+
+    st, _, _ = new_user(token, "lockedbyadmin", companyChangesLocked=True)
+    check("administrator cannot create a locked account", st == 403, st)
+    st, locked, locked_name = new_user(seed, "lockednew", [role["id"]], companyChangesLocked=True)
+    check("seed admin creates a locked account", st in (200, 201), st)
+    if st in (200, 201):
+        st, rows = call("GET", "/api/users", seed)
+        row = next((r for r in rows if r["id"] == locked["id"]), {})
+        check("new account is saved locked", row.get("companyChangesLocked") is True, row)
+        check("new locked account has no company keys", not (KEYS & keys(login(locked_name, PASSWORD))))
 
     st, _ = call("PUT", f"/api/users/{uid}", seed, {"companyChangesLocked": True})
     check("seed admin sets the lock", st == 200, st)

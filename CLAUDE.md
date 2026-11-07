@@ -2329,7 +2329,7 @@ them can be resolved from FBR.
 | Check | Command | Must show |
 |---|---|---|
 | Backend build | `dotnet build MyApp.Api.csproj` | `0 Error(s)` |
-| Seed admin company lock: keys removed, API refuses, created accounts inherit, seed-admin only | `python scripts/test_company_lock.py --base <url>` | `23/23 company lock checks passed` |
+| Seed admin company lock: keys removed, API refuses, created accounts inherit, seed-admin only | `python scripts/test_company_lock.py --base <url>` | `27/27 company lock checks passed` |
 | Audit verifier (static) | `python scripts/verify_audit_2026_05_13_security.py` | `67/67 checks passed` |
 | Audit verifier (live, optional but recommended) | `python scripts/verify_audit_2026_05_13_security.py --live` | `73/73 checks passed` |
 | Basic flows | `python scripts/test_basic_flows.py` | `all PASS` (92 checks) |
