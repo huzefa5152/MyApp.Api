@@ -8,19 +8,26 @@ Status (2026-10-03): built on branch `feat/trader-ui-themes` (off
 (`deploy-trader.yml` only runs on pushes to `TraderFbrInvoicingSystem`), so
 pushing it is safe. It reaches production only when the maintainer merges it.
 
-Coverage (2026-11-07): admin screens and dialogs read the `--k-*` tokens for the app palette,
+Coverage (2026-11-08): admin screens and dialogs read the `--k-*` tokens for the app palette,
 neutrals, control heights and card shadows. Bank & Cash, Transfers and Purchase Debit Notes are
-built from the kit. The bill, invoice and line item forms are NOT: they keep their own markup and
-only their styles moved to tokens.
+built from the kit components; the bill, invoice and line item forms use the kit button classes
+and `formStyles` for their fields, which is what KIT_GUIDE prescribes for dialogs.
 
-These keep fixed colours on purpose: status and action tints (paid, warning, print, PDF), which
-mean the same in every theme; print output and report print templates; public pages; charts; and
-the Classic shell in `layouts/DashboardLayout.css`.
+Status and accent colours (paid, warning, info, purple, teal tints) are tokens too:
+`--k-success*`, `--k-warn*`, `--k-info*`, `--k-danger-ink*`, `--k-purple*`, `--k-teal-*`,
+`--k-slate*` in `ui/kit.css`. They hold one value in every theme today, so a new theme (a dark
+one) overrides them in its CSS block instead of editing screens. They were introduced with a
+computed-style comparison of all 54 routes in both themes before and after: no visible colour
+changed.
 
-Checked at 375px and 1280px in both themes: 54 routes with no error and no sideways page scroll.
-39 dialogs opened from their New / Edit / View buttons in Classic at 1280px and Workspace at
-375px, and most of them in Workspace at 1280px. Classic at 375px dialogs were not opened, and a
-dialog behind another action, such as a row menu, was not necessarily opened.
+Fixed on purpose: print output and report print templates (the printed document must not follow
+the screen theme), public pages, charts drawn in SVG, and the sidebar's own gradient colours in
+`layouts/DashboardLayout.css` (its palette colours are tokens; the dark navigation shades are not).
+Hex-alpha tints built in code use `color-mix()` so they work with token values.
+
+Checked on 2026-11-08 at 375px and 1280px in Classic and Workspace: 54 routes with no error and no
+sideways page scroll, and 44 to 48 dialogs per combination opened from New / Add / Record / View /
+Edit buttons and row menus (destructive actions such as Delete or Submit are never opened).
 
 Trader integration (2026-10-09): includes the current Trader security and business workflows. Admin density overrides apply to Classic; Workspace keeps its theme tokens. Dialog focus handling and popup accessibility apply to both layouts. This integration remains local until explicitly pushed.
 
@@ -119,9 +126,8 @@ step-by-step. In short:
 
 ## Known follow-ups (not done)
 
-- A dark or differently coloured theme needs status tokens first: status and action tints are
-  fixed values today, and the Classic shell does not read `--k-*`.
-- `EditBillForm`, `InvoiceForm` and `StandaloneInvoiceForm` are not built from the kit.
+- A dark theme still needs its own values for the sidebar gradient in
+  `layouts/DashboardLayout.css`, which keeps fixed navigation shades.
 - Theme choice is per browser. If it should follow the user across devices, it
   needs a small user-preference API — that is a backend change, deliberately not
   part of this UI-only work.
