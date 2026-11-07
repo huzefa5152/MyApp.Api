@@ -6072,6 +6072,9 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("AvatarPath")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<bool>("CompanyChangesLocked")
+                        .HasColumnType("bit");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -6121,6 +6124,7 @@ namespace MyApp.Api.Migrations
                         new
                         {
                             Id = 1,
+                            CompanyChangesLocked = false,
                             CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             FailedLoginAttempts = 0,
                             FullName = "Administrator",

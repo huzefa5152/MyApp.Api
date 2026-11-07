@@ -33,5 +33,10 @@ namespace MyApp.Api.Models
         // existed) -- root-level accounts are visible to the seed admin only.
         // See IManagementScopeService.
         public int? CreatedByUserId { get; set; }
+
+        // Set by the seed admin only, for accounts handed out as demos: the user
+        // and every account they create lose the company create / edit / delete
+        // keys (PermissionService), whatever their roles grant.
+        public bool CompanyChangesLocked { get; set; }
     }
 }

@@ -64,7 +64,8 @@ namespace MyApp.Api.Controllers
                     u.FullName,
                     u.Role,
                     u.AvatarPath,
-                    u.CreatedAt
+                    u.CreatedAt,
+                    CompanyChangesLocked = CurrentUserId == _seedAdminUserId ? (bool?)u.CompanyChangesLocked : null
                 })
                 .ToListAsync();
 
@@ -288,6 +289,12 @@ namespace MyApp.Api.Controllers
 
             var user = await _context.Users.FindAsync(id);
             if (user == null) return NotFound(new { message = "User not found" });
+
+            if (dto.CompanyChangesLocked.HasValue)
+            {
+                if (CurrentUserId != _seedAdminUserId) return Forbid();
+                user.CompanyChangesLocked = dto.CompanyChangesLocked.Value;
+            }
 
             if (!string.IsNullOrWhiteSpace(dto.Username) && dto.Username != user.Username)
             {
