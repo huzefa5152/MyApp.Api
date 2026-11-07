@@ -114,6 +114,40 @@ namespace MyApp.Api.Controllers
             return Ok(dto);
         }
 
+        /// <summary>
+        /// Challans with lines still to purchase, newest first, for the Against
+        /// Delivery Challans picker. With a supplier, only lines planned for that
+        /// supplier or for nobody, unless <paramref name="allSuppliers"/>.
+        /// <paramref name="excludeBillId"/> is the bill being edited: its own
+        /// lines count as still open.
+        /// </summary>
+        [HttpGet("company/{companyId}/open-challan-lines")]
+        [HasPermission("purchasebills.manage.create")]
+        [HasPermission("challans.list.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<List<OpenChallanForPurchaseDto>>> GetOpenChallanLines(int companyId,
+            [FromQuery] int? supplierId = null, [FromQuery] bool allSuppliers = false,
+            [FromQuery] string? search = null, [FromQuery] int? excludeBillId = null)
+        {
+            await _access.AssertAccessAsync(CurrentUserId, companyId);
+            if (excludeBillId.HasValue && !await _context.PurchaseBills.AnyAsync(p => p.Id == excludeBillId && p.CompanyId == companyId))
+                return NotFound();
+            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            return Ok(await _service.GetOpenChallanLinesAsync(companyId, supplierId, allSuppliers, search, excludeBillId, divScope));
+        }
+
+        // A division-restricted user may buy only lines of challans in their divisions.
+        private async Task AssertChallanLineDivisionsAsync(int companyId, IEnumerable<int?> sourceIds)
+        {
+            var ids = sourceIds.Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToList();
+            if (ids.Count == 0) return;
+            var divisions = await _context.DeliveryItems.AsNoTracking()
+                .Where(i => ids.Contains(i.Id) && i.DeliveryChallan.CompanyId == companyId)
+                .Select(i => i.DeliveryChallan.DivisionId).Distinct().ToListAsync();
+            foreach (var divisionId in divisions)
+                await _divisionAccess.AssertAccessAsync(CurrentUserId, companyId, divisionId);
+        }
+
         [HttpPost]
         [HasPermission("purchasebills.manage.create")]
         public async Task<ActionResult<PurchaseBillDto>> Create([FromBody] CreatePurchaseBillDto dto)
@@ -122,6 +156,7 @@ namespace MyApp.Api.Controllers
             // Division-restricted users must tag the bill with one of their
             // divisions (write-assert also rejects null — policy D2).
             await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, dto.CompanyId, dto.DivisionId);
+            await AssertChallanLineDivisionsAsync(dto.CompanyId, dto.Items.Select(i => i.SourceDeliveryItemId));
             try
             {
                 var created = await _service.CreateAsync(dto);
@@ -181,6 +216,7 @@ namespace MyApp.Api.Controllers
             // Division is immutable on update (UpdatePurchaseBillDto carries
             // none) — the read-assert on the stored tag is sufficient.
             await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
+            await AssertChallanLineDivisionsAsync(existing.CompanyId, dto.Items.Select(i => i.SourceDeliveryItemId));
             try
             {
                 var updated = await _service.UpdateAsync(id, dto);

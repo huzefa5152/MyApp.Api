@@ -70,8 +70,7 @@ public partial class InvoiceService
         var available = await query.Include(c => c.SalesOrder).Include(c => c.Items).OrderByDescending(c => c.DeliveryDate)
             .ThenByDescending(c => c.Id).Take(101).ToListAsync();
         var deliveryIds = linked.Select(c => c.Id).Concat(available.Select(c => c.Id)).ToList();
-        var purchasedIds = await _context.PurchaseBills.Where(p => p.SourceDeliveryChallanId != null && deliveryIds.Contains(p.SourceDeliveryChallanId.Value))
-            .Select(p => p.SourceDeliveryChallanId!.Value).Distinct().ToListAsync();
+        var purchasedIds = await ChallanPurchases.ChallanIds(_context).Where(id => deliveryIds.Contains(id)).ToListAsync();
         BillChallanOptionDto Map(DeliveryChallan c) => new()
         {
             Id = c.Id, ChallanNumber = c.ChallanNumber, PoNumber = c.PoNumber, HasAutoPurchaseBills = purchasedIds.Contains(c.Id),
@@ -192,9 +191,9 @@ public partial class InvoiceService
         // lines stay together: none may be left out, and the challan may not be
         // cancelled or deleted through its bill.
         var leaveOutChallanIds = leaveOut.Select(x => x.Challan.Id).ToList();
-        if (leaveOutChallanIds.Count > 0 && await _context.PurchaseBills.AnyAsync(p => p.SourceDeliveryChallanId != null && leaveOutChallanIds.Contains(p.SourceDeliveryChallanId.Value)))
+        if (leaveOutChallanIds.Count > 0 && await ChallanPurchases.ChallanIds(_context).AnyAsync(id => leaveOutChallanIds.Contains(id)))
             throw new InvalidOperationException("A challan with supplier purchase bills keeps its lines together. Bill or remove the whole challan, or remove its purchase bills first.");
-        if (removalAction != null && await _context.PurchaseBills.AnyAsync(p => p.SourceDeliveryChallanId != null && removedIds.Contains(p.SourceDeliveryChallanId.Value)))
+        if (removalAction != null && await ChallanPurchases.ChallanIds(_context).AnyAsync(id => removedIds.Contains(id)))
             throw new InvalidOperationException("This challan has linked purchase bills. Resolve those purchases before cancelling or deleting its delivery.");
 
         var removedDeliveryIds = invoice.DeliveryChallans.Where(c => removedIds.Contains(c.Id))

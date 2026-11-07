@@ -79,7 +79,10 @@
         /// </summary>
         public int? SalesOrderId { get; set; }
         public int? SalesOrderNumber { get; set; }
+        /// <summary>True once any purchase bill buys from this challan (its lines then stay put).</summary>
         public bool HasAutoPurchaseBills { get; set; }
+        /// <summary>"" (nothing bought), "Partial" or "Purchased" — every line fully bought.</summary>
+        public string PurchaseStatus { get; set; } = "";
         public List<DeliveryItemDto> Items { get; set; } = new();
         public List<string> Warnings { get; set; } = new();
     }

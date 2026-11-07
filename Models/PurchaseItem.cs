@@ -15,6 +15,15 @@ namespace MyApp.Api.Models
         public int? GoodsReceiptItemId { get; set; }
 
         /// <summary>
+        /// The challan line this purchase line buys (Purchase Bills → Against
+        /// Delivery Challans). One bill can draw lines from many challans; the
+        /// line's <see cref="Quantity"/> is what it claims, and the claims on one
+        /// challan line never exceed its delivered quantity. Null = not from a challan.
+        /// </summary>
+        public int? SourceDeliveryItemId { get; set; }
+        public DeliveryItem? SourceDeliveryItem { get; set; }
+
+        /// <summary>
         /// Link to the shared <see cref="ItemType"/> catalog. Same item
         /// rows the sales side uses — when "Pneumatic Items" appears on a
         /// PurchaseBill and an Invoice, both reference the same ItemType,

@@ -1,6 +1,6 @@
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import { useState, useEffect, useMemo, useRef } from "react";
-import { MdAdd, MdDelete, MdReceipt } from "react-icons/md";
+import { MdAdd, MdDelete, MdLocalShipping, MdReceipt } from "react-icons/md";
 import {
   createPurchaseBill,
   updatePurchaseBill,
@@ -26,6 +26,8 @@ import AttachmentManager from "./AttachmentManager";
 import QuantityInput from "./QuantityInput";
 import useScrollToError from "../hooks/useScrollToError";
 import useIsNarrow from "../hooks/useIsNarrow";
+import ChallanLinePicker from "./ChallanLinePicker";
+import { usePermissions } from "../contexts/PermissionsContext";
 
 const colors = {
   blue: "#0d47a1",
@@ -48,6 +50,7 @@ export default function PurchaseBillForm({
   prefillSourceLabel = null,
   readOnly = false,
   defaultDivisionId = null,
+  startWithChallanPicker = false,
 }) {
   const isEdit = !!billId;
   const isAgainstSale = !!prefillFromInvoiceId;
@@ -99,6 +102,9 @@ export default function PurchaseBillForm({
   const errRef = useScrollToError(error);
   // Below 768px the wide line-items table reflows to a stacked card per line.
   const isNarrow = useIsNarrow();
+  const { has } = usePermissions();
+  const canPickChallans = !readOnly && !isAgainstSale && has("challans.list.view");
+  const [showChallanPicker, setShowChallanPicker] = useState(startWithChallanPicker);
 
   function newRow() {
     return {
@@ -113,6 +119,9 @@ export default function PurchaseBillForm({
       hsCode: "",
       saleType: "",
       sourceInvoiceItemIds: [],
+      // Challan line this row buys, and its challan for the row's tag.
+      sourceDeliveryItemId: null,
+      _challan: null,
       // metadata used only when in against-sale mode (not sent to API)
       _saleSoldQty: 0,
       _saleProcuredQty: 0,
@@ -213,6 +222,14 @@ export default function PurchaseBillForm({
             hsCode: i.hsCode || "",
             saleType: i.saleType || "",
             sourceInvoiceItemIds: i.sourceInvoiceItemIds || [],
+            sourceDeliveryItemId: i.sourceDeliveryItemId ?? null,
+            _challan: i.sourceChallanId
+              ? {
+                  id: i.sourceChallanId,
+                  number: i.sourceChallanNumber,
+                  clientName: i.sourceClientName,
+                }
+              : null,
           })),
         );
       } catch {
@@ -335,6 +352,66 @@ export default function PurchaseBillForm({
     });
   };
 
+  // Quantity of each challan line this bill already holds, so the picker only
+  // offers what is still left.
+  const takenFromChallans = useMemo(() => {
+    const m = {};
+    for (const i of items)
+      if (i.sourceDeliveryItemId)
+        m[i.sourceDeliveryItemId] =
+          (m[i.sourceDeliveryItemId] || 0) + (parseFloat(i.quantity) || 0);
+    return m;
+  }, [items]);
+
+  // Challans this bill buys from, in number order, for the summary strip.
+  const linkedChallans = useMemo(() => {
+    const m = new Map();
+    for (const i of items) {
+      if (!i._challan) continue;
+      const c = m.get(i._challan.id) || { ...i._challan, lines: 0 };
+      c.lines += 1;
+      m.set(i._challan.id, c);
+    }
+    return [...m.values()].sort((a, b) => a.number - b.number);
+  }, [items]);
+
+  const addChallanLines = (picked) => {
+    const rows = picked.map((p) => {
+      const type = itemTypes.find((t) => t.id === p.itemTypeId);
+      return {
+        ...newRow(),
+        itemTypeId: p.nonInventoryItemId ? null : p.itemTypeId || null,
+        nonInventoryItemId: p.nonInventoryItemId || null,
+        accountId: type?.purchaseAccountId ?? null,
+        description: p.description || "",
+        quantity: p.quantity,
+        unitPrice: p.unitPrice || 0,
+        uom: p.uom || type?.uom || "",
+        hsCode: type?.hsCode || "",
+        saleType: type?.saleType || "",
+        sourceDeliveryItemId: p.deliveryItemId,
+        _challan: { id: p.challanId, number: p.challanNumber, clientName: p.clientName },
+      };
+    });
+    // Untouched blank rows give way to the picked lines.
+    setItems((prev) => [
+      ...prev.filter(
+        (r) =>
+          r.sourceDeliveryItemId || r.description?.trim() || r.itemTypeId || r.nonInventoryItemId,
+      ),
+      ...rows,
+    ]);
+    setShowChallanPicker(false);
+  };
+
+  const challanTag = (it) =>
+    it._challan && (
+      <div style={challanChip} title="This line buys from that challan">
+        <MdLocalShipping size={12} /> Challan #{it._challan.number}
+        {it._challan.clientName ? ` · ${it._challan.clientName}` : ""}
+      </div>
+    );
+
   const pickItemType = (idx, newId, picked) => {
     setItems((prev) => {
       const next = [...prev];
@@ -446,6 +523,7 @@ export default function PurchaseBillForm({
           hsCode: i.hsCode || null,
           saleType: i.saleType || null,
           sourceInvoiceItemIds: i.sourceInvoiceItemIds || [],
+          sourceDeliveryItemId: i.sourceDeliveryItemId || null,
         })),
       };
       const res = isEdit
@@ -775,6 +853,26 @@ export default function PurchaseBillForm({
                       style={{ marginLeft: "auto", marginRight: "0.5rem" }}
                     />
                   )}
+                  {canPickChallans && (
+                    <button
+                      type="button"
+                      onClick={() => setShowChallanPicker(true)}
+                      style={{
+                        ...formStyles.button,
+                        padding: "0.3rem 0.65rem",
+                        fontSize: "0.8rem",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.25rem",
+                        background: "#e8f5e9",
+                        color: "#1b5e20",
+                        border: "none",
+                        marginRight: "0.5rem",
+                      }}
+                    >
+                      <MdLocalShipping size={14} /> Add from challans
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setItems([...items, newRow()])}
@@ -793,6 +891,20 @@ export default function PurchaseBillForm({
                     <MdAdd size={14} /> Add line
                   </button>
                 </div>
+                {linkedChallans.length > 0 && (
+                  <div style={challanStrip}>
+                    <MdLocalShipping size={18} color="#1b5e20" style={{ flexShrink: 0 }} />
+                    <div>
+                      <strong>Against challans:</strong>{" "}
+                      {linkedChallans.map((c, n) => (
+                        <span key={c.id}>
+                          {n > 0 && ", "}#{c.number} ({c.clientName ? `${c.clientName}, ` : ""}
+                          {c.lines} line{c.lines > 1 ? "s" : ""})
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <BulkItemTypeBar
                   items={items}
                   setItems={setItems}
@@ -889,6 +1001,7 @@ export default function PurchaseBillForm({
                               value={it.description}
                               onChange={(e) => updateItem(idx, "description", e.target.value)}
                             />
+                            {challanTag(it)}
                           </div>
 
                           <div style={mStyles.fieldGrid}>
@@ -1023,6 +1136,7 @@ export default function PurchaseBillForm({
                                   value={it.description}
                                   onChange={(e) => updateItem(idx, "description", e.target.value)}
                                 />
+                                {challanTag(it)}
                               </td>
                               <td style={td}>
                                 <QuantityInput
@@ -1157,6 +1271,19 @@ export default function PurchaseBillForm({
               mode={readOnly ? "view" : "edit"}
             />
           </div>
+          {showChallanPicker && (
+            <ChallanLinePicker
+              companyId={companyId}
+              suppliers={suppliers}
+              supplierId={supplierId}
+              onSupplierChange={setSupplierId}
+              supplierLocked={isEdit}
+              excludeBillId={isEdit ? billId : null}
+              taken={takenFromChallans}
+              onAdd={addChallanLines}
+              onClose={() => setShowChallanPicker(false)}
+            />
+          )}
           <div data-admin-footer="" style={formStyles.footer}>
             <button
               data-admin-close=""
@@ -1181,6 +1308,32 @@ export default function PurchaseBillForm({
     </div>
   );
 }
+
+const challanChip = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 4,
+  marginTop: 4,
+  padding: "1px 8px",
+  borderRadius: 999,
+  fontSize: "0.7rem",
+  fontWeight: 600,
+  background: "#e8f5e9",
+  color: "#1b5e20",
+};
+
+const challanStrip = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "0.5rem",
+  padding: "0.55rem 0.8rem",
+  marginBottom: "0.6rem",
+  background: "#f1f8e9",
+  border: "1px solid #c5e1a5",
+  borderRadius: 8,
+  fontSize: "0.82rem",
+  color: "#1a2332",
+};
 
 const th = {
   textAlign: "left",

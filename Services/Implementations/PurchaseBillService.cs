@@ -89,7 +89,23 @@ namespace MyApp.Api.Services.Implementations
                 RateId = i.RateId,
                 FixedNotifiedValueOrRetailPrice = i.FixedNotifiedValueOrRetailPrice,
                 SourceInvoiceItemIds = i.SourceLines?.Select(s => s.InvoiceItemId).ToList() ?? new(),
+                SourceDeliveryItemId = i.SourceDeliveryItemId,
+                SourceChallanId = i.SourceDeliveryItem?.DeliveryChallanId,
+                SourceChallanNumber = i.SourceDeliveryItem?.DeliveryChallan?.ChallanNumber,
+                SourceClientName = i.SourceDeliveryItem?.DeliveryChallan?.Client?.Name,
             }).ToList() ?? new(),
+            LinkedChallans = pb.Items?
+                .Where(i => i.SourceDeliveryItem?.DeliveryChallan != null)
+                .GroupBy(i => i.SourceDeliveryItem!.DeliveryChallan)
+                .Select(g => new LinkedChallanDto
+                {
+                    ChallanId = g.Key.Id,
+                    ChallanNumber = g.Key.ChallanNumber,
+                    ClientName = g.Key.Client?.Name ?? "",
+                    LineCount = g.Count(),
+                })
+                .OrderBy(c => c.ChallanNumber)
+                .ToList() ?? new(),
             // Distinct sale-bill numbers this purchase covered — computed
             // by walking the SourceLines → InvoiceItem → Invoice chain.
             LinkedSaleBillNumbers = pb.Items?
@@ -128,6 +144,10 @@ namespace MyApp.Api.Services.Implementations
                     .ThenInclude(pi => pi.SourceLines)
                         .ThenInclude(sl => sl.InvoiceItem!)
                             .ThenInclude(ii => ii.Invoice)
+                .Include(pb => pb.Items)
+                    .ThenInclude(pi => pi.SourceDeliveryItem!)
+                        .ThenInclude(di => di.DeliveryChallan)
+                            .ThenInclude(dc => dc.Client)
                 .Include(pb => pb.Division)
                 .Where(pb => pb.CompanyId == companyId);
             // Division-RBAC scope first (null = unrestricted); the operator's
@@ -136,7 +156,7 @@ namespace MyApp.Api.Services.Implementations
             if (allowedDivisionIds != null)
                 q = q.Where(pb => pb.DivisionId == null || allowedDivisionIds.Contains(pb.DivisionId.Value));
             if (fromChallan.HasValue)
-                q = q.Where(pb => pb.SourceDeliveryChallanId.HasValue == fromChallan.Value);
+                q = q.Where(pb => (pb.SourceDeliveryChallanId.HasValue || pb.Items.Any(i => i.SourceDeliveryItemId != null)) == fromChallan.Value);
             if (supplierId.HasValue)
                 q = q.Where(pb => pb.SupplierId == supplierId.Value);
             if (divisionId.HasValue)
@@ -182,6 +202,10 @@ namespace MyApp.Api.Services.Implementations
                     .ThenInclude(pi => pi.SourceLines)
                         .ThenInclude(sl => sl.InvoiceItem!)
                             .ThenInclude(ii => ii.Invoice)
+                .Include(p => p.Items)
+                    .ThenInclude(pi => pi.SourceDeliveryItem!)
+                        .ThenInclude(di => di.DeliveryChallan)
+                            .ThenInclude(dc => dc.Client)
                 .Include(p => p.Division)
                 .FirstOrDefaultAsync(p => p.Id == id);
             return pb == null ? null : ToDto(pb);
@@ -283,7 +307,7 @@ namespace MyApp.Api.Services.Implementations
             if (pb == null) return null;
             pb.DueDate = dueDate?.Date;
             await _context.SaveChangesAsync();
-            return ToDto(pb);
+            return await GetByIdAsync(id);
         }
 
         public async Task<PurchaseBillDto> CreateAsync(CreatePurchaseBillDto dto)
@@ -317,6 +341,7 @@ namespace MyApp.Api.Services.Implementations
             if (dto.Items.Any(i => i.UnitPrice < 0))
                 throw new InvalidOperationException("Unit price cannot be negative.");
 
+            AssertChallanLinesUnique(dto.Items.Select(i => i.SourceDeliveryItemId));
             var nextNumber = await CompanyDocumentNumbers.AllocateAsync(_context, dto.CompanyId, "purchase-bill", dto.CustomNumber, dto.DivisionId);
 
             // Validate "Purchase Against Sale Bill" lines BEFORE we touch
@@ -410,6 +435,9 @@ namespace MyApp.Api.Services.Implementations
                     FixedNotifiedValueOrRetailPrice = isNonInv ? null : i.FixedNotifiedValueOrRetailPrice,
                 });
             }
+
+            await LinkChallanLinesAsync(dto.CompanyId, dto.SupplierId,
+                items.Select((item, idx) => (item, dto.Items[idx].SourceDeliveryItemId)).ToList(), excludeBillId: null);
 
             var subtotal = items.Sum(x => x.LineTotal);
             var gstAmount = Math.Round(subtotal * dto.GSTRate / 100m, 2);
@@ -565,6 +593,7 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException("Set a supplier and non-negative actual unit cost on every line first.");
             if (challan.Items.Any(i => i.Supplier == null || i.Supplier.CompanyId != challan.CompanyId))
                 throw new InvalidOperationException("A supplier does not belong to this company.");
+            await AssertNoLinePurchasesAsync(challan.Id);
             return new ChallanPurchasePreviewDto {
                 ChallanId = challan.Id, ChallanNumber = challan.ChallanNumber,
                 Revision = ChallanPurchaseRevision(challan),
@@ -632,6 +661,7 @@ namespace MyApp.Api.Services.Implementations
                 var company = await _context.Companies
                     .FromSqlInterpolated($"SELECT * FROM Companies WITH (UPDLOCK, ROWLOCK) WHERE Id = {challan.CompanyId}")
                     .FirstOrDefaultAsync() ?? throw new KeyNotFoundException("Company not found.");
+                await AssertNoLinePurchasesAsync(challanId);
                 var existing = await _context.PurchaseBills.AsNoTracking()
                     .Where(p => p.SourceDeliveryChallanId == challanId)
                     .Select(p => new { p.Id, p.SupplierId })
@@ -654,6 +684,7 @@ namespace MyApp.Api.Services.Implementations
                     number = await CompanyDocumentNumbers.AllocateAsync(_context, challan.CompanyId, "purchase-bill", divisionId: challan.DivisionId);
                     var lines = group.Select(i => new PurchaseItem
                     {
+                        SourceDeliveryItemId = i.Id,
                         ItemTypeId = i.ItemTypeId,
                         NonInventoryItemId = i.NonInventoryItemId,
                         ItemTypeName = i.ItemTypeId.HasValue ? validItemTypes[i.ItemTypeId.Value].Name : "",
@@ -795,6 +826,9 @@ namespace MyApp.Api.Services.Implementations
                 newItems.Add(ni);
                 bill.Items.Add(ni);
             }
+            AssertChallanLinesUnique(dto.Items.Select(i => i.SourceDeliveryItemId));
+            await LinkChallanLinesAsync(bill.CompanyId, bill.SupplierId,
+                newItems.Select((item, idx) => (item, dto.Items[idx].SourceDeliveryItemId)).ToList(), excludeBillId: bill.Id);
             bill.Subtotal = newItems.Sum(x => x.LineTotal);
             bill.GSTAmount = Math.Round(bill.Subtotal * dto.GSTRate / 100m, 2);
             bill.GrandTotal = bill.Subtotal + bill.GSTAmount;
@@ -990,6 +1024,122 @@ namespace MyApp.Api.Services.Implementations
                 .GroupBy(p => p.SupplierId)
                 .Select(g => new { SupplierId = g.Key, Count = g.Count() })
                 .ToDictionaryAsync(x => x.SupplierId, x => x.Count);
+        }
+
+        // The challan's own "Create purchase bills" buys every line; once a purchase
+        // bill has picked some of its lines, the rest are bought the same way.
+        private async Task AssertNoLinePurchasesAsync(int challanId)
+        {
+            if (await _context.PurchaseItems.AnyAsync(p => p.SourceDeliveryItem!.DeliveryChallanId == challanId
+                                                           && p.PurchaseBill.SourceDeliveryChallanId != challanId))
+                throw new InvalidOperationException(
+                    "Some lines of this challan are already on a purchase bill. Buy the rest from Purchase Bills → Against Delivery Challans.");
+        }
+
+        private static void AssertChallanLinesUnique(IEnumerable<int?> sourceIds)
+        {
+            var ids = sourceIds.Where(x => x.HasValue).Select(x => x!.Value).ToList();
+            if (ids.Distinct().Count() != ids.Count)
+                throw new InvalidOperationException("A challan line appears twice on this bill. Put its whole quantity on one line.");
+        }
+
+        /// <summary>
+        /// Stamps each purchase line with the challan line it buys, after checking
+        /// the challan line belongs to this company, its challan is live, and the
+        /// quantity fits what is left. The claimed rows are locked first, so two
+        /// bills saved at once cannot both take the same remainder. A challan line
+        /// bought without a planned supplier or cost takes this purchase's.
+        /// </summary>
+        private async Task LinkChallanLinesAsync(int companyId, int supplierId,
+            List<(PurchaseItem Item, int? SourceId)> rows, int? excludeBillId)
+        {
+            foreach (var (item, sourceId) in rows) item.SourceDeliveryItemId = sourceId;
+            var linked = rows.Where(r => r.SourceId.HasValue).ToList();
+            if (linked.Count == 0) return;
+            var ids = linked.Select(r => r.SourceId!.Value).ToList();
+            // ids are ints from the bound DTO, so the IN list is not injectable.
+            var lines = await _context.DeliveryItems
+                .FromSqlRaw($"SELECT * FROM DeliveryItems WITH (UPDLOCK, HOLDLOCK) WHERE Id IN ({string.Join(",", ids)})")
+                .Include(i => i.DeliveryChallan)
+                .ToListAsync();
+            // One message for missing and foreign lines: no cross-company oracle.
+            if (lines.Count != ids.Count || lines.Any(l => l.DeliveryChallan.CompanyId != companyId))
+                throw new InvalidOperationException("A challan line on this bill was not found.");
+            var purchased = await ChallanPurchases.PurchasedAsync(_context, lines, excludeBillId);
+            foreach (var (item, sourceId) in linked)
+            {
+                var line = lines.First(l => l.Id == sourceId);
+                var challan = line.DeliveryChallan;
+                if (challan.IsDemo || challan.Status == "Cancelled")
+                    throw new InvalidOperationException($"Challan #{challan.ChallanNumber} is cancelled, so its lines cannot be purchased.");
+                var left = ChallanPurchases.Delivered(line) - purchased[line.Id];
+                if (item.Quantity > left)
+                    throw new InvalidOperationException(left <= 0
+                        ? $"Challan #{challan.ChallanNumber}: \"{line.Description}\" is already fully purchased."
+                        : $"Challan #{challan.ChallanNumber}: only {left:0.####} {line.Unit} of \"{line.Description}\" is left to purchase.");
+                line.SupplierId ??= supplierId;
+                line.ActualUnitCost ??= item.UnitPrice;
+            }
+        }
+
+        public async Task<List<OpenChallanForPurchaseDto>> GetOpenChallanLinesAsync(int companyId, int? supplierId,
+            bool allSuppliers, string? search, int? excludeBillId, HashSet<int>? allowedDivisionIds)
+        {
+            var q = _context.DeliveryChallans.AsNoTracking()
+                .Where(c => c.CompanyId == companyId && !c.IsDemo && c.Status != "Cancelled")
+                // Bought whole by its own "Create purchase bills" before line links existed.
+                .Where(c => !_context.PurchaseBills.Any(p => p.SourceDeliveryChallanId == c.Id && p.Id != excludeBillId
+                    && !p.Items.Any(i => i.SourceDeliveryItemId != null)))
+                .Where(c => c.Items.Any(i => (i.DeliveredQuantity ?? i.Quantity) >
+                    (_context.PurchaseItems.Where(p => p.SourceDeliveryItemId == i.Id && p.PurchaseBillId != excludeBillId)
+                        .Sum(p => (decimal?)p.Quantity) ?? 0m)));
+            if (allowedDivisionIds != null)
+                q = q.Where(c => c.DivisionId == null || allowedDivisionIds.Contains(c.DivisionId.Value));
+            if (supplierId.HasValue && !allSuppliers)
+                q = q.Where(c => c.Items.Any(i => i.SupplierId == null || i.SupplierId == supplierId));
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.Trim();
+                q = q.Where(c => c.ChallanNumber.ToString().Contains(term) || c.PoNumber.Contains(term)
+                                 || c.Client.Name.Contains(term) || c.Items.Any(i => i.Description.Contains(term)));
+            }
+            // ponytail: newest 100 open challans; search reaches older ones.
+            var challans = await q.Include(c => c.Client)
+                .Include(c => c.Items).ThenInclude(i => i.ItemType)
+                .Include(c => c.Items).ThenInclude(i => i.Supplier)
+                .OrderByDescending(c => c.DeliveryDate).ThenByDescending(c => c.Id)
+                .Take(100).ToListAsync();
+            var purchased = await ChallanPurchases.PurchasedAsync(_context, challans.SelectMany(c => c.Items).ToList(), excludeBillId);
+            return challans.Select(c => new OpenChallanForPurchaseDto
+            {
+                ChallanId = c.Id,
+                ChallanNumber = c.ChallanNumber,
+                DeliveryDate = c.DeliveryDate,
+                ClientName = c.Client?.Name ?? "",
+                PoNumber = c.PoNumber,
+                DivisionId = c.DivisionId,
+                Lines = c.Items.OrderBy(i => i.Id)
+                        .Where(i => !supplierId.HasValue || allSuppliers || i.SupplierId == null || i.SupplierId == supplierId)
+                        .Select(i => new OpenChallanLineDto
+                        {
+                            DeliveryItemId = i.Id,
+                            Description = i.Description,
+                            ItemTypeId = i.ItemTypeId,
+                            ItemTypeName = i.ItemType?.Name,
+                            NonInventoryItemId = i.NonInventoryItemId,
+                            Unit = i.Unit,
+                            Delivered = ChallanPurchases.Delivered(i),
+                            Purchased = purchased[i.Id],
+                            Remaining = ChallanPurchases.Delivered(i) - purchased[i.Id],
+                            ActualUnitCost = i.ActualUnitCost,
+                            SupplierId = i.SupplierId,
+                            SupplierName = i.Supplier?.Name,
+                        })
+                        .Where(l => l.Remaining > 0)
+                        .ToList(),
+            })
+                .Where(c => c.Lines.Count > 0)
+                .ToList();
         }
 
         /// <summary>Subset of <paramref name="candidates"/> that are ACTIVE accounts

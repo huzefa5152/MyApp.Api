@@ -59,6 +59,9 @@ function WarningTooltip({ warnings }) {
   );
 }
 
+// Supplier purchase status (Purchase Bills → Against Delivery Challans).
+const purchasedPill = { fontSize: "0.68rem", fontWeight: 600, padding: "1px 8px", borderRadius: 999, background: "#e8f5e9", color: "#1b5e20", whiteSpace: "nowrap" };
+const partPurchasedPill = { ...purchasedPill, background: "#fff3e0", color: "#e65100" };
 const partialColors = { bg: "#fff8e1", color: "#b26a00", border: "#b26a0030" };
 
 export default function ChallanList({ challans, onCancel, onDelete, onPrint, onEditItems, onExportPdf, onExportExcel, onGenerateBill, onDuplicate, onCopy, onLinkOrder, exportingId, duplicatingId, printDisabled = false, printDisabledReason = "", companyFbrOff = false, attachCounts = {}, onAttach }) {
@@ -158,6 +161,12 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                           : restOf ? "Lines of this challan not yet billed. Billable on their own." : undefined}>
                         {partlyBilled ? "Partially billed" : restOf ? `${c.status} · rest of #${c.challanNumber}` : c.status === "Invoiced" ? "Billed" : c.status}
                       </span>
+                      {c.purchaseStatus && (
+                        <span style={c.purchaseStatus === "Purchased" ? purchasedPill : partPurchasedPill}
+                          title={c.purchaseStatus === "Purchased" ? "Every line is on a supplier purchase bill." : "Some lines are still to purchase."}>
+                          {c.purchaseStatus === "Purchased" ? "Purchased" : "Partly purchased"}
+                        </span>
+                      )}
                       {/* Which bill it went onto. "Billed" on its own gave the
                           operator no way back to the document that billed it. */}
                       {c.invoiceNumber != null && (

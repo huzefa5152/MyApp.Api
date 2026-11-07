@@ -33,7 +33,7 @@ public partial class InvoiceService
         if (owned == total)
             throw new InvalidOperationException($"Challan #{source.ChallanNumber} would have no line on the bill. Untick the whole challan instead.");
         // A supplier purchase made from this challan covers every one of its lines.
-        if (await _context.PurchaseBills.AnyAsync(p => p.SourceDeliveryChallanId == source.Id))
+        if (await ChallanPurchases.AnyAsync(_context, source.Id))
             throw new InvalidOperationException($"Challan #{source.ChallanNumber} has supplier purchase bills, so its lines stay together. Bill the whole challan, or remove its purchase bills first.");
 
         var split = new DeliveryChallan
@@ -93,8 +93,7 @@ public partial class InvoiceService
     private async Task MergeRowsAsync(int root, List<int> rowIds)
     {
         if (rowIds.Count < 2) return;
-        var pinned = (await _context.PurchaseBills.Where(p => p.SourceDeliveryChallanId != null && rowIds.Contains(p.SourceDeliveryChallanId.Value))
-                .Select(p => p.SourceDeliveryChallanId!.Value).ToListAsync())
+        var pinned = (await ChallanPurchases.ChallanIds(_context).Where(id => rowIds.Contains(id)).ToListAsync())
             .Concat(await _context.Attachments.Where(a => a.EntityType == "DeliveryChallan" && a.EntityId != null
                 && rowIds.Contains(a.EntityId.Value)).Select(a => a.EntityId!.Value).ToListAsync())
             // A row that was duplicated is the parent of another challan row.

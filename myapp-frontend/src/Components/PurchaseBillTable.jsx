@@ -34,7 +34,7 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
         <>
           {b.supplierName || "—"}
           {b.divisionName && <span style={divisionChip}>{b.divisionName}</span>}
-          {b.sourceDeliveryChallanId && <span style={divisionChip}>Challan supplier purchase</span>}
+          {b.linkedChallans?.length > 0 && <span style={divisionChip} title="Challans this bill buys from">Challan {b.linkedChallans.map((c) => `#${c.challanNumber}`).join(", ")}</span>}
         </>
       ),
     },

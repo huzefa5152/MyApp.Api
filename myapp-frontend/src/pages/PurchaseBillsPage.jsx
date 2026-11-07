@@ -14,7 +14,6 @@ import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { getAwaitingPurchase } from "../api/invoiceApi";
 import { getOpenSalesOrdersForPurchase } from "../api/salesOrderApi";
-import { getDeliveryChallansByCompany } from "../api/challanApi";
 import { dropdownStyles, cardStyles, cardHover } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -129,13 +128,8 @@ export default function PurchaseBillsPage() {
   // Merged lines + label passed into PurchaseBillForm for the SO flow.
   const [prefillItems, setPrefillItems] = useState(null);
   const [prefillSourceLabel, setPrefillSourceLabel] = useState(null);
+  const [startWithChallanPicker, setStartWithChallanPicker] = useState(false);
 
-  // "Purchase Against Delivery Challan(s)" picker — multi-select challans.
-  const [showChallanPicker, setShowChallanPicker] = useState(false);
-  const [openChallans, setOpenChallans] = useState([]);
-  const [loadingChallans, setLoadingChallans] = useState(false);
-  const [challanPickerSearch, setChallanPickerSearch] = useState("");
-  const [selectedChallanIds, setSelectedChallanIds] = useState(() => new Set());
 
   const openOrderPicker = async () => {
     setShowOrderPicker(true);
@@ -208,72 +202,14 @@ export default function PurchaseBillsPage() {
     setShowForm(true);
   };
 
-  const openChallanPicker = async () => {
-    setShowChallanPicker(true);
-    setChallanPickerSearch("");
-    setSelectedChallanIds(new Set());
-    setLoadingChallans(true);
-    try {
-      const { data } = await getDeliveryChallansByCompany(selectedCompany.id);
-      setOpenChallans((data || []).filter((c) => c.status !== "Cancelled"));
-    } catch {
-      setOpenChallans([]);
-      notify("Failed to load delivery challans.", "error");
-    } finally {
-      setLoadingChallans(false);
-    }
-  };
-
-  const toggleChallan = (id) =>
-    setSelectedChallanIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-
-  // Merge the chosen challans' lines into purchase-bill prefill rows at the
-  // delivered quantity. Lines with the same description + item type + unit
-  // are summed (identical to the sales-order merge).
-  const buildPrefillFromChallans = () => {
-    const chosen = openChallans.filter((c) => selectedChallanIds.has(c.id));
-    const merged = new Map();
-    for (const c of chosen) {
-      for (const it of c.items || []) {
-        const qty = it.quantity ?? 0;
-        if (qty <= 0) continue;
-        const key = `${(it.description || "").trim().toLowerCase()}|${it.itemTypeId || 0}|${(it.unit || "").trim().toLowerCase()}`;
-        if (merged.has(key)) {
-          merged.get(key).quantity += qty;
-        } else {
-          merged.set(key, {
-            description: it.description || it.itemTypeName || "",
-            quantity: qty,
-            unitPrice: 0,
-            uom: it.unit || "",
-            itemTypeId: it.itemTypeId || null,
-          });
-        }
-      }
-    }
-    return merged.size ? Array.from(merged.values()) : [];
-  };
-
-  const confirmChallanPurchase = () => {
-    const lines = buildPrefillFromChallans();
-    if (lines.length === 0) {
-      notify("The selected challan(s) have no items to purchase.", "warning");
-      return;
-    }
-    const label = "Challan #" + openChallans
-      .filter((c) => selectedChallanIds.has(c.id))
-      .map((c) => c.challanNumber)
-      .join(", #");
-    setShowChallanPicker(false);
+  // Against Delivery Challans: a new bill that opens straight on the line picker.
+  const openChallanPurchase = () => {
     setEditingId(null);
     setViewOnly(false);
     setPrefillFromInvoiceId(null);
-    setPrefillItems(lines);
-    setPrefillSourceLabel(label);
+    setPrefillItems(null);
+    setPrefillSourceLabel(null);
+    setStartWithChallanPicker(true);
     setShowForm(true);
   };
 
@@ -282,6 +218,7 @@ export default function PurchaseBillsPage() {
   const closeForm = () => {
     setShowForm(false); setEditingId(null); setPrefillFromInvoiceId(null);
     setViewOnly(false); setPrefillItems(null); setPrefillSourceLabel(null);
+    setStartWithChallanPicker(false);
   };
 
   const fetchBills = useCallback(async (pg) => {
@@ -418,8 +355,8 @@ export default function PurchaseBillsPage() {
               </button>
             )}
             {canViewChallans && (
-              <button style={styles.altBtn} onClick={openChallanPicker}>
-                <MdLocalShipping size={16} /> Purchase Against Delivery Challan
+              <button style={styles.altBtn} onClick={openChallanPurchase}>
+                <MdLocalShipping size={16} /> Purchase Against Delivery Challans
               </button>
             )}
             <button style={styles.addBtn} onClick={() => { setEditingId(null); setPrefillFromInvoiceId(null); setPrefillItems(null); setPrefillSourceLabel(null); setViewOnly(false); setShowForm(true); }}>
@@ -464,7 +401,7 @@ export default function PurchaseBillsPage() {
                 <span className="filter-date-sep">–</span>
                 <input type="date" className="filter-date-input" value={dateTo} onChange={onFilterChange(setDateTo)} title="To" />
               </div>
-              <select className="filter-select" aria-label="Purchase source" value={sourceFilter} onChange={onFilterChange(setSourceFilter)}><option value="">All purchase sources</option><option value="challan">Challan supplier purchases</option><option value="other">Other purchases</option></select>
+              <select className="filter-select" aria-label="Purchase source" value={sourceFilter} onChange={onFilterChange(setSourceFilter)}><option value="">All purchase sources</option><option value="challan">Against delivery challans</option><option value="other">Other purchases</option></select>
               {hasFilters && <button className="filter-clear-btn" onClick={resetFilters}>Clear</button>}
               <PrintTemplateSelect picker={tplPicker} />
               {isBigScreen && (
@@ -519,7 +456,7 @@ export default function PurchaseBillsPage() {
                         </h5>
                         {b.divisionName && <span style={styles.divisionChip}>{b.divisionName}</span>}
                         <p style={cardStyles.text}><strong>Supplier:</strong> {b.supplierName}</p>
-                        {b.sourceDeliveryChallanId && <p style={cardStyles.text}><strong>Source:</strong> Challan supplier purchase</p>}
+                        {b.linkedChallans?.length > 0 && <p style={cardStyles.text}><strong>Against challans:</strong> {b.linkedChallans.map((c) => `#${c.challanNumber}`).join(", ")}</p>}
                         <p style={cardStyles.text}><strong>Date:</strong> {new Date(b.date).toLocaleDateString()}</p>
                         <p style={cardStyles.text}><strong>Grand Total:</strong> Rs. {b.grandTotal?.toLocaleString()}</p>
                         {/* Payment status + balance — clickable to see all
@@ -609,6 +546,7 @@ export default function PurchaseBillsPage() {
           prefillFromInvoiceId={prefillFromInvoiceId}
           prefillItems={prefillItems}
           prefillSourceLabel={prefillSourceLabel}
+          startWithChallanPicker={startWithChallanPicker}
           onClose={closeForm}
           onSaved={() => { closeForm(); fetchBills(page); }}
         />
@@ -858,111 +796,6 @@ export default function PurchaseBillsPage() {
         </div>
       )}
 
-      {showChallanPicker && (
-        <div data-admin-backdrop="" style={pickerStyles.backdrop} onClick={() => setShowChallanPicker(false)}>
-          <div data-admin-dialog="" style={pickerStyles.modal} onClick={(e) => e.stopPropagation()}>
-            <div data-admin-header="" style={pickerStyles.header}>
-              <h3 style={pickerStyles.title}>Select delivery challan(s) to purchase for</h3>
-              <button style={pickerStyles.closeBtn} onClick={() => setShowChallanPicker(false)}>
-                <MdClose size={20} />
-              </button>
-            </div>
-            <div style={{ padding: "0.75rem 1.25rem", borderBottom: `1px solid ${colors.cardBorder}` }}>
-              <div style={{ position: "relative" }}>
-                <MdSearch style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
-                <input
-                  type="text" placeholder="Search challan # / client..." autoFocus
-                  value={challanPickerSearch} onChange={(e) => setChallanPickerSearch(e.target.value)}
-                  style={{ width: "100%", padding: "0.55rem 0.75rem 0.55rem 2.3rem",
-                          border: `1px solid ${colors.inputBorder}`, borderRadius: 10,
-                          fontSize: "0.88rem", backgroundColor: "#f8f9fb", outline: "none" }}
-                />
-              </div>
-              <div style={{ fontSize: "0.74rem", color: colors.textSecondary, marginTop: "0.5rem" }}>
-                Pick one or more delivery challans. Their delivered lines are merged into a single purchase bill — identical items are summed.
-              </div>
-            </div>
-            <div style={pickerStyles.tableWrap}>
-              {loadingChallans ? (
-                <div style={{ padding: "3rem 0", textAlign: "center", color: colors.textSecondary }}>Loading...</div>
-              ) : openChallans.length === 0 ? (
-                <div style={{ padding: "3rem 1rem", textAlign: "center", color: colors.textSecondary, fontSize: "0.9rem" }}>
-                  No delivery challans available to purchase for.
-                </div>
-              ) : (() => {
-                const filtered = openChallans.filter(c => {
-                  if (!challanPickerSearch.trim()) return true;
-                  const q = challanPickerSearch.toLowerCase();
-                  return String(c.challanNumber).includes(q)
-                      || (c.clientName || "").toLowerCase().includes(q);
-                });
-                return isNarrow ? (
-                  <div style={pickerStyles.cardList}>
-                    {filtered.map(c => {
-                      const sel = selectedChallanIds.has(c.id);
-                      return (
-                        <div key={c.id} style={{ ...pickerStyles.card, ...(sel ? pickerStyles.cardSelected : {}) }} onClick={() => toggleChallan(c.id)}>
-                          <div style={pickerStyles.cardHead}>
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                              <input type="checkbox" checked={sel} onChange={() => toggleChallan(c.id)} onClick={(e) => e.stopPropagation()} />
-                              <strong>#{c.challanNumber}</strong>
-                            </span>
-                            <span style={pickerStyles.cardDate}>{c.deliveryDate ? new Date(c.deliveryDate).toLocaleDateString() : "—"}</span>
-                          </div>
-                          <div style={pickerStyles.cardClient}>{c.clientName}</div>
-                          <div style={pickerStyles.cardMeta}>
-                            <span>Lines: <strong>{c.items?.length || 0}</strong></span>
-                            <span>{c.status}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                <div data-admin-table-region=""><table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" }}>
-                  <thead>
-                    <tr>
-                      <th style={{ ...pickerStyles.th, width: 40 }}></th>
-                      <th style={pickerStyles.th}>Challan #</th>
-                      <th style={pickerStyles.th}>Date</th>
-                      <th style={pickerStyles.th}>Client</th>
-                      <th style={{ ...pickerStyles.th, textAlign: "right" }}>Lines</th>
-                      <th style={pickerStyles.th}>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map(c => (
-                        <tr key={c.id} style={{ cursor: "pointer", background: selectedChallanIds.has(c.id) ? "#e8f5e9" : "transparent" }} onClick={() => toggleChallan(c.id)}>
-                          <td style={pickerStyles.td}>
-                            <input type="checkbox" checked={selectedChallanIds.has(c.id)} onChange={() => toggleChallan(c.id)} onClick={(e) => e.stopPropagation()} />
-                          </td>
-                          <td style={pickerStyles.td}><strong>#{c.challanNumber}</strong></td>
-                          <td style={pickerStyles.td}>{c.deliveryDate ? new Date(c.deliveryDate).toLocaleDateString() : "—"}</td>
-                          <td style={pickerStyles.td}>{c.clientName}</td>
-                          <td style={{ ...pickerStyles.td, textAlign: "right" }}>{c.items?.length || 0}</td>
-                          <td style={pickerStyles.td}>{c.status}</td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table></div>
-                );
-              })()}
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", padding: "0.85rem 1.25rem", borderTop: `1px solid ${colors.cardBorder}` }}>
-              <span style={{ fontSize: "0.82rem", color: colors.textSecondary }}>
-                {selectedChallanIds.size} challan{selectedChallanIds.size !== 1 ? "s" : ""} selected
-              </span>
-              <button
-                style={{ ...styles.addBtn, opacity: selectedChallanIds.size === 0 ? 0.5 : 1, cursor: selectedChallanIds.size === 0 ? "not-allowed" : "pointer" }}
-                disabled={selectedChallanIds.size === 0}
-                onClick={confirmChallanPurchase}
-              >
-                <MdShoppingCart size={16} /> Create purchase bill
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
     </DocumentLinesNavigation>
   );

@@ -801,6 +801,12 @@ namespace MyApp.Api.Data
                 .HasOne(pi => pi.NonInventoryItem).WithMany()
                 .HasForeignKey(pi => pi.NonInventoryItemId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<PurchaseItem>().HasIndex(pi => pi.NonInventoryItemId);
+            // Challan line a purchase line buys. NoAction: a purchased challan line
+            // is refused deletion in the services, never silently unlinked.
+            modelBuilder.Entity<PurchaseItem>()
+                .HasOne(pi => pi.SourceDeliveryItem).WithMany()
+                .HasForeignKey(pi => pi.SourceDeliveryItemId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PurchaseItem>().HasIndex(pi => pi.SourceDeliveryItemId);
             modelBuilder.Entity<PurchaseItem>()
                 .ToTable(t => t.HasCheckConstraint("CK_PurchaseItem_OneItemRef",
                     "[ItemTypeId] IS NULL OR [NonInventoryItemId] IS NULL"));

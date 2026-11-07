@@ -4826,6 +4826,9 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("SaleType")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("SourceDeliveryItemId")
+                        .HasColumnType("int");
+
                     b.Property<string>("SroItemSerialNo")
                         .HasColumnType("nvarchar(max)");
 
@@ -4855,6 +4858,8 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("NonInventoryItemId");
 
                     b.HasIndex("PurchaseBillId");
+
+                    b.HasIndex("SourceDeliveryItemId");
 
                     b.ToTable("PurchaseItems", t =>
                         {
@@ -6598,6 +6603,11 @@ namespace MyApp.Api.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("MyApp.Api.Models.DeliveryItem", "SourceDeliveryItem")
+                        .WithMany()
+                        .HasForeignKey("SourceDeliveryItemId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.Navigation("Account");
 
                     b.Navigation("GoodsReceiptItem");
@@ -6607,6 +6617,8 @@ namespace MyApp.Api.Migrations
                     b.Navigation("NonInventoryItem");
 
                     b.Navigation("PurchaseBill");
+
+                    b.Navigation("SourceDeliveryItem");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.PurchaseItemSourceLine", b =>

@@ -736,6 +736,9 @@ namespace MyApp.Api.Services.Implementations
                 //    which they reference (Restrict).
                 if (challanIds.Count > 0)
                 {
+                    // Supplier bills outlive the challans they bought from: unlink their lines first.
+                    await _context.PurchaseItems.Where(p => p.SourceDeliveryItem != null && challanIds.Contains(p.SourceDeliveryItem.DeliveryChallanId))
+                        .ExecuteUpdateAsync(s => s.SetProperty(p => p.SourceDeliveryItemId, (int?)null));
                     await _context.DeliveryItems.Where(di => challanIds.Contains(di.DeliveryChallanId)).ExecuteDeleteAsync();
                     await _context.DeliveryChallans.Where(dc => dc.ClientId == id).ExecuteDeleteAsync();
                 }

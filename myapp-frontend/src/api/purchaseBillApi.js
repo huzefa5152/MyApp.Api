@@ -15,3 +15,8 @@ export const getPurchaseBillCountsBySupplier = (companyId) =>
   http.get(`/purchasebills/company/${companyId}/counts-by-supplier`);
 export const createPurchaseBillsFromChallan = (challanId, settings) => http.post(`/purchasebills/from-challan/${challanId}`, settings);
 export const previewPurchaseBillsFromChallan = (challanId) => http.get(`/purchasebills/from-challan/${challanId}/preview`);
+
+// Challans with lines still to purchase, for the Against Delivery Challans picker.
+// params: { supplierId, allSuppliers, search, excludeBillId }
+export const getOpenChallanLinesForPurchase = (companyId, params = {}) =>
+  http.get(`/purchasebills/company/${companyId}/open-challan-lines`, { params });

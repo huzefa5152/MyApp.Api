@@ -57,6 +57,17 @@ namespace MyApp.Api.DTOs
         /// purchase fulfilled lines from several sales.
         /// </summary>
         public List<int> LinkedSaleBillNumbers { get; set; } = new();
+
+        /// <summary>Challans this bill buys lines from (Against Delivery Challans), in challan-number order.</summary>
+        public List<LinkedChallanDto> LinkedChallans { get; set; } = new();
+    }
+
+    public class LinkedChallanDto
+    {
+        public int ChallanId { get; set; }
+        public int ChallanNumber { get; set; }
+        public string ClientName { get; set; } = "";
+        public int LineCount { get; set; }
     }
 
     public class PurchaseItemDto
@@ -89,6 +100,12 @@ namespace MyApp.Api.DTOs
         /// grouped set of sale lines.
         /// </summary>
         public List<int> SourceInvoiceItemIds { get; set; } = new();
+
+        /// <summary>Challan line this row buys; null when not from a challan.</summary>
+        public int? SourceDeliveryItemId { get; set; }
+        public int? SourceChallanId { get; set; }
+        public int? SourceChallanNumber { get; set; }
+        public string? SourceClientName { get; set; }
     }
 
     /// <summary>
@@ -141,6 +158,10 @@ namespace MyApp.Api.DTOs
         /// one save.
         /// </summary>
         public List<int> SourceInvoiceItemIds { get; set; } = new();
+
+        /// <summary>Optional challan line this row buys (Against Delivery Challans).
+        /// The quantity is checked against what is left on that line.</summary>
+        public int? SourceDeliveryItemId { get; set; }
     }
 
     /// <summary>
@@ -181,6 +202,37 @@ namespace MyApp.Api.DTOs
         public decimal? FixedNotifiedValueOrRetailPrice { get; set; }
         /// <summary>Preserves the source-line links if this row originated from a sale-bill grouping.</summary>
         public List<int> SourceInvoiceItemIds { get; set; } = new();
+        /// <summary>Keeps (or adds) the challan line this row buys.</summary>
+        public int? SourceDeliveryItemId { get; set; }
+    }
+
+    /// <summary>A challan with lines still to purchase — the Against Delivery Challans picker.</summary>
+    public class OpenChallanForPurchaseDto
+    {
+        public int ChallanId { get; set; }
+        public int ChallanNumber { get; set; }
+        public DateTime? DeliveryDate { get; set; }
+        public string ClientName { get; set; } = "";
+        public string PoNumber { get; set; } = "";
+        public int? DivisionId { get; set; }
+        public List<OpenChallanLineDto> Lines { get; set; } = new();
+    }
+
+    public class OpenChallanLineDto
+    {
+        public int DeliveryItemId { get; set; }
+        public string Description { get; set; } = "";
+        public int? ItemTypeId { get; set; }
+        public string? ItemTypeName { get; set; }
+        public int? NonInventoryItemId { get; set; }
+        public string Unit { get; set; } = "";
+        public decimal Delivered { get; set; }
+        public decimal Purchased { get; set; }
+        public decimal Remaining { get; set; }
+        /// <summary>Cost set on the challan line (internal); prefills the purchase price.</summary>
+        public decimal? ActualUnitCost { get; set; }
+        public int? SupplierId { get; set; }
+        public string? SupplierName { get; set; }
     }
 
     /// <summary>

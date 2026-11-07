@@ -136,6 +136,13 @@ export default function ChallanTable({
           {/* Which bill it went onto. "Billed" alone left the operator with no
               way back to the document that billed it — the link was in the data
               (InvoiceId) but never on the screen. */}
+          {c.purchaseStatus && (
+            <div style={{ fontSize: "0.72rem", marginTop: 2, whiteSpace: "nowrap", fontWeight: 600,
+              color: c.purchaseStatus === "Purchased" ? "#1b5e20" : "#e65100" }}
+              title={c.purchaseStatus === "Purchased" ? "Every line is on a supplier purchase bill." : "Some lines are still to purchase."}>
+              {c.purchaseStatus === "Purchased" ? "Purchased" : "Partly purchased"}
+            </div>
+          )}
           {c.invoiceNumber != null && (
             <div style={{ fontSize: "0.72rem", color: "#5f6d7e", marginTop: 2, whiteSpace: "nowrap" }}>
               Bill #{c.invoiceNumber}

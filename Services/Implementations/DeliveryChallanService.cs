@@ -54,7 +54,7 @@ namespace MyApp.Api.Services.Implementations
 
         private async Task AssertNoAutoPurchaseBillsAsync(int challanId)
         {
-            if (await _context.PurchaseBills.AsNoTracking().AnyAsync(p => p.SourceDeliveryChallanId == challanId))
+            if (await ChallanPurchases.AnyAsync(_context, challanId))
                 throw new InvalidOperationException("Purchase bills already exist for this challan. Remove those bills before changing its delivery lines or cancelling it.");
         }
 
@@ -293,10 +293,17 @@ namespace MyApp.Api.Services.Implementations
         {
             var ids = dtos.Select(d => d.Id).ToList();
             if (ids.Count == 0) return;
-            var linked = (await _context.PurchaseBills.AsNoTracking()
-                .Where(p => p.SourceDeliveryChallanId.HasValue && ids.Contains(p.SourceDeliveryChallanId.Value))
-                .Select(p => p.SourceDeliveryChallanId!.Value).Distinct().ToListAsync()).ToHashSet();
+            var linked = (await ChallanPurchases.ChallanIds(_context).Where(id => ids.Contains(id)).ToListAsync()).ToHashSet();
             foreach (var dto in dtos) dto.HasAutoPurchaseBills = linked.Contains(dto.Id);
+            if (linked.Count > 0)
+            {
+                var lines = await _context.DeliveryItems.AsNoTracking().Where(i => linked.Contains(i.DeliveryChallanId)).ToListAsync();
+                var bought = await ChallanPurchases.PurchasedAsync(_context, lines, excludeBillId: null);
+                var full = lines.GroupBy(i => i.DeliveryChallanId)
+                    .Where(g => g.All(i => bought[i.Id] >= ChallanPurchases.Delivered(i))).Select(g => g.Key).ToHashSet();
+                foreach (var dto in dtos.Where(d => linked.Contains(d.Id)))
+                    dto.PurchaseStatus = full.Contains(dto.Id) ? "Purchased" : "Partial";
+            }
 
             // Partially billed: the challan's rows (same number, split on billing)
             // are not all on a bill, nor all off one.
@@ -592,7 +599,7 @@ namespace MyApp.Api.Services.Implementations
         /// </summary>
         private async Task ApplyItemsDiffAsync(DeliveryChallan dc, List<DeliveryItemDto> items)
         {
-            if (await _context.PurchaseBills.AsNoTracking().AnyAsync(p => p.SourceDeliveryChallanId == dc.Id))
+            if (await ChallanPurchases.AnyAsync(_context, dc.Id))
             {
                 var incomingIds = items.Where(i => i.Id > 0).Select(i => i.Id).ToHashSet();
                 var changed = incomingIds.Count != dc.Items.Count ||
