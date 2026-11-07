@@ -121,6 +121,7 @@ export default function UsersPage() {
       fullName: u.fullName,
       password: "",
       role: u.role || defaultRoleName(),
+      companyChangesLocked: u.companyChangesLocked === true,
     });
     setMsg(null);
     setShowModal(true);
@@ -139,6 +140,7 @@ export default function UsersPage() {
       if (editUser) {
         const payload = { username: form.username, fullName: form.fullName, role: form.role };
         if (form.password) payload.password = form.password;
+        if (isSeedAdmin) payload.companyChangesLocked = form.companyChangesLocked === true;
         await updateUser(editUser.id, payload);
 
         // Sync RBAC role assignment to match the dropdown's pick — without
@@ -614,6 +616,24 @@ export default function UsersPage() {
                 <p style={{ margin: "0.35rem 0 0", fontSize: "0.72rem", color: "#5f6d7e" }}>
                   The selected role's permissions will be auto-assigned to this user on create.
                 </p>
+              )}
+              {editUser && isSeedAdmin && (
+                <label
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    alignItems: "center",
+                    minHeight: 44,
+                    marginTop: "0.5rem",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={form.companyChangesLocked === true}
+                    onChange={(e) => setForm({ ...form, companyChangesLocked: e.target.checked })}
+                  />
+                  Stop this user creating or editing companies
+                </label>
               )}
             </div>
 
