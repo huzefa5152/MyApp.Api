@@ -1,6 +1,57 @@
 import { useState, useEffect, useRef, useMemo, useId } from "react";
 import { createPortal } from "react-dom";
-import { MdArrowDropDown, MdSearch } from "react-icons/md";
+import { MdAdd, MdArrowDropDown, MdSearch } from "react-icons/md";
+import ClientForm from "./ClientForm";
+import SupplierForm from "./SupplierForm";
+import { useCompany } from "../contexts/CompanyContext";
+import { usePermissions } from "../contexts/PermissionsContext";
+
+const QUICK_CREATE = {
+  client: { Form: ClientForm, permission: "clients.manage.create", label: "New client" },
+  supplier: { Form: SupplierForm, permission: "suppliers.manage.create", label: "New supplier" },
+};
+
+// The "+" beside a form's client or supplier picker. It lives apart from the
+// picker so list filters, which never ask for it, need no permission or company
+// context. The form is portaled to <body>, and React still bubbles its submit
+// through the portal, so it must stop here or it would submit the parent document.
+function QuickCreate({ kind, companyId, onCreated }) {
+  const { has } = usePermissions();
+  const { companies } = useCompany();
+  const [open, setOpen] = useState(false);
+  const { Form, permission, label } = QUICK_CREATE[kind];
+  if (!companyId || !has(permission)) return null;
+  const company = companies?.find((c) => String(c.id) === String(companyId));
+  return (
+    <>
+      <button
+        type="button"
+        aria-label={label}
+        title={label}
+        onClick={() => setOpen(true)}
+        style={styles.createBtn}
+      >
+        <MdAdd size={16} /> New
+      </button>
+      {open &&
+        createPortal(
+          <div
+            onSubmit={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <Form
+              companyId={companyId}
+              fbrEnabled={company ? company.fbrEnabled !== false : undefined}
+              onClose={() => setOpen(false)}
+              onSaved={onCreated}
+            />
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+}
 
 /**
  * Generic single-select combobox with inline search — the common dropdown used
@@ -19,6 +70,10 @@ import { MdArrowDropDown, MdSearch } from "react-icons/md";
  *   labelKey     — option label field (default "name")
  *   searchKeys   — option fields to match against the query (default [labelKey])
  *   placeholder, style, disabled, loading, allowClear (default true)
+ *   quickCreate  — "client" | "supplier": shows a "+" that creates one in `companyId`
+ *                  and selects it. For forms only; list and report filters omit it.
+ *   companyId    — the company the new record belongs to (required with quickCreate)
+ *   onCreated(saved) — lets a parent that keeps its own list add the new record
  */
 export default function SearchableSelect({
   items,
@@ -34,6 +89,9 @@ export default function SearchableSelect({
   allowClear = true,
   id,
   ariaLabel,
+  quickCreate,
+  companyId,
+  onCreated,
 }) {
   const listId = useId();
   const [open, setOpen] = useState(false);
@@ -49,23 +107,37 @@ export default function SearchableSelect({
     [searchKeys, labelKey],
   );
 
+  // Records created through the "+" this session, kept per kind and company so a
+  // picker that switches either one never offers the previous scope's record.
+  const createdScope = `${quickCreate}:${companyId}`;
+  const [created, setCreated] = useState({ scope: createdScope, items: [] });
+  const allItems = useMemo(() => {
+    const base = items || [];
+    if (created.scope !== createdScope) return base;
+    return [
+      ...created.items.filter(
+        (c) => !base.some((b) => String(b[valueKey]) === String(c[valueKey])),
+      ),
+      ...base,
+    ];
+  }, [items, created, createdScope, valueKey]);
+
   const selected = useMemo(
-    () => (items || []).find((it) => String(it[valueKey]) === String(value)),
-    [items, value, valueKey],
+    () => allItems.find((it) => String(it[valueKey]) === String(value)),
+    [allItems, value, valueKey],
   );
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
-    const arr = items || [];
-    if (!term) return arr;
-    return arr.filter((it) =>
+    if (!term) return allItems;
+    return allItems.filter((it) =>
       keys.some((k) =>
         String(it[k] ?? "")
           .toLowerCase()
           .includes(term),
       ),
     );
-  }, [items, query, keys]);
+  }, [allItems, query, keys]);
 
   useEffect(() => {
     const onMouseDown = (e) => {
@@ -112,6 +184,15 @@ export default function SearchableSelect({
     e.stopPropagation();
     onChange?.("", null);
   };
+  const handleCreated = (saved) => {
+    if (!saved?.[valueKey]) return;
+    setCreated((prev) => ({
+      scope: createdScope,
+      items: [saved, ...(prev.scope === createdScope ? prev.items : [])],
+    }));
+    onCreated?.(saved);
+    onChange?.(saved[valueKey], saved);
+  };
 
   const onKeyDown = (e) => {
     if (!open) return;
@@ -132,7 +213,15 @@ export default function SearchableSelect({
   };
 
   return (
-    <div style={{ position: "relative", width: "100%" }}>
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        display: "flex",
+        alignItems: "stretch",
+        gap: 6,
+      }}
+    >
       <button
         id={id}
         aria-label={ariaLabel || placeholder}
@@ -145,6 +234,8 @@ export default function SearchableSelect({
         onClick={() => setOpen((v) => !v)}
         style={{
           ...styles.trigger,
+          flex: 1,
+          minWidth: 0,
           ...(disabled || loading ? { opacity: 0.6, cursor: "not-allowed" } : {}),
           ...style,
         }}
@@ -165,6 +256,9 @@ export default function SearchableSelect({
         )}
         <MdArrowDropDown size={18} style={{ flexShrink: 0, color: "#5f6d7e" }} />
       </button>
+      {quickCreate && !disabled && !loading && (
+        <QuickCreate kind={quickCreate} companyId={companyId} onCreated={handleCreated} />
+      )}
 
       {open &&
         triggerRect &&
@@ -198,7 +292,7 @@ export default function SearchableSelect({
             >
               {filtered.length === 0 && (
                 <div style={styles.empty}>
-                  {(items || []).length === 0 ? "No options." : `No match for "${query}".`}
+                  {allItems.length === 0 ? "No options." : `No match for "${query}".`}
                 </div>
               )}
               {filtered.map((it, idx) => (
@@ -248,6 +342,21 @@ const styles = {
     whiteSpace: "nowrap",
   },
   placeholder: { color: "#94a3b8" },
+  createBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.25rem",
+    flexShrink: 0,
+    padding: "0 0.7rem",
+    minHeight: 40,
+    border: "1px solid #00897b",
+    borderRadius: 8,
+    backgroundColor: "#fff",
+    color: "#00897b",
+    fontSize: "0.82rem",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
   clearBtn: {
     fontSize: "1.05rem",
     color: "#94a3b8",

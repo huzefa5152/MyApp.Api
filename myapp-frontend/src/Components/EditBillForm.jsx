@@ -25,6 +25,7 @@ import {
 import { getItemTypes } from "../api/itemTypeApi";
 import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
 import { getClientsByCompany } from "../api/clientApi";
+import SearchableSelect from "./SearchableSelect";
 import { getDivisionsByCompany } from "../api/divisionApi";
 import { getAllUnits } from "../api/unitsApi";
 import { getClaimSummary } from "../api/taxClaimApi";
@@ -1673,26 +1674,31 @@ export default function EditBillForm({
                         </span>
                       )}
                     </label>
-                    <select
+                    {/* The existing buyer stays an option even when not in the
+                        loaded clients list (e.g. archived client) so the picker
+                        never silently changes the buyer because of an empty list. */}
+                    <SearchableSelect
+                      quickCreate="client"
+                      companyId={invoice?.companyId}
+                      onCreated={(created) =>
+                        setClients((prev) => [created, ...prev.filter((c) => c.id !== created.id)])
+                      }
                       style={{ ...styles.input, ...(lockClient ? styles.readOnlyInput : {}) }}
+                      items={[
+                        ...(invoice?.clientId && !clients.some((c) => c.id === invoice.clientId)
+                          ? [{ id: invoice.clientId, label: invoice.clientName }]
+                          : []),
+                        ...clients.map((c) => ({
+                          ...c,
+                          label: `${c.name} (${c.registrationType || "—"}${c.ntn ? ` · NTN ${c.ntn}` : c.cnic ? ` · CNIC ${c.cnic}` : ""})`,
+                        })),
+                      ]}
+                      labelKey="label"
                       value={clientId}
-                      onChange={(e) => setClientId(e.target.value)}
+                      onChange={(id) => setClientId(String(id))}
+                      allowClear={false}
                       disabled={lockClient}
-                    >
-                      {/* Show the existing buyer as a fallback option even
-                          when not in the loaded clients list (e.g. archived
-                          client) so the dropdown never silently changes the
-                          buyer just because of an empty options list. */}
-                      {invoice?.clientId && !clients.some((c) => c.id === invoice.clientId) && (
-                        <option value={invoice.clientId}>{invoice.clientName}</option>
-                      )}
-                      {clients.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} ({c.registrationType || "—"}
-                          {c.ntn ? ` · NTN ${c.ntn}` : c.cnic ? ` · CNIC ${c.cnic}` : ""})
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </div>
                   {/* Division is editable (2026-07-14) — moving the bill re-tags
                       its GL entry + stock movements to the chosen division. Shown
@@ -2007,6 +2013,8 @@ export default function EditBillForm({
                                   </div>
                                 ) : (
                                   <SearchableItemTypeSelect
+                                    companyId={invoice?.companyId}
+                                    onItemTypeCreated={onItemTypeCreated}
                                     divisionId={divisionId}
                                     items={filteredItemTypes}
                                     value={group.itemTypeId || ""}
@@ -2136,6 +2144,8 @@ export default function EditBillForm({
                                   </div>
                                 ) : (
                                   <SearchableItemTypeSelect
+                                    companyId={invoice?.companyId}
+                                    onItemTypeCreated={onItemTypeCreated}
                                     divisionId={divisionId}
                                     items={filteredItemTypes}
                                     value={item.itemTypeId || ""}

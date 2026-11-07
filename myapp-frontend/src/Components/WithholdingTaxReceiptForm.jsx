@@ -120,6 +120,8 @@ export default function WithholdingTaxReceiptForm({
                 <div style={{ flex: "1 1 100%", minWidth: 220 }}>
                   <SelectDropdown
                     label="Customer"
+                    quickCreate="client"
+                    companyId={companyId}
                     endpoint={`/clients/company/${companyId}`}
                     value={client}
                     onChange={(v) => setClient(v)}

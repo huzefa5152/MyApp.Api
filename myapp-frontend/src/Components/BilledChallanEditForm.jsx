@@ -202,6 +202,7 @@ export default function BilledChallanEditForm({ challan, onClose, onSaved }) {
                 </p>
                 {!review ? (
                   <LineItemsEditor
+                    companyId={challan.companyId}
                     items={items}
                     onItemsChange={setItems}
                     makeBlankItem={blank}

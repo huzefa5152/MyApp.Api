@@ -21,6 +21,7 @@ import http from "../api/httpClient";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import DivisionSelect from "../Components/DivisionSelect";
+import SearchableSelect from "../Components/SearchableSelect";
 import { dropdownStyles } from "../theme";
 import LineItemsEditor from "../Components/LineItemsEditor";
 import EmailHtmlBody from "../Components/EmailHtmlBody";
@@ -469,6 +470,8 @@ function Workspace({ company, companyPicker }) {
               link={link}
               root={root}
               clients={clients}
+              setClients={setClients}
+              companyId={company.id}
               canManage={has("email.connections.manage")}
               canRemove={status.canPermanentlyRemove}
               companyName={company.brandName || company.name}
@@ -720,17 +723,21 @@ function Workspace({ company, companyPicker }) {
                           <div className="ew-grid">
                             <label>
                               Customer
-                              <select
+                              <SearchableSelect
+                                quickCreate="client"
+                                companyId={company.id}
+                                onCreated={(created) =>
+                                  setClients((prev) => [
+                                    created,
+                                    ...prev.filter((c) => c.id !== created.id),
+                                  ])
+                                }
+                                items={clients}
                                 value={draft.clientId || ""}
-                                onChange={(e) => change("clientId", Number(e.target.value) || null)}
-                              >
-                                <option value="">Confirm customer…</option>
-                                {clients.map((c) => (
-                                  <option key={c.id} value={c.id}>
-                                    {c.name}
-                                  </option>
-                                ))}
-                              </select>
+                                onChange={(id) => change("clientId", Number(id) || null)}
+                                placeholder="Confirm customer…"
+                                style={dropdownStyles.base}
+                              />
                             </label>
                             <DivisionSelect
                               companyId={company.id}
@@ -869,6 +876,8 @@ function Connection({
   link,
   root,
   clients,
+  setClients,
+  companyId,
   canManage,
   canRemove,
   companyName,
@@ -932,23 +941,22 @@ function Connection({
               </label>
               <label>
                 Customer (optional)
-                <select
+                <SearchableSelect
+                  quickCreate="client"
+                  companyId={companyId}
+                  onCreated={(created) =>
+                    setClients((prev) => [created, ...prev.filter((c) => c.id !== created.id)])
+                  }
+                  items={clients}
                   value={rule.clientId || ""}
-                  onChange={(e) =>
+                  onChange={(id) =>
                     setRules(
-                      rules.map((r, j) =>
-                        i === j ? { ...r, clientId: Number(e.target.value) || null } : r,
-                      ),
+                      rules.map((r, j) => (i === j ? { ...r, clientId: Number(id) || null } : r)),
                     )
                   }
-                >
-                  <option value="">Confirm for each email</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Confirm for each email"
+                  style={dropdownStyles.base}
+                />
               </label>
               <button disabled={busy} onClick={() => setRules(rules.filter((_, j) => j !== i))}>
                 <FiTrash2 className="ew-icon" aria-hidden="true" />

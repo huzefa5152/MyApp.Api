@@ -1,9 +1,9 @@
-import { useState, useEffect, useLayoutEffect, useRef, Fragment } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, Fragment } from "react";
 import { MdAdd, MdDelete, MdContentPaste, MdRepeat, MdLocalOffer, MdClose } from "react-icons/md";
 import { lineAmounts } from "../utils/quoteDiscount";
 import LookupAutocomplete from "./LookupAutocomplete";
 import LineItemImageCell from "./LineItemImageCell";
-import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import SearchableItemTypeSelect, { NewItemTypeButton } from "./SearchableItemTypeSelect";
 import BulkItemTypeBar from "./BulkItemTypeBar";
 import QuantityInput from "./QuantityInput";
 import useIsNarrow from "../hooks/useIsNarrow";
@@ -54,7 +54,9 @@ export default function LineItemsEditor({
   units = [],
   // Item Type / Non-Inventory picker + bulk-apply bar.
   showItemType = true,
-  itemTypes = [],
+  // The company an item type created from a picker belongs to.
+  companyId = null,
+  itemTypes: parentItemTypes = [],
   nonInventoryItems = [],
   divisionId = null,
   itemTypePlaceholder = "— item type (optional) —",
@@ -114,6 +116,17 @@ export default function LineItemsEditor({
       setTableNeeds(wrap.scrollWidth);
   });
   const showBulk = showBulkBar && showItemType;
+  // An item type created from one row must be pickable on every other row.
+  const [createdItemTypes, setCreatedItemTypes] = useState([]);
+  const itemTypes = useMemo(
+    () => [
+      ...createdItemTypes.filter((c) => !parentItemTypes.some((t) => t.id === c.id)),
+      ...parentItemTypes,
+    ],
+    [createdItemTypes, parentItemTypes],
+  );
+  const addCreatedItemType = (created) =>
+    setCreatedItemTypes((prev) => [created, ...prev.filter((t) => t.id !== created.id)]);
   // The photo cell is inert without an uploader, so require both.
   const showPhoto = showImage && typeof onUploadImage === "function";
   const [pasteOpen, setPasteOpen] = useState(false);
@@ -451,6 +464,13 @@ export default function LineItemsEditor({
           {itemsHint && <span style={s.hintText}> — {itemsHint}</span>}
         </label>
         <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+          {showItemType && (
+            <NewItemTypeButton
+              companyId={companyId}
+              divisionId={divisionId}
+              onCreated={addCreatedItemType}
+            />
+          )}
           {enableRepeatLast && (
             <button
               type="button"
@@ -533,6 +553,8 @@ export default function LineItemsEditor({
           itemTypes={itemTypes}
           nonInventoryItems={nonInventoryItems}
           divisionId={divisionId}
+          companyId={companyId}
+          onItemTypeCreated={addCreatedItemType}
         />
       )}
 
@@ -562,6 +584,8 @@ export default function LineItemsEditor({
                 {showItemType && (
                   <div style={{ marginBottom: "0.5rem" }}>
                     <SearchableItemTypeSelect
+                      companyId={companyId}
+                      onItemTypeCreated={addCreatedItemType}
                       divisionId={divisionId}
                       items={itemTypes}
                       value={item.itemTypeId || ""}
@@ -698,6 +722,8 @@ export default function LineItemsEditor({
                       {showItemType && (
                         <td style={{ ...s.td, verticalAlign: "top" }}>
                           <SearchableItemTypeSelect
+                            companyId={companyId}
+                            onItemTypeCreated={addCreatedItemType}
                             divisionId={divisionId}
                             items={itemTypes}
                             value={item.itemTypeId || ""}

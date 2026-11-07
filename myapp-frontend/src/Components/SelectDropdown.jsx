@@ -11,6 +11,7 @@ import SearchableSelect from "./SearchableSelect";
  *   - onChange        called with the selected option object (or null)
  *   - returnId        when true, onChange receives the id instead of the object
  *   - optionLabelKey / optionValueKey  field names (default name / id)
+ *   - quickCreate / companyId / onCreated  see SearchableSelect
  */
 export default function SelectDropdown({
   label,
@@ -24,6 +25,9 @@ export default function SelectDropdown({
   searchKeys,
   returnId = false,
   disabled = false,
+  quickCreate,
+  companyId,
+  onCreated,
 }) {
   const fieldId = useId();
   const [fetched, setFetched] = useState([]);
@@ -84,6 +88,9 @@ export default function SelectDropdown({
         placeholder={placeholder}
         loading={loading}
         disabled={disabled || !!error}
+        quickCreate={quickCreate}
+        companyId={companyId}
+        onCreated={onCreated}
         onChange={(id, item) => {
           if (returnId) onChange?.(id === "" ? null : id);
           else onChange?.(item || null);

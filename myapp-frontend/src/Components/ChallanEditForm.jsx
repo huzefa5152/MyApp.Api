@@ -8,6 +8,7 @@ import { useChallanPurchasePreview } from "./ChallanPurchasePreview";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { updateChallan } from "../api/challanApi";
 import { getClientsByCompany } from "../api/clientApi";
+import SearchableSelect from "./SearchableSelect";
 import { getAllUnits } from "../api/unitsApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
@@ -402,20 +403,19 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
                   Client *
                   {isDuplicate && <span style={styles.lockedHint}> (locked — inherited)</span>}
                 </label>
-                <select
+                <SearchableSelect
+                  quickCreate="client"
+                  companyId={challan.companyId}
+                  onCreated={(created) =>
+                    setClients((prev) => [created, ...prev.filter((c) => c.id !== created.id)])
+                  }
                   style={isDuplicate ? { ...styles.input, ...styles.lockedInput } : styles.input}
+                  items={clients}
                   value={clientId}
-                  onChange={(e) => setClientId(e.target.value)}
-                  required
+                  onChange={(id) => setClientId(id ? String(id) : "")}
+                  placeholder="Select a client"
                   disabled={isDuplicate}
-                >
-                  <option value="">Select a client</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
               <div style={{ flex: 1.5, minWidth: 180 }}>
                 <label style={styles.label}>
@@ -530,6 +530,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
 
             {/* ── Items ── */}
             <LineItemsEditor
+              companyId={challan.companyId}
               items={items}
               onItemsChange={setItems}
               makeBlankItem={blankItem}

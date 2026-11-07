@@ -804,6 +804,11 @@ export default function PaymentForm({
               ) : (
                 <div style={{ marginTop: "0.5rem" }}>
                   <SearchableSelect
+                    quickCreate={payeeType === "Client" ? "client" : "supplier"}
+                    companyId={companyId}
+                    onCreated={(created) =>
+                      setContacts((prev) => [created, ...prev.filter((c) => c.id !== created.id)])
+                    }
                     items={contacts}
                     loading={contactsLoading}
                     disabled={contactsLoading}

@@ -118,6 +118,7 @@ The editions are system roles defined in `Helpers/EditionCatalog.cs`. A variatio
 ### 7.3 Reusable parts
 
 - Line items: `Components/LineItemsEditor.jsx` (responsive table or cards, keyboard quick-add). Use it for any new quote, order, challan or invoice-style grid.
+- Client and supplier pickers on a form: `Components/SearchableSelect.jsx` (or `SelectDropdown`) with `quickCreate="client"` or `"supplier"` and `companyId`. It gates on the create permission, opens the shared form and selects the new record. Item types: `SearchableItemTypeSelect` has the same shortcut in its list, and its `NewItemTypeButton` export is the visible header button. List and report filters never pass `quickCreate`.
 - Hooks in `src/hooks/`: `useAdminAccessibility`, `useDocumentCopy`, `useEntityAttachmentCounts`, `useIsNarrow`, `useListViewMode`, `usePageSize`, `usePrintTemplates`, `useQueryAction`, `useScrollToError`, `useStarterTemplates`, `useUiPreference`.
 - Lists: `useListViewMode` and `usePageSize` remember each screen's view and page size.
 - Printing: `usePrintTemplates` for the template picker; `utils/printDocument` and the `templateEngine` merge for output. A new print path must go through `mergeTemplate`.

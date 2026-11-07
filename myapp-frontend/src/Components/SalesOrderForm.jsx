@@ -299,6 +299,8 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
                 <div style={{ flex: "1 1 100%", minWidth: 220 }}>
                   <SelectDropdown
                     label="Client"
+                    quickCreate="client"
+                    companyId={companyId}
                     endpoint={`/clients/company/${companyId}`}
                     value={client}
                     onChange={(v) => {
@@ -406,6 +408,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
             </section>
 
             <LineItemsEditor
+              companyId={companyId}
               items={items}
               onItemsChange={setItems}
               makeBlankItem={blankItem}

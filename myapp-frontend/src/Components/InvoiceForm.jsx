@@ -1180,6 +1180,8 @@ export default function InvoiceForm({
                                           The '+ New Item Type' affordance lives once above the grid
                                           (was per-row before — moved to declutter the table). */}
             <SearchableItemTypeSelect
+              companyId={companyId}
+              onItemTypeCreated={onItemTypeCreated}
               divisionId={divisionId}
               items={filteredItemTypes}
               value={itemTypeIds[item.id] || ""}

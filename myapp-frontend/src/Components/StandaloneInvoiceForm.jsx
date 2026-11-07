@@ -1749,6 +1749,13 @@ export default function StandaloneInvoiceForm({
                                 <tr key={r.localId} style={styles.unifiedRow}>
                                   <td style={styles.unifiedTd}>
                                     <SearchableItemTypeSelect
+                                      companyId={companyId}
+                                      onItemTypeCreated={(created) =>
+                                        setItemTypes((prev) => [
+                                          created,
+                                          ...prev.filter((t) => t.id !== created.id),
+                                        ])
+                                      }
                                       divisionId={divisionId}
                                       items={filteredItemTypes}
                                       value={r.itemTypeId}

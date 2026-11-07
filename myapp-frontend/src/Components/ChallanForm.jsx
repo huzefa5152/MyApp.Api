@@ -1,6 +1,6 @@
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import { useState, useRef, useEffect } from "react";
-import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import SearchableItemTypeSelect, { NewItemTypeButton } from "./SearchableItemTypeSelect";
 import SearchableSelect from "./SearchableSelect";
 import RichText from "./RichText";
 import DocumentNotesEditor from "./DocumentNotesEditor";
@@ -503,6 +503,8 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
                   ) : (
                     <SelectDropdown
                       label="Client"
+                      quickCreate="client"
+                      companyId={companyId}
                       endpoint={`/clients/company/${companyId}`}
                       value={client}
                       onChange={(val) => {
@@ -632,7 +634,17 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
                   <label style={{ ...styles.label, margin: 0 }}>
                     Items to deliver ({deliverableItems.length})
                   </label>
-                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                    <NewItemTypeButton
+                      companyId={companyId}
+                      divisionId={divisionId}
+                      onCreated={(created) =>
+                        setItemTypes((prev) => [
+                          created,
+                          ...prev.filter((t) => t.id !== created.id),
+                        ])
+                      }
+                    />
                     <button type="button" style={styles.soQuickBtn} onClick={setAllRemaining}>
                       Deliver all remaining
                     </button>
@@ -656,6 +668,13 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <SearchableItemTypeSelect
+                          companyId={companyId}
+                          onItemTypeCreated={(created) =>
+                            setItemTypes((prev) => [
+                              created,
+                              ...prev.filter((t) => t.id !== created.id),
+                            ])
+                          }
                           divisionId={divisionId}
                           items={itemTypes}
                           value={bulkOrderItemTypeId}
@@ -709,6 +728,13 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
                             </td>
                             <td style={{ ...styles.soTd, minWidth: 200 }}>
                               <SearchableItemTypeSelect
+                                companyId={companyId}
+                                onItemTypeCreated={(created) =>
+                                  setItemTypes((prev) => [
+                                    created,
+                                    ...prev.filter((t) => t.id !== created.id),
+                                  ])
+                                }
                                 divisionId={divisionId}
                                 items={itemTypes}
                                 value={it.itemTypeId || ""}
@@ -763,6 +789,7 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
             {!fromOrder && (
               <div style={{ marginTop: "0.25rem" }}>
                 <LineItemsEditor
+                  companyId={companyId}
                   items={items}
                   onItemsChange={setItems}
                   makeBlankItem={blankItem}

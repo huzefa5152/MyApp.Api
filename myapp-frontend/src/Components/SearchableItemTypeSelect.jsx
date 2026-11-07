@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { MdArrowDropDown, MdSearch, MdStar, MdAddCircleOutline } from "react-icons/md";
+import { MdAdd, MdArrowDropDown, MdSearch, MdStar, MdAddCircleOutline } from "react-icons/md";
 import ItemTypeForm from "./ItemTypeForm";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -508,6 +508,42 @@ export default function SearchableItemTypeSelect({
   );
 }
 
+// The bill form's visible "New Item Type" shortcut, for a form's items header.
+// Same permission and same ItemTypeForm as the picker's own footer.
+export function NewItemTypeButton({ companyId, divisionId = null, onCreated, style }) {
+  const [open, setOpen] = useState(false);
+  const { selectedCompany } = useCompany();
+  const { has } = usePermissions();
+  const targetCompanyId = companyId ?? selectedCompany?.id ?? null;
+  if (!targetCompanyId || !has("itemtypes.manage.create")) return null;
+  return (
+    <>
+      <button
+        type="button"
+        title="Add a new Item Type to your catalog without leaving this form"
+        onClick={() => setOpen(true)}
+        style={{ ...styles.newTypeBtn, ...style }}
+      >
+        <MdAdd size={14} /> New Item Type
+      </button>
+      {open &&
+        createPortal(
+          <ItemTypeForm
+            companyId={targetCompanyId}
+            defaultDivisionId={divisionId || null}
+            fbrOn={selectedCompany?.fbrEnabled !== false}
+            onClose={() => setOpen(false)}
+            onSaved={(saved) => {
+              if (saved) onCreated?.(saved);
+              setOpen(false);
+            }}
+          />,
+          document.body,
+        )}
+    </>
+  );
+}
+
 function renderItem(it, idx, highlightIdx, setHighlightIdx, handlePick) {
   const highlighted = idx === highlightIdx;
   return (
@@ -547,6 +583,19 @@ function renderItem(it, idx, highlightIdx, setHighlightIdx, handlePick) {
 }
 
 const styles = {
+  newTypeBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.25rem",
+    padding: "0.35rem 0.7rem",
+    border: "1px solid #00897b",
+    borderRadius: 8,
+    backgroundColor: "#fff",
+    color: "#00897b",
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
   trigger: {
     display: "flex",
     alignItems: "center",

@@ -11,6 +11,7 @@ import {
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { getClientsByCompany } from "../api/clientApi";
+import SearchableSelect from "../Components/SearchableSelect";
 import { hasExcelTemplate, getTemplate } from "../api/printTemplateApi";
 import { previewChallanImport, commitChallanImport } from "../api/challanImportApi";
 import { notify } from "../utils/notify";
@@ -286,6 +287,8 @@ export default function ImportChallansPage() {
           rows={previewRows}
           setRows={setPreviewRows}
           clients={clients}
+          setClients={setClients}
+          companyId={targetCompany?.id}
           onBack={() => setStep(1)}
           onCommit={handleCommit}
           loading={loading}
@@ -550,7 +553,7 @@ function UploadStep({
   );
 }
 
-function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
+function ReviewStep({ rows, setRows, clients, setClients, companyId, onBack, onCommit, loading }) {
   const updateRow = (idx, patch) =>
     setRows((prev) =>
       prev.map((r, i) => {
@@ -732,20 +735,18 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
                 />
               </Field>
               <Field label="Client">
-                <select
-                  value={row.clientId || ""}
-                  onChange={(e) =>
-                    updateRow(rowIdx, { clientId: parseInt(e.target.value) || null })
+                <SearchableSelect
+                  quickCreate="client"
+                  companyId={companyId}
+                  onCreated={(created) =>
+                    setClients((prev) => [created, ...prev.filter((c) => c.id !== created.id)])
                   }
+                  items={clients}
+                  value={row.clientId || ""}
+                  onChange={(id) => updateRow(rowIdx, { clientId: Number(id) || null })}
+                  placeholder="— pick client —"
                   style={styles.input}
-                >
-                  <option value="">— pick client —</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                />
                 {row.clientNameRaw && !row.clientId && (
                   <small style={{ color: colors.warning }}>File said: "{row.clientNameRaw}"</small>
                 )}

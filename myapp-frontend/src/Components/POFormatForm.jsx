@@ -294,6 +294,11 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
             <div style={{ minWidth: 0 }}>
               <label style={styles.label}>Client *</label>
               <SearchableSelect
+                quickCreate="client"
+                companyId={formatCompanyId}
+                onCreated={(created) =>
+                  setClients((prev) => [created, ...prev.filter((c) => c.id !== created.id)])
+                }
                 items={availableClients}
                 value={selectedClientId ?? ""}
                 onChange={(id) => setSelectedClientId(id === "" || id == null ? null : Number(id))}

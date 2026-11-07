@@ -24,6 +24,8 @@ export default function BulkItemTypeBar({
   itemTypes,
   nonInventoryItems = [],
   divisionId = null,
+  companyId = null,
+  onItemTypeCreated,
   // Array model
   items,
   setItems,
@@ -151,6 +153,8 @@ export default function BulkItemTypeBar({
       </select>
       <div style={{ flex: "1 1 220px", maxWidth: 300 }}>
         <SearchableItemTypeSelect
+          companyId={companyId}
+          onItemTypeCreated={onItemTypeCreated}
           divisionId={divisionId}
           items={itemTypes}
           value={items ? uniformItemTypeId : selId}

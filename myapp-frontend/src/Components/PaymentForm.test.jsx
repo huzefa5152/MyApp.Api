@@ -4,6 +4,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import PaymentForm from "./PaymentForm";
 import { getClientsByCompany } from "../api/clientApi";
+vi.mock("../contexts/PermissionsContext", () => ({ usePermissions: () => ({ has: () => false }) }));
+vi.mock("../contexts/CompanyContext", () => ({ useCompany: () => ({ companies: [] }) }));
 vi.mock("../api/clientApi", () => ({ getClientsByCompany: vi.fn() }));
 vi.mock("../api/supplierApi", () => ({
   getSuppliersByCompany: vi.fn().mockResolvedValue({ data: [] }),

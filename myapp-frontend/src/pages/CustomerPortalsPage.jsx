@@ -661,6 +661,11 @@ function CreatePortalModal({ companies, defaultCompanyId, loadingCompanies, onCl
 
           <label style={st.label}>Client</label>
           <SearchableSelect
+            quickCreate="client"
+            companyId={companyId}
+            onCreated={(created) =>
+              setClients((prev) => [created, ...prev.filter((c) => c.id !== created.id)])
+            }
             items={clients}
             value={clientId}
             onChange={setClientId}

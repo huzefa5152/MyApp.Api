@@ -16,11 +16,10 @@ import { formStyles } from "../theme";
 import { notify } from "../utils/notify";
 import { todayYmd } from "../utils/dateInput";
 import { defaultAccountPlaceholder } from "../utils/accountDisplay";
-import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import SearchableItemTypeSelect, { NewItemTypeButton } from "./SearchableItemTypeSelect";
 import BulkItemTypeBar from "./BulkItemTypeBar";
 import SearchableSelect from "./SearchableSelect";
 import DocumentNotesEditor from "./DocumentNotesEditor";
-import SupplierForm from "./SupplierForm";
 import DivisionSelect from "./DivisionSelect";
 import AccountSelect from "./AccountSelect";
 import AttachmentManager from "./AttachmentManager";
@@ -67,7 +66,6 @@ export default function PurchaseBillForm({
   // same behaviour as the sales bill form.
   const [units, setUnits] = useState([]);
   const [supplierId, setSupplierId] = useState("");
-  const [showSupplierForm, setShowSupplierForm] = useState(false);
   // New bills default to the division the list is filtered to; edits hydrate
   // their stored division from the loaded bill below.
   const [divisionId, setDivisionId] = useState(
@@ -581,47 +579,20 @@ export default function PurchaseBillForm({
                 }}
               >
                 <div data-admin-field="" style={{ ...formStyles.formGroup, gridColumn: "1 / -1" }}>
-                  <label
-                    style={{ ...formStyles.label, display: "flex", alignItems: "center", gap: 8 }}
-                  >
-                    Supplier *
-                    {!readOnly && (
-                      <button
-                        type="button"
-                        onClick={() => setShowSupplierForm(true)}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          color: "#0d47a1",
-                          fontWeight: 600,
-                          fontSize: "0.78rem",
-                          cursor: "pointer",
-                          padding: 0,
-                        }}
-                      >
-                        + New supplier
-                      </button>
-                    )}
-                  </label>
+                  <label style={formStyles.label}>Supplier *</label>
                   <SearchableSelect
+                    quickCreate="supplier"
+                    companyId={companyId}
+                    disabled={readOnly}
+                    onCreated={(created) =>
+                      setSuppliers((prev) => [created, ...prev.filter((c) => c.id !== created.id)])
+                    }
                     items={suppliers}
                     value={supplierId}
                     onChange={(id) => setSupplierId(id ? String(id) : "")}
                     placeholder="Select supplier…"
                   />
                 </div>
-                {showSupplierForm && (
-                  <SupplierForm
-                    companyId={companyId}
-                    onClose={() => setShowSupplierForm(false)}
-                    onSaved={(sup) => {
-                      if (sup && sup.id) {
-                        setSuppliers((prev) => [sup, ...prev.filter((s) => s.id !== sup.id)]);
-                        setSupplierId(String(sup.id));
-                      }
-                    }}
-                  />
-                )}
                 <div data-admin-field="" style={formStyles.formGroup}>
                   <label style={formStyles.label}>Bill Date *</label>
                   <input
@@ -791,6 +762,19 @@ export default function PurchaseBillForm({
                   }}
                 >
                   <strong style={{ color: colors.textPrimary }}>Items ({items.length})</strong>
+                  {!readOnly && (
+                    <NewItemTypeButton
+                      companyId={companyId}
+                      divisionId={divisionId}
+                      onCreated={(created) =>
+                        setItemTypes((prev) => [
+                          created,
+                          ...prev.filter((t) => t.id !== created.id),
+                        ])
+                      }
+                      style={{ marginLeft: "auto", marginRight: "0.5rem" }}
+                    />
+                  )}
                   <button
                     type="button"
                     onClick={() => setItems([...items, newRow()])}
@@ -815,6 +799,10 @@ export default function PurchaseBillForm({
                   itemTypes={itemTypes}
                   nonInventoryItems={nonInvItems}
                   divisionId={divisionId}
+                  companyId={companyId}
+                  onItemTypeCreated={(created) =>
+                    setItemTypes((prev) => [created, ...prev.filter((t) => t.id !== created.id)])
+                  }
                 />
                 {isNarrow ? (
                   /* Phone (<768px): each line becomes a stacked card so no control
@@ -852,6 +840,13 @@ export default function PurchaseBillForm({
                           <div>
                             <label style={mStyles.label}>Item Type (FBR catalog)</label>
                             <SearchableItemTypeSelect
+                              companyId={companyId}
+                              onItemTypeCreated={(created) =>
+                                setItemTypes((prev) => [
+                                  created,
+                                  ...prev.filter((t) => t.id !== created.id),
+                                ])
+                              }
                               divisionId={divisionId}
                               items={eligibleItemTypes}
                               value={it.itemTypeId || ""}
@@ -979,6 +974,13 @@ export default function PurchaseBillForm({
                             <tr key={idx}>
                               <td style={td}>
                                 <SearchableItemTypeSelect
+                                  companyId={companyId}
+                                  onItemTypeCreated={(created) =>
+                                    setItemTypes((prev) => [
+                                      created,
+                                      ...prev.filter((t) => t.id !== created.id),
+                                    ])
+                                  }
                                   divisionId={divisionId}
                                   items={eligibleItemTypes}
                                   value={it.itemTypeId || ""}

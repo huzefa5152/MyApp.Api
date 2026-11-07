@@ -14,7 +14,7 @@ import { formStyles } from "../theme";
 import { notify } from "../utils/notify";
 import { todayYmd } from "../utils/dateInput";
 import { defaultAccountPlaceholder } from "../utils/accountDisplay";
-import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import SearchableItemTypeSelect, { NewItemTypeButton } from "./SearchableItemTypeSelect";
 import BulkItemTypeBar from "./BulkItemTypeBar";
 import SearchableSelect from "./SearchableSelect";
 import DivisionSelect from "./DivisionSelect";
@@ -308,6 +308,12 @@ export default function PurchaseDebitNoteForm({
                 <div data-admin-field="" style={{ ...formStyles.formGroup, gridColumn: "1 / -1" }}>
                   <label style={formStyles.label}>Supplier *</label>
                   <SearchableSelect
+                    quickCreate="supplier"
+                    companyId={companyId}
+                    disabled={readOnly}
+                    onCreated={(created) =>
+                      setSuppliers((prev) => [created, ...prev.filter((c) => c.id !== created.id)])
+                    }
                     items={suppliers}
                     value={supplierId}
                     onChange={(id) => {
@@ -427,6 +433,19 @@ export default function PurchaseDebitNoteForm({
                   }}
                 >
                   <strong style={{ color: colors.textPrimary }}>Items ({items.length})</strong>
+                  {!readOnly && (
+                    <NewItemTypeButton
+                      companyId={companyId}
+                      divisionId={divisionId}
+                      onCreated={(created) =>
+                        setItemTypes((prev) => [
+                          created,
+                          ...prev.filter((t) => t.id !== created.id),
+                        ])
+                      }
+                      style={{ marginLeft: "auto", marginRight: "0.5rem" }}
+                    />
+                  )}
                   <button
                     type="button"
                     onClick={() => setItems([...items, newRow()])}
@@ -451,6 +470,10 @@ export default function PurchaseDebitNoteForm({
                   itemTypes={itemTypes}
                   nonInventoryItems={[]}
                   divisionId={divisionId}
+                  companyId={companyId}
+                  onItemTypeCreated={(created) =>
+                    setItemTypes((prev) => [created, ...prev.filter((t) => t.id !== created.id)])
+                  }
                 />
                 <div data-admin-table-region="" style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
@@ -481,6 +504,13 @@ export default function PurchaseDebitNoteForm({
                           <tr key={idx}>
                             <td style={td}>
                               <SearchableItemTypeSelect
+                                companyId={companyId}
+                                onItemTypeCreated={(created) =>
+                                  setItemTypes((prev) => [
+                                    created,
+                                    ...prev.filter((t) => t.id !== created.id),
+                                  ])
+                                }
                                 divisionId={divisionId}
                                 items={itemTypes}
                                 value={it.itemTypeId || ""}

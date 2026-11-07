@@ -13,7 +13,7 @@ import { getPurchaseBillsByCompanyPaged } from "../api/purchaseBillApi";
 import { formStyles } from "../theme";
 import { notify } from "../utils/notify";
 import { todayYmd } from "../utils/dateInput";
-import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import SearchableItemTypeSelect, { NewItemTypeButton } from "./SearchableItemTypeSelect";
 import BulkItemTypeBar from "./BulkItemTypeBar";
 import SearchableSelect from "./SearchableSelect";
 import DocumentNotesEditor from "./DocumentNotesEditor";
@@ -245,6 +245,11 @@ export default function GoodsReceiptForm({
               <div data-admin-field="" style={{ ...formStyles.formGroup, gridColumn: "1 / -1" }}>
                 <label style={formStyles.label}>Supplier *</label>
                 <SearchableSelect
+                  quickCreate="supplier"
+                  companyId={companyId}
+                  onCreated={(created) =>
+                    setSuppliers((prev) => [created, ...prev.filter((c) => c.id !== created.id)])
+                  }
                   items={suppliers}
                   value={supplierId}
                   onChange={(id) => setSupplierId(id ? String(id) : "")}
@@ -337,6 +342,14 @@ export default function GoodsReceiptForm({
                 }}
               >
                 <strong>Items ({items.length})</strong>
+                <NewItemTypeButton
+                  companyId={companyId}
+                  divisionId={divisionId}
+                  onCreated={(created) =>
+                    setItemTypes((prev) => [created, ...prev.filter((t) => t.id !== created.id)])
+                  }
+                  style={{ marginLeft: "auto", marginRight: "0.5rem" }}
+                />
                 <button
                   type="button"
                   onClick={() =>
@@ -373,6 +386,10 @@ export default function GoodsReceiptForm({
                 itemTypes={itemTypes}
                 nonInventoryItems={nonInvItems}
                 divisionId={divisionId}
+                companyId={companyId}
+                onItemTypeCreated={(created) =>
+                  setItemTypes((prev) => [created, ...prev.filter((t) => t.id !== created.id)])
+                }
               />
               <div data-admin-table-region="" style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
@@ -390,6 +407,13 @@ export default function GoodsReceiptForm({
                       <tr key={idx}>
                         <td style={td}>
                           <SearchableItemTypeSelect
+                            companyId={companyId}
+                            onItemTypeCreated={(created) =>
+                              setItemTypes((prev) => [
+                                created,
+                                ...prev.filter((t) => t.id !== created.id),
+                              ])
+                            }
                             divisionId={divisionId}
                             items={itemTypes}
                             value={it.itemTypeId || ""}

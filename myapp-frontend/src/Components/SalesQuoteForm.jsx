@@ -271,6 +271,8 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
                 <div style={{ flex: 2, minWidth: 220 }}>
                   <SelectDropdown
                     label="Client"
+                    quickCreate="client"
+                    companyId={companyId}
                     endpoint={`/clients/company/${companyId}`}
                     value={client}
                     onChange={setClient}
@@ -355,6 +357,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
             </section>
 
             <LineItemsEditor
+              companyId={companyId}
               items={items}
               onItemsChange={setItems}
               makeBlankItem={blankItem}

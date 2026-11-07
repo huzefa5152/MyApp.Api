@@ -13,6 +13,7 @@ import {
 } from "react-icons/md";
 import { parsePdf, parseText, ensureLookups } from "../api/poImportApi";
 import { getClientsByCompany, getClientById } from "../api/clientApi";
+import SearchableSelect from "./SearchableSelect";
 import { createSalesOrder } from "../api/salesOrderApi";
 import { createSalesQuote, getSalesQuotesForPicker } from "../api/salesQuoteApi";
 import { createDeliveryChallan } from "../api/challanApi";
@@ -23,7 +24,7 @@ import { todayYmd } from "../utils/dateInput";
 import LookupAutocomplete from "./LookupAutocomplete";
 import QuantityInput from "./QuantityInput";
 import ParserFeedback from "./ParserFeedback";
-import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import SearchableItemTypeSelect, { NewItemTypeButton } from "./SearchableItemTypeSelect";
 import { getItemTypes } from "../api/itemTypeApi";
 import ChallanPrivateCosts, { useChallanSuppliers } from "./ChallanPrivateCosts";
 import { createPurchaseBillsFromChallan } from "../api/purchaseBillApi";
@@ -621,22 +622,22 @@ export default function POImportForm({ companyId, target = "salesorder", onClose
               <div data-admin-form-row="" style={styles.row}>
                 <div style={{ flex: 2, minWidth: 220 }}>
                   <label style={styles.label}>Client *</label>
-                  <select
+                  <SearchableSelect
+                    quickCreate="client"
+                    companyId={companyId}
+                    onCreated={(created) =>
+                      setClients((prev) => [created, ...prev.filter((c) => c.id !== created.id)])
+                    }
                     style={styles.select}
+                    items={clients}
                     value={selectedClientId}
-                    onChange={(e) => {
-                      setSelectedClientId(e.target.value);
+                    onChange={(id) => {
+                      setSelectedClientId(id ? String(id) : "");
                       setSite("");
                       setSalesQuoteId("");
                     }}
-                  >
-                    <option value="">— Select Client —</option>
-                    {clients.map((cl) => (
-                      <option key={cl.id} value={cl.id}>
-                        {cl.name}
-                      </option>
-                    ))}
-                  </select>
+                    placeholder="— Select Client —"
+                  />
                 </div>
                 <div style={{ flex: 1.5, minWidth: 180 }}>
                   <label style={styles.label}>Site / Department</label>
@@ -719,6 +720,18 @@ export default function POImportForm({ companyId, target = "salesorder", onClose
                         />
                       )}
                   </label>
+                  {cfg.showItemType && (
+                    <NewItemTypeButton
+                      companyId={companyId}
+                      onCreated={(created) =>
+                        setItemTypes((prev) => [
+                          created,
+                          ...prev.filter((t) => t.id !== created.id),
+                        ])
+                      }
+                      style={{ marginLeft: "auto", marginRight: "0.5rem" }}
+                    />
+                  )}
                   <button type="button" style={styles.addItemBtn} onClick={addItem}>
                     <MdAdd size={16} /> Add Item
                   </button>
@@ -817,6 +830,12 @@ export default function POImportForm({ companyId, target = "salesorder", onClose
                               items={itemTypes}
                               value={item.itemTypeId || ""}
                               companyId={companyId}
+                              onItemTypeCreated={(created) =>
+                                setItemTypes((prev) => [
+                                  created,
+                                  ...prev.filter((t) => t.id !== created.id),
+                                ])
+                              }
                               onChange={(newId) =>
                                 handleItemChange(idx, "itemTypeId", newId ? Number(newId) : null)
                               }
