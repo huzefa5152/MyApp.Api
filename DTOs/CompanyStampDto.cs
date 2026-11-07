@@ -18,8 +18,7 @@ namespace MyApp.Api.DTOs
         public DateTime UpdatedAt { get; set; }
     }
 
-    // Rename / reorder only — the image and slug are immutable after upload
-    // (re-upload by deleting and adding a new stamp).
+    // Rename / reorder only. The slug never changes; the image is replaced through PUT {id}/image.
     public class UpdateCompanyStampDto
     {
         public string? Name { get; set; }

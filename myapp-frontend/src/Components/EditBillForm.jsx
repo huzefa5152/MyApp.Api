@@ -44,7 +44,7 @@ import { formStyles, modalSizes } from "../theme";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useAuth } from "../contexts/AuthContext";
 import LookupAutocomplete from "./LookupAutocomplete";
-import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import SearchableItemTypeSelect, { NON_HS_EMPTY_MESSAGE } from "./SearchableItemTypeSelect";
 import SearchableSelect from "./SearchableSelect";
 import SearchableClientSelect from "./SearchableClientSelect";
 import { useConfirm } from "./ConfirmDialog";
@@ -2325,6 +2325,7 @@ function CommercialBillEditor({
                     <div style={{ flex: "1 1 220px", maxWidth: 280 }}>
                       <SearchableItemTypeSelect
                         items={pickerItemsWithCurrent(commonItemTypeId)}
+                        emptyMessage={billsMode ? NON_HS_EMPTY_MESSAGE : undefined}
                         // value derived from the rows themselves so the
                         // dropdown reflects the applied selection. When
                         // all rows share an Item Type, that one shows;
@@ -2413,6 +2414,7 @@ function CommercialBillEditor({
                                 <>
                                   <SearchableItemTypeSelect
                                     items={pickerItemsWithCurrent(item.itemTypeId)}
+                                    emptyMessage={billsMode ? NON_HS_EMPTY_MESSAGE : undefined}
                                     value={item.itemTypeId || ""}
                                     onChange={(newId, picked) =>
                                       updateItemType(idx, newId ? parseInt(newId) : null, picked)
@@ -2562,6 +2564,7 @@ function CommercialBillEditor({
                                     ) : (
                                       <SearchableItemTypeSelect
                                         items={pickerItemsWithCurrent(group.itemTypeId)}
+                                        emptyMessage={billsMode ? NON_HS_EMPTY_MESSAGE : undefined}
                                         value={group.itemTypeId || ""}
                                         onChange={(newId, picked) =>
                                           updateGroupItemType(
@@ -2868,6 +2871,7 @@ function CommercialBillEditor({
                                     <>
                                       <SearchableItemTypeSelect
                                         items={pickerItemsWithCurrent(item.itemTypeId)}
+                                        emptyMessage={billsMode ? NON_HS_EMPTY_MESSAGE : undefined}
                                         value={item.itemTypeId || ""}
                                         onChange={(newId, picked) =>
                                           updateItemType(

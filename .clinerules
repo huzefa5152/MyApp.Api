@@ -1,0 +1,3 @@
+# Cline instructions
+
+Read `AGENTS.md`, `CLAUDE.md` and `docs/ENGINEERING_STANDARDS.md` in this repository before any change. `CLAUDE.md` is the source of truth; `AGENTS.md` lists the rules that have cost the most when they were broken; `docs/ENGINEERING_STANDARDS.md` describes this line's architecture, authorization, UI system and workflows.

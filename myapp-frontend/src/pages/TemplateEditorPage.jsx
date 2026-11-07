@@ -61,6 +61,7 @@ import NewTemplateDialog, {
 import { markRecentTemplate } from "../utils/templateEditorNav";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
+import { stampImageSrc } from "../utils/stampImages";
 
 // The type's default template, else its oldest, else nothing.
 const pickForType = (list, type) => {
@@ -740,7 +741,7 @@ export default function TemplateEditorPage() {
       // renders through a different path is a preview you cannot trust.
       const stamped = materializeStamp(
         src,
-        companyStamps.find((s) => s.id === stampId)?.url || null,
+        stampImageSrc(companyStamps.find((s) => s.id === stampId)),
       );
       return mergeTemplate(stamped, SAMPLE_DATA[templateType]);
     } catch (e) {

@@ -24,7 +24,7 @@ import useLineEntryMode from "../hooks/useLineEntryMode";
 import { todayYmd } from "../utils/dateInput";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
-import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import SearchableItemTypeSelect, { NON_HS_EMPTY_MESSAGE } from "./SearchableItemTypeSelect";
 import ClientForm from "./ClientForm";
 import ItemTypeForm from "./ItemTypeForm";
 import PermissionLackedHint from "./PermissionLackedHint";
@@ -1596,6 +1596,7 @@ export default function InvoiceForm({
                             <div style={{ flex: "1 1 220px", maxWidth: 280 }}>
                               <SearchableItemTypeSelect
                                 items={filteredItemTypes}
+                                emptyMessage={NON_HS_EMPTY_MESSAGE}
                                 value={bulkCommonItemTypeId}
                                 onChange={(newId, picked) => {
                                   if (!newId || !picked) return;
@@ -1650,6 +1651,7 @@ export default function InvoiceForm({
                                     <div style={{ flex: 1, minWidth: 160 }}>
                                       <SearchableItemTypeSelect
                                         items={filteredItemTypes}
+                                        emptyMessage={NON_HS_EMPTY_MESSAGE}
                                         value={itemTypeIds[item.id] || ""}
                                         onChange={(newId, picked) => {
                                           setItemTypeIds((p) => ({
@@ -1971,6 +1973,7 @@ export default function InvoiceForm({
                                           (was per-row before — moved to declutter the table). */}
                                         <SearchableItemTypeSelect
                                           items={filteredItemTypes}
+                                          emptyMessage={NON_HS_EMPTY_MESSAGE}
                                           value={itemTypeIds[item.id] || ""}
                                           onChange={(newId, picked) => {
                                             setItemTypeIds((p) => ({

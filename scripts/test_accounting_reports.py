@@ -711,7 +711,8 @@ def main() -> int:
               D(rows["WithholdingReceivable"]["perDocuments"]) == D(inv_wh["withholdingTaxAmount"]),
               f"{rows['WithholdingReceivable']['perDocuments']} vs {inv_wh['withholdingTaxAmount']}")
 
-        # Freight is commercial revenue and a customer receivable, with no tax change.
+        # Freight is a customer receivable with no tax change. It recovers the
+        # Freight / Cartage expense, so revenue grows by the goods alone.
         status, inv_freight = make_bill({"freightCharges": 325.50}, qty=1, price=1000)
         check("Freight", "commercial freight invoice created", status in (200, 201), f"{status} {err_text(inv_freight)}")
         if status in (200, 201):
@@ -721,8 +722,12 @@ def main() -> int:
             check("Freight", "aging increases by commercial amount",
                   fs == 200 and D(far["total"]) - D(ar["total"]) == Decimal("1505.50"))
             fs, fpl = rpt("profit-and-loss", **{"from": d_from, "to": d_to})
-            check("Freight", "revenue includes untaxed freight",
-                  fs == 200 and D(fpl["totalIncome"]) - D(pl["totalIncome"]) == Decimal("1325.50"))
+            check("Freight", "revenue excludes freight",
+                  fs == 200 and D(fpl["totalIncome"]) - D(pl["totalIncome"]) == Decimal("1000"))
+            check("Freight", "freight nets off expenses",
+                  fs == 200 and D(pl["totalExpenses"]) - D(fpl["totalExpenses"]) == Decimal("325.50"))
+            check("Freight", "profit still rises by goods plus freight",
+                  fs == 200 and D(fpl["netProfit"]) - D(pl["netProfit"]) == Decimal("1325.50"))
             fs, ftb = http("GET", f"/api/accounting/reports/company/{company_id}/trial-balance", base, token=token)
             check("Freight", "freight journal balances", fs == 200 and
                   sum(D(r["debit"]) for r in ftb["rows"]) == sum(D(r["credit"]) for r in ftb["rows"]))

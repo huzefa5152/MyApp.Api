@@ -15,6 +15,9 @@ namespace MyApp.Api.DTOs
         public string FullName { get; set; } = string.Empty;
 
         public string Role { get; set; } = "Admin";
+
+        /// <summary>Seed admin only.</summary>
+        public bool CompanyChangesLocked { get; set; }
     }
 
     public class UpdateUserDto
@@ -25,5 +28,8 @@ namespace MyApp.Api.DTOs
 
         [MinLength(6)]
         public string? Password { get; set; }
+
+        /// <summary>Seed admin only. Null leaves the lock as it is.</summary>
+        public bool? CompanyChangesLocked { get; set; }
     }
 }

@@ -1,6 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.DTOs;
@@ -23,12 +22,14 @@ namespace MyApp.Api.Controllers
     public class StampsController : ControllerBase
     {
         private readonly ICompanyStampRepository _repo;
+        private readonly ICompanyStampService _stamps;
         private readonly ICompanyAccessGuard _access;
         private readonly IAuditLogService _audit;
 
-        public StampsController(ICompanyStampRepository repo, ICompanyAccessGuard access, IAuditLogService audit)
+        public StampsController(ICompanyStampRepository repo, ICompanyStampService stamps, ICompanyAccessGuard access, IAuditLogService audit)
         {
             _repo = repo;
+            _stamps = stamps;
             _access = access;
             _audit = audit;
         }
@@ -77,11 +78,12 @@ namespace MyApp.Api.Controllers
         {
             await _access.AssertAccessAsync(CurrentUserId, companyId);
             var stamps = await _repo.GetByCompanyAsync(companyId);
+            var usage = await _repo.TemplateUsageCountsAsync(companyId);
             var dtos = new List<CompanyStampDto>();
             foreach (var s in stamps)
             {
                 var dto = ToDto(s);
-                dto.UsedByTemplates = await _repo.TemplateUsageCountAsync(s.Id);
+                dto.UsedByTemplates = usage.GetValueOrDefault(s.Id);
                 dtos.Add(dto);
             }
             return Ok(dtos);
@@ -97,15 +99,12 @@ namespace MyApp.Api.Controllers
         {
             await _access.AssertAccessAsync(CurrentUserId, companyId);
 
-            var stamp = await _repo.GetByIdAsync(id);
-            if (stamp == null || stamp.CompanyId != companyId) return NotFound();
+            var stamp = await _stamps.SetDefaultAsync(companyId, id);
+            if (stamp == null) return NotFound();
 
-            await _repo.SetDefaultAsync(companyId, id);
             await AuditAsync("COMPANYSTAMP_DEFAULT",
                 $"Set stamp \"{stamp.Name}\" (id {id}) as default for company {companyId}", companyId);
-
-            var refreshed = await _repo.GetByIdAsync(id);
-            return Ok(ToDto(refreshed!));
+            return Ok(ToDto(stamp));
         }
 
         [HttpPost]
@@ -115,45 +114,30 @@ namespace MyApp.Api.Controllers
         {
             await _access.AssertAccessAsync(CurrentUserId, companyId);
 
-            var err = ImageUploadValidator.Validate(file, ImageUploadValidator.LogoMaxBytes);
-            if (err != null) return BadRequest(new { error = err });
-
-            var displayName = string.IsNullOrWhiteSpace(name)
-                ? Path.GetFileNameWithoutExtension(file.FileName) ?? "Stamp"
-                : name.Trim();
-            if (string.IsNullOrWhiteSpace(displayName)) displayName = "Stamp";
-            if (displayName.Length > 100) displayName = displayName[..100];
-
-            // Stable, unique-per-company slug. Never changes after creation.
-            var slug = await UniqueSlugAsync(companyId, displayName);
-
-            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
-            if (string.IsNullOrEmpty(ext)) ext = ".png";
-
-            var relDir = $"data/uploads/stamps/company_{companyId}";
-            var absDir = Path.Combine(Directory.GetCurrentDirectory(), relDir);
-            Directory.CreateDirectory(absDir);
-
-            var fileName = $"{slug}{ext}";
-            var absPath = Path.Combine(absDir, fileName);
-            using (var stream = new FileStream(absPath, FileMode.Create))
-            {
-                await file.CopyToAsync(stream);
-            }
-
-            var relativeUrl = $"/{relDir}/{fileName}";
-            var stamp = await _repo.CreateAsync(new CompanyStamp
-            {
-                CompanyId = companyId,
-                Name = displayName,
-                Slug = slug,
-                FilePath = relativeUrl,
-                SortOrder = await _repo.NextSortOrderAsync(companyId),
-                UpdatedAt = DateTime.UtcNow,
-            });
+            CompanyStamp stamp;
+            try { stamp = await _stamps.AddAsync(companyId, file, name); }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
 
             await AuditAsync("COMPANYSTAMP_CREATE",
-                $"Uploaded stamp \"{displayName}\" (slug {slug}, id {stamp.Id}) in company {companyId}", companyId);
+                $"Uploaded stamp \"{stamp.Name}\" (slug {stamp.Slug}, id {stamp.Id}) in company {companyId}", companyId);
+            return Ok(ToDto(stamp));
+        }
+
+        // New image, same stamp: the merge field and every template's assignment stay as they are.
+        [HttpPut("{id:int}/image")]
+        [HasPermission("printtemplates.stamps.manage")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> ReplaceImage(int companyId, int id, IFormFile file)
+        {
+            await _access.AssertAccessAsync(CurrentUserId, companyId);
+
+            CompanyStamp? stamp;
+            try { stamp = await _stamps.ReplaceImageAsync(companyId, id, file); }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+            if (stamp == null) return NotFound();
+
+            await AuditAsync("COMPANYSTAMP_REPLACE",
+                $"Replaced the image of stamp \"{stamp.Name}\" (slug {stamp.Slug}, id {id}) in company {companyId}", companyId);
             return Ok(ToDto(stamp));
         }
 
@@ -164,18 +148,8 @@ namespace MyApp.Api.Controllers
         {
             await _access.AssertAccessAsync(CurrentUserId, companyId);
 
-            var stamp = await _repo.GetByIdAsync(id);
-            if (stamp == null || stamp.CompanyId != companyId) return NotFound();
-
-            // Slug is intentionally NOT touched — templates reference it.
-            if (!string.IsNullOrWhiteSpace(dto.Name))
-            {
-                var n = dto.Name.Trim();
-                stamp.Name = n.Length > 100 ? n[..100] : n;
-            }
-            if (dto.SortOrder.HasValue) stamp.SortOrder = dto.SortOrder.Value;
-            stamp.UpdatedAt = DateTime.UtcNow;
-            await _repo.SaveAsync();
+            var stamp = await _stamps.UpdateAsync(companyId, id, dto.Name, dto.SortOrder);
+            if (stamp == null) return NotFound();
 
             await AuditAsync("COMPANYSTAMP_UPDATE",
                 $"Updated stamp \"{stamp.Name}\" (id {id}) in company {companyId}", companyId);
@@ -189,59 +163,12 @@ namespace MyApp.Api.Controllers
         {
             await _access.AssertAccessAsync(CurrentUserId, companyId);
 
-            var stamp = await _repo.GetByIdAsync(id);
-            if (stamp == null || stamp.CompanyId != companyId) return NotFound();
+            var stamp = await _stamps.DeleteAsync(companyId, id);
+            if (stamp == null) return NotFound();
 
-            // Remove the file (best-effort — a missing file must not block the row delete).
-            try
-            {
-                var abs = Path.Combine(Directory.GetCurrentDirectory(), stamp.FilePath.TrimStart('/'));
-                if (System.IO.File.Exists(abs)) System.IO.File.Delete(abs);
-            }
-            catch { /* orphaned file is harmless; row delete is what matters */ }
-
-            await _repo.DeleteAsync(stamp);
             await AuditAsync("COMPANYSTAMP_DELETE",
                 $"Deleted stamp \"{stamp.Name}\" (id {id}) from company {companyId}", companyId);
             return NoContent();
-        }
-
-        // ── slug helpers ──
-
-        private async Task<string> UniqueSlugAsync(int companyId, string name)
-        {
-            var baseSlug = Slugify(name);
-            var slug = baseSlug;
-            var n = 2;
-            while (await _repo.SlugExistsAsync(companyId, slug))
-                slug = $"{baseSlug}_{n++}";
-            return slug;
-        }
-
-        // [a-z0-9_], collapse runs of non-alnum to a single underscore, never
-        // starts with a digit (Handlebars path segment safety), capped length.
-        private static string Slugify(string input)
-        {
-            var sb = new StringBuilder();
-            bool lastUnderscore = false;
-            foreach (var ch in input.Trim().ToLowerInvariant())
-            {
-                if (char.IsLetterOrDigit(ch) && ch < 128)
-                {
-                    sb.Append(ch);
-                    lastUnderscore = false;
-                }
-                else if (!lastUnderscore)
-                {
-                    sb.Append('_');
-                    lastUnderscore = true;
-                }
-            }
-            var slug = sb.ToString().Trim('_');
-            if (string.IsNullOrEmpty(slug)) slug = "stamp";
-            if (char.IsDigit(slug[0])) slug = "s_" + slug;
-            if (slug.Length > 50) slug = slug[..50].Trim('_');
-            return slug;
         }
     }
 }

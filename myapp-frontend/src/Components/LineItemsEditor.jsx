@@ -63,6 +63,7 @@ export default function LineItemsEditor({
   showItemType = false,
   itemTypes = [],
   itemTypePlaceholder = "— item type (optional) —",
+  itemTypeEmptyMessage,
   bulkApply,
   canCreateItemType = false,
   onAddItemType,
@@ -709,6 +710,7 @@ export default function LineItemsEditor({
           <div style={{ flex: "1 1 200px", maxWidth: 280 }}>
             <SearchableItemTypeSelect
               items={itemTypes}
+              emptyMessage={itemTypeEmptyMessage}
               value={""}
               onChange={(newId) => applyItemTypeToAll(newId)}
               placeholder={nonHsPlaceholderAll}
@@ -761,6 +763,7 @@ export default function LineItemsEditor({
                   <div style={{ marginBottom: "0.5rem" }}>
                     <SearchableItemTypeSelect
                       items={itemTypes}
+                      emptyMessage={itemTypeEmptyMessage}
                       value={item.itemTypeId || ""}
                       onChange={(newId) => pickItemType(idx, newId)}
                       placeholder={itemTypePlaceholder}
@@ -920,6 +923,7 @@ export default function LineItemsEditor({
                         <td style={{ ...s.td, verticalAlign: "top" }}>
                           <SearchableItemTypeSelect
                             items={itemTypes}
+                            emptyMessage={itemTypeEmptyMessage}
                             value={item.itemTypeId || ""}
                             onChange={(newId) => pickItemType(idx, newId)}
                             placeholder="— optional —"

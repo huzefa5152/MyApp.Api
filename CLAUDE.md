@@ -9,6 +9,8 @@ follow.** It is auto-loaded into every conversation — read it once and
 treat the rules as non-negotiable unless the user explicitly overrides
 them in their message.
 
+**Architecture and engineering standards: read `docs/ENGINEERING_STANDARDS.md` before any change.** It maps this line's architecture (authorization, tenancy and the seed admin, the UI design system, backend layers, configuration and workflows) and names the existing mechanism to reuse. Where it and this file disagree, correct the standards file in the same commit as the change.
+
 ---
 
 ## INVARIANT — tenant and assigned-company isolation is never violated
@@ -387,6 +389,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Check | Command | Must show |
 |---|---|---|
 | Backend build | `dotnet build MyApp.Api.csproj` | `0 Error(s)` |
+| Seed admin company lock: keys removed, API refuses, created accounts inherit, seed-admin only | `python scripts/test_company_lock.py --base <url>` | `27/27 company lock checks passed` |
 | Audit verifier (static) | `python scripts/verify_audit_2026_05_13_security.py` | `67/67 checks passed` |
 | Audit verifier (live, optional but recommended) | `python scripts/verify_audit_2026_05_13_security.py --live` | `73/73 checks passed` |
 | Basic flows | `python scripts/test_basic_flows.py` | `all PASS` |
@@ -440,6 +443,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | PDF export pagination | `python scripts/test_pdf_pagination.py` | `all checks passed` (230 cases) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
+| Company stamps: replace keeps the merge field and templates, every stamp action over MCP, refusals, image never echoed or logged, cross-company ids at prepare and commit | `python scripts/test_stamp_operations.py --base <url>` | `69/69 stamp operation checks passed` |
 | Shared starter templates: seed-admin-only writes over HTTP and MCP, every rule refuses and saves nothing, hide/show/delete, apply like a code starter, audit with no company | `python scripts/test_shared_starters.py --base <url>` | `57/57 shared starter checks passed` |
 | No production identifiers in tracked files | `python scripts/verify_no_production_identifiers.py` | `no production identifiers in tracked files` |
 

@@ -14,7 +14,13 @@ import "../ui/shared-components.css";
  *   value      — currently selected item type id (or empty string for none)
  *   onChange   — (newId, pickedItemType) ⇒ void
  *   placeholder, style — passthroughs
+ *   emptyMessage — what to say when `items` is empty
  */
+// Quotes, orders and bills list only item types WITHOUT an HS code, so an
+// empty list there does not mean an empty catalog.
+export const NON_HS_EMPTY_MESSAGE =
+  "No item types without an HS code yet. This form lists only those; HS-coded items are picked when the bill is classified on the Invoices tab.";
+
 export default function SearchableItemTypeSelect({
   items,
   value,
@@ -22,6 +28,7 @@ export default function SearchableItemTypeSelect({
   placeholder,
   style,
   groupByHsCode = false,
+  emptyMessage = "No items in catalog yet. Add one on the Item Types page.",
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -236,9 +243,7 @@ export default function SearchableItemTypeSelect({
             <div className="k-combo__list" role="listbox">
               {filteredItems.length === 0 && (
                 <div className="k-combo__empty">
-                  {items?.length === 0
-                    ? "No items in catalog yet. Add one on the Item Types page."
-                    : `No items match "${query}".`}
+                  {items?.length === 0 ? emptyMessage : `No items match "${query}".`}
                 </div>
               )}
 

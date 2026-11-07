@@ -1002,15 +1002,17 @@ export default function InvoicePage({ mode = "invoices" }) {
   // by Validate All / Submit All, and the server refuses them on every path.
   // So we exclude them from these counts too — the badges are about what
   // the bulk buttons will process.
-  const unsubmittedInvoices = invoices.filter(
-    (inv) =>
-      inv.fbrStatus !== "Submitted" &&
-      !inv.isCancelled &&
-      (inv.taxTreatment == null || inv.taxTreatment === "FBR") &&
-      inv.fbrReady &&
-      !inv.isFbrExcluded &&
-      (!inv.taxTreatment || inv.taxTreatment === "FBR"),
-  );
+  // ONE rule for what the bulk FBR actions may touch, shared by the counts on
+  // the bar, Validate All and Submit All. Submit All once skipped the fbrReady
+  // check, so a bill still marked Validated from before its review reopened
+  // was counted in the confirmation but not on the button.
+  const isBulkFbrCandidate = (inv) =>
+    inv.fbrStatus !== "Submitted" &&
+    !inv.isCancelled &&
+    (inv.taxTreatment == null || inv.taxTreatment === "FBR") &&
+    inv.fbrReady &&
+    !inv.isFbrExcluded;
+  const unsubmittedInvoices = invoices.filter(isBulkFbrCandidate);
   const incompleteCount = invoices.filter(
     (inv) =>
       inv.fbrStatus !== "Submitted" &&
@@ -1139,28 +1141,9 @@ export default function InvoicePage({ mode = "invoices" }) {
     if (isNotesMode) params.type = noteDocType === 10 ? "creditnotes" : "debitnotes";
     const { data } = await getPagedInvoicesByCompany(selectedCompany.id, params);
     const all = data.items || [];
-    if (action === "validate") {
-      // Skip FBR-excluded bills — operator explicitly opted them out of bulk actions.
-      return all.filter(
-        (inv) =>
-          inv.fbrStatus !== "Submitted" &&
-          !inv.isCancelled &&
-          (inv.taxTreatment == null || inv.taxTreatment === "FBR") &&
-          inv.fbrReady &&
-          !inv.isFbrExcluded &&
-          (!inv.taxTreatment || inv.taxTreatment === "FBR"),
-      );
-    }
-    if (action === "submit") {
-      return all.filter(
-        (inv) =>
-          inv.fbrStatus !== "Submitted" &&
-          !inv.isCancelled &&
-          fbrValidated.has(inv.id) &&
-          !inv.isFbrExcluded &&
-          (!inv.taxTreatment || inv.taxTreatment === "FBR"),
-      );
-    }
+    if (action === "validate") return all.filter(isBulkFbrCandidate);
+    if (action === "submit")
+      return all.filter((inv) => isBulkFbrCandidate(inv) && fbrValidated.has(inv.id));
     return all;
   };
 

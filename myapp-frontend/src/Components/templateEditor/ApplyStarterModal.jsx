@@ -8,6 +8,7 @@ import { useCompany } from "../../contexts/CompanyContext";
 import { materializeStamp } from "../../utils/stampSlot";
 import { notify } from "../../utils/notify";
 import { formStyles } from "../../theme";
+import { stampImageSrc } from "../../utils/stampImages";
 
 /**
  * Apply a starter design onto an EXISTING template (never creates a new one).
@@ -44,7 +45,7 @@ export default function ApplyStarterModal({ template, onClose, onApplied }) {
   // Applying a starter replaces the HTML but keeps the stamp assignment, so
   // BOTH panes must render this template's signature — otherwise the "after"
   // preview shows an unsigned document that will actually print signed.
-  const stampUrl = companyStamps.find((s) => s.id === template.stampId)?.url || null;
+  const stampUrl = stampImageSrc(companyStamps.find((s) => s.id === template.stampId));
   const currentHtml = buildTemplatePreviewHtml(
     template.templateType,
     materializeStamp(template.htmlContent || "", stampUrl),

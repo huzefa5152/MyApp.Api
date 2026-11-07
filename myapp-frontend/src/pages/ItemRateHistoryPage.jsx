@@ -61,11 +61,17 @@ export default function ItemRateHistoryPage() {
     [totalCount, pageSize],
   );
 
+  // Catalogs are private per company: an unscoped request is refused for a
+  // user who has more than one.
   useEffect(() => {
-    getItemTypes()
+    if (!selectedCompany) {
+      setItemTypes([]);
+      return;
+    }
+    getItemTypes(selectedCompany.id)
       .then((r) => setItemTypes(r.data || []))
       .catch(() => setItemTypes([]));
-  }, []);
+  }, [selectedCompany]);
 
   useEffect(() => {
     if (selectedCompany && canViewClients) {

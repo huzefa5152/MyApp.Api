@@ -12,6 +12,15 @@ export const uploadStamp = (companyId, file, name) => {
   });
 };
 
+// New image, same stamp: {{stamps.<slug>}} and every template using it show the new image.
+export const replaceStampImage = (companyId, id, file) => {
+  const form = new FormData();
+  form.append("file", file);
+  return httpClient.put(`/companies/${companyId}/stamps/${id}/image`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+};
+
 export const updateStamp = (companyId, id, payload) =>
   httpClient.put(`/companies/${companyId}/stamps/${id}`, payload);
 

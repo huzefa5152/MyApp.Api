@@ -134,7 +134,9 @@ export default function ChartOfAccountsPage() {
     load();
   }, [load]);
 
-  const isEmpty = (tree.balanceSheet?.length || 0) === 0 && (tree.profitAndLoss?.length || 0) === 0;
+  // No income or expense side means no real chart yet. Posting creates a lone
+  // Suspense account on demand, and that alone must not hide the preset.
+  const isEmpty = (tree.profitAndLoss?.length || 0) === 0;
 
   // Flatten the groups for the "parent group" / "account group" pickers. The
   // em-dash prefix shows nesting depth in a plain <option>, which can't indent.
@@ -151,7 +153,10 @@ export default function ChartOfAccountsPage() {
     setSeeding(true);
     try {
       const { data } = await seedWholesaleCoa(companyId);
-      notify(data.message || "Preset seeded.", "success");
+      notify(
+        `${data.message || "Preset seeded."} Rebuild the ledger on the Accounting dashboard to move earlier entries off Suspense.`,
+        "success",
+      );
       await load();
     } catch (err) {
       notify(err.response?.data?.error || "Could not seed preset.", "error");
