@@ -8,11 +8,19 @@ Status (2026-10-03): built on branch `feat/trader-ui-themes` (off
 (`deploy-trader.yml` only runs on pushes to `TraderFbrInvoicingSystem`), so
 pushing it is safe. It reaches production only when the maintainer merges it.
 
-Coverage (2026-11-07): every admin screen and dialog now follows the theme. Bank & Cash,
-Transfers and Purchase Debit Notes are built from the kit; every other screen's own CSS and
-inline styles read the `--k-*` tokens for the app palette, neutrals, control heights and card
-shadows. Status colours (paid, warning, overdue) keep their fixed values, since they mean the
-same thing in every theme. Public pages, print output and charts are out of scope.
+Coverage (2026-11-07): admin screens and dialogs read the `--k-*` tokens for the app palette,
+neutrals, control heights and card shadows. Bank & Cash, Transfers and Purchase Debit Notes are
+built from the kit. The bill, invoice and line item forms are NOT: they keep their own markup and
+only their styles moved to tokens.
+
+These keep fixed colours on purpose: status and action tints (paid, warning, print, PDF), which
+mean the same in every theme; print output and report print templates; public pages; charts; and
+the Classic shell in `layouts/DashboardLayout.css`.
+
+Checked at 375px and 1280px in both themes: 54 routes with no error and no sideways page scroll.
+39 dialogs opened from their New / Edit / View buttons in Classic at 1280px and Workspace at
+375px, and most of them in Workspace at 1280px. Classic at 375px dialogs were not opened, and a
+dialog behind another action, such as a row menu, was not necessarily opened.
 
 Trader integration (2026-10-09): includes the current Trader security and business workflows. Admin density overrides apply to Classic; Workspace keeps its theme tokens. Dialog focus handling and popup accessibility apply to both layouts. This integration remains local until explicitly pushed.
 
@@ -111,6 +119,9 @@ step-by-step. In short:
 
 ## Known follow-ups (not done)
 
+- A dark or differently coloured theme needs status tokens first: status and action tints are
+  fixed values today, and the Classic shell does not read `--k-*`.
+- `EditBillForm`, `InvoiceForm` and `StandaloneInvoiceForm` are not built from the kit.
 - Theme choice is per browser. If it should follow the user across devices, it
   needs a small user-preference API — that is a backend change, deliberately not
   part of this UI-only work.
