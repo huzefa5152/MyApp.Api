@@ -1277,6 +1277,9 @@ export default function PurchaseBillForm({
               suppliers={suppliers}
               supplierId={supplierId}
               onSupplierChange={setSupplierId}
+              onSupplierCreated={(created) =>
+                setSuppliers((prev) => [created, ...prev.filter((c) => c.id !== created.id)])
+              }
               supplierLocked={isEdit}
               excludeBillId={isEdit ? billId : null}
               taken={takenFromChallans}

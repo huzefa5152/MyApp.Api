@@ -18,6 +18,7 @@ export default function ChallanLinePicker({
   suppliers,
   supplierId,
   onSupplierChange,
+  onSupplierCreated,
   supplierLocked = false,
   excludeBillId = null,
   taken = {},
@@ -103,6 +104,11 @@ export default function ChallanLinePicker({
     return !(q > 0) || q > lineById.get(id).line.left;
   });
 
+  const pickedTotal = pickedIds.reduce((sum, id) => {
+    const { line } = lineById.get(id);
+    return sum + (parseFloat(picked[id]) || 0) * (line.actualUnitCost || 0);
+  }, 0);
+
   const add = () => {
     onAdd(
       pickedIds.map((id) => {
@@ -152,6 +158,9 @@ export default function ChallanLinePicker({
           <div style={{ flex: "1 1 240px", minWidth: 0 }}>
             <label style={s.toolLabel}>Supplier</label>
             <SearchableSelect
+              quickCreate={supplierLocked ? undefined : "supplier"}
+              companyId={companyId}
+              onCreated={onSupplierCreated}
               items={suppliers}
               value={supplierId}
               onChange={(id) => onSupplierChange(id ? String(id) : "")}
@@ -185,8 +194,8 @@ export default function ChallanLinePicker({
         </div>
         <div style={s.hint}>
           {supplierId
-            ? `Showing lines planned for ${supplierName || "this supplier"} and lines with no supplier yet. Tick lines from as many challans as you need; lower the quantity to buy part of a line.`
-            : "Choose a supplier to see the lines planned for them. Tick lines from as many challans as you need."}
+            ? `Lines planned for ${supplierName || "this supplier"}, and lines with no supplier yet. Lower a quantity to buy part of a line.`
+            : "Choose a supplier, then tick lines from as many challans as you need."}
         </div>
 
         <div data-admin-body="" style={{ ...formStyles.body, background: "#f6f8fb" }}>
@@ -214,6 +223,10 @@ export default function ChallanLinePicker({
                     />
                     <span style={s.challanNo}>Challan #{c.challanNumber}</span>
                     <span style={s.client}>{c.clientName}</span>
+                    <span style={s.count}>
+                      {ticked ? `${ticked} of ${c.lines.length}` : c.lines.length} line
+                      {c.lines.length > 1 ? "s" : ""}
+                    </span>
                     <span style={s.meta}>
                       {c.deliveryDate ? new Date(c.deliveryDate).toLocaleDateString() : ""}
                       {c.poNumber ? ` · PO ${c.poNumber}` : ""}
@@ -226,37 +239,36 @@ export default function ChallanLinePicker({
                     const other =
                       supplierId && l.supplierId && String(l.supplierId) !== String(supplierId);
                     return (
-                      <div key={l.deliveryItemId} style={{ ...s.line, ...(on ? s.lineOn : {}) }}>
+                      <div
+                        key={l.deliveryItemId}
+                        style={{ ...s.line, ...(on ? s.lineOn : {}) }}
+                        onClick={() => toggleLine(l)}
+                      >
                         <input
                           type="checkbox"
                           checked={on}
                           onChange={() => toggleLine(l)}
-                          style={{ marginTop: 3 }}
+                          onClick={(e) => e.stopPropagation()}
+                          style={s.check}
                           aria-label={`Buy ${l.description}`}
                         />
-                        <div
-                          style={{ minWidth: 0, flex: "1 1 260px" }}
-                          onClick={() => toggleLine(l)}
-                        >
+                        <div style={s.main}>
                           <div style={s.desc}>{l.description}</div>
                           <div style={s.sub}>
-                            {l.itemTypeName && <span>{l.itemTypeName} · </span>}
-                            Delivered {fmt(l.delivered)} · Purchased {fmt(l.delivered - l.left)} ·{" "}
-                            <strong style={{ color: "#1b5e20" }}>
-                              Left {fmt(l.left)} {l.unit}
-                            </strong>
+                            {l.itemTypeName && <span>{l.itemTypeName}</span>}
+                            <span>
+                              {fmt(l.delivered)} delivered
+                              {l.delivered - l.left > 0 && ` · ${fmt(l.delivered - l.left)} bought`}
+                            </span>
+                            {l.supplierId && (
+                              <span style={{ ...s.chip, ...(other ? s.chipWarn : s.chipOk) }}>
+                                {other ? "Planned for " : ""}
+                                {l.supplierName}
+                              </span>
+                            )}
                           </div>
-                          <span
-                            style={{
-                              ...s.chip,
-                              ...(other ? s.chipWarn : l.supplierId ? s.chipOk : {}),
-                            }}
-                          >
-                            {l.supplierId ? `Planned for ${l.supplierName}` : "No supplier planned"}
-                          </span>
                         </div>
-                        <div style={s.qtyBox}>
-                          <label style={s.qtyLabel}>Qty to buy</label>
+                        <div style={s.qtyBox} onClick={(e) => e.stopPropagation()}>
                           <input
                             type="number"
                             min={0}
@@ -269,12 +281,11 @@ export default function ChallanLinePicker({
                             onChange={(e) =>
                               setPicked((p) => ({ ...p, [l.deliveryItemId]: e.target.value }))
                             }
-                            style={{ ...s.qty, ...(qBad ? { borderColor: "#c62828" } : {}) }}
+                            style={{ ...s.qty, ...(qBad ? s.qtyBad : {}) }}
                           />
-                          <div style={s.cost}>
-                            {l.actualUnitCost != null
-                              ? `Cost Rs ${fmt(l.actualUnitCost)}`
-                              : "No cost set"}
+                          <div style={s.left}>
+                            of {fmt(l.left)} left
+                            {l.actualUnitCost != null && ` · Rs ${fmt(l.actualUnitCost)}`}
                           </div>
                         </div>
                       </div>
@@ -291,6 +302,9 @@ export default function ChallanLinePicker({
             {pickedIds.length === 0
               ? "No lines selected"
               : `${pickedIds.length} line${pickedIds.length > 1 ? "s" : ""} from ${challanCount} challan${challanCount > 1 ? "s" : ""}`}
+            {pickedTotal > 0 && (
+              <strong style={{ color: "#1a2332" }}> · Rs {fmt(pickedTotal)}</strong>
+            )}
             {badQty && (
               <span style={{ color: "#c62828" }}> · a quantity is above what is left</span>
             )}
@@ -366,57 +380,69 @@ const s = {
   empty: { padding: "2.5rem 1rem", textAlign: "center", color: "#5f6d7e", fontSize: "0.9rem" },
   card: {
     background: "#fff",
-    border: "1px solid #e8edf3",
+    border: "1px solid #e3e8ef",
     borderRadius: 10,
-    marginBottom: "0.75rem",
+    marginBottom: "0.6rem",
     overflow: "hidden",
   },
   cardHead: {
     display: "flex",
     flexWrap: "wrap",
     alignItems: "center",
-    gap: "0.35rem 0.6rem",
-    padding: "0.6rem 0.85rem",
-    background: "#eef3fb",
-    borderBottom: "1px solid #e8edf3",
+    gap: "0.25rem 0.6rem",
+    padding: "0.5rem 0.85rem",
+    background: "#f8fafc",
+    borderBottom: "1px solid #eef1f5",
     cursor: "pointer",
+    fontSize: "0.86rem",
   },
   challanNo: { fontWeight: 700, color: "#0d47a1" },
-  client: { fontWeight: 600, color: "#1a2332" },
-  meta: { fontSize: "0.78rem", color: "#5f6d7e", marginLeft: "auto" },
+  client: { fontWeight: 600, color: "#1a2332", minWidth: 0, overflowWrap: "anywhere" },
+  count: {
+    fontSize: "0.72rem",
+    color: "#5f6d7e",
+    background: "#eef1f5",
+    borderRadius: 999,
+    padding: "1px 8px",
+  },
+  meta: { fontSize: "0.76rem", color: "#5f6d7e", marginLeft: "auto" },
   line: {
     display: "flex",
     flexWrap: "wrap",
-    gap: "0.4rem 0.75rem",
-    alignItems: "flex-start",
-    padding: "0.6rem 0.85rem",
+    gap: "0.35rem 0.75rem",
+    alignItems: "center",
+    padding: "0.5rem 0.85rem",
     borderTop: "1px solid #f0f3f7",
+    borderLeft: "3px solid transparent",
     cursor: "pointer",
   },
-  lineOn: { background: "#f1f8e9" },
+  lineOn: { background: "#f3faf4", borderLeftColor: "#2e7d32" },
+  check: { width: 18, height: 18, flex: "0 0 auto", cursor: "pointer" },
+  main: { minWidth: 0, flex: "1 1 220px" },
   desc: { fontWeight: 600, color: "#1a2332", fontSize: "0.88rem", overflowWrap: "anywhere" },
-  sub: { fontSize: "0.76rem", color: "#5f6d7e", marginTop: 2 },
-  chip: {
-    display: "inline-block",
-    marginTop: 4,
-    fontSize: "0.7rem",
-    padding: "1px 8px",
-    borderRadius: 999,
-    background: "#eceff1",
-    color: "#455a64",
+  sub: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: "0.15rem 0.6rem",
+    fontSize: "0.75rem",
+    color: "#5f6d7e",
+    marginTop: 2,
   },
+  chip: { fontSize: "0.7rem", padding: "0 8px", borderRadius: 999, lineHeight: "18px" },
   chipOk: { background: "#e8f5e9", color: "#1b5e20" },
   chipWarn: { background: "#fff3e0", color: "#e65100" },
-  qtyBox: { flex: "0 0 140px", marginLeft: "auto" },
-  qtyLabel: { display: "block", fontSize: "0.7rem", color: "#5f6d7e" },
+  qtyBox: { flex: "0 0 132px", marginLeft: "auto", textAlign: "right" },
   qty: {
     width: "100%",
     boxSizing: "border-box",
-    padding: "0.45rem 0.55rem",
+    padding: "0.35rem 0.55rem",
     border: "1px solid #d0d7e2",
     borderRadius: 6,
     textAlign: "right",
-    minHeight: 40,
+    minHeight: 36,
+    fontSize: "0.88rem",
   },
-  cost: { fontSize: "0.7rem", color: "#5f6d7e", textAlign: "right", marginTop: 2 },
+  qtyBad: { borderColor: "#c62828", background: "#fff5f5" },
+  left: { fontSize: "0.7rem", color: "#5f6d7e", marginTop: 2, whiteSpace: "nowrap" },
 };
