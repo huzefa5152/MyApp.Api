@@ -58,16 +58,8 @@ namespace MyApp.Api.DTOs
         /// </summary>
         public List<int> LinkedSaleBillNumbers { get; set; } = new();
 
-        /// <summary>Challans this bill buys lines from (Against Delivery Challans), in challan-number order.</summary>
-        public List<LinkedChallanDto> LinkedChallans { get; set; } = new();
-    }
-
-    public class LinkedChallanDto
-    {
-        public int ChallanId { get; set; }
-        public int ChallanNumber { get; set; }
-        public string ClientName { get; set; } = "";
-        public int LineCount { get; set; }
+        /// <summary>Customer documents this bill buys for, each once, oldest stage first.</summary>
+        public List<DemandTagDto> ForDocuments { get; set; } = new();
     }
 
     public class PurchaseItemDto
@@ -93,19 +85,10 @@ namespace MyApp.Api.DTOs
         public int? RateId { get; set; }
         public decimal? FixedNotifiedValueOrRetailPrice { get; set; }
 
-        /// <summary>
-        /// Sale lines this purchase row covered (read-side projection of
-        /// PurchaseItemSourceLines). Empty when the row was a stand-alone
-        /// purchase. Multiple entries when one procurement covered a
-        /// grouped set of sale lines.
-        /// </summary>
-        public List<int> SourceInvoiceItemIds { get; set; } = new();
-
-        /// <summary>Challan line this row buys; null when not from a challan.</summary>
-        public int? SourceDeliveryItemId { get; set; }
-        public int? SourceChallanId { get; set; }
-        public int? SourceChallanNumber { get; set; }
-        public string? SourceClientName { get; set; }
+        /// <summary>Customer-document lines this row buys, and how much of each.</summary>
+        public List<PurchaseItemSourceDto> Sources { get; set; } = new();
+        /// <summary>The documents those lines are on, for the row's tag.</summary>
+        public List<DemandTagDto> Tags { get; set; } = new();
     }
 
     /// <summary>
@@ -147,21 +130,10 @@ namespace MyApp.Api.DTOs
         public int? RateId { get; set; }
         public decimal? FixedNotifiedValueOrRetailPrice { get; set; }
 
-        /// <summary>
-        /// Optional: when this purchase line is being created via the
-        /// "Purchase Against Sale Bill" flow, this lists the InvoiceItems
-        /// it covers. The form groups sale lines by ItemType (e.g. 28
-        /// "Medicines" rows collapse into one procurement row) so a
-        /// single PurchaseItem can fulfil many sale lines. Server uses
-        /// the list to back-fill HSCode/UOM/SaleType/ItemTypeId onto
-        /// every linked InvoiceItem, making the sale bill FBR-ready in
-        /// one save.
-        /// </summary>
-        public List<int> SourceInvoiceItemIds { get; set; } = new();
-
-        /// <summary>Optional challan line this row buys (Against Delivery Challans).
-        /// The quantity is checked against what is left on that line.</summary>
-        public int? SourceDeliveryItemId { get; set; }
+        /// <summary>Customer-document lines this row buys (order, challan or bill
+        /// lines). Their quantities add up to the row's; the server checks each
+        /// trail has that much left to buy.</summary>
+        public List<PurchaseItemSourceDto> Sources { get; set; } = new();
     }
 
     /// <summary>
@@ -200,109 +172,7 @@ namespace MyApp.Api.DTOs
         public string? SaleType { get; set; }
         public int? RateId { get; set; }
         public decimal? FixedNotifiedValueOrRetailPrice { get; set; }
-        /// <summary>Preserves the source-line links if this row originated from a sale-bill grouping.</summary>
-        public List<int> SourceInvoiceItemIds { get; set; } = new();
-        /// <summary>Keeps (or adds) the challan line this row buys.</summary>
-        public int? SourceDeliveryItemId { get; set; }
-    }
-
-    /// <summary>A challan with lines still to purchase — the Against Delivery Challans picker.</summary>
-    public class OpenChallanForPurchaseDto
-    {
-        public int ChallanId { get; set; }
-        public int ChallanNumber { get; set; }
-        public DateTime? DeliveryDate { get; set; }
-        public string ClientName { get; set; } = "";
-        public string PoNumber { get; set; } = "";
-        public int? DivisionId { get; set; }
-        public List<OpenChallanLineDto> Lines { get; set; } = new();
-    }
-
-    public class OpenChallanLineDto
-    {
-        public int DeliveryItemId { get; set; }
-        public string Description { get; set; } = "";
-        public int? ItemTypeId { get; set; }
-        public string? ItemTypeName { get; set; }
-        public int? NonInventoryItemId { get; set; }
-        public string Unit { get; set; } = "";
-        public decimal Delivered { get; set; }
-        public decimal Purchased { get; set; }
-        public decimal Remaining { get; set; }
-        /// <summary>Cost set on the challan line (internal); prefills the purchase price.</summary>
-        public decimal? ActualUnitCost { get; set; }
-        public int? SupplierId { get; set; }
-        public string? SupplierName { get; set; }
-    }
-
-    /// <summary>
-    /// One row in the picker for the "Purchase Against Sale Bill" flow.
-    /// Returned by GET /api/invoices/company/{cid}/awaiting-purchase. Filters
-    /// to bills that have at least one line missing HSCode AND that line
-    /// still has remaining qty to procure.
-    /// </summary>
-    public class AwaitingPurchaseInvoiceDto
-    {
-        public int InvoiceId { get; set; }
-        public int InvoiceNumber { get; set; }
-        public DateTime Date { get; set; }
-        public int ClientId { get; set; }
-        public string ClientName { get; set; } = "";
-        public int LinesAwaiting { get; set; }
-        // Decimal because the sum source (InvoiceItem.Quantity) is now
-        // decimal(18,4). PurchasedQty is still int on the purchase side,
-        // so the math (decimal - int) lands as decimal here.
-        public decimal TotalQtyRemaining { get; set; }
-    }
-
-    /// <summary>
-    /// Per-line procurement template for one sale bill. Returned by
-    /// GET /api/invoices/{invoiceId}/purchase-template. Drives the
-    /// PurchaseBill form when it's pre-filled from a sale bill.
-    ///
-    /// Only includes lines where HSCode is empty AND remainingQty &gt; 0,
-    /// matching the picker rules.
-    /// </summary>
-    public class PurchaseTemplateDto
-    {
-        public int InvoiceId { get; set; }
-        public int InvoiceNumber { get; set; }
-        public DateTime Date { get; set; }
-        public int ClientId { get; set; }
-        public string ClientName { get; set; } = "";
-        public List<PurchaseTemplateLineDto> Items { get; set; } = new();
-    }
-
-    /// <summary>
-    /// A grouped procurement row. Sale lines on the source bill that share
-    /// an ItemTypeId collapse into one row here — the operator buys the
-    /// total qty in one go from one supplier line. The InvoiceItemIds
-    /// field carries the line-level breakdown so the back-fill knows
-    /// which sale rows to update with the chosen HSCode/UOM/SaleType.
-    /// </summary>
-    public class PurchaseTemplateLineDto
-    {
-        /// <summary>The catalog item these sale lines were classified as (no HSCode yet).</summary>
-        public int ItemTypeId { get; set; }
-        public string ItemTypeName { get; set; } = "";
-
-        /// <summary>InvoiceItem IDs aggregated into this row.</summary>
-        public List<int> InvoiceItemIds { get; set; } = new();
-        public int LineCount { get; set; }
-
-        /// <summary>Combined description preview (first description or "first +N more").</summary>
-        public string Description { get; set; } = "";
-
-        // Decimal because the sale-side Quantity is now decimal(18,4).
-        // PurchasedQty stays consistent so subtraction lands as decimal.
-        public decimal SoldQty { get; set; }
-        public decimal PurchasedQty { get; set; }
-        public decimal RemainingQty { get; set; }
-
-        /// <summary>UOM the operator typed at sale time (most common across the group, if any).</summary>
-        public string? SaleUom { get; set; }
-
-        /// <summary>Avg unit price across the group — purely a sanity reference.</summary>
-        public decimal AvgSaleUnitPrice { get; set; }
+        /// <summary>Keeps (or changes) the customer-document lines this row buys.</summary>
+        public List<PurchaseItemSourceDto> Sources { get; set; } = new();
     }
 }

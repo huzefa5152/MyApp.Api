@@ -396,6 +396,10 @@ namespace MyApp.Api.Services.Implementations
                 await _context.GmailConnections.Where(c => emailConnectionIds.Contains(c.Id) && !_context.GmailCompanyLinks.Any(l => l.ConnectionId == c.Id && l.IsEnabled))
                     .ExecuteUpdateAsync(s => s.SetProperty(c => c.ProtectedRefreshToken, "").SetProperty(c => c.Status, "Disconnected"));
 
+                // Purchase rows record the order, challan and bill lines they buy;
+                // drop those links before the lines go (NoAction FKs).
+                await _context.PurchaseItemSources.Where(x => x.PurchaseItem.PurchaseBill.CompanyId == id).ExecuteDeleteAsync();
+
                 // 1. Unlink challans from invoices
                 await _context.DeliveryChallans
                     .Where(dc => dc.CompanyId == id && dc.InvoiceId != null)
@@ -413,9 +417,6 @@ namespace MyApp.Api.Services.Implementations
                 var challanIds = await _context.DeliveryChallans.Where(dc => dc.CompanyId == id).Select(dc => dc.Id).ToListAsync();
                 if (challanIds.Count > 0)
                 {
-                    // Supplier bills outlive the challans they bought from: unlink their lines first.
-                    await _context.PurchaseItems.Where(p => p.SourceDeliveryItem != null && challanIds.Contains(p.SourceDeliveryItem.DeliveryChallanId))
-                        .ExecuteUpdateAsync(s => s.SetProperty(p => p.SourceDeliveryItemId, (int?)null));
                     await _context.DeliveryItems.Where(di => challanIds.Contains(di.DeliveryChallanId)).ExecuteDeleteAsync();
                     await _context.DeliveryChallans.Where(dc => dc.CompanyId == id).ExecuteDeleteAsync();
                 }

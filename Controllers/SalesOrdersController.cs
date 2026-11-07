@@ -75,19 +75,6 @@ namespace MyApp.Api.Controllers
             return Ok(await _service.GetOpenByCompanyAsync(companyId, divScope));
         }
 
-        // Every OPEN order (regardless of delivery status) — the "purchase bill
-        // from sales order" picker. Purchasing is independent of delivery, so
-        // unlike /open (the challan picker) this does NOT hide fully-delivered
-        // orders.
-        [HttpGet("company/{companyId}/open-for-purchase")]
-        [HasReferenceAccess("salesorders")]
-        [AuthorizeCompany]
-        public async Task<ActionResult<List<SalesOrderDto>>> GetOpenForPurchase(int companyId)
-        {
-            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
-            return Ok(await _service.GetOpenForPurchaseAsync(companyId, divScope));
-        }
-
         [HttpGet("company/{companyId}/paged")]
         [HasPermission("salesorders.list.view")]
         [AuthorizeCompany]

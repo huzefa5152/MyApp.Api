@@ -4826,9 +4826,6 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("SaleType")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("SourceDeliveryItemId")
-                        .HasColumnType("int");
-
                     b.Property<string>("SroItemSerialNo")
                         .HasColumnType("nvarchar(max)");
 
@@ -4859,11 +4856,49 @@ namespace MyApp.Api.Migrations
 
                     b.HasIndex("PurchaseBillId");
 
-                    b.HasIndex("SourceDeliveryItemId");
-
                     b.ToTable("PurchaseItems", t =>
                         {
                             t.HasCheckConstraint("CK_PurchaseItem_OneItemRef", "[ItemTypeId] IS NULL OR [NonInventoryItemId] IS NULL");
+                        });
+                });
+
+            modelBuilder.Entity("MyApp.Api.Models.PurchaseItemSource", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("DeliveryItemId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("InvoiceItemId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PurchaseItemId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(28, 12)
+                        .HasColumnType("decimal(28,12)");
+
+                    b.Property<int?>("SalesOrderItemId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeliveryItemId");
+
+                    b.HasIndex("InvoiceItemId");
+
+                    b.HasIndex("PurchaseItemId");
+
+                    b.HasIndex("SalesOrderItemId");
+
+                    b.ToTable("PurchaseItemSources", t =>
+                        {
+                            t.HasCheckConstraint("CK_PurchaseItemSources_OneLine", "(CASE WHEN [SalesOrderItemId] IS NULL THEN 0 ELSE 1 END + CASE WHEN [DeliveryItemId] IS NULL THEN 0 ELSE 1 END + CASE WHEN [InvoiceItemId] IS NULL THEN 0 ELSE 1 END) = 1");
                         });
                 });
 
@@ -6603,11 +6638,6 @@ namespace MyApp.Api.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("MyApp.Api.Models.DeliveryItem", "SourceDeliveryItem")
-                        .WithMany()
-                        .HasForeignKey("SourceDeliveryItemId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
                     b.Navigation("Account");
 
                     b.Navigation("GoodsReceiptItem");
@@ -6617,8 +6647,38 @@ namespace MyApp.Api.Migrations
                     b.Navigation("NonInventoryItem");
 
                     b.Navigation("PurchaseBill");
+                });
 
-                    b.Navigation("SourceDeliveryItem");
+            modelBuilder.Entity("MyApp.Api.Models.PurchaseItemSource", b =>
+                {
+                    b.HasOne("MyApp.Api.Models.DeliveryItem", "DeliveryItem")
+                        .WithMany()
+                        .HasForeignKey("DeliveryItemId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("MyApp.Api.Models.InvoiceItem", "InvoiceItem")
+                        .WithMany()
+                        .HasForeignKey("InvoiceItemId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("MyApp.Api.Models.PurchaseItem", "PurchaseItem")
+                        .WithMany("Sources")
+                        .HasForeignKey("PurchaseItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MyApp.Api.Models.SalesOrderItem", "SalesOrderItem")
+                        .WithMany()
+                        .HasForeignKey("SalesOrderItemId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("DeliveryItem");
+
+                    b.Navigation("InvoiceItem");
+
+                    b.Navigation("PurchaseItem");
+
+                    b.Navigation("SalesOrderItem");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.PurchaseItemSourceLine", b =>
@@ -6630,7 +6690,7 @@ namespace MyApp.Api.Migrations
                         .IsRequired();
 
                     b.HasOne("MyApp.Api.Models.PurchaseItem", "PurchaseItem")
-                        .WithMany("SourceLines")
+                        .WithMany()
                         .HasForeignKey("PurchaseItemId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -7002,7 +7062,7 @@ namespace MyApp.Api.Migrations
 
             modelBuilder.Entity("MyApp.Api.Models.PurchaseItem", b =>
                 {
-                    b.Navigation("SourceLines");
+                    b.Navigation("Sources");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.Role", b =>

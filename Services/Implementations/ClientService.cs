@@ -721,6 +721,14 @@ namespace MyApp.Api.Services.Implementations
 
                 await _context.WithholdingTaxReceipts.Where(r => r.ClientId == id).ExecuteDeleteAsync();
 
+                // Supplier bills outlive this client's documents: drop what their rows
+                // record as bought for the client's order, challan and bill lines.
+                await _context.PurchaseItemSources.Where(x =>
+                        (x.SalesOrderItem != null && x.SalesOrderItem.SalesOrder.ClientId == id)
+                        || (x.DeliveryItem != null && x.DeliveryItem.DeliveryChallan.ClientId == id)
+                        || (x.InvoiceItem != null && x.InvoiceItem.Invoice.ClientId == id))
+                    .ExecuteDeleteAsync();
+
                 // 3. Invoices: purge their stock movements (else on-hand skews),
                 //    then items, then the invoices.
                 if (invoiceIds.Count > 0)
@@ -736,9 +744,6 @@ namespace MyApp.Api.Services.Implementations
                 //    which they reference (Restrict).
                 if (challanIds.Count > 0)
                 {
-                    // Supplier bills outlive the challans they bought from: unlink their lines first.
-                    await _context.PurchaseItems.Where(p => p.SourceDeliveryItem != null && challanIds.Contains(p.SourceDeliveryItem.DeliveryChallanId))
-                        .ExecuteUpdateAsync(s => s.SetProperty(p => p.SourceDeliveryItemId, (int?)null));
                     await _context.DeliveryItems.Where(di => challanIds.Contains(di.DeliveryChallanId)).ExecuteDeleteAsync();
                     await _context.DeliveryChallans.Where(dc => dc.ClientId == id).ExecuteDeleteAsync();
                 }

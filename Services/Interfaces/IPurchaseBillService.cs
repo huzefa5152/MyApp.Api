@@ -19,8 +19,9 @@ namespace MyApp.Api.Services.Interfaces
         Task<ChallanPurchasePreviewDto> PreviewFromChallanAsync(int challanId);
         Task<List<PurchaseBillDto>> CreateFromChallanAsync(int challanId, CreateChallanPurchasesDto? request = null);
         Task<PurchaseBillDto?> UpdateAsync(int id, UpdatePurchaseBillDto dto);
-        Task<List<OpenChallanForPurchaseDto>> GetOpenChallanLinesAsync(int companyId, int? supplierId,
-            bool allSuppliers, string? search, int? excludeBillId, HashSet<int>? allowedDivisionIds);
+        Task<List<AwaitingCardDto>> GetAwaitingLinesAsync(int companyId, AwaitingLinesQuery query,
+            HashSet<int>? allowedDivisionIds, ISet<MyApp.Api.Helpers.DemandKind> viewableKinds);
+        Task<List<int?>> SourceDivisionsAsync(int companyId, IEnumerable<PurchaseItemSourceDto> sources);
         /// <summary>Set (or clear, when null) the bill's payment due date —
         /// drives the Overdue/Coming-due status (design §11.5).</summary>
         Task<PurchaseBillDto?> SetDueDateAsync(int id, DateTime? dueDate);

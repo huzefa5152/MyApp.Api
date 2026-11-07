@@ -194,6 +194,7 @@ namespace MyApp.Api.Data
         public DbSet<PurchaseDebitNote> PurchaseDebitNotes { get; set; }
         public DbSet<PurchaseDebitNoteItem> PurchaseDebitNoteItems { get; set; }
         public DbSet<PurchaseItemSourceLine> PurchaseItemSourceLines { get; set; }
+        public DbSet<PurchaseItemSource> PurchaseItemSources { get; set; }
         public DbSet<GoodsReceipt> GoodsReceipts { get; set; }
         public DbSet<GoodsReceiptItem> GoodsReceiptItems { get; set; }
         public DbSet<StockMovement> StockMovements { get; set; }
@@ -801,12 +802,25 @@ namespace MyApp.Api.Data
                 .HasOne(pi => pi.NonInventoryItem).WithMany()
                 .HasForeignKey(pi => pi.NonInventoryItemId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<PurchaseItem>().HasIndex(pi => pi.NonInventoryItemId);
-            // Challan line a purchase line buys. NoAction: a purchased challan line
-            // is refused deletion in the services, never silently unlinked.
-            modelBuilder.Entity<PurchaseItem>()
-                .HasOne(pi => pi.SourceDeliveryItem).WithMany()
-                .HasForeignKey(pi => pi.SourceDeliveryItemId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
-            modelBuilder.Entity<PurchaseItem>().HasIndex(pi => pi.SourceDeliveryItemId);
+            // Customer-document lines a purchase row buys. NoAction to the lines:
+            // a bought line is refused deletion in the services, never silently unlinked.
+            modelBuilder.Entity<PurchaseItemSource>(e =>
+            {
+                e.HasOne(x => x.PurchaseItem).WithMany(pi => pi.Sources)
+                    .HasForeignKey(x => x.PurchaseItemId).OnDelete(DeleteBehavior.Cascade);
+                e.HasOne(x => x.SalesOrderItem).WithMany()
+                    .HasForeignKey(x => x.SalesOrderItemId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+                e.HasOne(x => x.DeliveryItem).WithMany()
+                    .HasForeignKey(x => x.DeliveryItemId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+                e.HasOne(x => x.InvoiceItem).WithMany()
+                    .HasForeignKey(x => x.InvoiceItemId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+                e.Property(x => x.Quantity).HasPrecision(28, 12);
+                e.HasIndex(x => x.SalesOrderItemId);
+                e.HasIndex(x => x.DeliveryItemId);
+                e.HasIndex(x => x.InvoiceItemId);
+                e.ToTable(t => t.HasCheckConstraint("CK_PurchaseItemSources_OneLine",
+                    "(CASE WHEN [SalesOrderItemId] IS NULL THEN 0 ELSE 1 END + CASE WHEN [DeliveryItemId] IS NULL THEN 0 ELSE 1 END + CASE WHEN [InvoiceItemId] IS NULL THEN 0 ELSE 1 END) = 1"));
+            });
             modelBuilder.Entity<PurchaseItem>()
                 .ToTable(t => t.HasCheckConstraint("CK_PurchaseItem_OneItemRef",
                     "[ItemTypeId] IS NULL OR [NonInventoryItemId] IS NULL"));
@@ -1936,7 +1950,9 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<PurchaseItem>()
                 .HasIndex(pi => pi.ItemTypeId);
 
-            // PurchaseItemSourceLine — join table for N:M between
+            // PurchaseItemSourceLine — legacy sale-bill links, copied into
+            // PurchaseItemSources on 2026-11-08 and no longer read or written;
+            // kept one release before it is dropped. Was the join table for N:M between
             // PurchaseItems and InvoiceItems. Composite PK; both sides
             // cascade so cleanup is automatic when either parent is
             // removed.
@@ -1944,7 +1960,7 @@ namespace MyApp.Api.Data
                 .HasKey(x => new { x.PurchaseItemId, x.InvoiceItemId });
             modelBuilder.Entity<PurchaseItemSourceLine>()
                 .HasOne(x => x.PurchaseItem)
-                .WithMany(pi => pi.SourceLines)
+                .WithMany()
                 .HasForeignKey(x => x.PurchaseItemId)
                 .OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<PurchaseItemSourceLine>()

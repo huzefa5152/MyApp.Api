@@ -14,14 +14,8 @@ namespace MyApp.Api.Models
         public int PurchaseBillId { get; set; }
         public int? GoodsReceiptItemId { get; set; }
 
-        /// <summary>
-        /// The challan line this purchase line buys (Purchase Bills → Against
-        /// Delivery Challans). One bill can draw lines from many challans; the
-        /// line's <see cref="Quantity"/> is what it claims, and the claims on one
-        /// challan line never exceed its delivered quantity. Null = not from a challan.
-        /// </summary>
-        public int? SourceDeliveryItemId { get; set; }
-        public DeliveryItem? SourceDeliveryItem { get; set; }
+        /// <summary>The customer-document lines this row buys (see <see cref="PurchaseItemSource"/>).</summary>
+        public ICollection<PurchaseItemSource> Sources { get; set; } = new List<PurchaseItemSource>();
 
         /// <summary>
         /// Link to the shared <see cref="ItemType"/> catalog. Same item
@@ -90,13 +84,5 @@ namespace MyApp.Api.Models
         public ItemType? ItemType { get; set; }
         public NonInventoryItem? NonInventoryItem { get; set; }
         public Account? Account { get; set; }
-
-        /// <summary>
-        /// Sale lines this purchase line covered (the "Purchase Against
-        /// Sale Bill" flow). One PurchaseItem can cover MANY InvoiceItems
-        /// because the operator groups sale lines by ItemType (e.g. 28
-        /// "Medicines" lines collapsed into one Paracetamol procurement).
-        /// </summary>
-        public ICollection<PurchaseItemSourceLine> SourceLines { get; set; } = new List<PurchaseItemSourceLine>();
     }
 }

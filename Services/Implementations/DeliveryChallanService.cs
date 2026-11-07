@@ -297,10 +297,16 @@ namespace MyApp.Api.Services.Implementations
             foreach (var dto in dtos) dto.HasAutoPurchaseBills = linked.Contains(dto.Id);
             if (linked.Count > 0)
             {
-                var lines = await _context.DeliveryItems.AsNoTracking().Where(i => linked.Contains(i.DeliveryChallanId)).ToListAsync();
-                var bought = await ChallanPurchases.PurchasedAsync(_context, lines, excludeBillId: null);
-                var full = lines.GroupBy(i => i.DeliveryChallanId)
-                    .Where(g => g.All(i => bought[i.Id] >= ChallanPurchases.Delivered(i))).Select(g => g.Key).ToHashSet();
+                // Fully bought when nothing is left on any of the challan's trails.
+                var full = new HashSet<int>();
+                foreach (var companyId in dtos.Where(d => linked.Contains(d.Id)).Select(d => d.CompanyId).Distinct())
+                {
+                    var demand = new CustomerDemand(_context);
+                    await demand.LoadAsync(companyId);
+                    await demand.LoadBoughtAsync(null);
+                    var open = demand.Trails.Where(t => t.Left > 0.0001m).SelectMany(t => t.Challans).Select(c => c.Doc.Id).ToHashSet();
+                    full.UnionWith(linked.Where(id => !open.Contains(id)));
+                }
                 foreach (var dto in dtos.Where(d => linked.Contains(d.Id)))
                     dto.PurchaseStatus = full.Contains(dto.Id) ? "Purchased" : "Partial";
             }

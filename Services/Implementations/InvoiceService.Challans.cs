@@ -205,6 +205,8 @@ public partial class InvoiceService
         if (addedIds.Count == 0 && removedIds.Count == 0 && leaveOut.Count == 0)
             return ToDto(invoice);
 
+        await CustomerDemand.AssertCanChangeAsync(_context, invoice.CompanyId, DemandKind.Bill,
+            removedLines.ToDictionary(l => l.Id, _ => 0m));
         foreach (var line in removedLines)
         {
             if (line.Adjustment != null) _context.InvoiceItemAdjustments.Remove(line.Adjustment);

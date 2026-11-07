@@ -176,40 +176,6 @@ namespace MyApp.Api.Controllers
         }
 
         /// <summary>
-        /// Sale bills that need procurement — picker for the "Purchase
-        /// Against Sale Bill" flow. Returns only bills that have at least
-        /// one HSCode-empty line with remaining qty AND every line on the
-        /// bill has an ItemTypeId set (so the procurement form can group
-        /// cleanly).
-        /// </summary>
-        [HttpGet("company/{companyId}/awaiting-purchase")]
-        [HasPermission("purchasebills.manage.create")]
-        [AuthorizeCompany]
-        public async Task<ActionResult<List<AwaitingPurchaseInvoiceDto>>> GetAwaitingPurchase(int companyId)
-        {
-            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
-            return Ok(await _service.GetAwaitingPurchaseAsync(companyId, divScope));
-        }
-
-        /// <summary>
-        /// Per-line procurement template for one sale bill — HSCode-empty
-        /// lines grouped by ItemType, with sold/procured/remaining qty.
-        /// Drives the PurchaseBillForm in "Purchase Against Sale" mode.
-        /// </summary>
-        [HttpGet("{invoiceId}/purchase-template")]
-        [HasPermission("purchasebills.manage.create")]
-        public async Task<ActionResult<PurchaseTemplateDto>> GetPurchaseTemplate(int invoiceId)
-        {
-            var inv = await _service.GetByIdAsync(invoiceId);
-            if (inv == null) return NotFound();
-            await _access.AssertAccessAsync(CurrentUserId, inv.CompanyId);
-            await _divisionAccess.AssertAccessAsync(CurrentUserId, inv.CompanyId, inv.DivisionId);
-            var dto = await _service.GetPurchaseTemplateAsync(invoiceId);
-            if (dto == null) return NotFound();
-            return Ok(dto);
-        }
-
-        /// <summary>
         /// Feeds the "Bill / Invoice No." control on BOTH create forms: the number
         /// an Auto bill would take, and — with <c>check</c> — whether a number the
         /// operator typed is free.

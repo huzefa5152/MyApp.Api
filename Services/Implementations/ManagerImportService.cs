@@ -1127,6 +1127,8 @@ WHERE b.CompanyId = {0} AND b.ExternalRef LIKE 'mgr-%' AND b.ImportSettlementAdj
             await _db.PaymentAllocations.Where(a => a.Payment.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.Payments.Where(p => p.CompanyId == companyId).ExecuteDeleteAsync();
             await _db.WithholdingTaxReceipts.Where(w => w.CompanyId == companyId).ExecuteDeleteAsync();
+            // Purchase rows record the order, challan and bill lines they buy (NoAction FKs).
+            await _db.PurchaseItemSources.Where(x => x.PurchaseItem.PurchaseBill.CompanyId == companyId).ExecuteDeleteAsync();
             // Challans reference Invoices (challan.InvoiceId, set on billed imports) —
             // delete challans BEFORE invoices so that FK doesn't block the invoice wipe.
             await _db.DeliveryItems.Where(di => di.DeliveryChallan!.CompanyId == companyId).ExecuteDeleteAsync();

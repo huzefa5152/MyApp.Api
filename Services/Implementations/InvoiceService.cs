@@ -1520,6 +1520,9 @@ namespace MyApp.Api.Services.Implementations
                 // deleted (their dual-book overlay cascade-deletes); new lines (Id<=0)
                 // are built like the standalone-create path. Stock + GL are reflowed off
                 // invoice.Items after the loop, so add/remove needs no other special-casing.
+                // A purchase bought for these lines: refuse removing them or billing less than was bought.
+                await AssertBoughtQuantitiesAsync(invoice, invoice.Items.ToDictionary(ii => ii.Id,
+                    ii => removedItemIds.Contains(ii.Id) ? 0m : dto.Items.FirstOrDefault(d => d.Id == ii.Id)?.Quantity ?? ii.Quantity));
                 if (removedItemIds.Count > 0)
                 {
                     var toRemove = invoice.Items.Where(ii => removedItemIds.Contains(ii.Id)).ToList();
@@ -1844,6 +1847,10 @@ namespace MyApp.Api.Services.Implementations
                             .Where(a => a.InvoiceId == invoice.Id)
                             .ToDictionaryAsync(a => a.InvoiceItemId)
                         : new Dictionary<int, InvoiceItemAdjustment>();
+
+                if (allowQuantityEdit && !asAdjustment)
+                    await AssertBoughtQuantitiesAsync(invoice, invoice.Items.ToDictionary(ii => ii.Id,
+                        ii => dto.Items.FirstOrDefault(r => r.Id == ii.Id)?.Quantity is decimal q && q > 0 ? q : ii.Quantity));
 
                 var validAccountIds = await ValidCompanyAccountIdsAsync(invoice.CompanyId, dto.Items.Select(i => i.AccountId));
                 foreach (var row in dto.Items)
@@ -2583,6 +2590,34 @@ namespace MyApp.Api.Services.Implementations
             }
         }
 
+        // A purchase bought for these lines: refuse a change that removes them or
+        // bills less than was bought. A bill line's quantity also rewrites its
+        // challan line, and a challan with purchased lines keeps its quantities,
+        // so a changed line on such a challan is refused outright.
+        private async Task AssertBoughtQuantitiesAsync(Invoice invoice, Dictionary<int, decimal> newQuantities)
+        {
+            var changedChallanLines = invoice.Items
+                .Where(ii => ii.DeliveryItemId != null && newQuantities.TryGetValue(ii.Id, out var q) && q != ii.Quantity)
+                .Select(ii => ii.DeliveryItemId!.Value).ToList();
+            if (changedChallanLines.Count > 0)
+            {
+                var challanIds = await _context.DeliveryItems.Where(d => changedChallanLines.Contains(d.Id))
+                    .Select(d => d.DeliveryChallanId).Distinct().ToListAsync();
+                if (await ChallanPurchases.ChallanIds(_context).AnyAsync(id => challanIds.Contains(id)))
+                    throw new InvalidOperationException(
+                        "This bill's challan has purchased lines, so its quantities cannot change. Delete or change that purchase first.");
+            }
+            await CustomerDemand.AssertCanChangeAsync(_context, invoice.CompanyId, DemandKind.Bill, newQuantities);
+        }
+
+        // A bill whose lines a purchase bought for cannot be deleted or cancelled
+        // while that purchase still points at them.
+        private async Task AssertNoBoughtLinesAsync(int companyId, int invoiceId)
+        {
+            var lineIds = await _context.InvoiceItems.Where(ii => ii.InvoiceId == invoiceId).Select(ii => ii.Id).ToListAsync();
+            await CustomerDemand.AssertCanChangeAsync(_context, companyId, DemandKind.Bill, lineIds.ToDictionary(x => x, _ => 0m));
+        }
+
         public async Task<bool> DeleteAsync(int id)
         {
             var invoice = await _invoiceRepo.GetByIdAsync(id);
@@ -2593,6 +2628,7 @@ namespace MyApp.Api.Services.Implementations
             // Note. (For FBR-off companies this never triggers.)
             if (invoice.FbrStatus == "Submitted")
                 throw new InvalidOperationException("Cannot delete a bill that has been submitted to FBR — reverse it with a Credit Note instead.");
+            await AssertNoBoughtLinesAsync(invoice.CompanyId, invoice.Id);
 
             // 2026-07-14: the "only the latest bill can be deleted" rule was
             // removed at the user's request — ANY bill/invoice can now be
@@ -2704,6 +2740,7 @@ namespace MyApp.Api.Services.Implementations
 
             if (invoice.IsCancelled)
                 throw new InvalidOperationException("This bill is already cancelled.");
+            await AssertNoBoughtLinesAsync(invoice.CompanyId, invoice.Id);
 
             var revertedChallans = new List<int>();
 
@@ -3664,163 +3701,6 @@ namespace MyApp.Api.Services.Implementations
                 .GroupBy(i => i.ClientId)
                 .Select(g => new { ClientId = g.Key, Count = g.Count() })
                 .ToDictionaryAsync(x => x.ClientId, x => x.Count);
-        }
-
-        public async Task<List<AwaitingPurchaseInvoiceDto>> GetAwaitingPurchaseAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
-        {
-            // A bill qualifies for the "Purchase Against Sale Bill" picker if:
-            //   • not yet submitted to FBR (still mutable)
-            //   • EVERY line on it has an ItemTypeId set (so grouping works)
-            //   • at least one line has empty HSCode (= needs procurement)
-            //   • that line still has remaining qty (sold − already procured)
-            //
-            // Bills with mixed-classification lines (some with ItemTypeId,
-            // some without) are excluded — operator must classify all
-            // lines first so the procurement form can show clean groups.
-
-            // Sum of "already procured" qty per InvoiceItem, computed from
-            // the join table.
-            var procuredPerItem = _context.PurchaseItemSourceLines
-                .Join(_context.PurchaseItems,
-                      psl => psl.PurchaseItemId,
-                      pi => pi.Id,
-                      (psl, pi) => new { psl.InvoiceItemId, pi.Quantity });
-
-            // Division-RBAC scope (null = unrestricted); company-level bills
-            // (DivisionId == null) stay visible — policy D1.
-            var billQuery = _context.Invoices.AsQueryable();
-            if (allowedDivisionIds != null)
-                billQuery = billQuery.Where(i => i.DivisionId == null || allowedDivisionIds.Contains(i.DivisionId.Value));
-
-            // We need raw item rows to compute the per-bill qualification
-            // server-side. EF will translate the LINQ to a single query.
-            var rawLines = await (
-                from i in billQuery
-                join ii in _context.InvoiceItems on i.Id equals ii.InvoiceId
-                where i.CompanyId == companyId
-                   && i.FbrStatus != "Submitted"
-                   && !i.IsDemo
-                   && !i.IsCancelled
-                   // Notes are reversals — nothing to procure against them.
-                   && i.DocumentType != 9 && i.DocumentType != 10
-                select new
-                {
-                    i.Id,
-                    i.InvoiceNumber,
-                    i.Date,
-                    i.ClientId,
-                    ClientName = i.Client.Name,
-                    InvoiceItemId = ii.Id,
-                    ii.HSCode,
-                    ii.ItemTypeId,
-                    SoldQty = ii.Quantity,
-                    PurchasedQty = procuredPerItem
-                        .Where(p => p.InvoiceItemId == ii.Id)
-                        .Sum(p => (int?)p.Quantity) ?? 0,
-                }).ToListAsync();
-
-            var grouped = rawLines.GroupBy(x => new {
-                x.Id, x.InvoiceNumber, x.Date, x.ClientId, x.ClientName
-            });
-
-            var result = new List<AwaitingPurchaseInvoiceDto>();
-            foreach (var bill in grouped)
-            {
-                var lines = bill.ToList();
-                // Every line must have ItemTypeId — bills with stragglers
-                // are filtered out per the user's rule ("if no item type
-                // is selected on bill, that bill doesn't show").
-                if (lines.Any(l => l.ItemTypeId == null)) continue;
-
-                var awaiting = lines
-                    .Where(l => string.IsNullOrWhiteSpace(l.HSCode)
-                             && (l.SoldQty - l.PurchasedQty) > 0)
-                    .ToList();
-                if (awaiting.Count == 0) continue;
-
-                result.Add(new AwaitingPurchaseInvoiceDto
-                {
-                    InvoiceId = bill.Key.Id,
-                    InvoiceNumber = bill.Key.InvoiceNumber,
-                    Date = bill.Key.Date,
-                    ClientId = bill.Key.ClientId,
-                    ClientName = bill.Key.ClientName,
-                    LinesAwaiting = awaiting.Count,
-                    TotalQtyRemaining = awaiting.Sum(l => l.SoldQty - l.PurchasedQty),
-                });
-            }
-            return result.OrderByDescending(x => x.Date)
-                         .ThenByDescending(x => x.InvoiceNumber)
-                         .ToList();
-        }
-
-        public async Task<PurchaseTemplateDto?> GetPurchaseTemplateAsync(int invoiceId)
-        {
-            var invoice = await _context.Invoices
-                .Include(i => i.Client)
-                .Include(i => i.Items)
-                    .ThenInclude(ii => ii.ItemType)
-                .FirstOrDefaultAsync(i => i.Id == invoiceId);
-            if (invoice == null) return null;
-
-            var lineIds = invoice.Items.Select(x => x.Id).ToList();
-
-            // Pre-compute already-procured qty per InvoiceItem in one query.
-            var procuredMap = await _context.PurchaseItemSourceLines
-                .Where(psl => lineIds.Contains(psl.InvoiceItemId))
-                .Join(_context.PurchaseItems,
-                      psl => psl.PurchaseItemId,
-                      pi => pi.Id,
-                      (psl, pi) => new { psl.InvoiceItemId, pi.Quantity })
-                .GroupBy(x => x.InvoiceItemId)
-                .Select(g => new { InvoiceItemId = g.Key, Total = g.Sum(x => x.Quantity) })
-                .ToDictionaryAsync(x => x.InvoiceItemId, x => x.Total);
-
-            // Group HSCode-empty lines by ItemTypeId. Lines without
-            // ItemTypeId would have disqualified the bill at picker
-            // level, so we shouldn't see any here — but defensively skip.
-            var groups = invoice.Items
-                .Where(ii => string.IsNullOrWhiteSpace(ii.HSCode) && ii.ItemTypeId.HasValue)
-                .GroupBy(ii => ii.ItemTypeId!.Value)
-                .Select(g => {
-                    var sample = g.First();
-                    var soldQty = g.Sum(x => x.Quantity);
-                    var procuredQty = g.Sum(x => procuredMap.GetValueOrDefault(x.Id));
-                    var remaining = soldQty - procuredQty;
-                    var firstDesc = g.First().Description;
-                    var moreCount = g.Count() - 1;
-                    return new PurchaseTemplateLineDto
-                    {
-                        ItemTypeId = g.Key,
-                        ItemTypeName = sample.ItemType?.Name ?? sample.ItemTypeName,
-                        InvoiceItemIds = g.Select(x => x.Id).ToList(),
-                        LineCount = g.Count(),
-                        Description = moreCount > 0
-                            ? $"{firstDesc} (+ {moreCount} more)"
-                            : firstDesc,
-                        SoldQty = soldQty,
-                        PurchasedQty = procuredQty,
-                        RemainingQty = remaining,
-                        SaleUom = g.GroupBy(x => x.UOM)
-                            .OrderByDescending(g2 => g2.Count())
-                            .Select(g2 => g2.Key)
-                            .FirstOrDefault(),
-                        AvgSaleUnitPrice = g.Average(x => x.UnitPrice),
-                    };
-                })
-                .Where(line => line.RemainingQty > 0)
-                .OrderBy(line => line.ItemTypeName)
-                .ToList();
-
-            return new PurchaseTemplateDto
-            {
-                InvoiceId = invoice.Id,
-                InvoiceNumber = invoice.InvoiceNumber,
-                Date = invoice.Date,
-                ClientId = invoice.ClientId,
-                ClientName = invoice.Client?.Name ?? "",
-                Items = groups,
-            };
         }
 
         public async Task<ItemRateHistoryResultDto> GetItemRateHistoryAsync(

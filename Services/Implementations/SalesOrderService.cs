@@ -291,17 +291,6 @@ namespace MyApp.Api.Services.Implementations
                                   && o.FulfillmentStatus != "Over Delivered").ToList();
         }
 
-        // The "purchase bill from sales order" picker. Purchasing to fulfil an
-        // order is independent of DELIVERY, and an order auto-closes once fully
-        // delivered — yet the operator may still want to raise a purchase bill
-        // for it. So return EVERY order except cancelled ones (Open AND Closed),
-        // unlike the delivery-scoped challan picker (GetOpenByCompanyAsync).
-        public async Task<List<SalesOrderDto>> GetOpenForPurchaseAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
-        {
-            var mapped = await MapManyAsync(await _repository.GetByCompanyAsync(companyId, allowedDivisionIds));
-            return mapped.Where(o => o.Status != "Cancelled").ToList();
-        }
-
         public async Task<PagedResult<SalesOrderDto>> GetPagedByCompanyAsync(
             int companyId, int page, int pageSize,
             string? search = null, string? status = null,
@@ -549,6 +538,11 @@ namespace MyApp.Api.Services.Implementations
                         $"Cannot remove \"{rem.Description}\" — it already has deliveries against it.");
             }
 
+            // A purchase bought for these lines: refuse removing them or asking for less than was bought.
+            var newQuantities = order.Items.ToDictionary(i => i.Id,
+                i => dto.Items.FirstOrDefault(d => d.Id == i.Id)?.Quantity ?? 0m);
+            await CustomerDemand.AssertCanChangeAsync(_context, order.CompanyId, DemandKind.Order, newQuantities);
+
             foreach (var itemDto in dto.Items)
             {
                 var existing = itemDto.Id > 0 ? order.Items.FirstOrDefault(i => i.Id == itemDto.Id) : null;
@@ -604,6 +598,9 @@ namespace MyApp.Api.Services.Implementations
             if (order == null) return false;
             if (status == "Cancelled" && await _repository.HasChallansAsync(id, includeCancelled: false))
                 throw new InvalidOperationException("Cannot cancel an order that has active delivery challans.");
+            if (status == "Cancelled")
+                await CustomerDemand.AssertCanChangeAsync(_context, order.CompanyId, DemandKind.Order,
+                    order.Items.ToDictionary(i => i.Id, _ => 0m));
             order.Status = status;
             await _repository.UpdateAsync(order);
             return true;
@@ -615,6 +612,8 @@ namespace MyApp.Api.Services.Implementations
             if (order == null) return false;
             if (await _repository.HasChallansAsync(id, includeCancelled: false))
                 throw new InvalidOperationException("Cannot delete an order that has active delivery challans. Delete the challans first.");
+            await CustomerDemand.AssertCanChangeAsync(_context, order.CompanyId, DemandKind.Order,
+                order.Items.ToDictionary(i => i.Id, _ => 0m));
             // Release any cancelled (voided) challans still pointing at this order so
             // the NoAction FK doesn't block the delete — they keep their history,
             // just unlinked from the removed order.
