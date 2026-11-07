@@ -93,9 +93,9 @@ export default function EditBillForm({
 }) {
   // FBR-off Invoices tab (2026-08-11): print-grouping selection ONLY — item type,
   // quantity and every other field are read-only so no qty/overlay edit can move
-  // stock. Implemented by shadowing readOnly (reuses the proven read-only render:
-  // locked cells, hidden Save, "Close" footer). The grouping selector is rendered
-  // interactive regardless and persists via the dedicated print-grouping endpoint.
+  // stock. The body is replaced by the layout choice and a read-only preview, and
+  // readOnly is shadowed for the footer (hidden Save, "Close"). The choice persists
+  // via the dedicated print-grouping endpoint.
   const groupingOnly = forceItemTypeAndQty && !billsMode && !fbrEnabled;
   const readOnly = readOnlyProp || groupingOnly;
   // billsMode: true when this form is mounted from the Bills tab. Hides
@@ -1169,7 +1169,9 @@ export default function EditBillForm({
   // Grouped EDIT table (retotal-able summed rows) only in FBR-on invoice mode when
   // grouping actually collapses lines; never in the read-only grouping-only view
   // or bill mode (there the selector is a pure print preference).
-  const renderGrouped = !billsMode && !groupingOnly && groupedView && groupingCollapses;
+  const renderGrouped = !billsMode && groupedView && groupingCollapses;
+  // The server prints grouped only when every line carries an Item Type.
+  const canGroupPrint = items.every((it) => (it.itemTypeName || "").trim());
 
   // ── Total preservation (narrow-edit guard) ───────────────────────
   // When the operator can edit qty/price (itemTypeAndQtyMode), the
@@ -1427,7 +1429,7 @@ export default function EditBillForm({
       >
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>
-            {readOnly ? "View Bill" : "Edit Bill"}{" "}
+            {groupingOnly ? "Tax Invoice Print Layout" : readOnly ? "View Bill" : "Edit Bill"}{" "}
             {invoice?.fbrInvoiceNumber || `#${invoice?.invoiceNumber || ""}`}
           </h5>
           <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
@@ -1445,6 +1447,112 @@ export default function EditBillForm({
               </div>
             ) : !invoice ? (
               <div style={styles.errorAlert}>Bill not found.</div>
+            ) : groupingOnly ? (
+              <>
+                <div style={styles.infoBox}>
+                  <MdInfo size={16} style={{ color: colors.blue, flexShrink: 0, marginTop: 2 }} />
+                  <div>
+                    <b>{invoice.clientName}</b> ·{" "}
+                    {invoice.date ? new Date(invoice.date).toLocaleDateString() : "—"}. Choose how
+                    this Tax Invoice prints. The choice saves straight away and the total stays the
+                    same as the bill.
+                  </div>
+                </div>
+                <div style={styles.viewToggle} role="group" aria-label="Tax Invoice print layout">
+                  <button
+                    type="button"
+                    onClick={() => persistGrouping(false)}
+                    style={{
+                      ...styles.viewToggleBtn,
+                      ...(!groupedView ? styles.viewToggleBtnActive : {}),
+                    }}
+                    aria-pressed={!groupedView}
+                  >
+                    Individual lines
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => persistGrouping(true)}
+                    disabled={!canGroupPrint}
+                    style={{
+                      ...styles.viewToggleBtn,
+                      ...(groupedView ? styles.viewToggleBtnActive : {}),
+                      ...(canGroupPrint ? {} : { opacity: 0.5, cursor: "not-allowed" }),
+                    }}
+                    aria-pressed={groupedView}
+                  >
+                    Grouped by Item Type
+                  </button>
+                </div>
+                {!canGroupPrint && (
+                  <p style={styles.gridHint}>
+                    Every line needs an Item Type before this invoice can be grouped. Set them on
+                    the <b>Bills</b> tab.
+                  </p>
+                )}
+                <div
+                  data-admin-table-region=""
+                  style={{ ...styles.tableWrap, marginTop: "0.75rem" }}
+                >
+                  <table style={styles.table}>
+                    <thead>
+                      <tr style={styles.thead}>
+                        <th style={{ ...styles.th, minWidth: 180 }}>
+                          {groupedView ? "Item Type" : "Description"}
+                        </th>
+                        <th style={{ ...styles.th, width: 90 }}>Qty</th>
+                        <th style={{ ...styles.th, width: 110 }}>UOM</th>
+                        <th style={{ ...styles.th, width: 110 }}>Unit Price</th>
+                        <th style={{ ...styles.th, width: 110 }}>Line Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(groupedView
+                        ? itemGroups.map((g) => ({
+                            key: g.key,
+                            label: g.itemTypeName,
+                            quantity: g.totalQty,
+                            uom: g.uom,
+                            unitPrice: g.unitPrice,
+                            lineTotal: g.totalValue,
+                          }))
+                        : items.map((it, idx) => ({
+                            key: it.id ?? idx,
+                            label: it.description,
+                            quantity: it.quantity,
+                            uom: it.uom,
+                            unitPrice: it.unitPrice,
+                            lineTotal: it.lineTotal,
+                          }))
+                      ).map((row) => (
+                        <tr key={row.key}>
+                          <td style={styles.td}>{row.label}</td>
+                          <td style={styles.td}>{Number(row.quantity).toLocaleString()}</td>
+                          <td style={styles.td}>{row.uom}</td>
+                          <td style={styles.td}>{Number(row.unitPrice).toLocaleString()}</td>
+                          <td style={styles.td}>{Number(row.lineTotal).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div style={styles.totalsBox}>
+                  <div style={styles.totalsRow}>
+                    <span>Subtotal:</span>
+                    <strong>Rs. {subtotal.toLocaleString()}</strong>
+                  </div>
+                  <div style={styles.totalsRow}>
+                    <span>GST ({gstRate}%):</span>
+                    <strong>Rs. {gstAmount.toLocaleString()}</strong>
+                  </div>
+                  <div style={styles.totalsRow}>
+                    <span style={{ fontWeight: 700 }}>Grand Total:</span>
+                    <strong style={{ fontSize: "1.1rem", color: colors.blue }}>
+                      Rs. {grandTotal.toLocaleString()}
+                    </strong>
+                  </div>
+                </div>
+              </>
             ) : !invoice.isEditable && !readOnly ? (
               <div style={styles.errorAlert}>
                 This bill has been submitted to FBR and cannot be edited.
@@ -1552,7 +1660,7 @@ export default function EditBillForm({
                 )}
 
                 {/* Narrow-permission banner */}
-                {itemTypeOnlyMode && !groupingOnly && (
+                {itemTypeOnlyMode && (
                   <div style={styles.narrowPermissionBanner}>
                     <MdInfo size={16} style={{ color: colors.warn, flexShrink: 0, marginTop: 2 }} />
                     <div>
@@ -1563,7 +1671,7 @@ export default function EditBillForm({
                     </div>
                   </div>
                 )}
-                {itemTypeAndQtyMode && !groupingOnly && (
+                {itemTypeAndQtyMode && (
                   <div style={styles.narrowPermissionBanner}>
                     <MdInfo size={16} style={{ color: colors.warn, flexShrink: 0, marginTop: 2 }} />
                     <div>
@@ -1571,18 +1679,6 @@ export default function EditBillForm({
                       adjust quantity. Prices, dates, payment terms, and other fields are read-only.
                       Ask an administrator to grant <code>invoices.manage.update</code> for full
                       edit access.
-                    </div>
-                  </div>
-                )}
-                {groupingOnly && (
-                  <div style={styles.narrowPermissionBanner}>
-                    <MdInfo size={16} style={{ color: colors.warn, flexShrink: 0, marginTop: 2 }} />
-                    <div>
-                      <b>Print grouping only</b> — this company's FBR integration is off, so item
-                      type, quantity and other fields are edited on the <b>Bills</b> tab. Here you
-                      can only choose how the <b>Tax Invoice</b> prints —{" "}
-                      <b>Grouped by Item Type</b> vs <b>Individual lines</b>; the choice saves
-                      immediately and does not change the Bill.
                     </div>
                   </div>
                 )}
