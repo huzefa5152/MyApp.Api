@@ -1765,8 +1765,10 @@ def suite_freight_receivables(base, token, cid):
     check(S, "outstanding report agrees with commercial AR", len(rows) == 1 and
           eq(rows[0].get("grandTotal"), 1430) and eq(rows[0].get("outstanding"), ledger.get("closingBalance")), str(outstanding))
     after = report(base, token, cid, "profit-loss", period="allPeriods")
-    check(S, "freight credited as revenue without output tax", eq(float(after.get("totalIncome", 0))-
-          float(before.get("totalIncome", 0)), 1250), str(after))
+    change = lambda field: float(after.get(field, 0)) - float(before.get(field, 0))
+    check(S, "income holds the goods only, no freight or output tax", eq(change("totalIncome"), 1000), str(after))
+    check(S, "freight credits the expense account", eq(change("totalExpenses"), -250), str(after))
+    check(S, "net profit rises by goods plus freight", eq(change("netProfit"), 1250), str(after))
 
 
 def main() -> int:

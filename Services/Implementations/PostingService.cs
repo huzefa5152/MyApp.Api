@@ -280,8 +280,11 @@ namespace MyApp.Api.Services.Implementations
             foreach (var kv in byAccount)
                 AddLine(lines, kv.Key, debit: isCreditNote ? kv.Value : 0m,
                     credit: isCreditNote ? 0m : kv.Value, invoice.DivisionId, label);
+            // Freight billed to the customer is a recovery of a cost, not revenue:
+            // it credits the freight expense account, netting what transporters are paid.
             if (invoice.FreightCharges != 0m)
-                AddLine(lines, sales.Id, debit: isCreditNote ? invoice.FreightCharges : 0m,
+                AddLine(lines, (await ResolveFreightAsync(invoice.CompanyId, accounts)).Id,
+                    debit: isCreditNote ? invoice.FreightCharges : 0m,
                     credit: isCreditNote ? 0m : invoice.FreightCharges,
                     invoice.DivisionId, $"{label} — Freight / cartage charges");
             if (outputTax != null)
@@ -609,6 +612,20 @@ namespace MyApp.Api.Services.Implementations
                    ?? accounts.Where(a => a.AccountType == AccountType.Income).OrderBy(a => a.Id).FirstOrDefault();
             if (hit != null) return hit;
             _logger.LogWarning("Company {CompanyId} has no income account — posting sales to Suspense.", companyId);
+            return await SuspenseAsync(companyId, accounts);
+        }
+
+        /// <summary>Freight on a sales bill: seed:exp_freight → an Expense account
+        /// named for freight or cartage → Suspense.</summary>
+        private async Task<Account> ResolveFreightAsync(int companyId, List<Account> accounts)
+        {
+            var hit = accounts.FirstOrDefault(a => a.ExternalRef == "seed:exp_freight")
+                   ?? accounts.Where(a => a.AccountType == AccountType.Expense &&
+                            (a.Name.Contains("freight", StringComparison.OrdinalIgnoreCase) ||
+                             a.Name.Contains("cartage", StringComparison.OrdinalIgnoreCase)))
+                        .OrderBy(a => a.Id).FirstOrDefault();
+            if (hit != null) return hit;
+            _logger.LogWarning("Company {CompanyId} has no freight expense account — posting freight to Suspense.", companyId);
             return await SuspenseAsync(companyId, accounts);
         }
 
