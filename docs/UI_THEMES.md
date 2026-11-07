@@ -8,6 +8,12 @@ Status (2026-10-03): built on branch `feat/trader-ui-themes` (off
 (`deploy-trader.yml` only runs on pushes to `TraderFbrInvoicingSystem`), so
 pushing it is safe. It reaches production only when the maintainer merges it.
 
+Coverage (2026-11-07): every admin screen and dialog now follows the theme. Bank & Cash,
+Transfers and Purchase Debit Notes are built from the kit; every other screen's own CSS and
+inline styles read the `--k-*` tokens for the app palette, neutrals, control heights and card
+shadows. Status colours (paid, warning, overdue) keep their fixed values, since they mean the
+same thing in every theme. Public pages, print output and charts are out of scope.
+
 Trader integration (2026-10-09): includes the current Trader security and business workflows. Admin density overrides apply to Classic; Workspace keeps its theme tokens. Dialog focus handling and popup accessibility apply to both layouts. This integration remains local until explicitly pushed.
 
 ## What a user sees
