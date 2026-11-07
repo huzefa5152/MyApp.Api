@@ -69,8 +69,8 @@ const colors = {
   inputBorder: "var(--k-line-strong)",
   danger: "var(--k-danger)",
   dangerLight: "var(--k-danger-bg)",
-  warn: "#e65100",
-  warnLight: "#fff8e1",
+  warn: "var(--k-warn)",
+  warnLight: "var(--k-warn-bg-2)",
 };
 
 // Per §9 + §10. Each entry annotates the backend's Scenario record so
@@ -1159,7 +1159,7 @@ export default function StandaloneInvoiceForm({
                                 style={{
                                   ...styles.scenarioCard,
                                   borderColor: active ? "var(--k-blue)" : "var(--k-line)",
-                                  backgroundColor: active ? "#e3f2fd" : "#fff",
+                                  backgroundColor: active ? "var(--k-info-bg)" : "#fff",
                                 }}
                               >
                                 <div style={styles.scenarioCardHeader}>
@@ -1298,7 +1298,7 @@ export default function StandaloneInvoiceForm({
                               {canCreateClient ? (
                                 <button
                                   type="button"
-                                  style={styles.inlineAddBtn}
+                                  className="k-btn k-btn--secondary k-btn--sm"
                                   onClick={() => setShowAddClient(true)}
                                   title="Create a new buyer without leaving this form"
                                 >
@@ -1514,7 +1514,7 @@ export default function StandaloneInvoiceForm({
                           {canCreateItemType ? (
                             <button
                               type="button"
-                              style={styles.inlineAddBtn}
+                              className="k-btn k-btn--secondary k-btn--sm"
                               onClick={() => setShowAddItemType(true)}
                               title="Add a new item type to your catalog"
                             >
@@ -1527,7 +1527,11 @@ export default function StandaloneInvoiceForm({
                               what="add a new item type"
                             />
                           )}
-                          <button type="button" style={styles.addRowBtn} onClick={addRow}>
+                          <button
+                            type="button"
+                            className="k-btn k-btn--primary k-btn--sm"
+                            onClick={addRow}
+                          >
                             <MdAdd size={14} /> Add Row
                           </button>
                         </div>
@@ -1581,7 +1585,7 @@ export default function StandaloneInvoiceForm({
                           </div>
                           <button
                             type="button"
-                            style={styles.bulkClearBtn}
+                            className="k-btn k-btn--danger k-btn--sm"
                             onClick={clearAllItemTypes}
                             disabled={!rows.some((r) => r.itemTypeId)}
                             title="Drop the Item Type binding from every row"
@@ -1626,12 +1630,8 @@ export default function StandaloneInvoiceForm({
                                   />
                                   <button
                                     type="button"
-                                    style={{
-                                      ...styles.removeRowBtn,
-                                      minWidth: 44,
-                                      minHeight: "var(--k-btn-h)",
-                                      flexShrink: 0,
-                                    }}
+                                    className="k-icon-btn k-icon-btn--danger"
+                                    style={{ flexShrink: 0 }}
                                     onClick={() => removeRow(r.localId)}
                                     disabled={rows.length === 1}
                                     title={
@@ -1920,7 +1920,7 @@ export default function StandaloneInvoiceForm({
                                     style={{
                                       ...styles.unifiedTh,
                                       width: "9%",
-                                      backgroundColor: "#fff8e1",
+                                      backgroundColor: "var(--k-warn-bg-2)",
                                     }}
                                   >
                                     MRP / unit *
@@ -1931,7 +1931,7 @@ export default function StandaloneInvoiceForm({
                                     style={{
                                       ...styles.unifiedTh,
                                       width: "9%",
-                                      backgroundColor: "#fff8e1",
+                                      backgroundColor: "var(--k-warn-bg-2)",
                                     }}
                                   >
                                     MRP × Qty
@@ -2263,7 +2263,7 @@ export default function StandaloneInvoiceForm({
                                       />
                                       <button
                                         type="button"
-                                        style={styles.removeRowBtn}
+                                        className="k-icon-btn k-icon-btn--danger"
                                         onClick={() => removeRow(r.localId)}
                                         disabled={rows.length === 1}
                                         title={
@@ -2573,7 +2573,7 @@ const styles = {
     padding: "0.65rem 0.85rem",
     borderRadius: 8,
     backgroundColor: colors.warnLight,
-    border: `1px solid ${colors.warn}30`,
+    border: `1px solid color-mix(in srgb, ${colors.warn} 19%, transparent)`,
     color: colors.warn,
     fontSize: "0.85rem",
   },
@@ -2600,8 +2600,8 @@ const styles = {
     marginLeft: "0.3rem",
     padding: "0.05rem 0.35rem",
     borderRadius: 4,
-    backgroundColor: "#fff3e0",
-    color: "#e65100",
+    backgroundColor: "var(--k-warn-bg)",
+    color: "var(--k-warn)",
     fontSize: "0.62rem",
     fontWeight: 800,
     letterSpacing: "0.03em",
@@ -2611,8 +2611,8 @@ const styles = {
     marginLeft: "0.3rem",
     padding: "0.05rem 0.35rem",
     borderRadius: 4,
-    backgroundColor: "#e0f2f1",
-    color: "#00695c",
+    backgroundColor: "var(--k-teal-bg)",
+    color: "var(--k-teal-ink)",
     fontSize: "0.62rem",
     fontWeight: 700,
     letterSpacing: "0.03em",
@@ -2629,35 +2629,6 @@ const styles = {
     gap: "0.5rem",
     marginBottom: "0.5rem",
   },
-  addRowBtn: {
-    minHeight: "var(--ui-btn-h, auto)",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.25rem",
-    padding: "0.35rem 0.75rem",
-    borderRadius: 6,
-    border: "none",
-    backgroundColor: "var(--k-blue)",
-    color: "#fff",
-    fontSize: "0.78rem",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  inlineAddBtn: {
-    minHeight: "var(--ui-btn-h, 44px)",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.3rem",
-    padding: "0 0.75rem",
-    borderRadius: 6,
-    border: `1px solid var(--k-blue)`,
-    backgroundColor: "var(--k-surface)",
-    color: "var(--k-blue)",
-    fontSize: "0.8rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  },
   tinyAddBtn: {
     display: "inline-flex",
     alignItems: "center",
@@ -2669,17 +2640,6 @@ const styles = {
     color: "var(--k-blue)",
     cursor: "pointer",
     flexShrink: 0,
-  },
-  removeRowBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "0.3rem",
-    borderRadius: 6,
-    border: `1px solid var(--k-line)`,
-    backgroundColor: "var(--k-surface)",
-    color: "var(--k-danger)",
-    cursor: "pointer",
   },
   unifiedTableWrap: {
     width: "100%",
@@ -2848,10 +2808,10 @@ const styles = {
     fontWeight: 700,
     letterSpacing: "0.02em",
   },
-  badgeBlue: { backgroundColor: "#e3f2fd", color: "var(--k-blue)" },
-  badgeOrange: { backgroundColor: "#fff3e0", color: "#e65100" },
-  badgePurple: { backgroundColor: "#f3e5f5", color: "#6a1b9a" },
-  badgeYellow: { backgroundColor: "#fff8e1", color: "#a16e00" },
+  badgeBlue: { backgroundColor: "var(--k-info-bg)", color: "var(--k-blue)" },
+  badgeOrange: { backgroundColor: "var(--k-warn-bg)", color: "var(--k-warn)" },
+  badgePurple: { backgroundColor: "var(--k-purple-bg-2)", color: "var(--k-purple-3)" },
+  badgeYellow: { backgroundColor: "var(--k-warn-bg-2)", color: "#a16e00" },
   badgePink: { backgroundColor: "#fce4ec", color: "#ad1457" },
   scenarioHint: {
     display: "flex",
@@ -2860,7 +2820,7 @@ const styles = {
     marginTop: "0.6rem",
     padding: "0.5rem 0.75rem",
     borderRadius: 8,
-    backgroundColor: "#e3f2fd",
+    backgroundColor: "var(--k-info-bg)",
     border: "1px solid #90caf9",
     color: "var(--k-blue)",
     fontSize: "0.82rem",
@@ -2875,12 +2835,12 @@ const styles = {
     padding: "0.5rem 0.85rem",
     marginBottom: "0.6rem",
     borderRadius: 8,
-    backgroundColor: "#e0f2f1",
+    backgroundColor: "var(--k-teal-bg)",
     border: "1px solid #80cbc4",
-    color: "#00695c",
+    color: "var(--k-teal-ink)",
     fontSize: "0.82rem",
   },
-  lockedSaleTypeHint: { color: "#00695c", opacity: 0.8, fontSize: "0.75rem" },
+  lockedSaleTypeHint: { color: "var(--k-teal-ink)", opacity: 0.8, fontSize: "0.75rem" },
 
   permHintBlock: {
     display: "inline-flex",
@@ -2888,8 +2848,8 @@ const styles = {
     gap: "0.35rem",
     padding: "0.45rem 0.75rem",
     borderRadius: 6,
-    backgroundColor: "#fff8e1",
-    border: `1px solid ${colors.warn}30`,
+    backgroundColor: "var(--k-warn-bg-2)",
+    border: `1px solid color-mix(in srgb, ${colors.warn} 19%, transparent)`,
     color: colors.warn,
     fontSize: "0.78rem",
     lineHeight: 1.35,
@@ -2917,7 +2877,7 @@ const styles = {
     marginLeft: "0.5rem",
     padding: "0.1rem 0.4rem",
     borderRadius: 4,
-    backgroundColor: "#e3f2fd",
+    backgroundColor: "var(--k-info-bg)",
     color: "var(--k-blue)",
     fontSize: "0.7rem",
     fontWeight: 800,
@@ -2979,21 +2939,5 @@ const styles = {
     borderRadius: 8,
     border: `1px solid var(--k-line)`,
     backgroundColor: "var(--k-surface-2)",
-  },
-  bulkClearBtn: {
-    minHeight: "var(--ui-btn-h, 44px)",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.3rem",
-    padding: "0.35rem 0.7rem",
-    borderRadius: 6,
-    border: `1px solid var(--k-danger)`,
-    backgroundColor: "var(--k-surface)",
-    color: "var(--k-danger)",
-    fontSize: "0.78rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-    flexShrink: 0,
   },
 };

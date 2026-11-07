@@ -51,8 +51,8 @@ const colors = {
   inputBorder: "var(--k-line-strong)",
   danger: "var(--k-danger)",
   dangerLight: "var(--k-danger-bg)",
-  warn: "#e65100",
-  warnLight: "#fff8e1",
+  warn: "var(--k-warn)",
+  warnLight: "var(--k-warn-bg-2)",
 };
 
 // Per-scenario buyer-kind metadata. Mirrors StandaloneInvoiceForm so the
@@ -1115,7 +1115,7 @@ export default function InvoiceForm({
                                 style={{
                                   ...styles.scenarioCard,
                                   borderColor: active ? "var(--k-blue)" : "var(--k-line)",
-                                  backgroundColor: active ? "#e3f2fd" : "#fff",
+                                  backgroundColor: active ? "var(--k-info-bg)" : "#fff",
                                 }}
                               >
                                 <div style={styles.scenarioCardHeader}>
@@ -1240,7 +1240,7 @@ export default function InvoiceForm({
                               {canCreateClient ? (
                                 <button
                                   type="button"
-                                  style={styles.inlineAddBtn}
+                                  className="k-btn k-btn--secondary k-btn--sm"
                                   onClick={() => setShowAddClient(true)}
                                   title="Create a new buyer without leaving this form"
                                 >
@@ -1503,7 +1503,7 @@ export default function InvoiceForm({
                             {canCreateItemType ? (
                               <button
                                 type="button"
-                                style={styles.inlineAddBtn}
+                                className="k-btn k-btn--secondary k-btn--sm"
                                 onClick={() => setShowAddItemType(true)}
                                 title="Add a new item type to your catalog"
                               >
@@ -1534,7 +1534,7 @@ export default function InvoiceForm({
                               gap: "0.5rem",
                               padding: "0.55rem 0.85rem",
                               marginBottom: "0.5rem",
-                              backgroundColor: "#fff8e1",
+                              backgroundColor: "var(--k-warn-bg-2)",
                               border: "1px solid #ffcc80",
                               borderRadius: 8,
                               fontSize: "0.82rem",
@@ -1617,7 +1617,7 @@ export default function InvoiceForm({
                                 no-op. */}
                             <button
                               type="button"
-                              style={styles.bulkClearBtn}
+                              className="k-btn k-btn--danger k-btn--sm"
                               onClick={clearAllItemTypes}
                               disabled={!Object.values(itemTypeIds).some(Boolean)}
                               title="Drop the Item Type binding from every row"
@@ -1758,7 +1758,7 @@ export default function InvoiceForm({
                                               parseFloat(itemPrices[item.id]) ===
                                               parseFloat(lastRates[item.id].lastUnitPrice)
                                                 ? "var(--k-muted)"
-                                                : "#2e7d32",
+                                                : "var(--k-success)",
                                           }}
                                           title={
                                             `Last billed Rs. ${Number(lastRates[item.id].lastUnitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}` +
@@ -2100,7 +2100,7 @@ export default function InvoiceForm({
                                                 parseFloat(itemPrices[item.id]) ===
                                                 parseFloat(lastRates[item.id].lastUnitPrice)
                                                   ? "var(--k-muted)"
-                                                  : "#2e7d32",
+                                                  : "var(--k-success)",
                                             }}
                                             title={
                                               `Last billed Rs. ${Number(lastRates[item.id].lastUnitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}` +
@@ -2505,7 +2505,7 @@ const styles = {
     fontSize: "0.7rem",
     fontWeight: 700,
     color: "var(--k-blue)",
-    background: "#e3f2fd",
+    background: "var(--k-info-bg)",
     borderRadius: 6,
     padding: "0.15rem 0.45rem",
     flexShrink: 0,
@@ -2656,7 +2656,7 @@ const styles = {
     marginTop: "0.5rem",
     padding: "0.5rem 0.75rem",
     borderRadius: 8,
-    backgroundColor: "#e3f2fd",
+    backgroundColor: "var(--k-info-bg)",
     border: "1px solid #0d47a130",
     flexWrap: "wrap",
   },
@@ -2665,8 +2665,8 @@ const styles = {
     marginLeft: "0.3rem",
     padding: "0.05rem 0.35rem",
     borderRadius: 4,
-    backgroundColor: "#fff3e0",
-    color: "#e65100",
+    backgroundColor: "var(--k-warn-bg)",
+    color: "var(--k-warn)",
     fontSize: "0.62rem",
     fontWeight: 800,
     letterSpacing: "0.03em",
@@ -2690,7 +2690,7 @@ const styles = {
   hintPill: {
     padding: "0.05rem 0.4rem",
     borderRadius: 4,
-    backgroundColor: "#e3f2fd",
+    backgroundColor: "var(--k-info-bg)",
     color: "var(--k-blue)",
     fontSize: "0.65rem",
     fontWeight: 800,
@@ -2727,8 +2727,8 @@ const styles = {
     marginLeft: "0.3rem",
     padding: "0.05rem 0.3rem",
     borderRadius: 4,
-    backgroundColor: "#e0f2f1",
-    color: "#00695c",
+    backgroundColor: "var(--k-teal-bg)",
+    color: "var(--k-teal-ink)",
     fontSize: "0.62rem",
     fontWeight: 700,
     letterSpacing: "0.03em",
@@ -2744,13 +2744,13 @@ const styles = {
     padding: "0.5rem 0.85rem",
     marginBottom: "0.6rem",
     borderRadius: 8,
-    backgroundColor: "#e0f2f1",
+    backgroundColor: "var(--k-teal-bg)",
     border: "1px solid #80cbc4",
-    color: "#00695c",
+    color: "var(--k-teal-ink)",
     fontSize: "0.82rem",
   },
   lockedSaleTypeIcon: { fontSize: "0.85rem" },
-  lockedSaleTypeHint: { color: "#00695c", opacity: 0.8, fontSize: "0.75rem" },
+  lockedSaleTypeHint: { color: "var(--k-teal-ink)", opacity: 0.8, fontSize: "0.75rem" },
 
   // ── Step labels + scenario picker grid (same as StandaloneInvoiceForm) ──
   stepLabel: {
@@ -2858,7 +2858,7 @@ const styles = {
     padding: "0.65rem 0.85rem",
     borderRadius: 8,
     backgroundColor: colors.warnLight,
-    border: `1px solid ${colors.warn}30`,
+    border: `1px solid color-mix(in srgb, ${colors.warn} 19%, transparent)`,
     color: colors.warn,
     fontSize: "0.85rem",
   },
@@ -2903,27 +2903,12 @@ const styles = {
     fontWeight: 700,
     letterSpacing: "0.02em",
   },
-  badgeBlue: { backgroundColor: "#e3f2fd", color: "var(--k-blue)" },
-  badgeOrange: { backgroundColor: "#fff3e0", color: "#e65100" },
-  badgePurple: { backgroundColor: "#f3e5f5", color: "#6a1b9a" },
+  badgeBlue: { backgroundColor: "var(--k-info-bg)", color: "var(--k-blue)" },
+  badgeOrange: { backgroundColor: "var(--k-warn-bg)", color: "var(--k-warn)" },
+  badgePurple: { backgroundColor: "var(--k-purple-bg-2)", color: "var(--k-purple-3)" },
 
   // ── Inline create buttons (next to Buyer dropdown + per-row Item Type) ──
   inlineRow: { display: "flex", gap: "0.5rem", alignItems: "stretch", flexWrap: "wrap" },
-  inlineAddBtn: {
-    minHeight: "var(--ui-btn-h, 44px)",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.3rem",
-    padding: "0 0.75rem",
-    borderRadius: 6,
-    border: `1px solid var(--k-blue)`,
-    backgroundColor: "var(--k-surface)",
-    color: "var(--k-blue)",
-    fontSize: "0.8rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  },
   tinyAddBtn: {
     display: "inline-flex",
     alignItems: "center",
@@ -2934,22 +2919,6 @@ const styles = {
     backgroundColor: "var(--k-surface)",
     color: "var(--k-blue)",
     cursor: "pointer",
-    flexShrink: 0,
-  },
-  bulkClearBtn: {
-    minHeight: "var(--ui-btn-h, 44px)",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.3rem",
-    padding: "0.35rem 0.7rem",
-    borderRadius: 6,
-    border: `1px solid var(--k-danger)`,
-    backgroundColor: "var(--k-surface)",
-    color: "var(--k-danger)",
-    fontSize: "0.78rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
     flexShrink: 0,
   },
 };

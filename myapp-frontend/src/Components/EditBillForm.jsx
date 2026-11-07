@@ -65,11 +65,11 @@ const colors = {
   inputBorder: "var(--k-line-strong)",
   danger: "var(--k-danger)",
   dangerLight: "var(--k-danger-bg)",
-  warn: "#f57c00",
-  warnBg: "#fff8e1",
-  warnBorder: "#ffcc80",
-  infoBg: "#e3f2fd",
-  infoBorder: "#90caf9",
+  warn: "var(--k-warn-2)",
+  warnBg: "var(--k-warn-bg-2)",
+  warnBorder: "var(--k-warn-line)",
+  infoBg: "var(--k-info-bg)",
+  infoBorder: "var(--k-info-line)",
 };
 
 /**
@@ -1760,11 +1760,8 @@ function CommercialBillEditor({
                       <button
                         type="button"
                         disabled={saving}
-                        style={{
-                          minHeight: "var(--k-btn-h)",
-                          padding: "0 0.8rem",
-                          marginLeft: "auto",
-                        }}
+                        className="k-btn k-btn--secondary k-btn--sm"
+                        style={{ marginLeft: "auto" }}
                         onClick={async () => {
                           if (
                             await confirm({
@@ -1816,17 +1813,17 @@ function CommercialBillEditor({
                       padding: "0.8rem 1rem",
                       marginBottom: "0.85rem",
                       borderRadius: 8,
-                      background: "#fff4e0",
+                      background: "var(--k-warn-bg-3)",
                       border: "1px solid #ffcc80",
                       borderLeft: "4px solid #e65100",
                     }}
                   >
                     <MdWarning
                       size={20}
-                      style={{ color: "#e65100", flexShrink: 0, marginTop: 2 }}
+                      style={{ color: "var(--k-warn)", flexShrink: 0, marginTop: 2 }}
                     />
                     <div style={{ fontSize: "0.85rem", color: "var(--k-ink)", lineHeight: 1.55 }}>
-                      <strong style={{ color: "#e65100" }}>
+                      <strong style={{ color: "var(--k-warn)" }}>
                         Bill changed since this invoice was adjusted — re-adjustment needed.
                       </strong>
                       <div style={{ marginTop: 4 }}>
@@ -1849,9 +1846,9 @@ function CommercialBillEditor({
                       </div>
                       <div style={{ marginTop: 4 }}>
                         The rows below show <strong>your last adjusted</strong> quantities &amp;
-                        unit prices; each <span style={{ color: "#e65100" }}>“bill: …”</span> note
-                        shows what the bill now says. Re-adjust the grouped Qty / Unit Price so the
-                        total matches the bill total (
+                        unit prices; each <span style={{ color: "var(--k-warn)" }}>“bill: …”</span>{" "}
+                        note shows what the bill now says. Re-adjust the grouped Qty / Unit Price so
+                        the total matches the bill total (
                         <strong>
                           Rs.{" "}
                           {Number(invoice.subtotal).toLocaleString("en-PK", {
@@ -2260,7 +2257,7 @@ function CommercialBillEditor({
                     <button
                       type="button"
                       onClick={() => setShowAddItemType(true)}
-                      style={styles.inlineAddBtn}
+                      className="k-btn k-btn--secondary k-btn--sm"
                       title="Add a new Item Type to your catalog without leaving this form"
                     >
                       <MdAdd size={14} /> New Item Type
@@ -2378,8 +2375,8 @@ function CommercialBillEditor({
                           disabled={!hasAnyItemType}
                           style={{
                             ...styles.inlineAddBtn,
-                            color: hasAnyItemType ? "#c62828" : "#98a4b3",
-                            borderColor: hasAnyItemType ? "#ef9a9a" : "#dde1e6",
+                            color: hasAnyItemType ? "var(--k-danger-ink)" : "#98a4b3",
+                            borderColor: hasAnyItemType ? "var(--k-danger-line)" : "#dde1e6",
                             backgroundColor: hasAnyItemType ? "#fff5f5" : "#f5f7fa",
                             cursor: hasAnyItemType ? "pointer" : "not-allowed",
                           }}
@@ -2396,7 +2393,7 @@ function CommercialBillEditor({
                       <button
                         type="button"
                         onClick={() => setShowAddItemType(true)}
-                        style={styles.inlineAddBtn}
+                        className="k-btn k-btn--secondary k-btn--sm"
                         title="Add a new Item Type to your catalog without leaving this form"
                       >
                         <MdAdd size={14} /> New Item Type
@@ -2626,7 +2623,7 @@ function CommercialBillEditor({
                                         <div
                                           style={{
                                             ...styles.groupMeta,
-                                            color: "#e65100",
+                                            color: "var(--k-warn)",
                                             textAlign: "right",
                                           }}
                                           title="The bill changed after you adjusted this invoice. This field shows the qty you last filed; the bill now shows this qty. Re-adjust so the total matches the bill."
@@ -2696,7 +2693,7 @@ function CommercialBillEditor({
                                         <div
                                           style={{
                                             ...styles.groupMeta,
-                                            color: "#e65100",
+                                            color: "var(--k-warn)",
                                             textAlign: "right",
                                           }}
                                           title="Unit price on the current bill. The bill changed after you adjusted this invoice — re-adjust so the group total matches the bill."
@@ -3004,9 +3001,9 @@ function CommercialBillEditor({
                   <div
                     style={{
                       ...styles.totalsBox,
-                      background: totalsMatch ? "#e8f5e9" : "#fff4e0",
-                      borderColor: totalsMatch ? "#a5d6a7" : "#ffcc80",
-                      borderLeft: `4px solid ${totalsMatch ? "#2e7d32" : "#e65100"}`,
+                      background: totalsMatch ? "var(--k-success-bg)" : "var(--k-warn-bg-3)",
+                      borderColor: totalsMatch ? "var(--k-success-line)" : "var(--k-warn-line)",
+                      borderLeft: `4px solid ${totalsMatch ? "var(--k-success)" : "var(--k-warn)"}`,
                       marginTop: "0.6rem",
                     }}
                   >
@@ -3085,7 +3082,7 @@ function CommercialBillEditor({
                       <strong
                         style={{
                           fontSize: "1rem",
-                          color: totalsMatch ? "#2e7d32" : "#c62828",
+                          color: totalsMatch ? "var(--k-success)" : "var(--k-danger-ink)",
                         }}
                       >
                         {totalsMatch ? "✓ " : "✗ "}
@@ -3254,8 +3251,8 @@ function CommercialBillEditor({
                   <div
                     style={{
                       ...styles.totalsBox,
-                      background: "#fff4e0",
-                      borderColor: "#ffcc80",
+                      background: "var(--k-warn-bg-3)",
+                      borderColor: "var(--k-warn-line)",
                       borderLeft: "4px solid #e65100",
                       marginTop: "0.6rem",
                     }}
@@ -3343,7 +3340,7 @@ function CommercialBillEditor({
                 <span
                   style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}
                 >
-                  <span style={{ fontSize: "0.78rem", color: "#e65100", fontWeight: 600 }}>
+                  <span style={{ fontSize: "0.78rem", color: "var(--k-warn)", fontWeight: 600 }}>
                     Remove FBR classification &amp; revert stock?
                   </span>
                   <button
@@ -3352,7 +3349,7 @@ function CommercialBillEditor({
                     onClick={handleSendBackForReadjustment}
                     style={{
                       ...formStyles.button,
-                      backgroundColor: "#e65100",
+                      backgroundColor: "var(--k-warn)",
                       color: "#fff",
                       opacity: saving ? 0.5 : 1,
                     }}
@@ -3375,8 +3372,8 @@ function CommercialBillEditor({
                   onClick={() => setConfirmingSendBack(true)}
                   style={{
                     ...formStyles.button,
-                    backgroundColor: "#fff3e0",
-                    color: "#e65100",
+                    backgroundColor: "var(--k-warn-bg)",
+                    color: "var(--k-warn)",
                     border: "1px solid #ffcc80",
                   }}
                   title="Remove the FBR classification (item type / HS) and revert its stock, sending this bill back to the Tax Sheet so the consultant can re-adjust it."
@@ -3685,7 +3682,7 @@ function TaxClaimPanel({
                 <button
                   type="button"
                   onClick={handleTopRefresh}
-                  style={styles.refreshBtn}
+                  className="k-btn k-btn--secondary k-btn--sm"
                   title="Refresh — pull latest purchases / sales (e.g. after running FBR Annexure-A import in another tab). Also re-anchors any frozen optimization suggestions."
                   disabled={loading}
                 >
@@ -3832,10 +3829,10 @@ function TaxClaimPanel({
                         fontWeight: 700,
                         color:
                           sc.kind === "good"
-                            ? "#2e7d32"
+                            ? "var(--k-success)"
                             : sc.kind === "warn"
-                              ? "#8a4b00"
-                              : "#b71c1c",
+                              ? "var(--k-warn-ink)"
+                              : "var(--k-danger-ink-2)",
                         flexShrink: 0,
                       }}
                     >
@@ -4325,7 +4322,11 @@ function TaxClaimPanel({
             <div style={styles.taxWarnings}>
               {warnings.map((w, i) => (
                 <div key={i} style={styles.taxWarningRow}>
-                  <MdInfo size={13} color="#8a4b00" style={{ flexShrink: 0, marginTop: 2 }} />
+                  <MdInfo
+                    size={13}
+                    color="var(--k-warn-ink)"
+                    style={{ flexShrink: 0, marginTop: 2 }}
+                  />
                   <span>{w}</span>
                 </div>
               ))}
@@ -4348,7 +4349,7 @@ function TaxClaimPanel({
 
 function HeadlineCell({ label, value, flag, tone }) {
   let valueColor = "var(--k-ink)";
-  if (tone === "good") valueColor = "#2e7d32";
+  if (tone === "good") valueColor = "var(--k-success)";
   else if (tone === "muted") valueColor = "var(--k-muted)";
   else if (tone === "strong") valueColor = "var(--k-blue)";
   return (
@@ -4563,9 +4564,9 @@ const styles = {
     gap: "0.5rem",
     minWidth: 0,
   },
-  taxRowGood: { borderColor: "#a5d6a7", borderLeftColor: "#2e7d32" },
-  taxRowWarn: { borderColor: "#ffcc80", borderLeftColor: "#e65100" },
-  taxRowDanger: { borderColor: "#ef9a9a", borderLeftColor: "#b71c1c" },
+  taxRowGood: { borderColor: "var(--k-success-line)", borderLeftColor: "var(--k-success)" },
+  taxRowWarn: { borderColor: "var(--k-warn-line)", borderLeftColor: "var(--k-warn)" },
+  taxRowDanger: { borderColor: "var(--k-danger-line)", borderLeftColor: "var(--k-danger-ink-2)" },
   taxRowHeader: {
     display: "flex",
     alignItems: "center",
@@ -4625,7 +4626,7 @@ const styles = {
   },
   taxStatExtra: {
     fontSize: "0.7rem",
-    color: "#2e7d32",
+    color: "var(--k-success)",
     fontWeight: 600,
     marginTop: 1,
   },
@@ -4670,8 +4671,8 @@ const styles = {
   taxRowOptimizationDelta: {
     fontSize: "0.74rem",
     fontWeight: 700,
-    color: "#1b5e20",
-    background: "#e8f5e9",
+    color: "var(--k-success-strong)",
+    background: "var(--k-success-bg)",
     border: "1px solid #a5d6a7",
     padding: "0.15rem 0.45rem",
     borderRadius: 999,
@@ -4705,7 +4706,7 @@ const styles = {
   taxRowOptimizationValueHighlight: {
     fontSize: "0.95rem",
     fontWeight: 800,
-    color: "#1b5e20",
+    color: "var(--k-success-strong)",
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
   },
   // Subtotal-preservation receipt — proves qty × unit_price recomposes
@@ -4730,8 +4731,8 @@ const styles = {
     gap: "0.25rem",
     fontSize: "0.68rem",
     fontWeight: 700,
-    color: "#1b5e20",
-    background: "#e8f5e9",
+    color: "var(--k-success-strong)",
+    background: "var(--k-success-bg)",
     border: "1px solid #a5d6a7",
     padding: "0.15rem 0.45rem",
     borderRadius: 999,
@@ -4743,8 +4744,8 @@ const styles = {
     gap: "0.25rem",
     fontSize: "0.68rem",
     fontWeight: 700,
-    color: "#8a4b00",
-    background: "#fff4e0",
+    color: "var(--k-warn-ink)",
+    background: "var(--k-warn-bg-3)",
     border: "1px solid #ffcc80",
     padding: "0.15rem 0.45rem",
     borderRadius: 999,
@@ -4763,11 +4764,11 @@ const styles = {
     display: "flex",
     gap: "0.4rem",
     padding: "0.4rem 0.55rem",
-    background: "#fff4e0",
+    background: "var(--k-warn-bg-3)",
     border: "1px solid #ffcc80",
     borderRadius: 6,
     fontSize: "0.72rem",
-    color: "#8a4b00",
+    color: "var(--k-warn-ink)",
     lineHeight: 1.45,
   },
   // ── Audit-risk pill (2026-05-11) ─────────────────────────────────
@@ -4784,14 +4785,14 @@ const styles = {
     lineHeight: 1.45,
   },
   taxRowOptimizationRiskLow: {
-    background: "#e8f5e9",
+    background: "var(--k-success-bg)",
     border: "1px solid #a5d6a7",
-    color: "#1b5e20",
+    color: "var(--k-success-strong)",
   },
   taxRowOptimizationRiskModerate: {
-    background: "#fff4e0",
+    background: "var(--k-warn-bg-3)",
     border: "1px solid #ffcc80",
-    color: "#8a4b00",
+    color: "var(--k-warn-ink)",
   },
   taxRowOptimizationRiskHigh: {
     background: "var(--k-danger-bg)",
@@ -4810,7 +4811,7 @@ const styles = {
     alignItems: "center",
     gap: "0.3rem",
     padding: "0.35rem 0.7rem",
-    background: "#1b5e20",
+    background: "var(--k-success-strong)",
     color: "#fff",
     border: "1px solid #1b5e20",
     borderRadius: 6,
@@ -4846,7 +4847,7 @@ const styles = {
   },
   taxRowOptimizationStaleHint: {
     fontSize: "0.7rem",
-    color: "#8a4b00",
+    color: "var(--k-warn-ink)",
     fontStyle: "italic",
   },
   taxRowOptimizationApplyOk: {
@@ -4854,8 +4855,8 @@ const styles = {
     alignItems: "center",
     gap: "0.35rem",
     fontSize: "0.72rem",
-    color: "#1b5e20",
-    background: "#e8f5e9",
+    color: "var(--k-success-strong)",
+    background: "var(--k-success-bg)",
     border: "1px solid #a5d6a7",
     borderRadius: 6,
     padding: "0.35rem 0.55rem",
@@ -4865,8 +4866,8 @@ const styles = {
     alignItems: "flex-start",
     gap: "0.4rem",
     fontSize: "0.72rem",
-    color: "#8a4b00",
-    background: "#fff4e0",
+    color: "var(--k-warn-ink)",
+    background: "var(--k-warn-bg-3)",
     border: "1px solid #ffcc80",
     borderRadius: 6,
     padding: "0.4rem 0.55rem",
@@ -4909,8 +4910,8 @@ const styles = {
   taxRowOptimizationDistBadgeOk: {
     fontSize: "0.66rem",
     fontWeight: 700,
-    color: "#1b5e20",
-    background: "#e8f5e9",
+    color: "var(--k-success-strong)",
+    background: "var(--k-success-bg)",
     border: "1px solid #a5d6a7",
     padding: "0.1rem 0.4rem",
     borderRadius: 999,
@@ -4919,8 +4920,8 @@ const styles = {
   taxRowOptimizationDistBadgeWarn: {
     fontSize: "0.66rem",
     fontWeight: 700,
-    color: "#8a4b00",
-    background: "#fff4e0",
+    color: "var(--k-warn-ink)",
+    background: "var(--k-warn-bg-3)",
     border: "1px solid #ffcc80",
     padding: "0.1rem 0.4rem",
     borderRadius: 999,
@@ -5024,8 +5025,8 @@ const styles = {
     borderRadius: 99,
     fontSize: "0.62rem",
     fontWeight: 700,
-    color: "#8a4b00",
-    backgroundColor: "#fff4e0",
+    color: "var(--k-warn-ink)",
+    backgroundColor: "var(--k-warn-bg-3)",
     border: "1px solid #ffcc80",
     textTransform: "uppercase",
     letterSpacing: "0.04em",
@@ -5033,7 +5034,7 @@ const styles = {
   },
   taxStatHighlight: {
     padding: "0.3rem 0.4rem",
-    background: "#e8f5e9",
+    background: "var(--k-success-bg)",
     border: "1px solid #a5d6a7",
     borderRadius: 6,
   },
@@ -5045,7 +5046,7 @@ const styles = {
     color: "var(--k-muted)",
   },
   taxRowAging: {
-    color: "#8a4b00",
+    color: "var(--k-warn-ink)",
     fontWeight: 600,
   },
   taxRowPending: {
@@ -5053,26 +5054,12 @@ const styles = {
     fontWeight: 600,
   },
   taxRowManualOnly: {
-    color: "#8a4b00",
+    color: "var(--k-warn-ink)",
     fontWeight: 600,
   },
   taxRowDisputed: {
     color: "var(--k-danger)",
     fontWeight: 600,
-  },
-  refreshBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.25rem",
-    padding: "0.3rem 0.6rem",
-    background: "var(--k-surface)",
-    color: "var(--k-blue)",
-    border: `1px solid var(--k-blue)`,
-    borderRadius: 8,
-    fontSize: "0.74rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    fontFamily: "inherit",
   },
   // Reset-to-original button — sits beside Refresh in the panel header.
   // Muted amber so it reads as "undo / revert" rather than "destructive".
@@ -5081,8 +5068,8 @@ const styles = {
     alignItems: "center",
     gap: "0.25rem",
     padding: "0.3rem 0.6rem",
-    background: "#fff4e0",
-    color: "#8a4b00",
+    background: "var(--k-warn-bg-3)",
+    color: "var(--k-warn-ink)",
     border: "1px solid #ffcc80",
     borderRadius: 8,
     fontSize: "0.74rem",
@@ -5124,14 +5111,14 @@ const styles = {
     borderRadius: 99,
     fontSize: "0.7rem",
     fontWeight: 700,
-    color: "#8a4b00",
-    backgroundColor: "#fff4e0",
+    color: "var(--k-warn-ink)",
+    backgroundColor: "var(--k-warn-bg-3)",
     border: "1px solid #ffcc80",
   },
   taxWarnings: {
     marginTop: "0.85rem",
     padding: "0.6rem 0.75rem",
-    background: "#fff8e1",
+    background: "var(--k-warn-bg-2)",
     border: "1px solid #ffe082",
     borderRadius: 8,
     display: "flex",
