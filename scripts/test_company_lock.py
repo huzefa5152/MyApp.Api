@@ -75,11 +75,12 @@ def new_user(token, prefix, role_ids=None):
     name = f"{prefix}_{uuid.uuid4().hex[:8]}"
     body = {"username": name, "password": PASSWORD, "fullName": name, "role": role["name"],
             "companyIds": [company_id]}
-    if role_ids:
-        body["roleIds"] = role_ids
     st, data = call("POST", "/api/users", token, body)
     if st in (200, 201):
         created.append(data["id"])
+        if role_ids:
+            role_st, role_body = call("PUT", f"/api/users/{data['id']}/roles", seed, {"roleIds": role_ids})
+            assert role_st in (200, 204), f"assign role: {role_st} {role_body}"
     return st, data, name
 
 
