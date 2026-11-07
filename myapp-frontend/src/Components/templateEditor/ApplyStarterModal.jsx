@@ -229,7 +229,7 @@ const s = {
   },
   modeActive: {
     borderColor: "var(--k-blue)",
-    background: "#f3f7ff",
+    background: "var(--k-surface-2)",
     boxShadow: "0 0 0 1px var(--k-blue) inset",
   },
   modeTitle: {

@@ -162,7 +162,7 @@ export default function BulkFbrPreviewDialog({ invoices, onClose }) {
           {/* Summary strip — what's about to go to FBR. Wraps on narrow viewports. */}
           <div style={s.summaryStrip}>
             <div style={s.summaryItem}>
-              <MdInfo size={16} color="#0d47a1" />
+              <MdInfo size={16} color="var(--k-blue)" />
               <span>
                 <strong>{stats.total}</strong> ready
               </span>
@@ -239,9 +239,9 @@ function BillRow({ invoice, expanded, payload, onToggle, fmtMoney, fmtNum, fmtQt
       <button type="button" style={s.rowHeader} onClick={onToggle} aria-expanded={expanded}>
         <div style={s.rowHeaderLeft}>
           {expanded ? (
-            <MdExpandLess size={20} color="#0d47a1" />
+            <MdExpandLess size={20} color="var(--k-blue)" />
           ) : (
-            <MdExpandMore size={20} color="#0d47a1" />
+            <MdExpandMore size={20} color="var(--k-blue)" />
           )}
           <div
             style={{
@@ -537,7 +537,11 @@ const s = {
   badgeReady: { background: "#e3f2fd", color: "var(--k-blue)", border: "1px solid #90caf9" },
   badgeValidated: { background: "#e8f5e9", color: "#1b5e20", border: "1px solid #a5d6a7" },
   badgeSubmitted: { background: "#e0f2f1", color: "#00695c", border: "1px solid #80cbc4" },
-  badgeFailed: { background: "#ffebee", color: "#b71c1c", border: "1px solid #ef9a9a" },
+  badgeFailed: {
+    background: "var(--k-danger-bg)",
+    color: "var(--k-danger)",
+    border: "1px solid #ef9a9a",
+  },
   rowBody: {
     padding: "0.65rem 0.85rem 0.85rem",
     borderTop: "1px solid var(--k-line)",

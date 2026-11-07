@@ -770,7 +770,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                   style={{
                     marginTop: "1.25rem",
                     paddingTop: "0.9rem",
-                    borderTop: "1px dashed #d0d7e2",
+                    borderTop: "1px dashed var(--k-line-strong)",
                   }}
                 >
                   <h6
@@ -778,7 +778,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                       margin: "0 0 0.5rem",
                       fontSize: "0.82rem",
                       fontWeight: 700,
-                      color: "#455a64",
+                      color: "var(--k-muted)",
                       letterSpacing: "0.03em",
                       textTransform: "uppercase",
                     }}
@@ -1279,7 +1279,7 @@ const chipStyles = {
     alignItems: "center",
     gap: "0.3rem",
     padding: "0.2rem 0.55rem",
-    backgroundColor: "#0d47a1",
+    backgroundColor: "var(--k-blue)",
     color: "#fff",
     borderRadius: 14,
     fontSize: "0.74rem",

@@ -19,9 +19,9 @@ import {
 import { useCompany } from "../contexts/CompanyContext";
 
 const colors = {
-  textSecondary: "#5f6d7e",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
+  textSecondary: "var(--k-muted)",
+  inputBg: "var(--k-surface-2)",
+  inputBorder: "var(--k-line-strong)",
   successBg: "#e8f5e9",
   successFg: "#2e7d32",
   successBorder: "#a5d6a7",

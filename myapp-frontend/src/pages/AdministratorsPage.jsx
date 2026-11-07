@@ -24,7 +24,7 @@ import { getRoles, assignUserRoles } from "../api/rbacApi";
 import { setUserCompanies } from "../api/userCompaniesApi";
 import { useAuth } from "../contexts/AuthContext";
 import { notify } from "../utils/notify";
-import { colors, formStyles, modalSizes } from "../theme";
+import { formStyles, modalSizes } from "../theme";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { PageHeader, Button, Toolbar, SearchBox, Loading, EmptyState } from "../ui/Kit";
 
@@ -561,9 +561,9 @@ export default function AdministratorsPage() {
                         onClick={() => toggleAccess(c.id)}
                       >
                         {on ? (
-                          <MdCheckBox size={22} color={colors.blue} />
+                          <MdCheckBox size={22} color={"var(--k-blue)"} />
                         ) : (
-                          <MdCheckBoxOutlineBlank size={22} color={colors.textSecondary} />
+                          <MdCheckBoxOutlineBlank size={22} color={"var(--k-muted)"} />
                         )}
                         <span
                           style={{
@@ -576,7 +576,7 @@ export default function AdministratorsPage() {
                           {c.name}
                         </span>
                         {c.isTenantIsolated ? (
-                          <MdLock size={16} color={colors.textSecondary} title="Tenant-isolated" />
+                          <MdLock size={16} color={"var(--k-muted)"} title="Tenant-isolated" />
                         ) : null}
                       </button>
                     );

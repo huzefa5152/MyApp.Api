@@ -155,7 +155,7 @@
     overflow: visible !important;
     line-height: 1.35 !important;
     padding-top: 0.15rem;
-    border-top: 1px dashed #eef2f7;
+    border-top: 1px dashed var(--k-line);
   }
   .fbr-mon-row__duration {
     grid-area: duration;

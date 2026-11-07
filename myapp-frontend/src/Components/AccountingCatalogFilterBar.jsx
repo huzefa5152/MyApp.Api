@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MdFilterAltOff, MdSearch, MdTune } from "react-icons/md";
-import { colors, dropdownStyles, formStyles } from "../theme";
+import { dropdownStyles, formStyles } from "../theme";
 import { FILTERS, PERIOD_OPTIONS } from "../config/accountingCatalog";
 import SearchableSelect from "./SearchableSelect";
 import { getAccountsFlat, getBankCashAccounts } from "../api/accountApi";
@@ -229,7 +229,7 @@ export default function AccountingCatalogFilterBar({
           <label style={{ ...st.field, flex: "2 1 220px" }}>
             <span style={st.label}>Search</span>
             <div style={st.searchWrap}>
-              <MdSearch size={18} color={colors.textSecondary} style={st.searchIcon} />
+              <MdSearch size={18} color={"var(--k-muted)"} style={st.searchIcon} />
               <input
                 style={{ ...formStyles.input, ...st.control, paddingLeft: 36 }}
                 placeholder="Account, description, reference…"

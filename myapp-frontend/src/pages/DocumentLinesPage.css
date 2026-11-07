@@ -40,7 +40,7 @@
   flex: 1 1 145px;
   font-size: 12px;
   font-weight: 600;
-  color: #526174;
+  color: var(--k-muted);
   line-height: 1.8;
 }
 .document-lines-company {
@@ -51,7 +51,7 @@
   display: block;
   font-size: 12px;
   font-weight: 600;
-  color: #526174;
+  color: var(--k-muted);
   line-height: 1.8;
 }
 .document-lines-columns {
@@ -76,7 +76,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
   gap: 0 12px;
-  border-top: 1px solid #edf1f5;
+  border-top: 1px solid var(--k-line);
 }
 .document-lines-column-grid label {
   display: flex;
@@ -87,7 +87,7 @@
   font-size: 12px;
 }
 .document-lines-column-grid input {
-  accent-color: #00897b;
+  accent-color: var(--k-teal);
 }
 .document-lines-columns > button {
   margin: 4px 0 10px;

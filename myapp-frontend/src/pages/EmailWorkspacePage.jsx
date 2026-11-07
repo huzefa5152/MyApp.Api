@@ -70,14 +70,14 @@ const shortDate = (v) => {
 const statusTone = (m) =>
   m.salesQuoteId ? "converted" : String(m.decision || "unreviewed").toLowerCase();
 const AVATAR_TINTS = [
-  "#0d47a1",
-  "#00897b",
+  "var(--k-blue)",
+  "var(--k-teal)",
   "#6a1b9a",
   "#c2185b",
   "#ef6c00",
   "#2e7d32",
   "#455a64",
-  "#1565c0",
+  "var(--k-blue)",
 ];
 const avatarTint = (s) =>
   AVATAR_TINTS[

@@ -625,8 +625,8 @@
   font-weight: 600;
   line-height: 1.6;
   white-space: nowrap;
-  color: #455a64;
-  background: #eef1f5;
+  color: var(--k-muted);
+  background: var(--k-surface-3);
 }
 .ew-status::before {
   content: "";

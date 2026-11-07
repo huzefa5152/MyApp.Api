@@ -116,7 +116,7 @@ const PILL_TONE = {
   red: { background: "#FCEBEB", color: "#791F1F" },
   purple: { background: "#ede7f6", color: "#4527a0" },
   teal: { background: "#e0f2f1", color: "#00695c" },
-  gray: { background: "#eceff1", color: "#37474f" },
+  gray: { background: "var(--k-surface-3)", color: "var(--k-muted)" },
 };
 function statusPill(tone, Icon, label, title) {
   return (
@@ -308,7 +308,7 @@ const tint = (bg, fg, border = "transparent") => ({
   borderColor: border,
 });
 const TONE = {
-  view: tint("#e3f2fd", "#0d47a1", "#90caf9"),
+  view: tint("#e3f2fd", "var(--k-blue)", "#90caf9"),
   openTeal: tint("#e0f2f1", "#00695c", "#80cbc4"),
   print: tint("#f3e5f5", "#7b1fa2"),
   tax: tint("#e8f5e9", "#2e7d32"),
@@ -317,7 +317,7 @@ const TONE = {
   reset: tint("#fff8e1", "#8a6d00", "#ffe082"),
   validate: tint("#fff3e0", "#e65100"),
   validated: tint("#e8f5e9", "#2e7d32"),
-  submit: tint("#e3f2fd", "#0d47a1"),
+  submit: tint("#e3f2fd", "var(--k-blue)"),
   edit: tint("#fff3e0", "#e65100", "#ffcc80"),
   include: tint("#e8f5e9", "#2e7d32", "#a5d6a7"),
   exclude: tint("#eceff1", "#546e7a", "#b0bec5"),
@@ -1461,7 +1461,7 @@ export default function InvoicePage({ mode = "invoices" }) {
               unsubmittedInvoices.length > 0 && (
                 <div className="k-card" style={styles.bulkBar}>
                   <div style={styles.bulkLead}>
-                    <MdCloudUpload size={18} color="#0d47a1" />
+                    <MdCloudUpload size={18} color="var(--k-blue)" />
                     <span style={styles.bulkText}>
                       FBR: {unsubmittedInvoices.length} ready to submit
                       {validatedCount > 0 ? `, ${validatedCount} validated` : ""}
@@ -1903,7 +1903,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                                 padding: "8px 10px",
                                 borderRadius: 8,
                                 background: "#f5f7f9",
-                                border: "1px dashed #b0bec5",
+                                border: "1px dashed var(--k-line-strong)",
                                 color: "#546e7a",
                                 fontSize: "0.82rem",
                                 display: "flex",
@@ -2575,7 +2575,7 @@ const styles = {
     gap: "0.75rem",
     margin: "0 0 0.75rem",
     padding: "0.5rem 0.85rem",
-    background: "#f8faff",
+    background: "var(--k-surface-2)",
     boxShadow: "none",
   },
   bulkLead: { display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", minWidth: 0 },

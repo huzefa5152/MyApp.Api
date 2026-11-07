@@ -23,14 +23,6 @@ import AccountSelect from "./AccountSelect";
 import QuantityInput from "./QuantityInput";
 import useScrollToError from "../hooks/useScrollToError";
 
-const colors = {
-  blue: "#0d47a1",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-};
-
 // Create/edit form for a supplier (purchase) debit note. A lean mirror of the
 // purchase-bill form: header + a line grid where each line optionally carries an
 // Item Type (reduces on-hand when the company tracks it) and/or a GL Account
@@ -462,7 +454,7 @@ export default function PurchaseDebitNoteForm({
                 >
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
                     <thead>
-                      <tr style={{ backgroundColor: "#f5f8fc" }}>
+                      <tr style={{ backgroundColor: "var(--k-surface-2)" }}>
                         <th style={th}>
                           Item Type{" "}
                           <span style={{ fontWeight: 400, textTransform: "none" }}>
@@ -567,7 +559,7 @@ export default function PurchaseDebitNoteForm({
                                   style={{
                                     background: "none",
                                     border: "none",
-                                    color: "#c62828",
+                                    color: "var(--k-danger)",
                                     cursor: "pointer",
                                     padding: 0,
                                   }}
@@ -590,7 +582,7 @@ export default function PurchaseDebitNoteForm({
                   padding: "0.75rem 1rem",
                   borderRadius: 10,
                   border: `1px solid var(--k-line)`,
-                  backgroundColor: "#f8faff",
+                  backgroundColor: "var(--k-surface-2)",
                   display: "grid",
                   gridTemplateColumns: "1fr auto auto",
                   rowGap: "0.35rem",

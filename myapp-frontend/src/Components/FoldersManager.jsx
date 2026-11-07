@@ -31,14 +31,6 @@ import {
   Loading,
 } from "../ui/Kit";
 
-const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-};
-
 // Folder listing + CRUD for the Configuration → Folders document library.
 // Folders are per-company, so a company selector scopes the view (mirrors
 // SalesQuotePage). Opening a folder reuses <AttachmentManager> via the detail
@@ -400,7 +392,7 @@ const st = {
     fontSize: "0.66rem",
     fontWeight: 700,
     color: "var(--k-muted)",
-    background: "#eef1f5",
+    background: "var(--k-surface-3)",
     padding: "0.15rem 0.5rem",
     borderRadius: 6,
     textTransform: "uppercase",

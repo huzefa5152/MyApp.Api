@@ -104,7 +104,7 @@ export default function AccountSelect({
           key: t,
           label: `${TYPE_LABEL[t] || t} (${list.length})`,
           groupName: TYPE_LABEL[t] || t,
-          tone: TYPE_COLOR[t] || { fg: "#5f6d7e", bg: "#f1f5f9" },
+          tone: TYPE_COLOR[t] || { fg: "var(--k-muted)", bg: "#f1f5f9" },
           options: list,
         };
       });

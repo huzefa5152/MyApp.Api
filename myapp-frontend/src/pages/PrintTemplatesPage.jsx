@@ -1618,7 +1618,7 @@ const st = {
     fontSize: "0.66rem",
     fontWeight: 700,
     color: "#90a4ae",
-    background: "#eceff1",
+    background: "var(--k-surface-3)",
     padding: "2px 7px",
     borderRadius: 5,
   },

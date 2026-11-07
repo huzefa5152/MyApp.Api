@@ -1,7 +1,7 @@
 /* Accounting report specifics. The shared look lives in reports/ReportWorkspace.css. */
 .report-filter-status {
   font-size: 11px;
-  color: #64748b;
+  color: var(--k-muted);
   align-self: center;
   white-space: nowrap;
 }

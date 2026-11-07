@@ -17,8 +17,8 @@ const variants = {
     bg: "#fdeded",
     color: "#842029",
     border: "#f5c6cb",
-    icon: <MdDelete size={28} color="#dc3545" />,
-    btnBg: "#dc3545",
+    icon: <MdDelete size={28} color="var(--k-danger)" />,
+    btnBg: "var(--k-danger)",
     btnHover: "#b02a37",
   },
   warning: {

@@ -5,11 +5,11 @@ import { MdCheckCircle, MdError, MdInfo, MdBlock, MdClose } from "react-icons/md
 import { formStyles, modalSizes } from "../theme";
 
 const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
+  blue: "var(--k-blue)",
+  teal: "var(--k-teal)",
+  textPrimary: "var(--k-ink)",
+  textSecondary: "var(--k-muted)",
+  cardBorder: "var(--k-line)",
   successBg: "#e8f5e9",
   successFg: "#2e7d32",
   failBg: "#ffebee",

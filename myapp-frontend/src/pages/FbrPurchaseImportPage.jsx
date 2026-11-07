@@ -56,9 +56,9 @@ const DECISION_CONFIG = {
   },
   "already-exists": {
     label: "Already in ERP",
-    color: "#37474f",
+    color: "var(--k-muted)",
     bg: "#eceff1",
-    border: "#b0bec5",
+    border: "var(--k-line-strong)",
     icon: MdInfo,
   },
   // Status=Claimed in FBR Annexure-A — the operator has already filed
@@ -67,9 +67,9 @@ const DECISION_CONFIG = {
   // error) — same visual weight as already-exists.
   "skip-already-claimed": {
     label: "Already claimed",
-    color: "#37474f",
+    color: "var(--k-muted)",
     bg: "#eceff1",
-    border: "#b0bec5",
+    border: "var(--k-line-strong)",
     icon: MdInfo,
   },
   // Unregistered seller — Taxpayer Type ≠ Registered. Placeholder NTN
@@ -84,14 +84,14 @@ const DECISION_CONFIG = {
   },
   "skip-cancelled": {
     label: "Cancelled",
-    color: "#b71c1c",
+    color: "var(--k-danger)",
     bg: "#ffebee",
     border: "#ef9a9a",
     icon: MdBlock,
   },
   "skip-wrong-type": {
     label: "Wrong invoice type",
-    color: "#b71c1c",
+    color: "var(--k-danger)",
     bg: "#ffebee",
     border: "#ef9a9a",
     icon: MdBlock,
@@ -120,7 +120,7 @@ const DECISION_CONFIG = {
   },
   "failed-validation": {
     label: "Validation failed",
-    color: "#b71c1c",
+    color: "var(--k-danger)",
     bg: "#ffebee",
     border: "#ef9a9a",
     icon: MdError,
@@ -133,7 +133,7 @@ function decisionCfg(d) {
       label: d,
       color: "var(--k-muted)",
       bg: "#eceff1",
-      border: "#b0bec5",
+      border: "var(--k-line-strong)",
       icon: MdInfo,
     }
   );
@@ -566,8 +566,8 @@ export default function FbrPurchaseImportPage() {
                 <span
                   style={{
                     ...styles.chip,
-                    color: "#b71c1c",
-                    backgroundColor: "#ffebee",
+                    color: "var(--k-danger)",
+                    backgroundColor: "var(--k-danger-bg)",
                     border: "1px solid #ef9a9a",
                   }}
                 >
@@ -578,9 +578,9 @@ export default function FbrPurchaseImportPage() {
               <span
                 style={{
                   ...styles.chip,
-                  color: "#37474f",
-                  backgroundColor: "#eceff1",
-                  border: "1px solid #b0bec5",
+                  color: "var(--k-muted)",
+                  backgroundColor: "var(--k-surface-3)",
+                  border: "1px solid var(--k-line-strong)",
                 }}
               >
                 <MdInfo size={14} />
@@ -634,7 +634,7 @@ export default function FbrPurchaseImportPage() {
               the second pass. */}
             {commitResult.counts.invoicesFailed > 0 && (
               <div style={{ marginTop: "0.5rem" }}>
-                <strong style={{ fontSize: "var(--k-font)", color: "#b71c1c" }}>
+                <strong style={{ fontSize: "var(--k-font)", color: "var(--k-danger)" }}>
                   Failed invoices:
                 </strong>
                 <ul
@@ -651,7 +651,7 @@ export default function FbrPurchaseImportPage() {
                       <li key={idx} style={{ marginBottom: "0.2rem" }}>
                         <strong>{i.invoiceNo}</strong> ({i.supplierName})
                         {i.errorMessage && (
-                          <span style={{ color: "#b71c1c" }}> — {i.errorMessage}</span>
+                          <span style={{ color: "var(--k-danger)" }}> — {i.errorMessage}</span>
                         )}
                       </li>
                     ))}

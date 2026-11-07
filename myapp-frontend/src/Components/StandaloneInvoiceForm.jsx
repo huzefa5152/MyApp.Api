@@ -60,15 +60,15 @@ import CopyLineButton from "./CopyLineButton";
 // Item Type from this same form when permitted.
 
 const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
-  danger: "#dc3545",
-  dangerLight: "#fff0f1",
+  blue: "var(--k-blue)",
+  teal: "var(--k-teal)",
+  textPrimary: "var(--k-ink)",
+  textSecondary: "var(--k-muted)",
+  cardBorder: "var(--k-line)",
+  inputBg: "var(--k-surface-2)",
+  inputBorder: "var(--k-line-strong)",
+  danger: "var(--k-danger)",
+  dangerLight: "var(--k-danger-bg)",
   warn: "#e65100",
   warnLight: "#fff8e1",
 };
@@ -1164,7 +1164,7 @@ export default function StandaloneInvoiceForm({
                               >
                                 <div style={styles.scenarioCardHeader}>
                                   <span style={styles.scenarioCode}>{s.code}</span>
-                                  {active && <MdCheck size={16} color={colors.blue} />}
+                                  {active && <MdCheck size={16} color={"var(--k-blue)"} />}
                                 </div>
                                 <div style={styles.scenarioSaleType}>{s.saleType}</div>
                                 <div style={styles.scenarioRate}>{s.defaultRate}% GST</div>
@@ -1208,7 +1208,7 @@ export default function StandaloneInvoiceForm({
                       )}
                       {!outsideFbr && chosenScenario && (
                         <div style={styles.scenarioHint}>
-                          <MdInfo size={14} color={colors.blue} /> {chosenScenario.meta.hint}
+                          <MdInfo size={14} color={"var(--k-blue)"} /> {chosenScenario.meta.hint}
                         </div>
                       )}
                     </div>
@@ -1412,7 +1412,7 @@ export default function StandaloneInvoiceForm({
                                 type="number"
                                 style={{
                                   ...styles.input,
-                                  backgroundColor: "#eef5ff",
+                                  backgroundColor: "var(--k-surface-3)",
                                   cursor: "not-allowed",
                                 }}
                                 value={gstRate}
@@ -1444,7 +1444,7 @@ export default function StandaloneInvoiceForm({
                                 type="text"
                                 style={{
                                   ...styles.input,
-                                  backgroundColor: "#eef5ff",
+                                  backgroundColor: "var(--k-surface-3)",
                                   cursor: "not-allowed",
                                 }}
                                 value="Sale Invoice"
@@ -1483,7 +1483,7 @@ export default function StandaloneInvoiceForm({
                     <div
                       style={{ ...styles.lockedSaleType, display: outsideFbr ? "none" : undefined }}
                     >
-                      <MdLock size={14} color={colors.teal} />
+                      <MdLock size={14} color={"var(--k-teal)"} />
                       <span>
                         <b>Sale Type locked:</b> {chosenScenario.saleType}
                       </span>
@@ -2563,7 +2563,7 @@ const styles = {
     borderRadius: 8,
     marginBottom: "1rem",
     fontWeight: 500,
-    border: `1px solid ${colors.danger}30`,
+    border: `1px solid color-mix(in srgb, var(--k-danger) 19%, transparent)`,
     fontSize: "0.85rem",
   },
   warnAlert: {
@@ -2648,7 +2648,7 @@ const styles = {
     display: "inline-flex",
     alignItems: "center",
     gap: "0.3rem",
-    padding: "0.45rem 0.75rem",
+    padding: "0 0.75rem",
     borderRadius: 6,
     border: `1px solid var(--k-blue)`,
     backgroundColor: "var(--k-surface)",
@@ -2748,7 +2748,7 @@ const styles = {
     padding: "var(--ui-input-pad, 0.6rem 0.85rem)",
     borderRadius: 10,
     border: `1px solid var(--k-line)`,
-    backgroundColor: "#f8faff",
+    backgroundColor: "var(--k-surface-2)",
     cursor: "pointer",
     fontFamily: "inherit",
     textAlign: "left",
@@ -2978,7 +2978,7 @@ const styles = {
     marginBottom: "0.5rem",
     borderRadius: 8,
     border: `1px solid var(--k-line)`,
-    backgroundColor: "#f8faff",
+    backgroundColor: "var(--k-surface-2)",
   },
   bulkClearBtn: {
     minHeight: "var(--ui-btn-h, 44px)",

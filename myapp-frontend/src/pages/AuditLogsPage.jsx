@@ -20,12 +20,6 @@ import {
   EmptyState,
 } from "../ui/Kit";
 
-const colors = {
-  teal: "#00897b",
-  textPrimary: "var(--k-ink)",
-  danger: "#dc3545",
-};
-
 const levelBadge = {
   Error: { bg: "#fdeded", color: "#842029", icon: <MdBugReport size={14} /> },
   Warning: { bg: "#fff3cd", color: "#664d03", icon: <MdWarning size={14} /> },
@@ -36,7 +30,7 @@ const methodColor = {
   GET: "#0d6efd",
   POST: "#198754",
   PUT: "#fd7e14",
-  DELETE: "#dc3545",
+  DELETE: "var(--k-danger)",
   PATCH: "#6f42c1",
 };
 
@@ -129,7 +123,7 @@ export default function AuditLogsPage() {
         actions={
           summary && (
             <>
-              <span style={{ ...chip, background: "#fdeded", color: "#842029" }}>
+              <span style={{ ...chip, background: "var(--k-danger-bg)", color: "#842029" }}>
                 {summary.errorsLast24h} errors (24h)
               </span>
               <span style={{ ...chip, background: "#fff3cd", color: "#664d03" }}>

@@ -46,12 +46,12 @@ import {
 } from "../ui/Kit";
 
 const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  cardBorder: "#e8edf3",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  danger: "#dc3545",
+  blue: "var(--k-blue)",
+  teal: "var(--k-teal)",
+  cardBorder: "var(--k-line)",
+  textPrimary: "var(--k-ink)",
+  textSecondary: "var(--k-muted)",
+  danger: "var(--k-danger)",
   warn: "#b26a00",
 };
 
@@ -904,7 +904,7 @@ const styles = {
     borderRadius: 50,
     fontSize: "0.7rem",
     fontWeight: 700,
-    background: `${colors.teal}18`,
+    background: `color-mix(in srgb, var(--k-teal) 9%, transparent)`,
     color: "var(--k-teal)",
     letterSpacing: "0.03em",
     textTransform: "uppercase",
@@ -917,7 +917,7 @@ const styles = {
     borderRadius: 50,
     fontSize: "0.78rem",
     fontWeight: 600,
-    background: `${colors.blue}10`,
+    background: `color-mix(in srgb, var(--k-blue) 6%, transparent)`,
     color: "var(--k-blue)",
   },
   // Modal chrome delegated to formStyles so the Roles & Permissions popup

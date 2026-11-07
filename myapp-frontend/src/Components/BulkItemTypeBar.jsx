@@ -173,7 +173,6 @@ export default function BulkItemTypeBar({
   );
 }
 
-const colors = { textPrimary: "#1a2332", cardBorder: "#e8edf3", danger: "#dc3545" };
 const styles = {
   bar: {
     display: "flex",
@@ -184,7 +183,7 @@ const styles = {
     marginBottom: "0.6rem",
     borderRadius: 8,
     border: `1px solid var(--k-line)`,
-    backgroundColor: "#f8faff",
+    backgroundColor: "var(--k-surface-2)",
   },
   label: { fontSize: "0.82rem", color: "var(--k-ink)", fontWeight: 600 },
   modeSel: {
@@ -192,7 +191,7 @@ const styles = {
     fontSize: "0.8rem",
     maxWidth: 170,
     borderRadius: 6,
-    border: `1px solid #d0d7e2`,
+    border: `1px solid var(--k-line-strong)`,
     backgroundColor: "var(--k-surface)",
     color: "var(--k-ink)",
   },

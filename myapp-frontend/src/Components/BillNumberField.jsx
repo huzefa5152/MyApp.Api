@@ -43,14 +43,14 @@ const readNumber = (companyId, kind, check, excludeId, clientId) =>
 // why — the Edit screen passes it once a bill has gone to FBR.
 
 const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
-  danger: "#dc3545",
+  blue: "var(--k-blue)",
+  teal: "var(--k-teal)",
+  textPrimary: "var(--k-ink)",
+  textSecondary: "var(--k-muted)",
+  cardBorder: "var(--k-line)",
+  inputBg: "var(--k-surface-2)",
+  inputBorder: "var(--k-line-strong)",
+  danger: "var(--k-danger)",
   warn: "#e65100",
   ok: "#2e7d32",
 };
@@ -286,7 +286,7 @@ export default function BillNumberField({
             type="text"
             readOnly
             value={currentNumber == null ? "—" : String(currentNumber)}
-            style={{ ...inputStyle, backgroundColor: "#eef5ff", cursor: "not-allowed" }}
+            style={{ ...inputStyle, backgroundColor: "var(--k-surface-3)", cursor: "not-allowed" }}
           />
           <div style={{ fontSize: "0.72rem", color: "var(--k-muted)", marginTop: "0.25rem" }}>
             {lockedReason}
@@ -299,7 +299,11 @@ export default function BillNumberField({
               type="text"
               readOnly
               value={loading ? "…" : info ? String(info.nextNumber) : "—"}
-              style={{ ...inputStyle, backgroundColor: "#eef5ff", cursor: "not-allowed" }}
+              style={{
+                ...inputStyle,
+                backgroundColor: "var(--k-surface-3)",
+                cursor: "not-allowed",
+              }}
               title={
                 documentType
                   ? "Allocated by the server when the document is saved"
@@ -382,7 +386,7 @@ export default function BillNumberField({
               <span style={{ color: "var(--k-muted)" }}>Checking…</span>
             ) : probe && probe.available === false ? (
               <>
-                <MdErrorOutline size={13} color={colors.danger} />
+                <MdErrorOutline size={13} color={"var(--k-danger)"} />
                 <span style={{ color: "var(--k-danger)" }}>
                   {probe.error || "That number can't be used."}
                 </span>

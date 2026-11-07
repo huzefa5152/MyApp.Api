@@ -79,8 +79,8 @@
   background: #edf4ff;
 }
 .isd-status--bad {
-  color: #b3261e;
-  background: #fff0f1;
+  color: var(--k-danger);
+  background: var(--k-danger-bg);
 }
 .isd-detail-button {
   display: inline-flex;

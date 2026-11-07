@@ -34,7 +34,7 @@ const statusColors = {
   Imported: { bg: "#f3e5f5", color: "#6a1b9a", border: "#6a1b9a30" },
   "No PO": { bg: "#e3f2fd", color: "var(--k-blue)", border: "#0d47a130" },
   Invoiced: { bg: "#e8f5e9", color: "#2e7d32", border: "#2e7d3230" },
-  Cancelled: { bg: "#ffebee", color: "#c62828", border: "#c6282830" },
+  Cancelled: { bg: "#ffebee", color: "var(--k-danger)", border: "#c6282830" },
   "Setup Required": { bg: "#fce4ec", color: "#880e4f", border: "#880e4f30" },
 };
 
@@ -545,7 +545,7 @@ const styles = {
     paddingTop: "0.9rem",
     borderTop: "1px solid var(--k-line)",
   },
-  viewBtn: tint("#e3f2fd", "#0d47a1"),
+  viewBtn: tint("#e3f2fd", "var(--k-blue)"),
   printBtn: tint("#f3e5f5", "#7b1fa2"),
   pdfBtn: tint("#ffebee", "#c62828"),
   excelBtn: tint("#e8f5e9", "#2e7d32"),
@@ -553,7 +553,7 @@ const styles = {
   cancelBtn: tint("#fce4ec", "#c62828"),
   deleteBtn: tint("#ffebee", "#b71c1c"),
   generateBillBtn: tint("#e0f2f1", "#00695c"),
-  linkBtn: tint("#e3f2fd", "#0d47a1"),
+  linkBtn: tint("#e3f2fd", "var(--k-blue)"),
   // Purple matches the "Duplicate of #N" subtitle and the DUPLICATE pill
   // so all three signals form one visual cue across the card.
   duplicateBtn: tint("#ede7f6", "#4527a0"),

@@ -257,7 +257,7 @@
 }
 .inventory-error {
   color: #a32c36;
-  background: #fff0f1;
+  background: var(--k-danger-bg);
 }
 .inventory-panel > .inventory-entry-history > p[role] {
   margin: 8px 18px;
@@ -380,7 +380,7 @@ html:not([data-ui-layout="workspace"]) .inventory-page .stock-table td {
   box-shadow: none;
 }
 .inventory-page .inventory-reverse:hover {
-  background: #fff0f1;
+  background: var(--k-danger-bg);
   color: #842727;
 }
 .inventory-mobile-label {

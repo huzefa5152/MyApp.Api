@@ -637,7 +637,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                     style={{ display: "none" }}
                   />
                   <div style={styles.dropZone} onClick={() => fileInputRef.current?.click()}>
-                    <MdUploadFile size={48} color={colors.textSecondary} />
+                    <MdUploadFile size={48} color={"var(--k-muted)"} />
                     <p
                       style={{
                         margin: "0.5rem 0 0",

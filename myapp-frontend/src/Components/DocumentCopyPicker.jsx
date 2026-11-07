@@ -195,7 +195,7 @@ export default function DocumentCopyPicker({
                   left: 10,
                   top: "50%",
                   transform: "translateY(-50%)",
-                  color: "#8a97a8",
+                  color: "var(--k-faint)",
                 }}
               />
               <input
@@ -218,7 +218,11 @@ export default function DocumentCopyPicker({
           {nothingToPick ? (
             // Nothing to copy: say so, rather than an empty dropdown and pager.
             <div style={empty}>
-              <MdInbox size={22} aria-hidden="true" style={{ color: "#8a97a8", flexShrink: 0 }} />
+              <MdInbox
+                size={22}
+                aria-hidden="true"
+                style={{ color: "var(--k-faint)", flexShrink: 0 }}
+              />
               <div>
                 <strong style={{ display: "block", color: "var(--k-ink)" }}>
                   {search
@@ -329,7 +333,7 @@ export default function DocumentCopyPicker({
                       ...check,
                       minHeight: 36,
                       padding: "4px 10px",
-                      borderBottom: i < itemCount - 1 ? "1px solid #eef2f7" : "none",
+                      borderBottom: i < itemCount - 1 ? "1px solid var(--k-line)" : "none",
                       overflowWrap: "anywhere",
                     }}
                   >
@@ -447,7 +451,7 @@ const primary = {
   padding: "7px 16px",
   border: "none",
   borderRadius: 8,
-  background: "linear-gradient(135deg, #0d47a1, #00897b)",
+  background: "var(--k-primary-bg)",
   color: "#fff",
   fontWeight: 600,
   fontSize: 13,
@@ -485,7 +489,7 @@ const empty = {
   gap: 10,
   alignItems: "flex-start",
   padding: "12px 14px",
-  border: "1px dashed #d0d7e2",
+  border: "1px dashed var(--k-line-strong)",
   borderRadius: 8,
   background: "var(--k-surface-2)",
   fontSize: 13,

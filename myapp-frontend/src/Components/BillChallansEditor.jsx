@@ -240,7 +240,12 @@ export default function BillChallansEditor({
           {error && (
             <div
               role="alert"
-              style={{ color: "#a21525", background: "#fff0f1", padding: 12, marginBottom: 12 }}
+              style={{
+                color: "#a21525",
+                background: "var(--k-danger-bg)",
+                padding: 12,
+                marginBottom: 12,
+              }}
             >
               {error}
             </div>
@@ -517,7 +522,7 @@ export default function BillChallansEditor({
           </button>
           <button
             type="submit"
-            style={{ ...button, background: "#0d47a1", color: "white" }}
+            style={{ ...button, background: "var(--k-blue)", color: "white" }}
             disabled={
               !snapshot || loading || saving || !changed || !validRates || !hasItems || !!emptied
             }

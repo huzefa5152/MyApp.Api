@@ -411,7 +411,7 @@ function Dashboard({
           <Metric
             label="Revenue"
             icon={MdTrendingUp}
-            accent="#0d47a1"
+            accent="var(--k-blue)"
             value={fmtMoney(income)}
             hint="Income accounts in the Profit & Loss — sales net of credit notes, excluding sales tax."
             to={reportLink("profit-loss")}
@@ -420,7 +420,7 @@ function Dashboard({
             <Metric
               label="Gross profit"
               icon={MdInventory2}
-              accent="#00897b"
+              accent="var(--k-teal)"
               value={fmtMoney(gross)}
               tone={gross < 0 ? "bad" : undefined}
               sub={
@@ -510,7 +510,7 @@ function Dashboard({
           <Metric
             label="Paid out"
             icon={MdPayments}
-            accent="#0d47a1"
+            accent="var(--k-blue)"
             value={fmtMoney(summary.paymentsTotal)}
             sub={`${summary.paymentCount || 0} payment${summary.paymentCount === 1 ? "" : "s"}`}
             to={reportLink("payments-register")}
@@ -538,7 +538,7 @@ function Dashboard({
           <Metric
             label="Cheques issued"
             icon={MdCallMade}
-            accent="#0d47a1"
+            accent="var(--k-blue)"
             value={fmtMoney(summary.pdcOut?.amount)}
             sub={chequeSub(summary.pdcOut)}
             tone={summary.pdcOut?.dueSoonCount > 0 ? "warn" : undefined}
@@ -658,27 +658,27 @@ function Dashboard({
         <MetricGrid min={180}>
           <Metric
             label="Output sales tax"
-            accent="#0d47a1"
+            accent="var(--k-blue)"
             value={fmtMoney(summary.outputTax)}
             sub="Owed to FBR"
             to={reportLink("tax-summary")}
           />
           <Metric
             label="Input sales tax"
-            accent="#00897b"
+            accent="var(--k-teal)"
             value={fmtMoney(summary.inputTax)}
             sub="Reclaimable"
             to={reportLink("tax-summary")}
           />
           <Metric
             label="Further tax"
-            accent="#0d47a1"
+            accent="var(--k-blue)"
             value={fmtMoney(summary.furtherTaxPayable)}
             sub="Owed to FBR"
           />
           <Metric
             label="WHT receivable"
-            accent="#00897b"
+            accent="var(--k-teal)"
             value={fmtMoney(summary.withholdingReceivable)}
             sub="Withheld by customers"
           />

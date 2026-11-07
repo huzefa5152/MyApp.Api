@@ -35,12 +35,12 @@ import "../Components/reports/ReportWorkspace.css";
 import { pdfReport, printReport } from "../utils/reportPrintKit";
 
 const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBorder: "#d0d7e2",
+  blue: "var(--k-blue)",
+  teal: "var(--k-teal)",
+  textPrimary: "var(--k-ink)",
+  textSecondary: "var(--k-muted)",
+  cardBorder: "var(--k-line)",
+  inputBorder: "var(--k-line-strong)",
   rowAlt: "#fafbfd",
   totalBg: "#eef4ff",
 };

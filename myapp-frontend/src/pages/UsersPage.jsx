@@ -38,15 +38,6 @@ import {
   Alert,
 } from "../ui/Kit";
 
-const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  cardBorder: "var(--k-line)",
-  textPrimary: "var(--k-ink)",
-  textSecondary: "var(--k-muted)",
-  danger: "#dc3545",
-};
-
 const msgTone = (type) => (type === "success" ? "success" : type === "warn" ? "warn" : "error");
 const isMcpRole = (role) => role.isSystemRole && ["MCP Access", "MCP Write"].includes(role.name);
 
@@ -705,7 +696,9 @@ export default function UsersPage() {
                           padding: "0.75rem 0.9rem",
                           border: `1px solid ${checked ? "var(--k-blue)" : "var(--k-line)"}`,
                           borderRadius: 10,
-                          background: checked ? `${colors.blue}0c` : "var(--k-surface)",
+                          background: checked
+                            ? `color-mix(in srgb, var(--k-blue) 5%, transparent)`
+                            : "var(--k-surface)",
                           cursor: "pointer",
                           transition: "background 0.15s, border-color 0.15s",
                         }}
@@ -742,7 +735,7 @@ export default function UsersPage() {
                                   borderRadius: 50,
                                   fontSize: "0.68rem",
                                   fontWeight: 700,
-                                  background: `${colors.teal}18`,
+                                  background: `color-mix(in srgb, var(--k-teal) 9%, transparent)`,
                                   color: "var(--k-teal)",
                                   textTransform: "uppercase",
                                   letterSpacing: "0.03em",
@@ -905,7 +898,7 @@ const styles = {
     borderRadius: 50,
     fontSize: "0.78rem",
     fontWeight: 600,
-    background: `${colors.blue}14`,
+    background: `color-mix(in srgb, var(--k-blue) 8%, transparent)`,
     color: "var(--k-blue)",
   },
   // Modal chrome — all delegated to the shared formStyles baseline so

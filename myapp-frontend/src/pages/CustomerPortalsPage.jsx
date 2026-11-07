@@ -499,7 +499,7 @@ const st = {
     fontSize: "0.62rem",
     fontWeight: 700,
     textTransform: "uppercase",
-    background: "#eceff1",
+    background: "var(--k-surface-3)",
     color: "#607d8b",
     padding: "1px 7px",
     borderRadius: 10,

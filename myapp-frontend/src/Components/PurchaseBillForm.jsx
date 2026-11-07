@@ -42,15 +42,6 @@ import "./PurchaseBillFlow.css";
 import { Link } from "react-router-dom";
 
 // Kit tokens for the Trader panels below (inventory impact, linked-line notes).
-const colors = {
-  blue: "var(--k-blue)",
-  teal: "var(--k-teal)",
-  textPrimary: "var(--k-ink)",
-  textSecondary: "var(--k-muted)",
-  cardBorder: "var(--k-line)",
-  inputBg: "var(--k-input-bg)",
-  inputBorder: "var(--k-line-strong)",
-};
 
 export default function PurchaseBillForm({
   companyId,
@@ -1155,7 +1146,7 @@ export default function PurchaseBillForm({
                                           padding: "0.4rem 0.55rem",
                                           fontSize: "0.82rem",
                                           ...(isAgainstSale && !it.itemTypeId
-                                            ? { borderColor: "#dc3545" }
+                                            ? { borderColor: "var(--k-danger)" }
                                             : {}),
                                         }}
                                       />
@@ -1317,7 +1308,7 @@ export default function PurchaseBillForm({
                                             padding: "0.3rem 0.5rem",
                                             fontSize: "0.78rem",
                                             ...(isAgainstSale && !it.itemTypeId
-                                              ? { borderColor: "#dc3545" }
+                                              ? { borderColor: "var(--k-danger)" }
                                               : {}),
                                           }}
                                         />
@@ -1470,7 +1461,7 @@ export default function PurchaseBillForm({
                         padding: 16,
                         borderRadius: 10,
                         border: `1px solid var(--k-line)`,
-                        background: "#f8faff",
+                        background: "var(--k-surface-2)",
                       }}
                     >
                       <strong style={{ color: "var(--k-blue)" }}>Inventory impact</strong>

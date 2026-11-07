@@ -7,7 +7,7 @@ import AttachmentManager from "./AttachmentManager";
 import { Facts, TableWrap } from "../ui/Kit";
 
 // Read-only view of a Sales Quote: header + meta + items + totals + notes.
-const STATUS_COLORS = { Active: "#1565c0", Expired: "#f57c00", Accepted: "#28a745" };
+const STATUS_COLORS = { Active: "var(--k-blue)", Expired: "#f57c00", Accepted: "#28a745" };
 
 const fmtDate = (d) => {
   if (!d) return "—";
@@ -53,8 +53,8 @@ export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPr
             <span
               style={{
                 ...st.badge,
-                background: `${STATUS_COLORS[quote.status] || "#5f6d7e"}18`,
-                color: STATUS_COLORS[quote.status] || "#5f6d7e",
+                background: `${STATUS_COLORS[quote.status] || "var(--k-muted)"}18`,
+                color: STATUS_COLORS[quote.status] || "var(--k-muted)",
               }}
             >
               {quote.status}

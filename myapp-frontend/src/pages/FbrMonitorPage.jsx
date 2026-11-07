@@ -63,12 +63,18 @@ const STATUS_CFG = {
   },
   rejected: {
     label: "Rejected",
-    color: "#c62828",
+    color: "var(--k-danger)",
     bg: "#ffebee",
     border: "#ef9a9a",
     icon: MdError,
   },
-  failed: { label: "Failed", color: "#b71c1c", bg: "#fdecea", border: "#f5a3a3", icon: MdError },
+  failed: {
+    label: "Failed",
+    color: "var(--k-danger)",
+    bg: "#fdecea",
+    border: "#f5a3a3",
+    icon: MdError,
+  },
   uncertain: {
     label: "Uncertain",
     color: "#8a4b00",
@@ -85,9 +91,9 @@ const STATUS_CFG = {
   },
   sent: {
     label: "Sent",
-    color: "#37474f",
+    color: "var(--k-muted)",
     bg: "#eceff1",
-    border: "#b0bec5",
+    border: "var(--k-line-strong)",
     icon: MdHourglassEmpty,
   },
 };
@@ -98,7 +104,7 @@ function statusCfg(s) {
       label: s || "—",
       color: "var(--k-muted)",
       bg: "#eceff1",
-      border: "#b0bec5",
+      border: "var(--k-line-strong)",
       icon: MdWarning,
     }
   );
@@ -602,14 +608,14 @@ function Drawer({ row, onClose }) {
           {row.fbrErrorCode && (
             <KeyValue
               label="FBR error code"
-              value={<strong style={{ color: "#b71c1c" }}>{row.fbrErrorCode}</strong>}
+              value={<strong style={{ color: "var(--k-danger)" }}>{row.fbrErrorCode}</strong>}
             />
           )}
           {row.fbrErrorMessage && (
             <KeyValue
               label="FBR message"
               value={
-                <span style={{ color: "#b71c1c", whiteSpace: "pre-line" }}>
+                <span style={{ color: "var(--k-danger)", whiteSpace: "pre-line" }}>
                   {row.fbrErrorMessage}
                 </span>
               }
@@ -679,8 +685,8 @@ const S = {
     alignItems: "center",
     padding: "0.15rem 0.5rem",
     borderRadius: 999,
-    background: "#ffebee",
-    color: "#b71c1c",
+    background: "var(--k-danger-bg)",
+    color: "var(--k-danger)",
     fontSize: "0.78rem",
   },
   list: {
@@ -757,7 +763,7 @@ const S = {
   },
   drawerBody: { padding: "0.85rem 1rem 1.5rem", flex: 1 },
   pre: {
-    background: "#f5f8fc",
+    background: "var(--k-surface-2)",
     border: "1px solid var(--k-line)",
     borderRadius: 8,
     padding: "0.6rem 0.75rem",
@@ -773,7 +779,7 @@ const S = {
   code: {
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
     fontSize: "0.78rem",
-    background: "#f5f8fc",
+    background: "var(--k-surface-2)",
     padding: "1px 5px",
     borderRadius: 4,
     border: "1px solid var(--k-line)",

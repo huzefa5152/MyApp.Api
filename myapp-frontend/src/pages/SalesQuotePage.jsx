@@ -60,7 +60,7 @@ import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
 
 // Status is derived server-side (never operator-set): Active / Expired / Accepted.
-const STATUS_COLORS = { Active: "#1565c0", Expired: "#f57c00", Accepted: "#28a745" };
+const STATUS_COLORS = { Active: "var(--k-blue)", Expired: "#f57c00", Accepted: "#28a745" };
 
 export default function SalesQuotePage() {
   const confirm = useConfirm();
@@ -368,8 +368,8 @@ export default function SalesQuotePage() {
                         <span
                           style={{
                             ...st.badge,
-                            background: `${STATUS_COLORS[q.status] || "#5f6d7e"}18`,
-                            color: STATUS_COLORS[q.status] || "#5f6d7e",
+                            background: `${STATUS_COLORS[q.status] || "var(--k-muted)"}18`,
+                            color: STATUS_COLORS[q.status] || "var(--k-muted)",
                           }}
                         >
                           {q.status}

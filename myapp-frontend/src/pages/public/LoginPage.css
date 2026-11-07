@@ -408,7 +408,7 @@
 
 .ht-form-control:focus {
   border-color: var(--lg-cyan-deep);
-  background: #fff;
+  background: var(--k-surface);
   box-shadow: 0 0 0 4px rgba(34, 224, 255, 0.15);
 }
 

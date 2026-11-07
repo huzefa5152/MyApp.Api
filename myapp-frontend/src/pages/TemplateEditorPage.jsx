@@ -833,7 +833,7 @@ export default function TemplateEditorPage() {
             zIndex: 9999,
             padding: "0.75rem 1.25rem",
             borderRadius: 10,
-            background: toast.type === "error" ? "#dc3545" : "#28a745",
+            background: toast.type === "error" ? "var(--k-danger)" : "#28a745",
             color: "#fff",
             fontWeight: 600,
             fontSize: "0.9rem",

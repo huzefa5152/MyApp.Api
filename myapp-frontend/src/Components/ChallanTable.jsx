@@ -390,12 +390,12 @@ const baseBtn = {
 const btnStyles = {
   view: { ...baseBtn, backgroundColor: "#e3f2fd", color: "var(--k-blue)" },
   print: { ...baseBtn, backgroundColor: "#f3e5f5", color: "#7b1fa2" },
-  pdf: { ...baseBtn, backgroundColor: "#ffebee", color: "#c62828" },
+  pdf: { ...baseBtn, backgroundColor: "var(--k-danger-bg)", color: "var(--k-danger)" },
   excel: { ...baseBtn, backgroundColor: "#e8f5e9", color: "#2e7d32" },
   edit: { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },
   duplicate: { ...baseBtn, backgroundColor: "#ede7f6", color: "#4527a0" },
   generateBill: { ...baseBtn, backgroundColor: "#e0f2f1", color: "#00695c" },
   link: { ...baseBtn, backgroundColor: "#e3f2fd", color: "var(--k-blue)" },
-  cancel: { ...baseBtn, backgroundColor: "#fce4ec", color: "#c62828" },
-  delete: { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" },
+  cancel: { ...baseBtn, backgroundColor: "#fce4ec", color: "var(--k-danger)" },
+  delete: { ...baseBtn, backgroundColor: "var(--k-danger-bg)", color: "var(--k-danger)" },
 };

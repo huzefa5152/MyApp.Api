@@ -274,7 +274,7 @@ export default function ItemTypesPage() {
                             {it.isFavorite ? (
                               <MdStar size={18} color={colors.favorite} />
                             ) : (
-                              <MdStarBorder size={18} color={colors.textSecondary} />
+                              <MdStarBorder size={18} color={"var(--k-muted)"} />
                             )}
                           </IconButton>
                         </td>
@@ -363,7 +363,7 @@ export default function ItemTypesPage() {
                         {it.isFavorite ? (
                           <MdStar size={20} color={colors.favorite} />
                         ) : (
-                          <MdStarBorder size={20} color={colors.textSecondary} />
+                          <MdStarBorder size={20} color={"var(--k-muted)"} />
                         )}
                       </IconButton>
                       <div style={{ minWidth: 0, flex: 1 }}>

@@ -56,15 +56,15 @@ import DocumentNotesEditor from "./DocumentNotesEditor";
 import TaxFilingRowsEditor from "./TaxFilingRowsEditor";
 
 const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
-  danger: "#dc3545",
-  dangerLight: "#fff0f1",
+  blue: "var(--k-blue)",
+  teal: "var(--k-teal)",
+  textPrimary: "var(--k-ink)",
+  textSecondary: "var(--k-muted)",
+  cardBorder: "var(--k-line)",
+  inputBg: "var(--k-surface-2)",
+  inputBorder: "var(--k-line-strong)",
+  danger: "var(--k-danger)",
+  dangerLight: "var(--k-danger-bg)",
   warn: "#f57c00",
   warnBg: "#fff8e1",
   warnBorder: "#ffcc80",
@@ -1762,7 +1762,7 @@ function CommercialBillEditor({
                         disabled={saving}
                         style={{
                           minHeight: "var(--k-btn-h)",
-                          padding: "0.5rem 0.8rem",
+                          padding: "0 0.8rem",
                           marginLeft: "auto",
                         }}
                         onClick={async () => {
@@ -2166,13 +2166,13 @@ function CommercialBillEditor({
                 </div>
 
                 {!billsMode && originalLinesOnly && (
-                  <div style={{ fontSize: "0.82rem", color: "#526174", marginBottom: 12 }}>
+                  <div style={{ fontSize: "0.82rem", color: "var(--k-muted)", marginBottom: 12 }}>
                     The tax invoice prints your original bill lines, one row per line. Item types
                     and codes you set here are what is filed.
                   </div>
                 )}
                 {!billsMode && !originalLinesOnly && (
-                  <div style={{ fontSize: "0.82rem", color: "#526174", marginBottom: 12 }}>
+                  <div style={{ fontSize: "0.82rem", color: "var(--k-muted)", marginBottom: 12 }}>
                     Consultant groups use the item type’s tax unit. Bill and challan units stay
                     unchanged.
                     {invoice.groupTaxInvoiceByItemType
@@ -2646,7 +2646,7 @@ function CommercialBillEditor({
                                         <div
                                           style={{
                                             ...styles.groupMeta,
-                                            color: "#c62828",
+                                            color: "var(--k-danger)",
                                             textAlign: "right",
                                           }}
                                           title={
@@ -2851,7 +2851,10 @@ function CommercialBillEditor({
                                             )}
                                             {exactActive && !exactValid && (
                                               <div
-                                                style={{ ...styles.groupMeta, color: "#c62828" }}
+                                                style={{
+                                                  ...styles.groupMeta,
+                                                  color: "var(--k-danger)",
+                                                }}
                                               >
                                                 ✗ Enter an amount greater than zero.
                                               </div>
@@ -3260,7 +3263,7 @@ function CommercialBillEditor({
                     <div
                       style={{
                         fontSize: "0.78rem",
-                        color: "#c62828",
+                        color: "var(--k-danger)",
                         marginBottom: "0.4rem",
                         fontWeight: 700,
                         display: "flex",
@@ -3273,7 +3276,7 @@ function CommercialBillEditor({
                     {stockNegatives.map((w) => (
                       <div key={w.name} style={styles.totalsRow}>
                         <span>{w.name}</span>
-                        <strong style={{ color: "#c62828" }}>
+                        <strong style={{ color: "var(--k-danger)" }}>
                           on-hand {fmtQty(w.onHand)} − {fmtQty(w.planned)} = {fmtQty(w.projected)}
                         </strong>
                       </div>
@@ -3626,7 +3629,7 @@ function TaxClaimPanel({
               minWidth: 0,
             }}
           >
-            <MdInventory2 size={16} color={colors.teal} />
+            <MdInventory2 size={16} color={"var(--k-teal)"} />
             <strong style={{ fontSize: "0.88rem", color: "var(--k-ink)" }}>
               Tax Claim Snapshot
             </strong>
@@ -3922,7 +3925,7 @@ function TaxClaimPanel({
                   <div style={styles.taxRowHint}>
                     <MdLightbulb
                       size={13}
-                      color="#5f6d7e"
+                      color="var(--k-muted)"
                       style={{ flexShrink: 0, marginTop: 1 }}
                     />
                     <span>{hint}</span>
@@ -4002,7 +4005,7 @@ function TaxClaimPanel({
                     return (
                       <div style={styles.taxRowOptimization}>
                         <div style={styles.taxRowOptimizationHeader}>
-                          <MdAutoAwesome size={14} color="#0d47a1" />
+                          <MdAutoAwesome size={14} color="var(--k-blue)" />
                           <span style={styles.taxRowOptimizationTitle}>
                             Maximum-claim suggestion for this HS
                           </span>
@@ -4344,10 +4347,10 @@ function TaxClaimPanel({
 }
 
 function HeadlineCell({ label, value, flag, tone }) {
-  let valueColor = "#1a2332";
+  let valueColor = "var(--k-ink)";
   if (tone === "good") valueColor = "#2e7d32";
-  else if (tone === "muted") valueColor = "#5f6d7e";
-  else if (tone === "strong") valueColor = "#0d47a1";
+  else if (tone === "muted") valueColor = "var(--k-muted)";
+  else if (tone === "strong") valueColor = "var(--k-blue)";
   return (
     <div>
       <div style={styles.taxPanelHeadlineLabel}>
@@ -4630,7 +4633,7 @@ const styles = {
     display: "flex",
     gap: "0.4rem",
     padding: "0.4rem 0.55rem",
-    background: "#f7f9fc",
+    background: "var(--k-surface-2)",
     borderRadius: 6,
     fontSize: "0.74rem",
     color: "var(--k-ink)",
@@ -4791,9 +4794,9 @@ const styles = {
     color: "#8a4b00",
   },
   taxRowOptimizationRiskHigh: {
-    background: "#ffebee",
+    background: "var(--k-danger-bg)",
     border: "1px solid #ef9a9a",
-    color: "#b71c1c",
+    color: "var(--k-danger)",
   },
   // ── Action row (Apply / Recalculate / Why) ────────────────────────
   taxRowOptimizationActions: {
@@ -5054,7 +5057,7 @@ const styles = {
     fontWeight: 600,
   },
   taxRowDisputed: {
-    color: "#b71c1c",
+    color: "var(--k-danger)",
     fontWeight: 600,
   },
   refreshBtn: {
@@ -5158,7 +5161,7 @@ const styles = {
     borderRadius: 8,
   },
   table: { width: "100%", borderCollapse: "collapse", minWidth: 1100, tableLayout: "fixed" },
-  thead: { backgroundColor: "#f5f7fa" },
+  thead: { backgroundColor: "var(--k-surface-2)" },
   th: {
     padding: "0.6rem 0.5rem",
     textAlign: "left",
@@ -5197,14 +5200,18 @@ const styles = {
     lineHeight: 1.4,
   },
   readOnlyCell: {
-    backgroundColor: "#f5f7fa",
+    backgroundColor: "var(--k-surface-2)",
     color: "var(--k-ink)",
     fontSize: "0.78rem",
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
-  readOnlyInput: { backgroundColor: "#f5f7fa", cursor: "not-allowed", pointerEvents: "none" },
+  readOnlyInput: {
+    backgroundColor: "var(--k-surface-2)",
+    cursor: "not-allowed",
+    pointerEvents: "none",
+  },
   readOnlyText: {
     padding: "0.35rem 0.5rem",
     fontSize: "0.8rem",
@@ -5227,7 +5234,7 @@ const styles = {
     marginBottom: "0.65rem",
     borderRadius: 8,
     border: `1px solid var(--k-line)`,
-    backgroundColor: "#f8faff",
+    backgroundColor: "var(--k-surface-2)",
   },
   bulkApplyLabel: { fontSize: "0.82rem", color: "var(--k-ink)", fontWeight: 500 },
   // Grouped ⇄ Individual lines segmented toggle.
@@ -5270,7 +5277,7 @@ const styles = {
     whiteSpace: "nowrap",
     textAlign: "right",
   },
-  adjustRow: { background: "#f7f9fc" },
+  adjustRow: { background: "var(--k-surface-2)" },
   adjustCell: {
     padding: "0.5rem 0.75rem 0.75rem 1.1rem",
     borderBottom: `1px solid var(--k-line)`,
@@ -5329,14 +5336,14 @@ const styles = {
   stockHint: {
     marginTop: 2,
     fontSize: "0.66rem",
-    color: "#c62828",
+    color: "var(--k-danger)",
     fontWeight: 700,
     lineHeight: 1.3,
   },
   totalsBox: {
     marginTop: "1rem",
     padding: "0.75rem 1rem",
-    backgroundColor: "#f5f7fa",
+    backgroundColor: "var(--k-surface-2)",
     borderRadius: 8,
     maxWidth: 360,
     marginLeft: "auto",

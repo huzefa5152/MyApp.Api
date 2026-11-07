@@ -1,5 +1,4 @@
 import { MdContentCopy } from "react-icons/md";
-import { colors } from "../theme";
 
 /**
  * The "copy this line" button on a document's item rows: one look on every
@@ -38,7 +37,7 @@ const base = {
   borderRadius: 8,
   cursor: "pointer",
   boxShadow: "none",
-  border: `1px solid ${colors.teal}40`,
-  backgroundColor: `${colors.teal}12`,
+  border: `1px solid color-mix(in srgb, var(--k-teal) 25%, transparent)`,
+  backgroundColor: `color-mix(in srgb, var(--k-teal) 7%, transparent)`,
   color: "var(--k-teal)",
 };

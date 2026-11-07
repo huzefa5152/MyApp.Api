@@ -26,7 +26,7 @@ import {
 } from "../ui/Kit";
 
 const colors = {
-  blueLight: "#1565c0",
+  blueLight: "var(--k-blue)",
   cardBg: "var(--k-surface)",
   cardBorder: "var(--k-line)",
   textPrimary: "var(--k-ink)",
@@ -323,7 +323,7 @@ function EditModal({ user, selected, onToggle, onSubmit, onClose, saving, canAss
                   {checked ? (
                     <MdCheckBox size={20} color={colors.success} />
                   ) : (
-                    <MdCheckBoxOutlineBlank size={20} color={colors.textSecondary} />
+                    <MdCheckBoxOutlineBlank size={20} color={"var(--k-muted)"} />
                   )}
                   <span style={pageStyles.companyName}>{c.companyName}</span>
                 </label>

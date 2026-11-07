@@ -564,16 +564,6 @@ function Row({
   );
 }
 
-const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBorder: "#d0d7e2",
-  inputBg: "#f8f9fb",
-};
-
 const st = {
   wrap: {
     marginTop: "1rem",
@@ -583,7 +573,10 @@ const st = {
     background: "var(--k-surface)",
     transition: "border-color 0.15s, background 0.15s",
   },
-  wrapDrag: { borderColor: "var(--k-teal)", background: `${colors.teal}08` },
+  wrapDrag: {
+    borderColor: "var(--k-teal)",
+    background: `color-mix(in srgb, var(--k-teal) 3%, transparent)`,
+  },
   head: {
     display: "flex",
     justifyContent: "space-between",
@@ -620,7 +613,7 @@ const st = {
     marginTop: 4,
     padding: "0.1rem 0.5rem",
     borderRadius: 6,
-    background: "#eef4ff",
+    background: "var(--k-surface-3)",
     color: "var(--k-blue)",
     fontSize: "0.7rem",
     fontWeight: 600,
@@ -629,7 +622,10 @@ const st = {
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
-  srcChipDirect: { background: `${colors.teal}14`, color: "var(--k-teal)" },
+  srcChipDirect: {
+    background: `color-mix(in srgb, var(--k-teal) 8%, transparent)`,
+    color: "var(--k-teal)",
+  },
   list: { marginTop: "0.7rem", display: "flex", flexDirection: "column", gap: 8 },
   row: {
     display: "flex",
@@ -686,7 +682,7 @@ const st = {
     gap: 8,
     padding: "0.5rem 0.7rem",
     borderRadius: 8,
-    background: `${colors.teal}10`,
+    background: `color-mix(in srgb, var(--k-teal) 6%, transparent)`,
     color: "var(--k-teal)",
     fontSize: "0.82rem",
     fontWeight: 600,
@@ -694,7 +690,7 @@ const st = {
   spin: {
     width: 14,
     height: 14,
-    border: `2px solid ${colors.teal}40`,
+    border: `2px solid color-mix(in srgb, var(--k-teal) 25%, transparent)`,
     borderTopColor: "var(--k-teal)",
     borderRadius: "50%",
     display: "inline-block",

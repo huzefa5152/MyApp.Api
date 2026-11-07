@@ -5,9 +5,9 @@ import { notify } from "../utils/notify";
 // Same backdrop / gradient header / scrolling body / footer as every other popup.
 import { formStyles, modalSizes } from "../theme";
 
-const ink = "#1a2332";
-const muted = "#5f6d7e";
-const line = "#e8edf3";
+const ink = "var(--k-ink)";
+const muted = "var(--k-muted)";
+const line = "var(--k-line)";
 
 /**
  * Bulk adjust from a filled-in Tax Sheet: pick the file, review what would
@@ -117,7 +117,7 @@ export default function TaxSheetImportDialog({ companyId, onClose, onApplied }) 
               boxShadow: "none",
             }}
           >
-            <MdUploadFile size={28} color="#0d47a1" style={{ flexShrink: 0 }} />
+            <MdUploadFile size={28} color="var(--k-blue)" style={{ flexShrink: 0 }} />
             <span style={{ minWidth: 0 }}>
               <span
                 style={{
@@ -189,7 +189,7 @@ export default function TaxSheetImportDialog({ companyId, onClose, onApplied }) 
                     style={{
                       fontWeight: 700,
                       fontSize: "0.82rem",
-                      color: "#c62828",
+                      color: "var(--k-danger)",
                       marginBottom: "0.4rem",
                       display: "flex",
                       gap: 6,

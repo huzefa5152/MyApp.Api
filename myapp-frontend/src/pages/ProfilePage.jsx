@@ -29,8 +29,8 @@ import McpAgentsPanel from "../Components/McpAgentsPanel";
 import { usePermissions } from "../contexts/PermissionsContext";
 
 const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
+  blue: "var(--k-blue)",
+  teal: "var(--k-teal)",
   cyan: "#00e5ff",
 };
 
@@ -753,7 +753,7 @@ const styles = {
     marginTop: "0.5rem",
     padding: "0.25rem 0.75rem",
     borderRadius: 20,
-    background: `linear-gradient(135deg, ${colors.blue}18, ${colors.teal}18)`,
+    background: `linear-gradient(135deg, color-mix(in srgb, var(--k-blue) 9%, transparent), color-mix(in srgb, var(--k-teal) 9%, transparent))`,
     color: "var(--k-blue)",
     fontSize: "0.78rem",
     fontWeight: 600,

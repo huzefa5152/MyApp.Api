@@ -416,7 +416,7 @@ const s = {
   },
   optionActive: {
     borderColor: "var(--k-blue)",
-    background: "#f3f7ff",
+    background: "var(--k-surface-2)",
     boxShadow: "0 0 0 2px rgba(13,71,161,0.12)",
   },
   optionDisabled: { opacity: 0.55, cursor: "not-allowed" },

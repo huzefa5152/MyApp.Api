@@ -94,7 +94,7 @@ const styles = {
     fontWeight: 600,
   },
   optionDisabled: { opacity: 0.6, cursor: "not-allowed" },
-  radio: { width: 16, height: 16, accentColor: "#0d47a1", cursor: "inherit" },
+  radio: { width: 16, height: 16, accentColor: "var(--k-blue)", cursor: "inherit" },
   hint: {
     marginTop: "0.5rem",
     fontSize: "0.76rem",

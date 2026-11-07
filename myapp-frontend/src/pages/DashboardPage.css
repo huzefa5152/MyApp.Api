@@ -87,7 +87,7 @@
 
 .dash-hero__select option {
   color: #0c1830;
-  background: #fff;
+  background: var(--k-surface);
   font-weight: 500;
 }
 

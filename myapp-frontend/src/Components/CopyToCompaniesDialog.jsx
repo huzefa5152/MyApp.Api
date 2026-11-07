@@ -160,7 +160,7 @@ export default function CopyToCompaniesDialog({
                           <span style={styles.muted}> · {c.name}</span>
                         )}
                       </span>
-                      {checked && <MdCheckCircle size={16} color="#0d47a1" />}
+                      {checked && <MdCheckCircle size={16} color="var(--k-blue)" />}
                     </label>
                   );
                 })}
@@ -238,6 +238,6 @@ const styles = {
     userSelect: "none",
     transition: "background-color 0.15s, border-color 0.15s",
   },
-  rowActive: { borderColor: "#0d47a1", backgroundColor: "#e3f2fd" },
+  rowActive: { borderColor: "var(--k-blue)", backgroundColor: "#e3f2fd" },
   muted: { color: "#94a3b8", fontWeight: 400, fontSize: "var(--k-font-sm)" },
 };

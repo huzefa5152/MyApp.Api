@@ -353,7 +353,7 @@ const s = {
     background: "var(--k-surface)",
     transition: "opacity 0.15s, border-color 0.15s",
   },
-  rowCurrent: { borderColor: "var(--k-blue)", background: "#f3f7ff" },
+  rowCurrent: { borderColor: "var(--k-blue)", background: "var(--k-surface-2)" },
   rowBusy: { opacity: 0.65 },
   rowMain: { display: "flex", alignItems: "center", gap: "0.5rem", flex: "1 1 220px", minWidth: 0 },
   nameBtn: {
@@ -430,7 +430,7 @@ const s = {
   },
   spinner: { width: 15, height: 15, borderWidth: 2, flexShrink: 0 },
   // "Copy to…" while its row is open.
-  btnOn: { borderColor: "var(--k-blue)", background: "#f3f7ff" },
+  btnOn: { borderColor: "var(--k-blue)", background: "var(--k-surface-2)" },
   copyRow: {
     flexBasis: "100%",
     display: "flex",

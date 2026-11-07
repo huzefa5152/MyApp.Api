@@ -40,9 +40,9 @@ const TABLE_MIN = 1000;
 const PHONE = 760;
 const STATUS_TONE = {
   "Recently active": { bg: "#eafbef", fg: "#1b6e34", dot: "#28a745" },
-  "Signed in": { bg: "#e7f0fb", fg: "#0d47a1", dot: "#1565c0" },
-  Expired: { bg: "#eef1f5", fg: "#5f6d7e", dot: "#9aa6b5" },
-  Revoked: { bg: "#fff0f1", fg: "#a52834", dot: "#dc3545" },
+  "Signed in": { bg: "#e7f0fb", fg: "var(--k-blue)", dot: "var(--k-blue)" },
+  Expired: { bg: "#eef1f5", fg: "var(--k-muted)", dot: "#9aa6b5" },
+  Revoked: { bg: "var(--k-danger-bg)", fg: "#a52834", dot: "var(--k-danger)" },
 };
 const FILTERS = [
   ["signed-in", "Signed in"],

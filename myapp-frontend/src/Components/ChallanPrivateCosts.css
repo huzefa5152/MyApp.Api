@@ -13,7 +13,7 @@
   justify-content: space-between;
   gap: 8px 16px;
   padding: 10px 12px;
-  background: #f5f8fc;
+  background: var(--k-surface-2);
   border-radius: 10px 10px 0 0;
 }
 .challan-private-heading strong {
@@ -72,7 +72,7 @@
   border-top: 1px solid var(--k-line);
 }
 .challan-private-row {
-  border-top: 1px solid #edf1f5;
+  border-top: 1px solid var(--k-line);
   min-height: var(--k-btn-h);
 }
 .challan-private-item {

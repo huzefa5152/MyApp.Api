@@ -40,8 +40,8 @@ import {
 const colors = {
   success: "#2e7d32",
   successBg: "#e8f5e9",
-  danger: "#dc3545",
-  dangerLight: "#fff0f1",
+  danger: "var(--k-danger)",
+  dangerLight: "var(--k-danger-bg)",
   warn: "#f57c00",
   warnBg: "#fff8e1",
 };

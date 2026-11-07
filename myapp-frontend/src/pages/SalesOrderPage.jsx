@@ -66,13 +66,13 @@ import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
 
 const FULFIL_COLORS = {
-  "Not Delivered": "#5f6d7e",
+  "Not Delivered": "var(--k-muted)",
   "Partially Delivered": "#f57c00",
   "Fully Delivered": "#28a745",
   "Over Delivered": "#7b1fa2",
 };
 const INVOICE_COLORS = {
-  Uninvoiced: "#5f6d7e",
+  Uninvoiced: "var(--k-muted)",
   "Partially Invoiced": "#f57c00",
   Invoiced: "#28a745",
 };
@@ -394,8 +394,8 @@ export default function SalesOrderPage() {
                           <span
                             style={{
                               ...st.badge,
-                              background: `${FULFIL_COLORS[o.fulfillmentStatus] || "#5f6d7e"}18`,
-                              color: FULFIL_COLORS[o.fulfillmentStatus] || "#5f6d7e",
+                              background: `${FULFIL_COLORS[o.fulfillmentStatus] || "var(--k-muted)"}18`,
+                              color: FULFIL_COLORS[o.fulfillmentStatus] || "var(--k-muted)",
                             }}
                           >
                             {o.fulfillmentStatus}
@@ -450,9 +450,9 @@ export default function SalesOrderPage() {
                               ...st.statusPill,
                               color:
                                 o.status === "Cancelled"
-                                  ? "#dc3545"
+                                  ? "var(--k-danger)"
                                   : o.status === "Closed"
-                                    ? "#5f6d7e"
+                                    ? "var(--k-muted)"
                                     : "var(--k-teal)",
                             }}
                           >
@@ -461,8 +461,8 @@ export default function SalesOrderPage() {
                           <span
                             style={{
                               ...st.invPill,
-                              color: INVOICE_COLORS[o.invoiceStatus] || "#5f6d7e",
-                              background: `${INVOICE_COLORS[o.invoiceStatus] || "#5f6d7e"}18`,
+                              color: INVOICE_COLORS[o.invoiceStatus] || "var(--k-muted)",
+                              background: `${INVOICE_COLORS[o.invoiceStatus] || "var(--k-muted)"}18`,
                             }}
                           >
                             {{

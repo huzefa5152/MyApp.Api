@@ -27,7 +27,7 @@
 .tax-filing button {
   min-height: var(--k-btn-h);
   padding: 0 14px;
-  border: 1px solid #c4d3e4;
+  border: 1px solid var(--k-line-strong);
   border-radius: 8px;
   background: var(--k-surface);
   color: #174579;
@@ -120,7 +120,7 @@
 }
 .tf-toolbar span,
 .tf-footer span {
-  color: #4e6074;
+  color: var(--k-muted);
   font-size: 14px;
 }
 .tf-row {
@@ -152,7 +152,7 @@
   margin: 0;
 }
 .tf-select span {
-  color: #4e6074;
+  color: var(--k-muted);
   font-size: 14px;
 }
 .tf-source-preview {
@@ -163,7 +163,7 @@
   display: block;
   margin-top: 4px;
   font-size: 14px;
-  color: #4e6074;
+  color: var(--k-muted);
 }
 .tf-grouping-help {
   color: #174579;
@@ -189,7 +189,7 @@
   box-sizing: border-box;
   min-height: var(--k-h);
   padding: 0 var(--k-input-pad-x);
-  border: 1px solid #bccbdd;
+  border: 1px solid var(--k-line-strong);
   border-radius: 8px;
   font-size: 16px;
   color: var(--k-ink);
@@ -204,7 +204,7 @@
   width: 100%;
   min-height: var(--k-h);
   padding: 0 var(--k-input-pad-x);
-  border: 1px solid #bccbdd;
+  border: 1px solid var(--k-line-strong);
   border-radius: 8px;
   font-size: 16px;
   background: var(--k-surface-2);
@@ -212,7 +212,7 @@
 }
 .tf-fields small {
   display: block;
-  color: #4e6074;
+  color: var(--k-muted);
   font-size: 13px;
   line-height: 1.5;
   font-weight: 400;
@@ -251,7 +251,7 @@
   overflow-wrap: anywhere;
 }
 .tf-error {
-  background: #fff0f1;
+  background: var(--k-danger-bg);
   color: #96283c;
   border: 1px solid #edb4c0;
 }
@@ -307,7 +307,7 @@
   gap: 10px 20px;
   padding: 16px;
   background: #e3f2fd;
-  border: 1px solid #90caf9;
+  border: 1px solid var(--k-focus);
   border-radius: 10px;
   font-size: 0.875rem;
   overflow-wrap: anywhere;
@@ -404,7 +404,7 @@
 }
 .tf-bulk p {
   margin: 0;
-  color: #4e6074;
+  color: var(--k-muted);
   font-size: 0.9rem;
 }
 .tf-bulk button {
@@ -418,7 +418,7 @@
   display: block;
   margin-top: 4px;
   font-size: 14px;
-  color: #4e6074;
+  color: var(--k-muted);
 }
 .tf-bulk label {
   display: block;
@@ -433,7 +433,7 @@
   box-sizing: border-box;
   min-height: var(--k-h);
   padding: 0 var(--k-input-pad-x);
-  border: 1px solid #bccbdd;
+  border: 1px solid var(--k-line-strong);
   border-radius: 8px;
   font-size: 16px;
   color: var(--k-ink);
@@ -441,7 +441,7 @@
 }
 .tf-bulk small {
   display: block;
-  color: #4e6074;
+  color: var(--k-muted);
   font-size: 13px;
   line-height: 1.5;
   margin-top: 6px;

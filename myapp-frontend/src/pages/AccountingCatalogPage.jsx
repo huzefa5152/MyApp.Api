@@ -271,7 +271,7 @@ function ReportIndex({ onOpen }) {
                           {available ? (
                             <MdChevronRight
                               size={18}
-                              color={colors.textSecondary}
+                              color={"var(--k-muted)"}
                               style={{ flexShrink: 0 }}
                             />
                           ) : (
@@ -1015,7 +1015,7 @@ const st = {
     gap: "0.7rem",
     padding: "0.9rem 1rem",
     borderBottom: `1px solid var(--k-line)`,
-    background: "#f7f9fc",
+    background: "var(--k-surface-2)",
   },
   categoryIcon: {
     display: "grid",
@@ -1251,7 +1251,7 @@ const st = {
   th: {
     textAlign: "left",
     padding: "0.7rem 0.8rem",
-    background: "#f7f9fc",
+    background: "var(--k-surface-2)",
     fontSize: "0.68rem",
     fontWeight: 800,
     textTransform: "uppercase",

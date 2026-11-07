@@ -14,7 +14,7 @@ import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
-import { colors, formStyles, modalSizes } from "../theme";
+import { formStyles, modalSizes } from "../theme";
 import SearchableSelect from "../Components/SearchableSelect";
 import {
   PageHeader,
@@ -530,7 +530,7 @@ function PeriodCloseDialog({ companyId, current, onClose, onSaved }) {
                 ...formStyles.button,
                 background: "var(--k-surface)",
                 color: "var(--k-danger)",
-                border: `1px solid ${colors.danger}40`,
+                border: `1px solid color-mix(in srgb, var(--k-danger) 25%, transparent)`,
               }}
               disabled={saving}
               onClick={() => save("")}
@@ -896,8 +896,8 @@ const st = {
     fontSize: "0.72rem",
     fontWeight: 700,
     textTransform: "uppercase",
-    color: "#b71c1c",
-    background: "#ffebee",
+    color: "var(--k-danger)",
+    background: "var(--k-danger-bg)",
     border: "1px solid #ffcdd2",
     padding: "3px 10px",
     borderRadius: 12,
@@ -982,7 +982,7 @@ const st = {
     fontSize: "0.62rem",
     fontWeight: 700,
     textTransform: "uppercase",
-    background: "#eceff1",
+    background: "var(--k-surface-3)",
     color: "#607d8b",
     padding: "1px 5px",
     borderRadius: 10,

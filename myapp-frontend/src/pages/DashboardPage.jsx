@@ -90,8 +90,8 @@ const PERIOD_OPTIONS = [
 const PERIOD_STORAGE_KEY = "dashboardPeriod";
 
 const accents = {
-  sales: "#0d47a1",
-  purchases: "#00897b",
+  sales: "var(--k-blue)",
+  purchases: "var(--k-teal)",
   fbr: "#6a1b9a",
   inventory: "#e65100",
 };
@@ -518,7 +518,7 @@ function CommandCentre({ data, has, periodLabel }) {
               <Metric
                 label="Customers owe you"
                 icon={MdCallReceived}
-                accent="#00897b"
+                accent="var(--k-teal)"
                 value={fmtMoney(receivables.total)}
                 sub={
                   receivables.overdue > 0

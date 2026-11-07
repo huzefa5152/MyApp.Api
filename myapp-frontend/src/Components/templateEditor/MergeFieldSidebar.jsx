@@ -1,12 +1,6 @@
 // Light-panel colours come from the UI-kit tokens (--k-*) so the sidebar
 // follows the selected theme; the dark variant (visual editor panel) keeps its
 // own fixed palette below.
-const colors = {
-  blue: "var(--k-blue)",
-  textPrimary: "var(--k-ink)",
-  textSecondary: "var(--k-muted)",
-  cardBorder: "var(--k-line)",
-};
 
 // Reusable field list — used in code-mode sidebar and visual-editor left panel
 export function MergeFieldList({ fields, onInsert, dark }) {

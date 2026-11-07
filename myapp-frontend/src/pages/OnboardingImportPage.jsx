@@ -20,7 +20,6 @@ import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import StepCard from "../Components/onboarding/StepCard";
-import { colors } from "../theme";
 import { PageHeader, Button, Tabs } from "../ui/Kit";
 import {
   SHEETS,
@@ -449,7 +448,7 @@ export default function OnboardingImportPage() {
             pickFile(e.dataTransfer.files?.[0]);
           }}
         >
-          <MdCloudUpload size={36} color={colors.blue} aria-hidden="true" />
+          <MdCloudUpload size={36} color={"var(--k-blue)"} aria-hidden="true" />
           <strong>
             {busy === "preview" ? "Checking your file…" : "Drop the file here, or tap to choose it"}
           </strong>
@@ -692,7 +691,7 @@ function Page({ companyName, children }) {
 const TONES = {
   info: { icon: MdInfo, color: "var(--k-blue)", bg: "#e3f2fd", border: "#90caf9" },
   warning: { icon: MdWarning, color: "#8a4b00", bg: "#fff4e0", border: "#ffcc80" },
-  error: { icon: MdError, color: "#b71c1c", bg: "#ffebee", border: "#ef9a9a" },
+  error: { icon: MdError, color: "var(--k-danger)", bg: "#ffebee", border: "#ef9a9a" },
 };
 
 function Notice({ tone = "info", children, onClose }) {
@@ -832,7 +831,7 @@ const st = {
   },
   choiceOn: {
     borderColor: "var(--k-blue)",
-    background: "#f3f7ff",
+    background: "var(--k-surface-2)",
     boxShadow: `0 0 0 1px var(--k-blue) inset`,
   },
   choiceOff: { opacity: 0.55, cursor: "not-allowed" },
@@ -860,8 +859,8 @@ const st = {
     marginTop: 4,
     fontSize: "0.72rem",
     fontWeight: 700,
-    color: "#c62828",
-    background: "#ffebee",
+    color: "var(--k-danger)",
+    background: "var(--k-danger-bg)",
     border: "1px solid #ef9a9a",
     borderRadius: 999,
     padding: "1px 8px",
@@ -881,7 +880,7 @@ const st = {
     cursor: "pointer",
     color: "var(--k-ink)",
   },
-  dropOver: { borderColor: "var(--k-blue)", background: "#eef4ff" },
+  dropOver: { borderColor: "var(--k-blue)", background: "var(--k-surface-3)" },
   fileChip: {
     display: "inline-flex",
     alignItems: "center",
@@ -910,8 +909,8 @@ const st = {
   tileLabel: { fontSize: "var(--k-font-sm)", fontWeight: 600 },
   tabErr: {
     fontSize: "0.72rem",
-    background: "#ffebee",
-    color: "#b71c1c",
+    background: "var(--k-danger-bg)",
+    color: "var(--k-danger)",
     borderRadius: 999,
     padding: "1px 7px",
   },

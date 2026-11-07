@@ -14,12 +14,6 @@ import { TableWrap } from "../ui/Kit";
 
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : "—");
 
-const colors = {
-  blue: "var(--k-blue)",
-  teal: "var(--k-teal)",
-  textSecondary: "var(--k-muted)",
-};
-
 export default function ChallanModal({ challan, onClose }) {
   if (!challan) return null;
 
@@ -52,7 +46,7 @@ export default function ChallanModal({ challan, onClose }) {
               minimal-data challans. Status is always shown. */}
           <div style={styles.infoGrid}>
             <div style={styles.infoItem}>
-              <MdPerson size={16} color={colors.teal} />
+              <MdPerson size={16} color={"var(--k-teal)"} />
               <div>
                 <span style={styles.infoLabel}>Client</span>
                 <span style={styles.infoValue}>{challan.clientName || "—"}</span>
@@ -60,7 +54,7 @@ export default function ChallanModal({ challan, onClose }) {
             </div>
             {challan.site && (
               <div style={styles.infoItem}>
-                <MdLocationOn size={16} color={colors.teal} />
+                <MdLocationOn size={16} color={"var(--k-teal)"} />
                 <div>
                   <span style={styles.infoLabel}>Site</span>
                   <span style={styles.infoValue}>{challan.site}</span>
@@ -68,14 +62,14 @@ export default function ChallanModal({ challan, onClose }) {
               </div>
             )}
             <div style={styles.infoItem}>
-              <MdCalendarToday size={16} color={colors.textSecondary} />
+              <MdCalendarToday size={16} color={"var(--k-muted)"} />
               <div>
                 <span style={styles.infoLabel}>Delivery Date</span>
                 <span style={styles.infoValue}>{fmtDate(challan.deliveryDate)}</span>
               </div>
             </div>
             <div style={styles.infoItem}>
-              <MdReceipt size={16} color={colors.blue} />
+              <MdReceipt size={16} color={"var(--k-blue)"} />
               <div>
                 <span style={styles.infoLabel}>PO Number</span>
                 <span style={styles.infoValue}>{challan.poNumber || "—"}</span>
@@ -83,7 +77,7 @@ export default function ChallanModal({ challan, onClose }) {
             </div>
             {challan.poDate && (
               <div style={styles.infoItem}>
-                <MdEventNote size={16} color={colors.blue} />
+                <MdEventNote size={16} color={"var(--k-blue)"} />
                 <div>
                   <span style={styles.infoLabel}>PO Date</span>
                   <span style={styles.infoValue}>{fmtDate(challan.poDate)}</span>
@@ -92,7 +86,7 @@ export default function ChallanModal({ challan, onClose }) {
             )}
             {challan.indentNo && (
               <div style={styles.infoItem}>
-                <MdAssignmentTurnedIn size={16} color={colors.blue} />
+                <MdAssignmentTurnedIn size={16} color={"var(--k-blue)"} />
                 <div>
                   <span style={styles.infoLabel}>Indent No</span>
                   <span style={styles.infoValue}>{challan.indentNo}</span>
@@ -100,7 +94,7 @@ export default function ChallanModal({ challan, onClose }) {
               </div>
             )}
             <div style={styles.infoItem}>
-              <MdAssignmentTurnedIn size={16} color={colors.textSecondary} />
+              <MdAssignmentTurnedIn size={16} color={"var(--k-muted)"} />
               <div>
                 <span style={styles.infoLabel}>Status</span>
                 <span style={styles.infoValue}>

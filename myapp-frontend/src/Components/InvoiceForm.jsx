@@ -42,15 +42,15 @@ import TaxInvoiceGrouping from "./TaxInvoiceGrouping";
 import DocumentNotesEditor from "./DocumentNotesEditor";
 
 const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
-  danger: "#dc3545",
-  dangerLight: "#fff0f1",
+  blue: "var(--k-blue)",
+  teal: "var(--k-teal)",
+  textPrimary: "var(--k-ink)",
+  textSecondary: "var(--k-muted)",
+  cardBorder: "var(--k-line)",
+  inputBg: "var(--k-surface-2)",
+  inputBorder: "var(--k-line-strong)",
+  danger: "var(--k-danger)",
+  dangerLight: "var(--k-danger-bg)",
   warn: "#e65100",
   warnLight: "#fff8e1",
 };
@@ -1120,7 +1120,7 @@ export default function InvoiceForm({
                               >
                                 <div style={styles.scenarioCardHeader}>
                                   <span style={styles.scenarioCode}>{s.code}</span>
-                                  {active && <MdCheck size={16} color={colors.blue} />}
+                                  {active && <MdCheck size={16} color={"var(--k-blue)"} />}
                                 </div>
                                 <div style={styles.scenarioSaleType}>{s.saleType}</div>
                                 <div style={styles.scenarioRate}>{s.defaultRate}% GST</div>
@@ -1405,7 +1405,7 @@ export default function InvoiceForm({
                                 type="text"
                                 style={{
                                   ...styles.input,
-                                  backgroundColor: "#eef5ff",
+                                  backgroundColor: "var(--k-surface-3)",
                                   cursor: "not-allowed",
                                 }}
                                 value="Sale Invoice"
@@ -1568,7 +1568,7 @@ export default function InvoiceForm({
                               marginBottom: "0.5rem",
                               borderRadius: 8,
                               border: `1px solid var(--k-line)`,
-                              backgroundColor: "#f8faff",
+                              backgroundColor: "var(--k-surface-2)",
                             }}
                           >
                             <span
@@ -1757,7 +1757,7 @@ export default function InvoiceForm({
                                             color:
                                               parseFloat(itemPrices[item.id]) ===
                                               parseFloat(lastRates[item.id].lastUnitPrice)
-                                                ? "#5f6d7e"
+                                                ? "var(--k-muted)"
                                                 : "#2e7d32",
                                           }}
                                           title={
@@ -1818,7 +1818,7 @@ export default function InvoiceForm({
                                             ...styles.input,
                                             padding: "0.5rem 0.55rem",
                                             fontSize: "0.85rem",
-                                            backgroundColor: "#eef5ff",
+                                            backgroundColor: "var(--k-surface-3)",
                                             cursor: "not-allowed",
                                           }}
                                           title={`Locked by ${chosenScenario.code}`}
@@ -2099,7 +2099,7 @@ export default function InvoiceForm({
                                               color:
                                                 parseFloat(itemPrices[item.id]) ===
                                                 parseFloat(lastRates[item.id].lastUnitPrice)
-                                                  ? "#5f6d7e"
+                                                  ? "var(--k-muted)"
                                                   : "#2e7d32",
                                             }}
                                             title={
@@ -2211,7 +2211,7 @@ export default function InvoiceForm({
                                                 ...styles.input,
                                                 padding: "0.3rem 0.5rem",
                                                 fontSize: "0.78rem",
-                                                backgroundColor: "#eef5ff",
+                                                backgroundColor: "var(--k-surface-3)",
                                                 cursor: "not-allowed",
                                               }}
                                               title={`Locked by ${chosenScenario.code}`}
@@ -2580,7 +2580,7 @@ const styles = {
     borderRadius: 8,
     marginBottom: "1rem",
     fontWeight: 500,
-    border: `1px solid ${colors.danger}30`,
+    border: `1px solid color-mix(in srgb, var(--k-danger) 19%, transparent)`,
     fontSize: "0.85rem",
   },
   challanGrid: {
@@ -2793,7 +2793,7 @@ const styles = {
     padding: "var(--ui-input-pad, 0.6rem 0.85rem)",
     borderRadius: 10,
     border: `1px solid var(--k-line)`,
-    backgroundColor: "#f8faff",
+    backgroundColor: "var(--k-surface-2)",
     cursor: "pointer",
     fontFamily: "inherit",
     textAlign: "left",
@@ -2914,7 +2914,7 @@ const styles = {
     display: "inline-flex",
     alignItems: "center",
     gap: "0.3rem",
-    padding: "0.45rem 0.75rem",
+    padding: "0 0.75rem",
     borderRadius: 6,
     border: `1px solid var(--k-blue)`,
     backgroundColor: "var(--k-surface)",

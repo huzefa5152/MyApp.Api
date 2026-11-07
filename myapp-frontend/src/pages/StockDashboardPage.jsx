@@ -852,8 +852,8 @@ const drillStyles = {
   srcChip: {
     fontSize: "0.74rem",
     fontWeight: 600,
-    color: "#37474f",
-    backgroundColor: "#eef2f7",
+    color: "var(--k-muted)",
+    backgroundColor: "var(--k-surface-3)",
     padding: "0.12rem 0.45rem",
     borderRadius: 5,
   },

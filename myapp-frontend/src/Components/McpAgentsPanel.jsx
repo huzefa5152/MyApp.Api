@@ -30,13 +30,13 @@ import { Button, IconButton, Toolbar, TableWrap, Loading, EmptyState, Alert } fr
 const NARROW = 980;
 const TOKEN_TONE = {
   Active: { bg: "#eafbef", fg: "#1b6e34", dot: "#28a745" },
-  Expired: { bg: "#eef1f5", fg: "#5f6d7e", dot: "#9aa6b5" },
-  Revoked: { bg: "#fff0f1", fg: "#a52834", dot: "#dc3545" },
+  Expired: { bg: "#eef1f5", fg: "var(--k-muted)", dot: "#9aa6b5" },
+  Revoked: { bg: "var(--k-danger-bg)", fg: "#a52834", dot: "var(--k-danger)" },
 };
 const OUTCOME_TONE = {
   ok: { bg: "#eafbef", fg: "#1b6e34", dot: "#28a745", label: "Done" },
   denied: { bg: "#fff4e5", fg: "#8a4b00", dot: "#fd7e14", label: "Refused" },
-  error: { bg: "#fff0f1", fg: "#a52834", dot: "#dc3545", label: "Failed" },
+  error: { bg: "var(--k-danger-bg)", fg: "#a52834", dot: "var(--k-danger)", label: "Failed" },
 };
 const OUTCOMES = [
   ["", "All"],

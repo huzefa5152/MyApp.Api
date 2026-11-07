@@ -71,7 +71,7 @@ export default function PrintTemplateSelect({ picker, style }) {
         }}
         title="Default print template used by Print / PDF"
       >
-        <MdPrint size={15} color="#5f6d7e" aria-hidden="true" />
+        <MdPrint size={15} color="var(--k-muted)" aria-hidden="true" />
         <span
           style={{
             fontSize: "0.85rem",
@@ -107,7 +107,7 @@ export default function PrintTemplateSelect({ picker, style }) {
       }}
       title="Print template used by Print / PDF — override per document type here"
     >
-      <MdPrint size={15} color="#5f6d7e" aria-hidden="true" />
+      <MdPrint size={15} color="var(--k-muted)" aria-hidden="true" />
       <select
         className="filter-select"
         aria-label="Print template"

@@ -56,10 +56,10 @@
   min-height: var(--pg-btn-h);
   min-width: var(--pg-btn-h);
   padding: var(--pg-btn-pad);
-  border: 1px solid var(--k-line-strong, #d0d7e2);
+  border: 1px solid var(--k-line-strong, var(--k-line-strong));
   border-radius: var(--pg-btn-radius);
-  background: #fff;
-  color: var(--k-blue, #0d47a1);
+  background: var(--k-surface);
+  color: var(--k-blue, var(--k-blue));
   font-size: var(--pg-font);
   font-weight: 600;
   cursor: pointer;
@@ -67,7 +67,7 @@
 }
 
 .pagination-btn:focus-visible {
-  outline: 2px solid var(--k-focus, #1565c0);
+  outline: 2px solid var(--k-focus, var(--k-blue));
   outline-offset: 2px;
 }
 
@@ -78,13 +78,13 @@
 
 .pagination-info {
   font-size: var(--pg-font);
-  color: var(--k-muted, #5f6d7e);
+  color: var(--k-muted, var(--k-muted));
   font-weight: 500;
   white-space: nowrap;
 }
 
 .pagination-info__count {
-  color: #98a4b3;
+  color: var(--k-faint);
 }
 
 /* Rows-per-page selector (Components/PageSizeSelect.jsx). */
@@ -93,7 +93,7 @@
   align-items: center;
   gap: 0.4rem;
   font-size: var(--pg-size-font);
-  color: var(--k-muted, #5f6d7e);
+  color: var(--k-muted, var(--k-muted));
   font-weight: 500;
 }
 
@@ -101,9 +101,9 @@
   min-height: var(--pg-btn-h);
   padding: var(--pg-size-pad);
   border-radius: var(--pg-btn-radius);
-  border: 1px solid var(--k-line-strong, #d0d7e2);
-  background-color: #fff;
-  color: var(--k-blue, #0d47a1);
+  border: 1px solid var(--k-line-strong, var(--k-line-strong));
+  background-color: var(--k-surface);
+  color: var(--k-blue, var(--k-blue));
   font-size: var(--pg-size-font);
   font-weight: 600;
   cursor: pointer;
@@ -111,7 +111,7 @@
 }
 
 .pagination-size__select:focus-visible {
-  border-color: var(--k-focus, #1565c0);
+  border-color: var(--k-focus, var(--k-blue));
 }
 
 /* Phone: nav spans the full width (Prev · info · Next), rows-select wraps

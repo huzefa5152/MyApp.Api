@@ -688,7 +688,11 @@ export default function LineItemsEditor({
       {showBulk && items.length > 1 && (
         <div style={s.bulkApplyBar}>
           <span
-            style={{ fontSize: "var(--sc-cell-font, 0.82rem)", color: colors.ink, fontWeight: 500 }}
+            style={{
+              fontSize: "var(--sc-cell-font, 0.82rem)",
+              color: "var(--k-ink)",
+              fontWeight: 500,
+            }}
           >
             Apply same Item Type to:
           </span>
@@ -1068,16 +1072,6 @@ export default function LineItemsEditor({
 // Colours come from the kit's --k-* tokens (ui/kit.css — Classic values are the
 // original palette). Sizes read --sc-* tokens (ui/shared-components.css) with the
 // original value as the fallback, so Classic is unchanged and Workspace is compact.
-const colors = {
-  textSecondary: "var(--k-muted, #5f6d7e)",
-  cardBorder: "var(--k-line, #e8edf3)",
-  inputBg: "var(--k-input-bg, #f8f9fb)",
-  inputBorder: "var(--k-line-strong, #d0d7e2)",
-  danger: "var(--k-danger, #dc3545)",
-  dangerLight: "var(--k-danger-bg, #fff0f1)",
-  teal: "var(--k-teal, #00897b)",
-  ink: "var(--k-ink, #1a2332)",
-};
 const touchH = "var(--sc-touch-h, 44px)";
 const smallFont = "var(--sc-small-font, 0.78rem)";
 
@@ -1105,7 +1099,7 @@ const s = {
     border: `1px solid var(--k-line-strong)`,
     fontSize: "0.9rem",
     backgroundColor: "var(--k-input-bg)",
-    color: colors.ink,
+    color: "var(--k-ink)",
     outline: "none",
     boxSizing: "border-box",
   },
@@ -1144,7 +1138,7 @@ const s = {
     borderRadius: 10,
     padding: "var(--sc-box-pad, 0.7rem)",
     marginBottom: "0.6rem",
-    background: "#f8faff",
+    background: "var(--k-surface-2)",
   },
   pasteHintRow: { fontSize: "0.75rem", color: "var(--k-muted)", marginBottom: "0.4rem" },
   pasteArea: {
@@ -1189,7 +1183,7 @@ const s = {
     marginBottom: "0.5rem",
     borderRadius: 8,
     border: `1px solid var(--k-line)`,
-    backgroundColor: "#f8faff",
+    backgroundColor: "var(--k-surface-2)",
   },
   bulkClearBtn: {
     minHeight: touchH,
@@ -1243,7 +1237,7 @@ const s = {
     border: `1px solid var(--k-line-strong)`,
     fontSize: "var(--sc-cell-font, 0.88rem)",
     backgroundColor: "var(--k-input-bg)",
-    color: colors.ink,
+    color: "var(--k-ink)",
     outline: "none",
     boxSizing: "border-box",
   },
@@ -1386,7 +1380,7 @@ const s = {
     borderRadius: 4,
     border: `1px solid var(--k-line-strong)`,
     background: "var(--k-surface)",
-    color: colors.ink,
+    color: "var(--k-ink)",
   },
   // Mobile stacked-card line items (below narrowBreakpoint).
   mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },

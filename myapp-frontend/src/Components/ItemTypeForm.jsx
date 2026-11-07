@@ -572,7 +572,11 @@ export default function ItemTypeForm({
                   </label>
                   {lockedSaleType ? (
                     <input
-                      style={{ ...styles.input, backgroundColor: "#eef5ff", cursor: "not-allowed" }}
+                      style={{
+                        ...styles.input,
+                        backgroundColor: "var(--k-surface-3)",
+                        cursor: "not-allowed",
+                      }}
                       value={saleType}
                       readOnly
                       title={`Locked to ${scenarioCode}'s sale type. Cancel to use a different scenario.`}
@@ -647,9 +651,9 @@ export default function ItemTypeForm({
 }
 
 const colors = {
-  blue: "#0d47a1",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
+  blue: "var(--k-blue)",
+  textPrimary: "var(--k-ink)",
+  textSecondary: "var(--k-muted)",
   warn: "#e65100",
   warnLight: "#fff8e1",
   hintBg: "#f3f7ff",

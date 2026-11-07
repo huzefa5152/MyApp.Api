@@ -21,18 +21,18 @@ import { formStyles } from "../theme";
 import { Facts, TableWrap, Loading } from "../ui/Kit";
 
 const FULFIL_COLORS = {
-  "Not Delivered": "#5f6d7e",
+  "Not Delivered": "var(--k-muted)",
   "Partially Delivered": "#f57c00",
   "Fully Delivered": "#28a745",
   "Over Delivered": "#7b1fa2",
 };
 const INVOICE_COLORS = {
-  Uninvoiced: "#5f6d7e",
+  Uninvoiced: "var(--k-muted)",
   "Partially Invoiced": "#f57c00",
   Invoiced: "#28a745",
 };
 const LINE_COLORS = {
-  Pending: "#5f6d7e",
+  Pending: "var(--k-muted)",
   Partial: "#f57c00",
   Complete: "#28a745",
   Over: "#7b1fa2",
@@ -177,8 +177,8 @@ export default function SalesOrderDetailModal({
               <span
                 style={{
                   ...st.badge,
-                  background: `${FULFIL_COLORS[order.fulfillmentStatus] || "#5f6d7e"}22`,
-                  color: FULFIL_COLORS[order.fulfillmentStatus] || "#5f6d7e",
+                  background: `${FULFIL_COLORS[order.fulfillmentStatus] || "var(--k-muted)"}22`,
+                  color: FULFIL_COLORS[order.fulfillmentStatus] || "var(--k-muted)",
                 }}
               >
                 {order.fulfillmentStatus}
@@ -188,7 +188,7 @@ export default function SalesOrderDetailModal({
                 style={{
                   ...st.badge,
                   background: "#ffffffee",
-                  color: INVOICE_COLORS[order.invoiceStatus] || "#5f6d7e",
+                  color: INVOICE_COLORS[order.invoiceStatus] || "var(--k-muted)",
                 }}
               >
                 {{
@@ -300,8 +300,8 @@ export default function SalesOrderDetailModal({
                         <span
                           style={{
                             ...st.lineBadge,
-                            background: `${LINE_COLORS[i.lineStatus] || "#5f6d7e"}18`,
-                            color: LINE_COLORS[i.lineStatus] || "#5f6d7e",
+                            background: `${LINE_COLORS[i.lineStatus] || "var(--k-muted)"}18`,
+                            color: LINE_COLORS[i.lineStatus] || "var(--k-muted)",
                           }}
                         >
                           {i.lineStatus}
@@ -361,8 +361,8 @@ export default function SalesOrderDetailModal({
                       <span
                         style={{
                           ...st.challanStatus,
-                          color: cancelled ? "#dc3545" : "var(--k-teal)",
-                          background: cancelled ? "#fff0f1" : "#e6f4f1",
+                          color: cancelled ? "var(--k-danger)" : "var(--k-teal)",
+                          background: cancelled ? "var(--k-danger-bg)" : "#e6f4f1",
                         }}
                       >
                         {c.status}

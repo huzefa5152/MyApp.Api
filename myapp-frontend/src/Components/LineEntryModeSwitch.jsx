@@ -81,7 +81,7 @@ const st = {
     cursor: "pointer",
     whiteSpace: "nowrap",
   },
-  optionOn: { background: "#0d47a1", color: "#fff", cursor: "default" },
+  optionOn: { background: "var(--k-blue)", color: "#fff", cursor: "default" },
   calc: {
     display: "flex",
     alignItems: "center",
