@@ -2,7 +2,7 @@ import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import useQueryAction from "../hooks/useQueryAction";
-import { MdAssignment, MdAdd, MdBusiness, MdSearch, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdLocalShipping, MdUploadFile, MdVisibility, MdReceiptLong, MdLink, MdCopyAll } from "react-icons/md";
+import { MdAssignment, MdAdd, MdBusiness, MdSearch, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdLocalShipping, MdUploadFile, MdVisibility, MdReceiptLong, MdLink, MdCopyAll, MdShoppingCart } from "react-icons/md";
 import SalesOrderForm from "../Components/SalesOrderForm";
 import CopyDocumentModal from "../Components/CopyDocumentModal";
 import { DOC_COPY_TYPES } from "../api/documentCopyApi";
@@ -69,6 +69,9 @@ export default function SalesOrderPage() {
   const navigate = useNavigate();
   // Jump to the Delivery Challan screen filtered to this order's challans.
   const viewChallans = (o) => navigate(`/challans?salesOrderId=${o.id}`);
+  const canBuy = has("purchasebills.manage.create");
+  // Opens a new purchase bill on the picker, showing only this order's lines left to buy.
+  const buyFor = (o) => navigate(`/purchase-bills?for=order:${o.id}`);
 
   const [orders, setOrders] = useState([]);
   const [attachTarget, setAttachTarget] = useState(null);
@@ -352,6 +355,7 @@ export default function SalesOrderPage() {
                         {["Open", "Closed", "Cancelled"].map((x) => <option key={x} value={x}>{x}</option>)}
                       </select>
                     )}
+                    {canBuy && o.status !== "Cancelled" && <button style={st.actBtn} onClick={() => buyFor(o)} title="Buy for this order" aria-label={`Buy for sales order ${o.salesOrderNumber}`}><MdShoppingCart size={16} /></button>}
                     {canCopy && <button style={st.actBtn} onClick={() => copy.openCopy(o.id, `Sales Order #${o.salesOrderNumber}`)} title="Copy this order"><MdCopyAll size={16} /></button>}
                     {canDelete && o.isLatest && o.challanCount === 0 && <button style={{ ...st.actBtn, color: "#dc3545" }} onClick={() => handleDelete(o)} title="Delete"><MdDelete size={16} /></button>}
                   </div>

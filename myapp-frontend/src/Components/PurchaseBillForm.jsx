@@ -1,6 +1,6 @@
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import { useState, useEffect, useMemo, useRef } from "react";
-import { MdAdd, MdDelete, MdLocalShipping, MdReceipt } from "react-icons/md";
+import { MdAdd, MdDelete, MdEditNote, MdShoppingCart } from "react-icons/md";
 import {
   createPurchaseBill,
   updatePurchaseBill,
@@ -9,7 +9,6 @@ import {
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
-import { getPurchaseTemplate } from "../api/invoiceApi";
 import { getAllUnits } from "../api/unitsApi";
 import { getAccountsFlat } from "../api/accountApi";
 import { formStyles } from "../theme";
@@ -26,7 +25,8 @@ import AttachmentManager from "./AttachmentManager";
 import QuantityInput from "./QuantityInput";
 import useScrollToError from "../hooks/useScrollToError";
 import useIsNarrow from "../hooks/useIsNarrow";
-import ChallanLinePicker from "./ChallanLinePicker";
+import CustomerDemandPicker from "./CustomerDemandPicker";
+import { docTag, docTitle, docTrail } from "../utils/demandTags";
 import { usePermissions } from "../contexts/PermissionsContext";
 
 const colors = {
@@ -45,18 +45,12 @@ export default function PurchaseBillForm({
   billId,
   onClose,
   onSaved,
-  prefillFromInvoiceId = null,
-  prefillItems = null,
-  prefillSourceLabel = null,
   readOnly = false,
   defaultDivisionId = null,
-  startWithChallanPicker = false,
+  startWithPicker = false,
+  forDoc = null,
 }) {
   const isEdit = !!billId;
-  const isAgainstSale = !!prefillFromInvoiceId;
-  // "Purchase Against Sales Order(s)" prefill — plain lines (NOT the FBR
-  // item-type-binding flow); the operator picks the supplier and unit prices.
-  const isFromOrders = Array.isArray(prefillItems) && prefillItems.length > 0;
   const [suppliers, setSuppliers] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
   const [nonInvItems, setNonInvItems] = useState([]);
@@ -96,15 +90,19 @@ export default function PurchaseBillForm({
   const [customNumber, setCustomNumber] = useState("");
   const [numberValid, setNumberValid] = useState(true);
   const [saving, setSaving] = useState(false);
-  // Source-bill metadata when in "Purchase Against Sale" mode
-  const [sourceBill, setSourceBill] = useState(null);
   const attachmentRef = useRef(null);
   const errRef = useScrollToError(error);
   // Below 768px the wide line-items table reflows to a stacked card per line.
   const isNarrow = useIsNarrow();
   const { has } = usePermissions();
-  const canPickChallans = !readOnly && !isAgainstSale && has("challans.list.view");
-  const [showChallanPicker, setShowChallanPicker] = useState(startWithChallanPicker);
+  // Buying for customer documents needs at least one of them to be viewable.
+  const canPick =
+    !readOnly &&
+    has("purchasebills.manage.create") &&
+    (has("salesorders.list.view") || has("challans.list.view") || has("invoices.list.view"));
+  const [showPicker, setShowPicker] = useState(startWithPicker && canPick);
+  // A new bill starts by choosing how to fill its lines; "Enter lines myself" hides the choice.
+  const [manualEntry, setManualEntry] = useState(false);
 
   function newRow() {
     return {
@@ -118,26 +116,13 @@ export default function PurchaseBillForm({
       uom: "",
       hsCode: "",
       saleType: "",
-      sourceInvoiceItemIds: [],
-      // Challan line this row buys, and its challan for the row's tag.
-      sourceDeliveryItemId: null,
-      _challan: null,
-      // metadata used only when in against-sale mode (not sent to API)
-      _saleSoldQty: 0,
-      _saleProcuredQty: 0,
-      _saleRemaining: 0,
-      _saleLineCount: 0,
+      // Customer-document lines this row buys ({ kind, lineId, quantity, trailKey }),
+      // and the documents they are on, for the row's tag.
+      sources: [],
+      tags: [],
     };
   }
 
-  // For the against-sale flow, the ItemType picker MUST filter to items
-  // that have an HSCode — procurement is an FBR-compliance moment, not
-  // a re-classification with a placeholder. For the standalone flow,
-  // any catalog item is fine.
-  const eligibleItemTypes = useMemo(() => {
-    if (!isAgainstSale) return itemTypes;
-    return itemTypes.filter((it) => it.hsCode && it.hsCode.trim().length > 0);
-  }, [itemTypes, isAgainstSale]);
 
   useEffect(() => {
     (async () => {
@@ -221,15 +206,8 @@ export default function PurchaseBillForm({
             uom: i.uom,
             hsCode: i.hsCode || "",
             saleType: i.saleType || "",
-            sourceInvoiceItemIds: i.sourceInvoiceItemIds || [],
-            sourceDeliveryItemId: i.sourceDeliveryItemId ?? null,
-            _challan: i.sourceChallanId
-              ? {
-                  id: i.sourceChallanId,
-                  number: i.sourceChallanNumber,
-                  clientName: i.sourceClientName,
-                }
-              : null,
+            sources: i.sources || [],
+            tags: i.tags || [],
           })),
         );
       } catch {
@@ -248,69 +226,6 @@ export default function PurchaseBillForm({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [company?.defaultWithholdingTaxRate, isEdit]);
-
-  // "Purchase Against Sale Bill" mode — load the grouped template and
-  // populate items. Each row represents a group of sale lines with the
-  // same ItemType (HSCode-empty). Operator picks an FBR-compliant
-  // ItemType to procure under; on save, every linked sale line gets
-  // back-filled with HSCode/UOM/SaleType.
-  useEffect(() => {
-    if (!prefillFromInvoiceId) return;
-    (async () => {
-      try {
-        const { data } = await getPurchaseTemplate(prefillFromInvoiceId);
-        setSourceBill({
-          invoiceId: data.invoiceId,
-          invoiceNumber: data.invoiceNumber,
-          date: data.date,
-          clientName: data.clientName,
-        });
-        if (!data.items || data.items.length === 0) {
-          setError("This sale bill has no lines awaiting procurement.");
-          setItems([]);
-          return;
-        }
-        setItems(
-          data.items.map((g) => ({
-            id: 0,
-            itemTypeId: null, // operator MUST pick an HSCode'd item
-            description: g.description, // shows e.g. "Paracetamol (+ 27 more)"
-            quantity: g.remainingQty,
-            unitPrice: g.avgSaleUnitPrice || 0,
-            uom: g.saleUom || "",
-            hsCode: "",
-            saleType: "",
-            sourceInvoiceItemIds: g.invoiceItemIds || [],
-            _saleSoldQty: g.soldQty,
-            _saleProcuredQty: g.purchasedQty,
-            _saleRemaining: g.remainingQty,
-            _saleLineCount: g.lineCount,
-            _originalItemTypeId: g.itemTypeId,
-            _originalItemTypeName: g.itemTypeName,
-          })),
-        );
-      } catch {
-        setError("Failed to load purchase template for the chosen sale bill.");
-      }
-    })();
-  }, [prefillFromInvoiceId]);
-
-  // "Purchase Against Sales Order(s)" — seed plain lines from the merged order
-  // items. Unit prices start at 0 (orders carry no pricing); operator fills them.
-  useEffect(() => {
-    if (!isFromOrders) return;
-    setItems(
-      prefillItems.map((p) => ({
-        ...newRow(),
-        itemTypeId: p.itemTypeId || null,
-        description: p.description || "",
-        quantity: p.quantity || 0,
-        unitPrice: p.unitPrice || 0,
-        uom: p.uom || "",
-      })),
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const subtotal = useMemo(
     () =>
@@ -352,30 +267,30 @@ export default function PurchaseBillForm({
     });
   };
 
-  // Quantity of each challan line this bill already holds, so the picker only
-  // offers what is still left.
-  const takenFromChallans = useMemo(() => {
+  // What each customer demand ("trail") this bill already holds, so the picker
+  // only offers what is still left.
+  const takenByTrail = useMemo(() => {
     const m = {};
     for (const i of items)
-      if (i.sourceDeliveryItemId)
-        m[i.sourceDeliveryItemId] =
-          (m[i.sourceDeliveryItemId] || 0) + (parseFloat(i.quantity) || 0);
+      for (const src of fitSources(i))
+        if (src.trailKey) m[src.trailKey] = (m[src.trailKey] || 0) + src.quantity;
     return m;
   }, [items]);
 
-  // Challans this bill buys from, in number order, for the summary strip.
-  const linkedChallans = useMemo(() => {
-    const m = new Map();
-    for (const i of items) {
-      if (!i._challan) continue;
-      const c = m.get(i._challan.id) || { ...i._challan, lines: 0 };
-      c.lines += 1;
-      m.set(i._challan.id, c);
-    }
-    return [...m.values()].sort((a, b) => a.number - b.number);
+  // The customer documents this bill buys for, each once, for the "For" strip.
+  const forDocuments = useMemo(() => {
+    const seen = new Map();
+    for (const i of items)
+      for (const t of i.tags || []) seen.set(`${t.kind}:${t.documentId}`, t);
+    const order = { order: 0, challan: 1, bill: 2 };
+    return [...seen.values()].sort((a, b) => order[a.kind] - order[b.kind] || a.number - b.number);
   }, [items]);
 
-  const addChallanLines = (picked) => {
+  const isBlankRow = (r) =>
+    !r.sources?.length && !r.description?.trim() && !r.itemTypeId && !r.nonInventoryItemId;
+  const showStart = !isEdit && canPick && !manualEntry && items.every(isBlankRow);
+
+  const addPickedLines = (picked) => {
     const rows = picked.map((p) => {
       const type = itemTypes.find((t) => t.id === p.itemTypeId);
       return {
@@ -389,26 +304,40 @@ export default function PurchaseBillForm({
         uom: p.uom || type?.uom || "",
         hsCode: type?.hsCode || "",
         saleType: type?.saleType || "",
-        sourceDeliveryItemId: p.deliveryItemId,
-        _challan: { id: p.challanId, number: p.challanNumber, clientName: p.clientName },
+        sources: p.sources.map((src, n) => ({ ...src, trailKey: p.trailKeys[n] })),
+        tags: p.tags,
       };
     });
-    // Untouched blank rows give way to the picked lines.
-    setItems((prev) => [
-      ...prev.filter(
-        (r) =>
-          r.sourceDeliveryItemId || r.description?.trim() || r.itemTypeId || r.nonInventoryItemId,
-      ),
-      ...rows,
-    ]);
-    setShowChallanPicker(false);
+    // Untouched blank rows give way to the picked lines. A line whose demand is
+    // already on a single-source row tops that row up: one demand, one row.
+    setItems((prev) => {
+      const next = prev.filter((r) => !isBlankRow(r));
+      for (const row of rows) {
+        const key = row.sources.length === 1 ? row.sources[0].trailKey : null;
+        const at = key
+          ? next.findIndex((r) => r.sources?.length === 1 && r.sources[0].trailKey === key)
+          : -1;
+        if (at < 0) {
+          next.push(row);
+          continue;
+        }
+        const quantity = (parseFloat(next[at].quantity) || 0) + row.quantity;
+        next[at] = {
+          ...next[at],
+          quantity,
+          sources: [{ ...next[at].sources[0], quantity }],
+        };
+      }
+      return next;
+    });
+    setManualEntry(true);
+    setShowPicker(false);
   };
 
-  const challanTag = (it) =>
-    it._challan && (
-      <div style={challanChip} title="This line buys from that challan">
-        <MdLocalShipping size={12} /> Challan #{it._challan.number}
-        {it._challan.clientName ? ` · ${it._challan.clientName}` : ""}
+  const docTags = (it) =>
+    it.tags?.length > 0 && (
+      <div style={docChip} title={`Buys for ${it.tags.map(docTitle).join(", ")}`}>
+        <MdShoppingCart size={12} /> {docTrail(it.tags)}
       </div>
     );
 
@@ -483,14 +412,6 @@ export default function PurchaseBillForm({
       return setError("Quantity must be greater than zero on every line.");
     if (items.some((i) => parseFloat(i.unitPrice) < 0))
       return setError("Unit price cannot be negative.");
-    if (isAgainstSale) {
-      // In the "Purchase Against Sale" flow every row MUST have an
-      // ItemType picked — that's the whole point (binding the sale's
-      // unclassified items to a real catalog item with HSCode).
-      const unbound = items.filter((i) => !i.itemTypeId);
-      if (unbound.length > 0)
-        return setError("Pick an FBR-compliant Item Type (with HS Code) for every row.");
-    }
     setSaving(true);
     try {
       const payload = {
@@ -522,8 +443,7 @@ export default function PurchaseBillForm({
           uom: i.uom || null,
           hsCode: i.hsCode || null,
           saleType: i.saleType || null,
-          sourceInvoiceItemIds: i.sourceInvoiceItemIds || [],
-          sourceDeliveryItemId: i.sourceDeliveryItemId || null,
+          sources: fitSources(i).map(({ kind, lineId, quantity }) => ({ kind, lineId, quantity })),
         })),
       };
       const res = isEdit
@@ -595,57 +515,6 @@ export default function PurchaseBillForm({
               {error && (
                 <div ref={errRef} style={formStyles.error}>
                   {error}
-                </div>
-              )}
-
-              {sourceBill && (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "flex-start",
-                    gap: "0.65rem",
-                    padding: "0.7rem 0.95rem",
-                    marginBottom: "0.85rem",
-                    backgroundColor: "#fff8e1",
-                    border: "1px solid #ffcc80",
-                    borderRadius: 8,
-                  }}
-                >
-                  <MdReceipt size={20} color="#bf360c" style={{ flexShrink: 0, marginTop: 1 }} />
-                  <div style={{ fontSize: "0.84rem", color: "#1a2332", lineHeight: 1.4 }}>
-                    <strong>Procuring against Sale Bill #{sourceBill.invoiceNumber}</strong> for{" "}
-                    <strong>{sourceBill.clientName}</strong> (
-                    {new Date(sourceBill.date).toLocaleDateString()})
-                    <div style={{ fontSize: "0.76rem", color: "#5f6d7e", marginTop: 2 }}>
-                      Each row groups same-ItemType sale lines. Pick an HS-coded catalog item per
-                      row — on save, every linked sale line back-fills with that HSCode / UOM / Sale
-                      Type and becomes FBR-ready.
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {isFromOrders && prefillSourceLabel && (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "flex-start",
-                    gap: "0.65rem",
-                    padding: "0.7rem 0.95rem",
-                    marginBottom: "0.85rem",
-                    backgroundColor: "#e8f5e9",
-                    border: "1px solid #a5d6a7",
-                    borderRadius: 8,
-                  }}
-                >
-                  <MdReceipt size={20} color="#1b5e20" style={{ flexShrink: 0, marginTop: 1 }} />
-                  <div style={{ fontSize: "0.84rem", color: "#1a2332", lineHeight: 1.4 }}>
-                    <strong>Purchasing for Sales Order {prefillSourceLabel}</strong>
-                    <div style={{ fontSize: "0.76rem", color: "#5f6d7e", marginTop: 2 }}>
-                      Lines are prefilled with the outstanding (undelivered) quantities. Pick a
-                      supplier and enter unit prices. Quantities and lines are editable.
-                    </div>
-                  </div>
                 </div>
               )}
 
@@ -853,10 +722,10 @@ export default function PurchaseBillForm({
                       style={{ marginLeft: "auto", marginRight: "0.5rem" }}
                     />
                   )}
-                  {canPickChallans && (
+                  {canPick && !showStart && (
                     <button
                       type="button"
-                      onClick={() => setShowChallanPicker(true)}
+                      onClick={() => setShowPicker(true)}
                       style={{
                         ...formStyles.button,
                         padding: "0.3rem 0.65rem",
@@ -870,12 +739,15 @@ export default function PurchaseBillForm({
                         marginRight: "0.5rem",
                       }}
                     >
-                      <MdLocalShipping size={14} /> Add from challans
+                      <MdShoppingCart size={14} /> From customer documents
                     </button>
                   )}
                   <button
                     type="button"
-                    onClick={() => setItems([...items, newRow()])}
+                    onClick={() => {
+                      setManualEntry(true);
+                      if (!showStart) setItems([...items, newRow()]);
+                    }}
                     style={{
                       ...formStyles.button,
                       padding: "0.3rem 0.65rem",
@@ -891,20 +763,39 @@ export default function PurchaseBillForm({
                     <MdAdd size={14} /> Add line
                   </button>
                 </div>
-                {linkedChallans.length > 0 && (
-                  <div style={challanStrip}>
-                    <MdLocalShipping size={18} color="#1b5e20" style={{ flexShrink: 0 }} />
+                {forDocuments.length > 0 && (
+                  <div style={docStrip}>
+                    <MdShoppingCart size={18} color="#0d47a1" style={{ flexShrink: 0 }} />
                     <div>
-                      <strong>Against challans:</strong>{" "}
-                      {linkedChallans.map((c, n) => (
-                        <span key={c.id}>
-                          {n > 0 && ", "}#{c.number} ({c.clientName ? `${c.clientName}, ` : ""}
-                          {c.lines} line{c.lines > 1 ? "s" : ""})
+                      <strong>For:</strong>{" "}
+                      {forDocuments.map((t, n) => (
+                        <span key={`${t.kind}:${t.documentId}`} title={docTitle(t)}>
+                          {n > 0 && ", "}
+                          {docTag(t)}
+                          {t.clientName ? ` (${t.clientName})` : ""}
                         </span>
                       ))}
                     </div>
                   </div>
                 )}
+                {showStart ? (
+                  <div style={startGrid}>
+                    <button type="button" style={startTile} onClick={() => setShowPicker(true)}>
+                      <MdShoppingCart size={26} color="#0d47a1" />
+                      <span style={startTitle}>Pick from customer documents</span>
+                      <span style={startText}>
+                        Buy lines of sales orders, challans or sale bills. Each line is bought once,
+                        whichever document you pick it from.
+                      </span>
+                    </button>
+                    <button type="button" style={startTile} onClick={() => setManualEntry(true)}>
+                      <MdEditNote size={26} color="#455a64" />
+                      <span style={startTitle}>Enter lines myself</span>
+                      <span style={startText}>For stock, expenses or anything not sold yet.</span>
+                    </button>
+                  </div>
+                ) : (
+                  <>
                 <BulkItemTypeBar
                   items={items}
                   setItems={setItems}
@@ -926,7 +817,6 @@ export default function PurchaseBillForm({
                     {items.map((it, idx) => {
                       const lineTotal =
                         (parseFloat(it.quantity) || 0) * (parseFloat(it.unitPrice) || 0);
-                      const linkedToSale = (it.sourceInvoiceItemIds?.length || 0) > 0;
                       return (
                         <div key={idx} style={mStyles.card}>
                           <div style={mStyles.cardHead}>
@@ -960,32 +850,15 @@ export default function PurchaseBillForm({
                                 ])
                               }
                               divisionId={divisionId}
-                              items={eligibleItemTypes}
+                              items={itemTypes}
                               value={it.itemTypeId || ""}
                               onChange={(newId, picked) => pickItemType(idx, newId, picked)}
                               nonInventoryItems={nonInvItems}
                               nonInventoryValue={it.nonInventoryItemId || ""}
                               onPickNonInventory={(n) => pickNonInventory(idx, n)}
-                              placeholder={
-                                isAgainstSale ? "— pick item with HS Code —" : "— optional —"
-                              }
-                              style={{
-                                padding: "0.5rem 0.6rem",
-                                fontSize: "0.9rem",
-                                ...(isAgainstSale && !it.itemTypeId
-                                  ? { borderColor: "#dc3545" }
-                                  : {}),
-                              }}
+                              placeholder="— optional —"
+                              style={{ padding: "0.5rem 0.6rem", fontSize: "0.9rem" }}
                             />
-                            {linkedToSale && (
-                              <div style={{ fontSize: "0.72rem", color: "#5f6d7e", marginTop: 3 }}>
-                                {it._saleLineCount > 1
-                                  ? `${it._saleLineCount} sale lines, was: ${it._originalItemTypeName || "—"}`
-                                  : `1 sale line, was: ${it._originalItemTypeName || "—"}`}
-                                {it._saleProcuredQty > 0 &&
-                                  ` · already procured ${it._saleProcuredQty} of ${it._saleSoldQty}`}
-                              </div>
-                            )}
                           </div>
 
                           <div>
@@ -1001,7 +874,7 @@ export default function PurchaseBillForm({
                               value={it.description}
                               onChange={(e) => updateItem(idx, "description", e.target.value)}
                             />
-                            {challanTag(it)}
+                            {docTags(it)}
                           </div>
 
                           <div style={mStyles.fieldGrid}>
@@ -1082,8 +955,7 @@ export default function PurchaseBillForm({
                         {items.map((it, idx) => {
                           const lineTotal =
                             (parseFloat(it.quantity) || 0) * (parseFloat(it.unitPrice) || 0);
-                          const linkedToSale = (it.sourceInvoiceItemIds?.length || 0) > 0;
-                          return (
+                              return (
                             <tr key={idx}>
                               <td style={td}>
                                 <SearchableItemTypeSelect
@@ -1095,34 +967,15 @@ export default function PurchaseBillForm({
                                     ])
                                   }
                                   divisionId={divisionId}
-                                  items={eligibleItemTypes}
+                                  items={itemTypes}
                                   value={it.itemTypeId || ""}
                                   onChange={(newId, picked) => pickItemType(idx, newId, picked)}
                                   nonInventoryItems={nonInvItems}
                                   nonInventoryValue={it.nonInventoryItemId || ""}
                                   onPickNonInventory={(n) => pickNonInventory(idx, n)}
-                                  placeholder={
-                                    isAgainstSale ? "— pick item with HS Code —" : "— optional —"
-                                  }
-                                  style={{
-                                    padding: "0.3rem 0.5rem",
-                                    fontSize: "0.78rem",
-                                    ...(isAgainstSale && !it.itemTypeId
-                                      ? { borderColor: "#dc3545" }
-                                      : {}),
-                                  }}
+                                  placeholder="— optional —"
+                                  style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
                                 />
-                                {linkedToSale && (
-                                  <div
-                                    style={{ fontSize: "0.7rem", color: "#5f6d7e", marginTop: 2 }}
-                                  >
-                                    {it._saleLineCount > 1
-                                      ? `${it._saleLineCount} sale lines, was: ${it._originalItemTypeName || "—"}`
-                                      : `1 sale line, was: ${it._originalItemTypeName || "—"}`}
-                                    {it._saleProcuredQty > 0 &&
-                                      ` · already procured ${it._saleProcuredQty} of ${it._saleSoldQty}`}
-                                  </div>
-                                )}
                               </td>
                               <td style={td}>
                                 <textarea
@@ -1136,7 +989,7 @@ export default function PurchaseBillForm({
                                   value={it.description}
                                   onChange={(e) => updateItem(idx, "description", e.target.value)}
                                 />
-                                {challanTag(it)}
+                                {docTags(it)}
                               </td>
                               <td style={td}>
                                 <QuantityInput
@@ -1209,6 +1062,8 @@ export default function PurchaseBillForm({
                     </table>
                   </div>
                 )}
+                  </>
+                )}
               </div>
 
               <div
@@ -1271,8 +1126,8 @@ export default function PurchaseBillForm({
               mode={readOnly ? "view" : "edit"}
             />
           </div>
-          {showChallanPicker && (
-            <ChallanLinePicker
+          {showPicker && (
+            <CustomerDemandPicker
               companyId={companyId}
               suppliers={suppliers}
               supplierId={supplierId}
@@ -1282,9 +1137,10 @@ export default function PurchaseBillForm({
               }
               supplierLocked={isEdit}
               excludeBillId={isEdit ? billId : null}
-              taken={takenFromChallans}
-              onAdd={addChallanLines}
-              onClose={() => setShowChallanPicker(false)}
+              taken={takenByTrail}
+              forDoc={forDoc}
+              onAdd={addPickedLines}
+              onClose={() => setShowPicker(false)}
             />
           )}
           <div data-admin-footer="" style={formStyles.footer}>
@@ -1312,7 +1168,23 @@ export default function PurchaseBillForm({
   );
 }
 
-const challanChip = {
+// A row's sources must add up to its quantity. When the operator changes the
+// quantity of a picked row, the change lands on its last source (a lower
+// quantity empties the last sources first). The server checks what is left.
+function fitSources(row) {
+  const sources = row.sources || [];
+  if (sources.length === 0) return [];
+  let remaining = parseFloat(row.quantity) || 0;
+  const out = [];
+  sources.forEach((src, n) => {
+    const quantity = n === sources.length - 1 ? remaining : Math.min(src.quantity, remaining);
+    remaining -= quantity;
+    if (quantity > 0) out.push({ ...src, quantity });
+  });
+  return out;
+}
+
+const docChip = {
   display: "inline-flex",
   alignItems: "center",
   gap: 4,
@@ -1321,18 +1193,43 @@ const challanChip = {
   borderRadius: 999,
   fontSize: "0.7rem",
   fontWeight: 600,
-  background: "#e8f5e9",
-  color: "#1b5e20",
+  background: "#e3f2fd",
+  color: "#0d47a1",
 };
 
-const challanStrip = {
+const startGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(240px, 100%), 1fr))",
+  gap: "0.75rem",
+  margin: "0.25rem 0 0.5rem",
+};
+
+const startTile = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "flex-start",
+  gap: "0.3rem",
+  padding: "1rem 1.1rem",
+  minHeight: 110,
+  textAlign: "left",
+  background: "#fff",
+  border: "1px solid #d0d7e2",
+  borderRadius: 12,
+  boxShadow: "none",
+  cursor: "pointer",
+};
+
+const startTitle = { fontWeight: 700, fontSize: "0.95rem", color: "#1a2332" };
+const startText = { fontSize: "0.8rem", color: "#5f6d7e", lineHeight: 1.4 };
+
+const docStrip = {
   display: "flex",
   alignItems: "flex-start",
   gap: "0.5rem",
   padding: "0.55rem 0.8rem",
   marginBottom: "0.6rem",
-  background: "#f1f8e9",
-  border: "1px solid #c5e1a5",
+  background: "#f5f9ff",
+  border: "1px solid #bbdefb",
   borderRadius: 8,
   fontSize: "0.82rem",
   color: "#1a2332",

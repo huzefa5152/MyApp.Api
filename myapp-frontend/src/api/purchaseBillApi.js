@@ -18,5 +18,5 @@ export const previewPurchaseBillsFromChallan = (challanId) => http.get(`/purchas
 
 // Challans with lines still to purchase, for the Against Delivery Challans picker.
 // params: { supplierId, allSuppliers, search, excludeBillId }
-export const getOpenChallanLinesForPurchase = (companyId, params = {}) =>
-  http.get(`/purchasebills/company/${companyId}/open-challan-lines`, { params });
+export const getAwaitingLinesForPurchase = (companyId, params = {}) =>
+  http.get(`/purchasebills/company/${companyId}/awaiting-lines`, { params });

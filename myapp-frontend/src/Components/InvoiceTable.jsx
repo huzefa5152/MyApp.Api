@@ -4,8 +4,9 @@ import {
   MdVisibility, MdPrint, MdPictureAsPdf, MdGridOn, MdDescription,
   MdCloudUpload, MdCheckCircle, MdHourglassEmpty, MdError, MdBlock, MdRestore,
   MdEdit, MdDelete, MdOpenInNew, MdCancel, MdPayments, MdUndo, MdPostAdd, MdCopyAll,
-  MdAddLink, MdLinkOff,
+  MdAddLink, MdLinkOff, MdShoppingCart,
 } from "react-icons/md";
+import { usePermissions } from "../contexts/PermissionsContext";
 import DataTable from "./DataTable";
 import AttachmentBadge from "./AttachmentBadge";
 import StatusBadge from "./StatusBadge";
@@ -117,6 +118,7 @@ export default function InvoiceTable({
   onAttach,
 }) {
   const navigate = useNavigate();
+  const canBuy = usePermissions().has("purchasebills.manage.create");
 
   const columns = [
     {
@@ -286,6 +288,11 @@ export default function InvoiceTable({
     const isSubmitted = inv.fbrStatus === "Submitted";
     return (
       <CardActions nowrap label={`More actions for ${inv.invoiceNumber}`}>
+        {canBuy && !isReturnsMode && !inv.isCancelled && inv.documentType !== 9 && inv.documentType !== 10 && (
+          <button data-label="Buy for this bill" style={btn.view} onClick={() => navigate(`/purchase-bills?for=bill:${inv.id}`)} title="Buy for this bill">
+            <MdShoppingCart size={14} />
+          </button>
+        )}
         {!isReturnsMode && (
           <button data-label="View" data-primary={(isBillsMode) || undefined} style={btn.view} onClick={() => onView?.(inv)} title={isBillsMode ? "View bill" : "View invoice (read-only)"}>
             <MdVisibility size={14} />

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import CardActions from "./CardActions";
-import { MdVisibility, MdEdit, MdPrint, MdPictureAsPdf, MdGridOn, MdRequestQuote, MdContentCopy, MdCopyAll, MdCancel, MdDelete, MdWarning, MdLink } from "react-icons/md";
+import { MdVisibility, MdEdit, MdPrint, MdPictureAsPdf, MdGridOn, MdRequestQuote, MdContentCopy, MdCopyAll, MdCancel, MdDelete, MdWarning, MdLink, MdShoppingCart } from "react-icons/md";
+import { useNavigate } from "react-router-dom";
 import { usePermissions } from "../contexts/PermissionsContext";
 import DataTable from "./DataTable";
 import StatusBadge, { toneForStatus } from "./StatusBadge";
@@ -45,6 +46,8 @@ export default function ChallanTable({
   onAttach,
 }) {
   const { has } = usePermissions();
+  const navigate = useNavigate();
+  const canBuy = has("purchasebills.manage.create");
   const perms = {
     permUpdate: has("challans.manage.update"),
     permDelete: has("challans.manage.delete"),
@@ -225,6 +228,11 @@ export default function ChallanTable({
         {perms.permUpdate && flags.canCancel && (
           <button data-label="Cancel challan" data-admin-close="" style={btnStyles.cancel} onClick={() => onCancel?.(c)} title="Cancel challan">
             <MdCancel size={14} />
+          </button>
+        )}
+        {canBuy && c.status !== "Cancelled" && (
+          <button data-label="Buy for this challan" style={btnStyles.view} onClick={() => navigate(`/purchase-bills?for=challan:${c.id}`)} title="Buy for this challan">
+            <MdShoppingCart size={14} />
           </button>
         )}
         {perms.permDelete && flags.canDelete && (

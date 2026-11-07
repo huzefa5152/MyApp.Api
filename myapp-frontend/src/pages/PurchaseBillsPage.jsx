@@ -3,7 +3,7 @@ import CardActions from "../Components/CardActions";
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import useQueryAction from "../hooks/useQueryAction";
-import { MdShoppingCart, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdReceipt, MdClose, MdPayments, MdAssignment, MdPrint, MdPictureAsPdf, MdLocalShipping, MdCopyAll } from "react-icons/md";
+import { MdShoppingCart, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdPayments, MdPrint, MdPictureAsPdf, MdCopyAll } from "react-icons/md";
 import { getPurchaseBillsByCompanyPaged, deletePurchaseBill, getPurchaseBillPrintData } from "../api/purchaseBillApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
@@ -12,8 +12,7 @@ import { defaultPurchaseBillTemplate } from "../utils/purchaseNoteDocTemplates";
 import { usePrintTemplates } from "../hooks/usePrintTemplates";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { getSuppliersByCompany } from "../api/supplierApi";
-import { getAwaitingPurchase } from "../api/invoiceApi";
-import { getOpenSalesOrdersForPurchase } from "../api/salesOrderApi";
+import { docTrail } from "../utils/demandTags";
 import { dropdownStyles, cardStyles, cardHover } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -74,8 +73,6 @@ export default function PurchaseBillsPage() {
   const canViewPayments = has("accounting.payments.view");
   // Gate the "Purchase Against Sales Order" flow on the SO list permission
   // (the picker calls GET /salesorders/.../open).
-  const canViewSalesOrders = has("salesorders.list.view");
-  const canViewChallans = has("challans.list.view");
   const [viewMode, setViewMode, isBigScreen] = useListViewMode("purchaseBills");
   const isNarrow = useIsNarrow();
 
@@ -88,7 +85,7 @@ export default function PurchaseBillsPage() {
   const [size, setSize] = usePageSize("purchaseBills");
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   // Seed from ?supplierId= so the Suppliers page "N purchase bills" chip
   // deep-links straight to this list filtered to that supplier.
@@ -104,7 +101,7 @@ export default function PurchaseBillsPage() {
   const [showForm, setShowForm] = useState(false);
   // Dashboard quick action: ?new=1 opens New Purchase Bill (the New button's own reset).
   useQueryAction("new", !!selectedCompany && canCreate, () => {
-    setEditingId(null); setPrefillFromInvoiceId(null); setPrefillItems(null); setPrefillSourceLabel(null); setViewOnly(false); setShowForm(true);
+    openNew();
   });
   const [editingId, setEditingId] = useState(null);
   const [viewOnly, setViewOnly] = useState(false);
@@ -112,114 +109,33 @@ export default function PurchaseBillsPage() {
   const [paymentPreset, setPaymentPreset] = useState(null);
   // Bill whose payment history is open in the dialog; null when closed.
   const [paymentHistoryDoc, setPaymentHistoryDoc] = useState(null);
-  // "Purchase Against Sale Bill" picker
-  const [showSalePicker, setShowSalePicker] = useState(false);
-  const [awaitingBills, setAwaitingBills] = useState([]);
-  const [loadingAwaiting, setLoadingAwaiting] = useState(false);
-  const [prefillFromInvoiceId, setPrefillFromInvoiceId] = useState(null);
-  const [pickerSearch, setPickerSearch] = useState("");
+  // A new bill opens on the customer-document picker when it was started from a
+  // document (?for=order:12 from a sales order, challan or sale bill).
+  const [pickerFor, setPickerFor] = useState(null);
 
-  // "Purchase Against Sales Order(s)" picker — multi-select open orders.
-  const [showOrderPicker, setShowOrderPicker] = useState(false);
-  const [openOrders, setOpenOrders] = useState([]);
-  const [loadingOrders, setLoadingOrders] = useState(false);
-  const [orderPickerSearch, setOrderPickerSearch] = useState("");
-  const [selectedOrderIds, setSelectedOrderIds] = useState(() => new Set());
-  // Merged lines + label passed into PurchaseBillForm for the SO flow.
-  const [prefillItems, setPrefillItems] = useState(null);
-  const [prefillSourceLabel, setPrefillSourceLabel] = useState(null);
-  const [startWithChallanPicker, setStartWithChallanPicker] = useState(false);
-
-
-  const openOrderPicker = async () => {
-    setShowOrderPicker(true);
-    setOrderPickerSearch("");
-    setSelectedOrderIds(new Set());
-    setLoadingOrders(true);
-    try {
-      const { data } = await getOpenSalesOrdersForPurchase(selectedCompany.id);
-      setOpenOrders(data || []);
-    } catch {
-      setOpenOrders([]);
-      notify("Failed to load open sales orders.", "error");
-    } finally {
-      setLoadingOrders(false);
-    }
-  };
-
-  const toggleOrder = (id) =>
-    setSelectedOrderIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-
-  // Merge the chosen orders' lines into purchase-bill prefill rows, at the FULL
-  // ordered quantity — purchasing is independent of delivery, so a fully-
-  // delivered (auto-closed) order still contributes its ordered qty. Lines with
-  // the same description + item type + unit are summed.
-  const buildPrefillFromOrders = () => {
-    const chosen = openOrders.filter((o) => selectedOrderIds.has(o.id));
-    const merged = new Map();
-    for (const o of chosen) {
-      for (const it of o.items || []) {
-        const qty = it.quantity ?? 0;
-        if (qty <= 0) continue;
-        const key = `${(it.description || "").trim().toLowerCase()}|${it.itemTypeId || 0}|${(it.unit || "").trim().toLowerCase()}`;
-        if (merged.has(key)) {
-          merged.get(key).quantity += qty;
-        } else {
-          merged.set(key, {
-            description: it.description || it.itemTypeName || "",
-            quantity: qty,
-            unitPrice: 0,
-            uom: it.unit || "",
-            itemTypeId: it.itemTypeId || null,
-          });
-        }
-      }
-    }
-    return merged.size ? Array.from(merged.values()) : [];
-  };
-
-  const confirmOrderPurchase = () => {
-    const lines = buildPrefillFromOrders();
-    if (lines.length === 0) {
-      notify("The selected order(s) have no quantity to purchase.", "warning");
-      return;
-    }
-    const label = "#" + openOrders
-      .filter((o) => selectedOrderIds.has(o.id))
-      .map((o) => o.salesOrderNumber)
-      .sort((a, b) => a - b)
-      .join(", #");
-    setShowOrderPicker(false);
+  const openNew = (forDoc = null) => {
     setEditingId(null);
     setViewOnly(false);
-    setPrefillFromInvoiceId(null);
-    setPrefillItems(lines);
-    setPrefillSourceLabel(label);
+    setPickerFor(forDoc);
     setShowForm(true);
   };
 
-  // Against Delivery Challans: a new bill that opens straight on the line picker.
-  const openChallanPurchase = () => {
-    setEditingId(null);
-    setViewOnly(false);
-    setPrefillFromInvoiceId(null);
-    setPrefillItems(null);
-    setPrefillSourceLabel(null);
-    setStartWithChallanPicker(true);
-    setShowForm(true);
-  };
-
-  // Always clear every prefill source when the form closes so the next open
-  // (New Bill / Against Sale / Edit) starts clean.
   const closeForm = () => {
-    setShowForm(false); setEditingId(null); setPrefillFromInvoiceId(null);
-    setViewOnly(false); setPrefillItems(null); setPrefillSourceLabel(null);
-    setStartWithChallanPicker(false);
+    setShowForm(false); setEditingId(null); setViewOnly(false); setPickerFor(null);
   };
+
+  // "Buy" on a sales order, challan or sale bill lands here with ?for=kind:id.
+  useEffect(() => {
+    const target = searchParams.get("for");
+    if (!target || !selectedCompany) return;
+    const [kind, id] = target.split(":");
+    if (canCreate && ["order", "challan", "bill"].includes(kind) && Number(id) > 0)
+      openNew({ kind, id: Number(id) });
+    const next = new URLSearchParams(searchParams);
+    next.delete("for");
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, selectedCompany, canCreate]);
 
   const fetchBills = useCallback(async (pg) => {
     if (!selectedCompany) return;
@@ -330,37 +246,8 @@ export default function PurchaseBillsPage() {
         </div>
         {companies.length > 0 && canCreate && (
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-            <button
-              style={styles.altBtn}
-              onClick={async () => {
-                setShowSalePicker(true);
-                setLoadingAwaiting(true);
-                setPickerSearch("");
-                try {
-                  const { data } = await getAwaitingPurchase(selectedCompany.id);
-                  setAwaitingBills(data || []);
-                } catch {
-                  setAwaitingBills([]);
-                  notify("Failed to load sale bills awaiting procurement.", "error");
-                } finally {
-                  setLoadingAwaiting(false);
-                }
-              }}
-            >
-              <MdReceipt size={16} /> Purchase Against Sale Bill
-            </button>
-            {canViewSalesOrders && (
-              <button style={styles.altBtn} onClick={openOrderPicker}>
-                <MdAssignment size={16} /> Purchase Against Sales Order
-              </button>
-            )}
-            {canViewChallans && (
-              <button style={styles.altBtn} onClick={openChallanPurchase}>
-                <MdLocalShipping size={16} /> Purchase Against Delivery Challans
-              </button>
-            )}
-            <button style={styles.addBtn} onClick={() => { setEditingId(null); setPrefillFromInvoiceId(null); setPrefillItems(null); setPrefillSourceLabel(null); setViewOnly(false); setShowForm(true); }}>
-              <MdAdd size={18} /> New Purchase Bill
+            <button style={styles.addBtn} onClick={() => openNew()}>
+              <MdAdd size={18} /> New purchase bill
             </button>
           </div>
         )}
@@ -401,7 +288,7 @@ export default function PurchaseBillsPage() {
                 <span className="filter-date-sep">–</span>
                 <input type="date" className="filter-date-input" value={dateTo} onChange={onFilterChange(setDateTo)} title="To" />
               </div>
-              <select className="filter-select" aria-label="Purchase source" value={sourceFilter} onChange={onFilterChange(setSourceFilter)}><option value="">All purchase sources</option><option value="challan">Against delivery challans</option><option value="other">Other purchases</option></select>
+              <select className="filter-select" aria-label="Purchase source" value={sourceFilter} onChange={onFilterChange(setSourceFilter)}><option value="">All purchase sources</option><option value="challan">For customer documents</option><option value="other">Stock &amp; other</option></select>
               {hasFilters && <button className="filter-clear-btn" onClick={resetFilters}>Clear</button>}
               <PrintTemplateSelect picker={tplPicker} />
               {isBigScreen && (
@@ -456,7 +343,7 @@ export default function PurchaseBillsPage() {
                         </h5>
                         {b.divisionName && <span style={styles.divisionChip}>{b.divisionName}</span>}
                         <p style={cardStyles.text}><strong>Supplier:</strong> {b.supplierName}</p>
-                        {b.linkedChallans?.length > 0 && <p style={cardStyles.text}><strong>Against challans:</strong> {b.linkedChallans.map((c) => `#${c.challanNumber}`).join(", ")}</p>}
+                        {b.forDocuments?.length > 0 && <p style={cardStyles.text}><strong>For:</strong> {docTrail(b.forDocuments)}</p>}
                         <p style={cardStyles.text}><strong>Date:</strong> {new Date(b.date).toLocaleDateString()}</p>
                         <p style={cardStyles.text}><strong>Grand Total:</strong> Rs. {b.grandTotal?.toLocaleString()}</p>
                         {/* Payment status + balance — clickable to see all
@@ -488,7 +375,7 @@ export default function PurchaseBillsPage() {
                           <MdVisibility size={14} /> View
                         </button>
                         {canPrint && (
-                          <button data-primary style={{ ...btnPrint, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} onClick={() => handlePrint(b)} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print purchase bill"}>
+                          <button style={{ ...btnPrint, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} onClick={() => handlePrint(b)} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print purchase bill"}>
                             <MdPrint size={14} /> Print
                           </button>
                         )}
@@ -543,10 +430,8 @@ export default function PurchaseBillsPage() {
           billId={editingId}
           readOnly={viewOnly}
           defaultDivisionId={editingId ? null : divisionFilter}
-          prefillFromInvoiceId={prefillFromInvoiceId}
-          prefillItems={prefillItems}
-          prefillSourceLabel={prefillSourceLabel}
-          startWithChallanPicker={startWithChallanPicker}
+          startWithPicker={!!pickerFor}
+          forDoc={pickerFor?.kind ? pickerFor : null}
           onClose={closeForm}
           onSaved={() => { closeForm(); fetchBills(page); }}
         />
@@ -590,267 +475,10 @@ export default function PurchaseBillsPage() {
         />
       )}
 
-      {showSalePicker && (
-        <div data-admin-backdrop="" style={pickerStyles.backdrop} onClick={() => setShowSalePicker(false)}>
-          <div data-admin-dialog="" style={pickerStyles.modal} onClick={(e) => e.stopPropagation()}>
-            <div data-admin-header="" style={pickerStyles.header}>
-              <h3 style={pickerStyles.title}>Pick a sale bill awaiting procurement</h3>
-              <button style={pickerStyles.closeBtn} onClick={() => setShowSalePicker(false)}>
-                <MdClose size={20} />
-              </button>
-            </div>
-            <div style={{ padding: "0.75rem 1.25rem", borderBottom: `1px solid ${colors.cardBorder}` }}>
-              <div style={{ position: "relative" }}>
-                <MdSearch style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
-                <input
-                  type="text" placeholder="Search bill # / client..." autoFocus
-                  value={pickerSearch} onChange={(e) => setPickerSearch(e.target.value)}
-                  style={{ width: "100%", padding: "0.55rem 0.75rem 0.55rem 2.3rem",
-                          border: `1px solid ${colors.inputBorder}`, borderRadius: 10,
-                          fontSize: "0.88rem", backgroundColor: "#f8f9fb", outline: "none" }}
-                />
-              </div>
-              <div style={{ fontSize: "0.74rem", color: colors.textSecondary, marginTop: "0.5rem" }}>
-                Only bills where every line has an Item Type AND at least one line is missing HS Code appear here.
-              </div>
-            </div>
-            <div style={pickerStyles.tableWrap}>
-              {loadingAwaiting ? (
-                <div style={{ padding: "3rem 0", textAlign: "center", color: colors.textSecondary }}>Loading...</div>
-              ) : awaitingBills.length === 0 ? (
-                <div style={{ padding: "3rem 1rem", textAlign: "center", color: colors.textSecondary, fontSize: "0.9rem" }}>
-                  No sale bills awaiting procurement. Either every bill is FBR-ready, or some lines are missing Item Type — fix those on the Bills page first.
-                </div>
-              ) : (() => {
-                const filtered = awaitingBills.filter(b => {
-                  if (!pickerSearch.trim()) return true;
-                  const q = pickerSearch.toLowerCase();
-                  return String(b.invoiceNumber).includes(q)
-                      || (b.clientName || "").toLowerCase().includes(q);
-                });
-                const pick = (b) => {
-                  setShowSalePicker(false);
-                  setEditingId(null);
-                  setPrefillFromInvoiceId(b.invoiceId);
-                  setPrefillItems(null);
-                  setPrefillSourceLabel(null);
-                  setViewOnly(false);
-                  setShowForm(true);
-                };
-                return isNarrow ? (
-                  <div style={pickerStyles.cardList}>
-                    {filtered.map(b => (
-                      <div key={b.invoiceId} style={pickerStyles.card}>
-                        <div style={pickerStyles.cardHead}>
-                          <strong>#{b.invoiceNumber}</strong>
-                          <span style={pickerStyles.cardDate}>{new Date(b.date).toLocaleDateString()}</span>
-                        </div>
-                        <div style={pickerStyles.cardClient}>{b.clientName}</div>
-                        <div style={pickerStyles.cardMeta}>
-                          <span>Lines awaiting: <strong>{b.linesAwaiting}</strong></span>
-                          <span>Qty remaining: <strong>{b.totalQtyRemaining}</strong></span>
-                        </div>
-                        <button style={{ ...pickerStyles.pickBtn, width: "100%", minHeight: 44 }} onClick={() => pick(b)}>Pick</button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                <div data-admin-table-region=""><table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" }}>
-                  <thead>
-                    <tr>
-                      <th style={pickerStyles.th}>Bill #</th>
-                      <th style={pickerStyles.th}>Date</th>
-                      <th style={pickerStyles.th}>Client</th>
-                      <th style={{ ...pickerStyles.th, textAlign: "right" }}>Lines awaiting</th>
-                      <th style={{ ...pickerStyles.th, textAlign: "right" }}>Qty remaining</th>
-                      <th style={{ ...pickerStyles.th, width: 80 }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map(b => (
-                        <tr key={b.invoiceId}>
-                          <td style={pickerStyles.td}><strong>#{b.invoiceNumber}</strong></td>
-                          <td style={pickerStyles.td}>{new Date(b.date).toLocaleDateString()}</td>
-                          <td style={pickerStyles.td}>{b.clientName}</td>
-                          <td style={{ ...pickerStyles.td, textAlign: "right" }}>{b.linesAwaiting}</td>
-                          <td style={{ ...pickerStyles.td, textAlign: "right", fontWeight: 600 }}>{b.totalQtyRemaining}</td>
-                          <td style={pickerStyles.td}>
-                            <button style={pickerStyles.pickBtn} onClick={() => pick(b)}>
-                              Pick
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table></div>
-                );
-              })()}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showOrderPicker && (
-        <div data-admin-backdrop="" style={pickerStyles.backdrop} onClick={() => setShowOrderPicker(false)}>
-          <div data-admin-dialog="" style={pickerStyles.modal} onClick={(e) => e.stopPropagation()}>
-            <div data-admin-header="" style={pickerStyles.header}>
-              <h3 style={pickerStyles.title}>Select sales order(s) to purchase for</h3>
-              <button style={pickerStyles.closeBtn} onClick={() => setShowOrderPicker(false)}>
-                <MdClose size={20} />
-              </button>
-            </div>
-            <div style={{ padding: "0.75rem 1.25rem", borderBottom: `1px solid ${colors.cardBorder}` }}>
-              <div style={{ position: "relative" }}>
-                <MdSearch style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
-                <input
-                  type="text" placeholder="Search order # / client..." autoFocus
-                  value={orderPickerSearch} onChange={(e) => setOrderPickerSearch(e.target.value)}
-                  style={{ width: "100%", padding: "0.55rem 0.75rem 0.55rem 2.3rem",
-                          border: `1px solid ${colors.inputBorder}`, borderRadius: 10,
-                          fontSize: "0.88rem", backgroundColor: "#f8f9fb", outline: "none" }}
-                />
-              </div>
-              <div style={{ fontSize: "0.74rem", color: colors.textSecondary, marginTop: "0.5rem" }}>
-                Pick one or more orders (open or already delivered). Their ordered lines are merged into a single purchase bill — identical items are summed.
-              </div>
-            </div>
-            <div style={pickerStyles.tableWrap}>
-              {loadingOrders ? (
-                <div style={{ padding: "3rem 0", textAlign: "center", color: colors.textSecondary }}>Loading...</div>
-              ) : openOrders.length === 0 ? (
-                <div style={{ padding: "3rem 1rem", textAlign: "center", color: colors.textSecondary, fontSize: "0.9rem" }}>
-                  No sales orders available to purchase for.
-                </div>
-              ) : (() => {
-                const filtered = openOrders.filter(o => {
-                  if (!orderPickerSearch.trim()) return true;
-                  const q = orderPickerSearch.toLowerCase();
-                  return String(o.salesOrderNumber).includes(q)
-                      || (o.clientName || "").toLowerCase().includes(q);
-                });
-                return isNarrow ? (
-                  <div style={pickerStyles.cardList}>
-                    {filtered.map(o => {
-                      const sel = selectedOrderIds.has(o.id);
-                      return (
-                        <div key={o.id} style={{ ...pickerStyles.card, ...(sel ? pickerStyles.cardSelected : {}) }} onClick={() => toggleOrder(o.id)}>
-                          <div style={pickerStyles.cardHead}>
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                              <input type="checkbox" checked={sel} onChange={() => toggleOrder(o.id)} onClick={(e) => e.stopPropagation()} />
-                              <strong>#{o.salesOrderNumber}</strong>
-                            </span>
-                            <span style={pickerStyles.cardDate}>{o.orderDate ? new Date(o.orderDate).toLocaleDateString() : "—"}</span>
-                          </div>
-                          <div style={pickerStyles.cardClient}>{o.clientName}</div>
-                          <div style={pickerStyles.cardMeta}>
-                            <span>Lines: <strong>{o.items?.length || 0}</strong></span>
-                            <span>{o.fulfillmentStatus}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                <div data-admin-table-region=""><table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" }}>
-                  <thead>
-                    <tr>
-                      <th style={{ ...pickerStyles.th, width: 40 }}></th>
-                      <th style={pickerStyles.th}>Order #</th>
-                      <th style={pickerStyles.th}>Date</th>
-                      <th style={pickerStyles.th}>Client</th>
-                      <th style={{ ...pickerStyles.th, textAlign: "right" }}>Lines</th>
-                      <th style={pickerStyles.th}>Fulfilment</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map(o => (
-                        <tr key={o.id} style={{ cursor: "pointer", background: selectedOrderIds.has(o.id) ? "#e8f5e9" : "transparent" }} onClick={() => toggleOrder(o.id)}>
-                          <td style={pickerStyles.td}>
-                            <input type="checkbox" checked={selectedOrderIds.has(o.id)} onChange={() => toggleOrder(o.id)} onClick={(e) => e.stopPropagation()} />
-                          </td>
-                          <td style={pickerStyles.td}><strong>#{o.salesOrderNumber}</strong></td>
-                          <td style={pickerStyles.td}>{o.orderDate ? new Date(o.orderDate).toLocaleDateString() : "—"}</td>
-                          <td style={pickerStyles.td}>{o.clientName}</td>
-                          <td style={{ ...pickerStyles.td, textAlign: "right" }}>{o.items?.length || 0}</td>
-                          <td style={pickerStyles.td}>{o.fulfillmentStatus}</td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table></div>
-                );
-              })()}
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", padding: "0.85rem 1.25rem", borderTop: `1px solid ${colors.cardBorder}` }}>
-              <span style={{ fontSize: "0.82rem", color: colors.textSecondary }}>
-                {selectedOrderIds.size} order{selectedOrderIds.size !== 1 ? "s" : ""} selected
-              </span>
-              <button
-                style={{ ...styles.addBtn, opacity: selectedOrderIds.size === 0 ? 0.5 : 1, cursor: selectedOrderIds.size === 0 ? "not-allowed" : "pointer" }}
-                disabled={selectedOrderIds.size === 0}
-                onClick={confirmOrderPurchase}
-              >
-                <MdShoppingCart size={16} /> Create purchase bill
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
     </div>
     </DocumentLinesNavigation>
   );
 }
-
-const pickerStyles = {
-  backdrop: {
-    position: "fixed", inset: 0, backgroundColor: "rgba(15,20,30,0.55)",
-    backdropFilter: "blur(4px)", display: "flex", alignItems: "center",
-    justifyContent: "center", zIndex: 1100, padding: "2vh 1rem",
-  },
-  modal: {
-    backgroundColor: "#fff", borderRadius: 16, width: "100%",
-    maxWidth: 820, maxHeight: "92vh", boxShadow: "0 20px 60px rgba(13,71,161,0.2)",
-    display: "flex", flexDirection: "column", overflow: "hidden",
-  },
-  header: {
-    background: `linear-gradient(135deg, #6a1b9a, #00897b)`,
-    padding: "0.95rem 1.4rem",
-    display: "flex", justifyContent: "space-between", alignItems: "center",
-  },
-  title: { margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "#fff" },
-  closeBtn: {
-    background: "rgba(255,255,255,0.2)", border: "none", color: "#fff",
-    cursor: "pointer", width: 32, height: 32, minWidth: 32, padding: 0,
-    borderRadius: 8, boxShadow: "none",
-    display: "inline-flex", alignItems: "center", justifyContent: "center",
-  },
-  tableWrap: { overflowY: "auto", overflowX: "auto", flex: "1 1 auto", minHeight: 0 },
-  th: {
-    textAlign: "left", padding: "0.6rem 0.95rem",
-    backgroundColor: "#f5f8fc", borderBottom: "1px solid #e8edf3",
-    fontSize: "0.76rem", fontWeight: 700, color: "#5f6d7e",
-    textTransform: "uppercase", letterSpacing: "0.04em",
-    position: "sticky", top: 0, zIndex: 1,
-  },
-  td: { padding: "0.55rem 0.95rem", borderBottom: "1px solid #e8edf3", color: "#1a2332" },
-  pickBtn: {
-    padding: "0.35rem 0.85rem", borderRadius: 6, border: "none",
-    backgroundColor: "#0d47a1", color: "#fff",
-    fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", boxShadow: "none",
-  },
-  // Mobile (<768px) card list — one selectable card per row instead of a
-  // horizontally-scrolled multi-column table.
-  cardList: { display: "flex", flexDirection: "column", gap: "0.6rem", padding: "0.75rem 1rem" },
-  card: {
-    border: "1px solid #e8edf3", borderRadius: 10, padding: "0.7rem 0.8rem",
-    background: "#fff", display: "flex", flexDirection: "column", gap: "0.4rem", cursor: "pointer",
-  },
-  cardSelected: { background: "#e8f5e9", borderColor: "#a5d6a7" },
-  cardHead: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", fontSize: "0.95rem", color: "#1a2332" },
-  cardDate: { fontSize: "0.78rem", color: "#5f6d7e", fontWeight: 500 },
-  cardClient: { fontSize: "0.9rem", fontWeight: 600, color: "#1a2332", wordBreak: "break-word" },
-  cardMeta: { display: "flex", flexWrap: "wrap", gap: "0.3rem 1rem", fontSize: "0.8rem", color: "#5f6d7e" },
-};
 
 const styles = {
   pageHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" },
@@ -858,7 +486,6 @@ const styles = {
   pageTitle: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: colors.textPrimary },
   pageSubtitle: { margin: "0.15rem 0 0", fontSize: "0.88rem", color: colors.textSecondary },
   addBtn: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1.25rem", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, color: "#fff", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 14px rgba(13,71,161,0.25)" },
-  altBtn: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.5rem 1rem", borderRadius: 10, border: "1px solid #d0d7e2", backgroundColor: "#fff", color: "#6a1b9a", fontSize: "0.86rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
   loading: { display: "flex", alignItems: "center", justifyContent: "center", padding: "3rem 0" },
   spinner: { width: 28, height: 28, border: `3px solid ${colors.cardBorder}`, borderTopColor: colors.blue, borderRadius: "50%", animation: "spin 0.8s linear infinite" },
   empty: { display: "flex", flexDirection: "column", alignItems: "center", padding: "3rem 1rem", textAlign: "center", color: colors.textSecondary },

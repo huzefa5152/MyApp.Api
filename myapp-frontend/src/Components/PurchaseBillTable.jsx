@@ -1,5 +1,6 @@
 import { MdVisibility, MdEdit, MdDelete, MdPayments, MdPrint, MdPictureAsPdf, MdCopyAll } from "react-icons/md";
 import CardActions from "./CardActions";
+import { docTrail } from "../utils/demandTags";
 import DataTable from "./DataTable";
 import AttachmentBadge from "./AttachmentBadge";
 import StatusBadge from "./StatusBadge";
@@ -34,7 +35,7 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
         <>
           {b.supplierName || "—"}
           {b.divisionName && <span style={divisionChip}>{b.divisionName}</span>}
-          {b.linkedChallans?.length > 0 && <span style={divisionChip} title="Challans this bill buys from">Challan {b.linkedChallans.map((c) => `#${c.challanNumber}`).join(", ")}</span>}
+          {b.forDocuments?.length > 0 && <span style={divisionChip} title="Customer documents this bill buys for">For {docTrail(b.forDocuments)}</span>}
         </>
       ),
     },
@@ -106,7 +107,7 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
         <MdVisibility size={14} />
       </button>
       {perms.canPrint && onPrint && (
-        <button data-label="Print" data-primary style={{ ...btn.print, ...(printDisabled ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={printDisabled} onClick={() => onPrint(b)} title={printDisabled ? printDisabledReason : "Print purchase bill"}>
+        <button data-label="Print" style={{ ...btn.print, ...(printDisabled ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={printDisabled} onClick={() => onPrint(b)} title={printDisabled ? printDisabledReason : "Print purchase bill"}>
           <MdPrint size={14} />
         </button>
       )}

@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback } from "react";
 import CardActions from "./CardActions";
 import { createPortal } from "react-dom";
-import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn, MdWarning, MdRequestQuote, MdLocationOn, MdContentCopy, MdCopyAll, MdLink } from "react-icons/md";
+import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn, MdWarning, MdRequestQuote, MdLocationOn, MdContentCopy, MdCopyAll, MdLink, MdShoppingCart } from "react-icons/md";
+import { useNavigate } from "react-router-dom";
 import ChallanModal from "./ChallanModal";
 import AttachmentBadge from "./AttachmentBadge";
 import { cardStyles, cardHover } from "../theme";
@@ -68,6 +69,8 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
   const { has } = usePermissions();
   const permUpdate = has("challans.manage.update");
   const permDelete = has("challans.manage.delete");
+  const canBuy = has("purchasebills.manage.create");
+  const navigate = useNavigate();
   const permPrint = has("challans.print.view");
   const permCreateBill = has("bills.manage.create");
   const permCreate = has("challans.manage.create");
@@ -325,6 +328,15 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                       onClick={() => onCancel?.(c)}
                     >
                       <MdCancel size={14} /> Cancel
+                    </button>
+                  )}
+                  {canBuy && c.status !== "Cancelled" && (
+                    <button
+                      style={{ ...styles.actionBtn, ...styles.viewBtn }}
+                      onClick={() => navigate(`/purchase-bills?for=challan:${c.id}`)}
+                      title="Buy for this challan"
+                    >
+                      <MdShoppingCart size={14} /> Buy
                     </button>
                   )}
                   {permDelete && canDelete && (

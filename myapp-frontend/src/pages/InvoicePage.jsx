@@ -3,7 +3,7 @@ import CardActions from "../Components/CardActions";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import useQueryAction from "../hooks/useQueryAction";
-import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments, MdUndo, MdPostAdd, MdCopyAll, MdDownload, MdAddLink, MdLinkOff } from "react-icons/md";
+import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments, MdUndo, MdPostAdd, MdCopyAll, MdDownload, MdAddLink, MdLinkOff, MdShoppingCart } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import PaymentForm from "../Components/PaymentForm";
 import PaymentHistoryDialog from "../Components/PaymentHistoryDialog";
@@ -1254,6 +1254,11 @@ export default function InvoicePage({ mode = "invoices" }) {
                     )}
                   </div>
                   <CardActions style={cardStyles.buttonGroup}>
+                    {has("purchasebills.manage.create") && !isNotesMode && !inv.isCancelled && inv.documentType !== 9 && inv.documentType !== 10 && (
+                      <button style={styles.printBtn} onClick={() => navigate(`/purchase-bills?for=bill:${inv.id}`)} title="Buy for this bill">
+                        <MdShoppingCart size={14} /> Buy
+                      </button>
+                    )}
                     {/* Receipt shortcut — record money in against this invoice,
                         pre-filling the client + this document in the form. */}
                     {canRecordReceipt && !inv.isCancelled && (
