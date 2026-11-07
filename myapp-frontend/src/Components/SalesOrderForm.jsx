@@ -13,26 +13,56 @@ import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
 
 const colors = {
-  textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2", danger: "#dc3545", dangerLight: "#fff0f1", teal: "#00897b",
+  textSecondary: "#5f6d7e",
+  cardBorder: "#e8edf3",
+  inputBg: "#f8f9fb",
+  inputBorder: "#d0d7e2",
+  danger: "#dc3545",
+  dangerLight: "#fff0f1",
+  teal: "#00897b",
 };
 
-const blankItem = () => ({ id: 0, itemTypeId: null, nonInventoryItemId: null, description: "", quantity: 1, unit: "", unitPrice: "" });
+const blankItem = () => ({
+  id: 0,
+  itemTypeId: null,
+  nonInventoryItemId: null,
+  description: "",
+  quantity: 1,
+  unit: "",
+  unitPrice: "",
+});
 
 // Create + edit a Sales Order (quantity-only). Pass `order` to edit.
 export default function SalesOrderForm({ onClose, onSaved, companyId, order, defaultDivisionId }) {
   const isEdit = !!order;
-  const [client, setClient] = useState(order ? { id: order.clientId, label: order.clientName } : null);
-  const [orderDate, setOrderDate] = useState(order?.orderDate ? order.orderDate.slice(0, 10) : new Date().toISOString().slice(0, 10));
-  const [requiredDate, setRequiredDate] = useState(order?.requiredDate ? order.requiredDate.slice(0, 10) : "");
+  const [client, setClient] = useState(
+    order ? { id: order.clientId, label: order.clientName } : null,
+  );
+  const [orderDate, setOrderDate] = useState(
+    order?.orderDate ? order.orderDate.slice(0, 10) : new Date().toISOString().slice(0, 10),
+  );
+  const [requiredDate, setRequiredDate] = useState(
+    order?.requiredDate ? order.requiredDate.slice(0, 10) : "",
+  );
   const [poNumber, setPoNumber] = useState(order?.customerPoNumber || "");
-  const [poDate, setPoDate] = useState(order?.customerPoDate ? order.customerPoDate.slice(0, 10) : "");
+  const [poDate, setPoDate] = useState(
+    order?.customerPoDate ? order.customerPoDate.slice(0, 10) : "",
+  );
   const [site, setSite] = useState(order?.site || "");
   const [notes, setNotes] = useState(order?.notes || "");
   const [items, setItems] = useState(
     order?.items?.length
-      ? order.items.map((i) => ({ id: i.id, itemTypeId: i.itemTypeId, nonInventoryItemId: i.nonInventoryItemId ?? null, description: i.description, quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice ?? "", delivered: i.deliveredQuantity }))
-      : [blankItem()]
+      ? order.items.map((i) => ({
+          id: i.id,
+          itemTypeId: i.itemTypeId,
+          nonInventoryItemId: i.nonInventoryItemId ?? null,
+          description: i.description,
+          quantity: i.quantity,
+          unit: i.unit,
+          unitPrice: i.unitPrice ?? "",
+          delivered: i.deliveredQuantity,
+        }))
+      : [blankItem()],
   );
   const [units, setUnits] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
@@ -40,25 +70,45 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
   // New orders default to the division currently being filtered (so "filter to
   // a division → New Order" lands in that division); edits keep their own.
   const [divisionId, setDivisionId] = useState(
-    order?.divisionId ? String(order.divisionId) : (defaultDivisionId ? String(defaultDivisionId) : ""));
+    order?.divisionId
+      ? String(order.divisionId)
+      : defaultDivisionId
+        ? String(defaultDivisionId)
+        : "",
+  );
   const [error, setError] = useState("");
   const errRef = useScrollToError(error);
   const [numberMode, setNumberMode] = useState("auto");
   const [customNumber, setCustomNumber] = useState(order ? String(order.salesOrderNumber) : "");
   const [numberValid, setNumberValid] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [salesQuoteId, setSalesQuoteId] = useState(order?.salesQuoteId ? String(order.salesQuoteId) : "");
+  const [salesQuoteId, setSalesQuoteId] = useState(
+    order?.salesQuoteId ? String(order.salesQuoteId) : "",
+  );
   const [quotes, setQuotes] = useState([]);
   const [quoteLoadedMsg, setQuoteLoadedMsg] = useState("");
   const attachmentRef = useRef(null);
 
-  useEffect(() => { getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([])); }, []);
-  useEffect(() => { getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([])); }, [companyId]);
+  useEffect(() => {
+    getAllUnits()
+      .then(({ data }) => setUnits(data))
+      .catch(() => setUnits([]));
+  }, []);
+  useEffect(() => {
+    getItemTypes(companyId)
+      .then(({ data }) => setItemTypes(data || []))
+      .catch(() => setItemTypes([]));
+  }, [companyId]);
   // Per-company Non-Inventory Items (GL-account shortcut lines: Freight, Discount, …).
   // A company with GL off / no items resolves to [] and the picker shows none.
   useEffect(() => {
-    if (!companyId) { setNonInvItems([]); return; }
-    getNonInventoryItemsByCompany(companyId, true).then(({ data }) => setNonInvItems(data || [])).catch(() => setNonInvItems([]));
+    if (!companyId) {
+      setNonInvItems([]);
+      return;
+    }
+    getNonInventoryItemsByCompany(companyId, true)
+      .then(({ data }) => setNonInvItems(data || []))
+      .catch(() => setNonInvItems([]));
   }, [companyId]);
 
   useEffect(() => {
@@ -80,9 +130,15 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
   // is offered; picking a client narrows the list to that client's quotes.
   const QUOTE_LINKABLE = ["Active", "Accepted", "Draft", "Sent"];
   const quoteOptions = quotes
-    .filter((q) => (QUOTE_LINKABLE.includes(q.status) || String(q.id) === salesQuoteId)
-      && (!client || q.clientId === client.id))
-    .map((q) => ({ id: q.id, label: `Quote #${q.quoteNumber} — ${q.clientName}${q.divisionName ? ` · ${q.divisionName}` : ""}` }));
+    .filter(
+      (q) =>
+        (QUOTE_LINKABLE.includes(q.status) || String(q.id) === salesQuoteId) &&
+        (!client || q.clientId === client.id),
+    )
+    .map((q) => ({
+      id: q.id,
+      label: `Quote #${q.quoteNumber} — ${q.clientName}${q.divisionName ? ` · ${q.divisionName}` : ""}`,
+    }));
 
   // Picking a quote on a NEW order pulls its client + division + line items in
   // (quantity only — prices are dropped, re-entered at bill time); the lines
@@ -94,11 +150,23 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
     if (!value || isEdit) return;
     const q = quotes.find((x) => String(x.id) === String(value));
     if (!q) return;
-    if (q.clientId && (!client || client.id !== q.clientId)) setClient({ id: q.clientId, label: q.clientName });
+    if (q.clientId && (!client || client.id !== q.clientId))
+      setClient({ id: q.clientId, label: q.clientName });
     setDivisionId(q.divisionId ? String(q.divisionId) : "");
     if (q.items?.length) {
-      setItems(q.items.map((i) => ({ id: 0, itemTypeId: i.itemTypeId || null, nonInventoryItemId: i.nonInventoryItemId || null, description: i.description, quantity: i.quantity, unit: i.unit })));
-      setQuoteLoadedMsg(`Loaded ${q.items.length} item${q.items.length !== 1 ? "s" : ""} from Quote #${q.quoteNumber} — edit as needed.`);
+      setItems(
+        q.items.map((i) => ({
+          id: 0,
+          itemTypeId: i.itemTypeId || null,
+          nonInventoryItemId: i.nonInventoryItemId || null,
+          description: i.description,
+          quantity: i.quantity,
+          unit: i.unit,
+        })),
+      );
+      setQuoteLoadedMsg(
+        `Loaded ${q.items.length} item${q.items.length !== 1 ? "s" : ""} from Quote #${q.quoteNumber} — edit as needed.`,
+      );
     }
   };
 
@@ -107,8 +175,14 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
     if (saving || !numberValid) return;
     setError("");
     const valid = items.filter((i) => i.description.trim());
-    if (!client) { setError("Please select a client."); return; }
-    if (valid.length === 0) { setError("Add at least one item."); return; }
+    if (!client) {
+      setError("Please select a client.");
+      return;
+    }
+    if (valid.length === 0) {
+      setError("Add at least one item.");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -128,9 +202,12 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
           itemTypeId: i.itemTypeId || null,
           nonInventoryItemId: i.nonInventoryItemId || null,
           description: i.description.trim(),
-          quantity: typeof i.quantity === "number" ? i.quantity : (parseFloat(i.quantity) || 1),
+          quantity: typeof i.quantity === "number" ? i.quantity : parseFloat(i.quantity) || 1,
           unit: i.unit,
-          unitPrice: (i.unitPrice === "" || i.unitPrice == null || isNaN(parseFloat(i.unitPrice))) ? null : parseFloat(i.unitPrice),
+          unitPrice:
+            i.unitPrice === "" || i.unitPrice == null || isNaN(parseFloat(i.unitPrice))
+              ? null
+              : parseFloat(i.unitPrice),
         })),
       });
       // Upload any attachments staged before the order had an id. No-op in
@@ -138,11 +215,15 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
       try {
         const savedId = saved?.id ?? order?.id;
         if (savedId) await attachmentRef.current?.flush(savedId);
-      } catch { /* attachments are best-effort — the order is already saved */ }
+      } catch {
+        /* attachments are best-effort — the order is already saved */
+      }
       onClose();
     } catch (err) {
       const msg = err.response?.data?.error || err.response?.data?.message;
-      setError(msg || (!err.response ? "Could not reach the server." : "Could not save the order."));
+      setError(
+        msg || (!err.response ? "Could not reach the server." : "Could not save the order."),
+      );
       setSaving(false);
     }
   };
@@ -151,64 +232,178 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
-          <h5 style={formStyles.title}>{isEdit ? `Edit Sales Order #${order.salesOrderNumber}` : "Create Sales Order"}</h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <h5 style={formStyles.title}>
+            {isEdit ? `Edit Sales Order #${order.salesOrderNumber}` : "Create Sales Order"}
+          </h5>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            &times;
+          </button>
         </div>
         <form onSubmit={handleSubmit}>
           <div data-admin-body="" style={formStyles.body}>
-            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} divisionId={isEdit ? order?.divisionId : divisionId} documentType="order" variant={isEdit ? "edit" : "create"} currentNumber={order?.salesOrderNumber} editRecordId={order?.id} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
-            {error && <div ref={errRef} style={s.err}>{error}</div>}
-            <section className="admin-details-panel" aria-label="Customer & delivery"><h6 className="admin-section-heading">Customer & delivery</h6><div data-admin-form-row="" className="admin-order-party-row" style={s.row}>
-              <div style={{ flex: "1 1 100%", minWidth: 220 }}>
-                <label style={s.label}>Sales Quote <span style={s.opt}>(optional — picking one pre-fills the order)</span></label>
-                <SearchableSelect
-                  items={quoteOptions}
-                  value={salesQuoteId}
-                  onChange={(id) => handleQuoteSelect(id ? String(id) : "")}
-                  labelKey="label"
-                  placeholder="— not linked —"
-                />
-                {quoteLoadedMsg && <div style={{ fontSize: "0.72rem", color: colors.teal, marginTop: 4, fontWeight: 600 }}>{quoteLoadedMsg}</div>}
-              </div>
-              <div style={{ flex: "1 1 100%", minWidth: 220 }}>
-                <SelectDropdown label="Client" endpoint={`/clients/company/${companyId}`} value={client} onChange={(v) => { setClient(v); setSite(""); setSalesQuoteId(""); }} placeholder="Choose client" />
-              </div>
-              <div style={{ flex: 1, minWidth: 150 }}>
-                <label style={s.label}>Site / Department <span style={s.opt}>(optional)</span></label>
-                {(() => {
-                  const sites = client?.site ? client.site.split(";").map((x) => x.trim()).filter(Boolean) : [];
-                  return sites.length > 0 ? (
-                    <select style={s.input} value={site} onChange={(e) => setSite(e.target.value)}>
-                      <option value="">(none)</option>
-                      {sites.map((x) => <option key={x} value={x}>{x}</option>)}
-                    </select>
-                  ) : (
-                    <input type="text" style={s.input} value={site} onChange={(e) => setSite(e.target.value)} placeholder={client ? "Optional" : "Pick a client first"} disabled={!client} />
-                  );
-                })()}
-              </div>
-              <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={s.opt}>(optional)</span></>} labelStyle={s.label} style={s.input} wrapStyle={{ flex: 1, minWidth: 150 }} />
+            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}>
+              <BillNumberField
+                companyId={companyId}
+                divisionId={isEdit ? order?.divisionId : divisionId}
+                documentType="order"
+                variant={isEdit ? "edit" : "create"}
+                currentNumber={order?.salesOrderNumber}
+                editRecordId={order?.id}
+                mode={numberMode}
+                onModeChange={setNumberMode}
+                number={customNumber}
+                onNumberChange={setCustomNumber}
+                onValidityChange={setNumberValid}
+                disabled={saving}
+              />
             </div>
-            <div data-admin-form-row="" style={s.row}>
-              <div style={{ flex: 1, minWidth: 140 }}>
-                <label style={s.label}>Order Date</label>
-                <input type="date" style={s.input} value={orderDate} onChange={(e) => setOrderDate(e.target.value)} />
+            {error && (
+              <div ref={errRef} style={s.err}>
+                {error}
               </div>
-              <div style={{ flex: 1, minWidth: 140 }}>
-                <label style={s.label}>Required By <span style={s.opt}>(optional)</span></label>
-                <input type="date" style={s.input} value={requiredDate} onChange={(e) => setRequiredDate(e.target.value)} />
+            )}
+            <section className="admin-details-panel" aria-label="Customer & delivery">
+              <h6 className="admin-section-heading">Customer & delivery</h6>
+              <div data-admin-form-row="" className="admin-order-party-row" style={s.row}>
+                <div style={{ flex: "1 1 100%", minWidth: 220 }}>
+                  <label style={s.label}>
+                    Sales Quote{" "}
+                    <span style={s.opt}>(optional — picking one pre-fills the order)</span>
+                  </label>
+                  <SearchableSelect
+                    items={quoteOptions}
+                    value={salesQuoteId}
+                    onChange={(id) => handleQuoteSelect(id ? String(id) : "")}
+                    labelKey="label"
+                    placeholder="— not linked —"
+                  />
+                  {quoteLoadedMsg && (
+                    <div
+                      style={{
+                        fontSize: "0.72rem",
+                        color: colors.teal,
+                        marginTop: 4,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {quoteLoadedMsg}
+                    </div>
+                  )}
+                </div>
+                <div style={{ flex: "1 1 100%", minWidth: 220 }}>
+                  <SelectDropdown
+                    label="Client"
+                    endpoint={`/clients/company/${companyId}`}
+                    value={client}
+                    onChange={(v) => {
+                      setClient(v);
+                      setSite("");
+                      setSalesQuoteId("");
+                    }}
+                    placeholder="Choose client"
+                  />
+                </div>
+                <div style={{ flex: 1, minWidth: 150 }}>
+                  <label style={s.label}>
+                    Site / Department <span style={s.opt}>(optional)</span>
+                  </label>
+                  {(() => {
+                    const sites = client?.site
+                      ? client.site
+                          .split(";")
+                          .map((x) => x.trim())
+                          .filter(Boolean)
+                      : [];
+                    return sites.length > 0 ? (
+                      <select
+                        style={s.input}
+                        value={site}
+                        onChange={(e) => setSite(e.target.value)}
+                      >
+                        <option value="">(none)</option>
+                        {sites.map((x) => (
+                          <option key={x} value={x}>
+                            {x}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        style={s.input}
+                        value={site}
+                        onChange={(e) => setSite(e.target.value)}
+                        placeholder={client ? "Optional" : "Pick a client first"}
+                        disabled={!client}
+                      />
+                    );
+                  })()}
+                </div>
+                <DivisionSelect
+                  companyId={companyId}
+                  value={divisionId}
+                  onChange={setDivisionId}
+                  mode="select"
+                  label={
+                    <>
+                      Division <span style={s.opt}>(optional)</span>
+                    </>
+                  }
+                  labelStyle={s.label}
+                  style={s.input}
+                  wrapStyle={{ flex: 1, minWidth: 150 }}
+                />
               </div>
-              <div style={{ flex: 1, minWidth: 160 }}>
-                <label style={s.label}>Customer PO # <span style={s.opt}>(optional)</span></label>
-                <input type="text" style={s.input} value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Their PO number" />
+              <div data-admin-form-row="" style={s.row}>
+                <div style={{ flex: 1, minWidth: 140 }}>
+                  <label style={s.label}>Order Date</label>
+                  <input
+                    type="date"
+                    style={s.input}
+                    value={orderDate}
+                    onChange={(e) => setOrderDate(e.target.value)}
+                  />
+                </div>
+                <div style={{ flex: 1, minWidth: 140 }}>
+                  <label style={s.label}>
+                    Required By <span style={s.opt}>(optional)</span>
+                  </label>
+                  <input
+                    type="date"
+                    style={s.input}
+                    value={requiredDate}
+                    onChange={(e) => setRequiredDate(e.target.value)}
+                  />
+                </div>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <label style={s.label}>
+                    Customer PO # <span style={s.opt}>(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    style={s.input}
+                    value={poNumber}
+                    onChange={(e) => setPoNumber(e.target.value)}
+                    placeholder="Their PO number"
+                  />
+                </div>
+                <div style={{ flex: 1, minWidth: 140 }}>
+                  <label style={s.label}>Customer PO Date</label>
+                  <input
+                    type="date"
+                    style={s.input}
+                    value={poDate}
+                    onChange={(e) => setPoDate(e.target.value)}
+                  />
+                </div>
               </div>
-              <div style={{ flex: 1, minWidth: 140 }}>
-                <label style={s.label}>Customer PO Date</label>
-                <input type="date" style={s.input} value={poDate} onChange={(e) => setPoDate(e.target.value)} />
-              </div>
-            </div></section>
+            </section>
 
             <LineItemsEditor
               items={items}
@@ -222,13 +417,24 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
               priceOptional
               unitPriceTitle="Optional agreed price — prefills the bill created from this order"
               isRowLocked={(it) => isEdit && it.id > 0 && it.delivered > 0}
-              rowLockHint={(it) => (isEdit && it.id > 0 && it.delivered > 0) ? `${it.delivered} already delivered — qty can't go below that` : null}
+              rowLockHint={(it) =>
+                isEdit && it.id > 0 && it.delivered > 0
+                  ? `${it.delivered} already delivered — qty can't go below that`
+                  : null
+              }
               itemsLabel="Items (quantity ordered)"
             />
 
             <div style={{ marginTop: "1rem" }}>
-              <label style={s.label}>Notes <span style={s.opt}>(optional)</span></label>
-              <textarea style={{ ...s.input, minHeight: 56, resize: "vertical" }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Internal notes for this order" />
+              <label style={s.label}>
+                Notes <span style={s.opt}>(optional)</span>
+              </label>
+              <textarea
+                style={{ ...s.input, minHeight: 56, resize: "vertical" }}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Internal notes for this order"
+              />
             </div>
 
             <AttachmentManager
@@ -240,8 +446,21 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
             />
           </div>
           <div data-admin-footer="" style={formStyles.footer}>
-            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
-            <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: disabled ? 0.6 : 1 }} disabled={disabled}>{saving ? "Saving..." : isEdit ? "Update Order" : "Save Order"}</button>
+            <button
+              data-admin-close=""
+              type="button"
+              style={{ ...formStyles.button, ...formStyles.cancel }}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              style={{ ...formStyles.button, ...formStyles.submit, opacity: disabled ? 0.6 : 1 }}
+              disabled={disabled}
+            >
+              {saving ? "Saving..." : isEdit ? "Update Order" : "Save Order"}
+            </button>
           </div>
         </form>
       </div>
@@ -250,17 +469,103 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
 }
 
 const s = {
-  row: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.85rem 1rem", marginBottom: "1rem", alignItems: "end" },
-  label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
+  row: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))",
+    gap: "0.85rem 1rem",
+    marginBottom: "1rem",
+    alignItems: "end",
+  },
+  label: {
+    display: "block",
+    marginBottom: "0.35rem",
+    fontWeight: 600,
+    fontSize: "0.85rem",
+    color: colors.textSecondary,
+  },
   opt: { color: colors.textSecondary, fontWeight: 400 },
-  input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: "#1a2332", outline: "none", boxSizing: "border-box" },
-  err: { backgroundColor: colors.dangerLight, color: colors.danger, padding: "0.65rem 1rem", borderRadius: 8, marginBottom: "1rem", fontWeight: 500, fontSize: "0.85rem" },
-  tableWrap: { maxHeight: 280, overflowY: "auto", overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 10 },
+  input: {
+    width: "100%",
+    padding: "0.55rem 0.75rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    fontSize: "0.9rem",
+    backgroundColor: colors.inputBg,
+    color: "#1a2332",
+    outline: "none",
+    boxSizing: "border-box",
+  },
+  err: {
+    backgroundColor: colors.dangerLight,
+    color: colors.danger,
+    padding: "0.65rem 1rem",
+    borderRadius: 8,
+    marginBottom: "1rem",
+    fontWeight: 500,
+    fontSize: "0.85rem",
+  },
+  tableWrap: {
+    maxHeight: 280,
+    overflowY: "auto",
+    overflowX: "auto",
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 10,
+  },
   table: { width: "100%", borderCollapse: "collapse" },
-  th: { textAlign: "left", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.02em", fontWeight: 700, color: colors.textSecondary, padding: "0.5rem 0.4rem", borderBottom: `2px solid ${colors.cardBorder}`, whiteSpace: "nowrap", background: "#fafbfc", position: "sticky", top: 0 },
-  td: { padding: "0.3rem 0.4rem", verticalAlign: "middle", borderBottom: `1px solid ${colors.cardBorder}` },
-  cellInput: { width: "100%", padding: "0.5rem 0.55rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.88rem", backgroundColor: colors.inputBg, color: "#1a2332", outline: "none", boxSizing: "border-box" },
+  th: {
+    textAlign: "left",
+    fontSize: "0.7rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.02em",
+    fontWeight: 700,
+    color: colors.textSecondary,
+    padding: "0.5rem 0.4rem",
+    borderBottom: `2px solid ${colors.cardBorder}`,
+    whiteSpace: "nowrap",
+    background: "#fafbfc",
+    position: "sticky",
+    top: 0,
+  },
+  td: {
+    padding: "0.3rem 0.4rem",
+    verticalAlign: "middle",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+  },
+  cellInput: {
+    width: "100%",
+    padding: "0.5rem 0.55rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    fontSize: "0.88rem",
+    backgroundColor: colors.inputBg,
+    color: "#1a2332",
+    outline: "none",
+    boxSizing: "border-box",
+  },
   hint: { fontSize: "0.7rem", color: colors.danger, marginTop: 2, fontWeight: 600 },
-  del: { display: "grid", placeItems: "center", padding: "0.4rem", borderRadius: 8, border: `1px solid ${colors.danger}25`, backgroundColor: colors.dangerLight, color: colors.danger, cursor: "pointer", margin: "0 auto" },
-  addBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", marginTop: "0.6rem", padding: "0.4rem 0.9rem", borderRadius: 8, border: "none", backgroundColor: `${colors.teal}14`, color: colors.teal, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" },
+  del: {
+    display: "grid",
+    placeItems: "center",
+    padding: "0.4rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.danger}25`,
+    backgroundColor: colors.dangerLight,
+    color: colors.danger,
+    cursor: "pointer",
+    margin: "0 auto",
+  },
+  addBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    marginTop: "0.6rem",
+    padding: "0.4rem 0.9rem",
+    borderRadius: 8,
+    border: "none",
+    backgroundColor: `${colors.teal}14`,
+    color: colors.teal,
+    fontSize: "0.82rem",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
 };

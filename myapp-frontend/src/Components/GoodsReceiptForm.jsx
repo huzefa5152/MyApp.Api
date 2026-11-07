@@ -1,7 +1,11 @@
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import { useState, useEffect, useRef } from "react";
 import { MdAdd, MdDelete } from "react-icons/md";
-import { createGoodsReceipt, updateGoodsReceipt, getGoodsReceiptById } from "../api/goodsReceiptApi";
+import {
+  createGoodsReceipt,
+  updateGoodsReceipt,
+  getGoodsReceiptById,
+} from "../api/goodsReceiptApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
@@ -17,12 +21,20 @@ import DivisionSelect from "./DivisionSelect";
 import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
 
-export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSaved, defaultDivisionId }) {
+export default function GoodsReceiptForm({
+  companyId,
+  receiptId,
+  onClose,
+  onSaved,
+  defaultDivisionId,
+}) {
   const isEdit = !!receiptId;
   // New receipts default to the division currently being filtered (so "filter
   // to a division → New Receipt" lands in that division); edits hydrate from
   // the loaded receipt below.
-  const [divisionId, setDivisionId] = useState(!isEdit && defaultDivisionId ? String(defaultDivisionId) : "");
+  const [divisionId, setDivisionId] = useState(
+    !isEdit && defaultDivisionId ? String(defaultDivisionId) : "",
+  );
   const [suppliers, setSuppliers] = useState([]);
   const [bills, setBills] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
@@ -35,7 +47,9 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
   const [supplierChallanNumber, setSupplierChallanNumber] = useState("");
   const [site, setSite] = useState("");
   const [notes, setNotes] = useState("");
-  const [items, setItems] = useState([{ id: 0, itemTypeId: null, nonInventoryItemId: null, description: "", quantity: 1, unit: "" }]);
+  const [items, setItems] = useState([
+    { id: 0, itemTypeId: null, nonInventoryItemId: null, description: "", quantity: 1, unit: "" },
+  ]);
   const [error, setError] = useState("");
   const [numberMode, setNumberMode] = useState("auto");
   const [currentNumber, setCurrentNumber] = useState(null);
@@ -57,15 +71,22 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
         setSuppliers(sRes.data || []);
         setItemTypes(tRes.data || []);
         setBills(bRes.data?.items || []);
-      } catch { setError("Failed to load reference data."); }
+      } catch {
+        setError("Failed to load reference data.");
+      }
     })();
   }, [companyId]);
 
   // Per-company Non-Inventory Items (GL-account shortcut lines: Freight, Discount, …).
   // A company with GL off / no items resolves to [] and the picker shows none.
   useEffect(() => {
-    if (!companyId) { setNonInvItems([]); return; }
-    getNonInventoryItemsByCompany(companyId, true).then(({ data }) => setNonInvItems(data || [])).catch(() => setNonInvItems([]));
+    if (!companyId) {
+      setNonInvItems([]);
+      return;
+    }
+    getNonInventoryItemsByCompany(companyId, true)
+      .then(({ data }) => setNonInvItems(data || []))
+      .catch(() => setNonInvItems([]));
   }, [companyId]);
 
   useEffect(() => {
@@ -83,16 +104,31 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
         setSupplierChallanNumber(data.supplierChallanNumber || "");
         setSite(data.site || "");
         setNotes(data.notes || "");
-        setItems((data.items || []).map(i => ({ id: i.id, itemTypeId: i.itemTypeId, nonInventoryItemId: i.nonInventoryItemId ?? null, description: i.description, quantity: i.quantity, unit: i.unit })));
-      } catch { setError("Failed to load receipt."); }
+        setItems(
+          (data.items || []).map((i) => ({
+            id: i.id,
+            itemTypeId: i.itemTypeId,
+            nonInventoryItemId: i.nonInventoryItemId ?? null,
+            description: i.description,
+            quantity: i.quantity,
+            unit: i.unit,
+          })),
+        );
+      } catch {
+        setError("Failed to load receipt.");
+      }
     })();
   }, [receiptId, isEdit]);
 
-  const billsForSupplier = bills.filter(b => !supplierId || b.supplierId === parseInt(supplierId));
+  const billsForSupplier = bills.filter(
+    (b) => !supplierId || b.supplierId === parseInt(supplierId),
+  );
 
   const updateItem = (idx, field, value) => {
-    setItems(prev => {
-      const next = [...prev]; next[idx] = { ...next[idx], [field]: value }; return next;
+    setItems((prev) => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], [field]: value };
+      return next;
     });
   };
 
@@ -100,14 +136,16 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
   // non-inv id, clears any itemTypeId, and prefills description / unit only
   // when empty (goods receipts are qty-only, so ignore price).
   const pickNonInventory = (idx, n) => {
-    setItems(prev => prev.map((it, i) => {
-      if (i !== idx) return it;
-      if (!n) return { ...it, nonInventoryItemId: null };
-      const next = { ...it, nonInventoryItemId: n.id, itemTypeId: null };
-      if (!it.description?.trim()) next.description = n.defaultLineDescription || n.name || "";
-      if (!it.unit?.trim()) next.unit = n.unitName || "";
-      return next;
-    }));
+    setItems((prev) =>
+      prev.map((it, i) => {
+        if (i !== idx) return it;
+        if (!n) return { ...it, nonInventoryItemId: null };
+        const next = { ...it, nonInventoryItemId: n.id, itemTypeId: null };
+        if (!it.description?.trim()) next.description = n.defaultLineDescription || n.name || "";
+        if (!it.unit?.trim()) next.unit = n.unitName || "";
+        return next;
+      }),
+    );
   };
 
   const handleSubmit = async (e) => {
@@ -116,8 +154,10 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
     setError("");
     if (!supplierId) return setError("Select a supplier.");
     if (items.length === 0) return setError("Add at least one item.");
-    if (items.some(i => !i.description?.trim())) return setError("Every line needs a description.");
-    if (items.some(i => !(parseInt(i.quantity) > 0))) return setError("Quantity must be greater than zero.");
+    if (items.some((i) => !i.description?.trim()))
+      return setError("Every line needs a description.");
+    if (items.some((i) => !(parseInt(i.quantity) > 0)))
+      return setError("Quantity must be greater than zero.");
     setSaving(true);
     try {
       const payload = {
@@ -130,7 +170,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
         supplierChallanNumber: supplierChallanNumber || null,
         site: site || null,
         notes: notes.trim() || null,
-        items: items.map(i => ({
+        items: items.map((i) => ({
           id: i.id || 0,
           itemTypeId: i.itemTypeId || null,
           nonInventoryItemId: i.nonInventoryItemId || null,
@@ -147,7 +187,9 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
       try {
         const savedId = res.data?.id ?? receiptId;
         if (savedId) await attachmentRef.current?.flush(savedId);
-      } catch { /* attachments are best-effort — the receipt is already saved */ }
+      } catch {
+        /* attachments are best-effort — the receipt is already saved */
+      }
       notify(`Goods Receipt ${isEdit ? "updated" : "created"}.`, "success");
       onSaved(res.data);
       onClose();
@@ -163,13 +205,43 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
       <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: 1000, width: "94vw" }}>
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? "Edit Goods Receipt" : "New Goods Receipt"}</h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            &times;
+          </button>
         </div>
         <form onSubmit={handleSubmit}>
-          <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
-            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} divisionId={isEdit ? storedNumberDivision : divisionId} documentType="goods-receipt" variant={isEdit ? "edit" : "create"} currentNumber={currentNumber} editRecordId={receiptId} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
-            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
+          <div
+            data-admin-body=""
+            style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}
+          >
+            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}>
+              <BillNumberField
+                companyId={companyId}
+                divisionId={isEdit ? storedNumberDivision : divisionId}
+                documentType="goods-receipt"
+                variant={isEdit ? "edit" : "create"}
+                currentNumber={currentNumber}
+                editRecordId={receiptId}
+                mode={numberMode}
+                onModeChange={setNumberMode}
+                number={customNumber}
+                onNumberChange={setCustomNumber}
+                onValidityChange={setNumberValid}
+                disabled={saving}
+              />
+            </div>
+            {error && (
+              <div ref={errRef} style={formStyles.error}>
+                {error}
+              </div>
+            )}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
+                gap: "0.75rem",
+              }}
+            >
               <div data-admin-field="" style={{ ...formStyles.formGroup, gridColumn: "1 / -1" }}>
                 <label style={formStyles.label}>Supplier *</label>
                 <SearchableSelect
@@ -181,88 +253,214 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
               </div>
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Receipt Date *</label>
-                <input type="date" style={formStyles.input} value={receiptDate} onChange={e => setReceiptDate(e.target.value)} />
+                <input
+                  type="date"
+                  style={formStyles.input}
+                  value={receiptDate}
+                  onChange={(e) => setReceiptDate(e.target.value)}
+                />
               </div>
               <div data-admin-field="" style={formStyles.formGroup}>
-                <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={formStyles.label} style={formStyles.input} />
+                <DivisionSelect
+                  companyId={companyId}
+                  value={divisionId}
+                  onChange={setDivisionId}
+                  mode="select"
+                  label={
+                    <>
+                      Division <span style={{ fontWeight: 400 }}>(optional)</span>
+                    </>
+                  }
+                  labelStyle={formStyles.label}
+                  style={formStyles.input}
+                />
               </div>
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Linked Purchase Bill</label>
-                <select style={formStyles.input} value={purchaseBillId} onChange={e => setPurchaseBillId(e.target.value)}>
+                <select
+                  style={formStyles.input}
+                  value={purchaseBillId}
+                  onChange={(e) => setPurchaseBillId(e.target.value)}
+                >
                   <option value="">— optional —</option>
-                  {billsForSupplier.map(b => <option key={b.id} value={b.id}>PB #{b.purchaseBillNumber}</option>)}
+                  {billsForSupplier.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      PB #{b.purchaseBillNumber}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
+                gap: "0.75rem",
+              }}
+            >
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Supplier Challan #</label>
-                <input type="text" style={formStyles.input} value={supplierChallanNumber} onChange={e => setSupplierChallanNumber(e.target.value)} />
+                <input
+                  type="text"
+                  style={formStyles.input}
+                  value={supplierChallanNumber}
+                  onChange={(e) => setSupplierChallanNumber(e.target.value)}
+                />
               </div>
               <div data-admin-field="" style={formStyles.formGroup}>
                 <label style={formStyles.label}>Receiving Site</label>
-                <input type="text" style={formStyles.input} value={site} onChange={e => setSite(e.target.value)} />
+                <input
+                  type="text"
+                  style={formStyles.input}
+                  value={site}
+                  onChange={(e) => setSite(e.target.value)}
+                />
               </div>
             </div>
 
             <DocumentNotesEditor value={notes} onChange={setNotes} />
-            <div style={{ marginTop: "0.75rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #e8edf3", backgroundColor: "#f8f9fb" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+            <div
+              style={{
+                marginTop: "0.75rem",
+                padding: "0.75rem",
+                borderRadius: 10,
+                border: "1px solid #e8edf3",
+                backgroundColor: "#f8f9fb",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "0.5rem",
+                }}
+              >
                 <strong>Items ({items.length})</strong>
-                <button type="button" onClick={() => setItems([...items, { id: 0, itemTypeId: null, nonInventoryItemId: null, description: "", quantity: 1, unit: "" }])} style={{ ...formStyles.button, padding: "0.3rem 0.65rem", fontSize: "0.8rem", display: "inline-flex", alignItems: "center", gap: "0.25rem", background: "#e3f2fd", color: "#0d47a1", border: "none" }}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setItems([
+                      ...items,
+                      {
+                        id: 0,
+                        itemTypeId: null,
+                        nonInventoryItemId: null,
+                        description: "",
+                        quantity: 1,
+                        unit: "",
+                      },
+                    ])
+                  }
+                  style={{
+                    ...formStyles.button,
+                    padding: "0.3rem 0.65rem",
+                    fontSize: "0.8rem",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.25rem",
+                    background: "#e3f2fd",
+                    color: "#0d47a1",
+                    border: "none",
+                  }}
+                >
                   <MdAdd size={14} /> Add line
                 </button>
               </div>
-              <BulkItemTypeBar items={items} setItems={setItems} itemTypes={itemTypes} nonInventoryItems={nonInvItems} divisionId={divisionId} />
+              <BulkItemTypeBar
+                items={items}
+                setItems={setItems}
+                itemTypes={itemTypes}
+                nonInventoryItems={nonInvItems}
+                divisionId={divisionId}
+              />
               <div data-admin-table-region="" style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
-                <thead>
-                  <tr style={{ backgroundColor: "#f5f8fc" }}>
-                    <th style={th}>Item Type</th>
-                    <th style={th}>Description *</th>
-                    <th style={{ ...th, textAlign: "right", width: 80 }}>Qty *</th>
-                    <th style={{ ...th, width: 100 }}>UOM</th>
-                    <th style={{ ...th, width: 36 }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((it, idx) => (
-                    <tr key={idx}>
-                      <td style={td}>
-                        <SearchableItemTypeSelect
-                          divisionId={divisionId}
-                          items={itemTypes}
-                          value={it.itemTypeId || ""}
-                          onChange={(newId, picked) => {
-                            // Picking an item type clears any non-inv binding (mutually exclusive).
-                            updateItem(idx, "nonInventoryItemId", null);
-                            updateItem(idx, "itemTypeId", newId ? parseInt(newId) : null);
-                            if (picked) {
-                              if (!it.description?.trim()) updateItem(idx, "description", picked.name || "");
-                              if (picked.uom) updateItem(idx, "unit", picked.uom);
-                            }
-                          }}
-                          nonInventoryItems={nonInvItems}
-                          nonInventoryValue={it.nonInventoryItemId || ""}
-                          onPickNonInventory={(n) => pickNonInventory(idx, n)}
-                          placeholder="— optional —"
-                          style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
-                        />
-                      </td>
-                      <td style={td}><textarea rows={2} style={{ ...cellInput, resize: "vertical", minHeight: 38, lineHeight: 1.4 }} value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} /></td>
-                      <td style={td}><input type="number" min={1} style={{ ...cellInput, textAlign: "right" }} value={it.quantity} onChange={e => updateItem(idx, "quantity", e.target.value)} /></td>
-                      <td style={td}><input type="text" style={cellInput} value={it.unit} onChange={e => updateItem(idx, "unit", e.target.value)} /></td>
-                      <td style={td}>
-                        {items.length > 1 && (
-                          <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#c62828", cursor: "pointer", padding: 0 }}>
-                            <MdDelete size={16} />
-                          </button>
-                        )}
-                      </td>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+                  <thead>
+                    <tr style={{ backgroundColor: "#f5f8fc" }}>
+                      <th style={th}>Item Type</th>
+                      <th style={th}>Description *</th>
+                      <th style={{ ...th, textAlign: "right", width: 80 }}>Qty *</th>
+                      <th style={{ ...th, width: 100 }}>UOM</th>
+                      <th style={{ ...th, width: 36 }}></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {items.map((it, idx) => (
+                      <tr key={idx}>
+                        <td style={td}>
+                          <SearchableItemTypeSelect
+                            divisionId={divisionId}
+                            items={itemTypes}
+                            value={it.itemTypeId || ""}
+                            onChange={(newId, picked) => {
+                              // Picking an item type clears any non-inv binding (mutually exclusive).
+                              updateItem(idx, "nonInventoryItemId", null);
+                              updateItem(idx, "itemTypeId", newId ? parseInt(newId) : null);
+                              if (picked) {
+                                if (!it.description?.trim())
+                                  updateItem(idx, "description", picked.name || "");
+                                if (picked.uom) updateItem(idx, "unit", picked.uom);
+                              }
+                            }}
+                            nonInventoryItems={nonInvItems}
+                            nonInventoryValue={it.nonInventoryItemId || ""}
+                            onPickNonInventory={(n) => pickNonInventory(idx, n)}
+                            placeholder="— optional —"
+                            style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                          />
+                        </td>
+                        <td style={td}>
+                          <textarea
+                            rows={2}
+                            style={{
+                              ...cellInput,
+                              resize: "vertical",
+                              minHeight: 38,
+                              lineHeight: 1.4,
+                            }}
+                            value={it.description}
+                            onChange={(e) => updateItem(idx, "description", e.target.value)}
+                          />
+                        </td>
+                        <td style={td}>
+                          <input
+                            type="number"
+                            min={1}
+                            style={{ ...cellInput, textAlign: "right" }}
+                            value={it.quantity}
+                            onChange={(e) => updateItem(idx, "quantity", e.target.value)}
+                          />
+                        </td>
+                        <td style={td}>
+                          <input
+                            type="text"
+                            style={cellInput}
+                            value={it.unit}
+                            onChange={(e) => updateItem(idx, "unit", e.target.value)}
+                          />
+                        </td>
+                        <td style={td}>
+                          {items.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => setItems(items.filter((_, i) => i !== idx))}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                color: "#c62828",
+                                cursor: "pointer",
+                                padding: 0,
+                              }}
+                            >
+                              <MdDelete size={16} />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
 
@@ -275,9 +473,20 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
             />
           </div>
           <div data-admin-footer="" style={formStyles.footer}>
-            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
-            <button type="submit" disabled={saving || !numberValid} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}>
-              {saving ? "Saving..." : (isEdit ? "Update" : "Create")}
+            <button
+              data-admin-close=""
+              type="button"
+              style={{ ...formStyles.button, ...formStyles.cancel }}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !numberValid}
+              style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}
+            >
+              {saving ? "Saving..." : isEdit ? "Update" : "Create"}
             </button>
           </div>
         </form>
@@ -286,6 +495,24 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
   );
 }
 
-const th = { textAlign: "left", padding: "0.45rem 0.55rem", borderBottom: "1px solid #e8edf3", fontSize: "0.74rem", fontWeight: 700, color: "#5f6d7e", textTransform: "uppercase", letterSpacing: "0.04em" };
+const th = {
+  textAlign: "left",
+  padding: "0.45rem 0.55rem",
+  borderBottom: "1px solid #e8edf3",
+  fontSize: "0.74rem",
+  fontWeight: 700,
+  color: "#5f6d7e",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+};
 const td = { padding: "0.4rem 0.45rem", borderBottom: "1px solid #f3f5f9", verticalAlign: "top" };
-const cellInput = { width: "100%", padding: "0.3rem 0.5rem", fontSize: "0.8rem", border: "1px solid #d0d7e2", borderRadius: 6, backgroundColor: "#f8f9fb", color: "#1a2332", outline: "none" };
+const cellInput = {
+  width: "100%",
+  padding: "0.3rem 0.5rem",
+  fontSize: "0.8rem",
+  border: "1px solid #d0d7e2",
+  borderRadius: 6,
+  backgroundColor: "#f8f9fb",
+  color: "#1a2332",
+  outline: "none",
+};

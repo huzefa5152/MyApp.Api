@@ -32,7 +32,14 @@ const colors = {
   warningLight: "#fff3e0",
 };
 
-const blankItem = () => ({ id: 0, itemTypeId: null, nonInventoryItemId: null, description: "", quantity: 1, unit: "" });
+const blankItem = () => ({
+  id: 0,
+  itemTypeId: null,
+  nonInventoryItemId: null,
+  description: "",
+  quantity: 1,
+  unit: "",
+});
 
 /**
  * ChallanEditForm — edit ANY editable challan (Pending / No PO / Setup Required /
@@ -65,7 +72,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   const [site, setSite] = useState(challan.site || "");
   const [notes, setNotes] = useState(challan.notes || "");
   const [deliveryDate, setDeliveryDate] = useState(
-    challan.deliveryDate ? challan.deliveryDate.substring(0, 10) : ""
+    challan.deliveryDate ? challan.deliveryDate.substring(0, 10) : "",
   );
   const [poNumber, setPoNumber] = useState(challan.poNumber || "");
   const [poDate, setPoDate] = useState(challan.poDate ? challan.poDate.substring(0, 10) : "");
@@ -87,7 +94,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
       unit: i.unit,
       supplierId: i.supplierId ?? null,
       actualUnitCost: i.actualUnitCost ?? null,
-    }))
+    })),
   );
 
   // ── Lookups ──
@@ -114,11 +121,19 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   // Load lookups once
   useEffect(() => {
     if (challan.companyId) {
-      getClientsByCompany(challan.companyId).then(({ data }) => setClients(data)).catch(() => {});
-      getItemTypes(challan.companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([]));
-      getNonInventoryItemsByCompany(challan.companyId, true).then(({ data }) => setNonInvItems(data || [])).catch(() => setNonInvItems([]));
+      getClientsByCompany(challan.companyId)
+        .then(({ data }) => setClients(data))
+        .catch(() => {});
+      getItemTypes(challan.companyId)
+        .then(({ data }) => setItemTypes(data || []))
+        .catch(() => setItemTypes([]));
+      getNonInventoryItemsByCompany(challan.companyId, true)
+        .then(({ data }) => setNonInvItems(data || []))
+        .catch(() => setNonInvItems([]));
     }
-    getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([]));
+    getAllUnits()
+      .then(({ data }) => setUnits(data))
+      .catch(() => setUnits([]));
   }, [challan.companyId]);
 
   // Derive the site options from the selected client's semicolon-separated list.
@@ -126,14 +141,17 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   // input so operator can still type a one-off site.
   const selectedClient = useMemo(
     () => clients.find((c) => String(c.id) === String(clientId)),
-    [clients, clientId]
+    [clients, clientId],
   );
   const clientSites = useMemo(
     () =>
       selectedClient?.site
-        ? selectedClient.site.split(";").map((s) => s.trim()).filter(Boolean)
+        ? selectedClient.site
+            .split(";")
+            .map((s) => s.trim())
+            .filter(Boolean)
         : [],
-    [selectedClient]
+    [selectedClient],
   );
 
   // If user switches client, clear any site that doesn't belong to the new
@@ -154,7 +172,8 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
     // ones use "Pending". Setup Required is possible but the preview just
     // shows the ready state optimistically; the backend corrects if not FBR-ready.
     const readyLabel = challan.isImported ? "Imported" : "Pending";
-    if (challan.status === "Setup Required") return hasPo ? `${readyLabel} (if FBR-ready)` : "No PO";
+    if (challan.status === "Setup Required")
+      return hasPo ? `${readyLabel} (if FBR-ready)` : "No PO";
     return hasPo ? readyLabel : "No PO";
   }, [poNumber, challan.status, challan.isImported]);
 
@@ -166,11 +185,23 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
     if (savedAwaitingPurchase || !numberValid || saving) return;
     setError("");
 
-    if (!clientId) { setError("Client is required."); return; }
-    if (!deliveryDate) { setError("Delivery date is required."); return; }
+    if (!clientId) {
+      setError("Client is required.");
+      return;
+    }
+    if (!deliveryDate) {
+      setError("Delivery date is required.");
+      return;
+    }
     const validItems = items.filter((i) => i.description.trim());
-    if (validItems.length === 0) { setError("At least one item is required."); return; }
-    if (validItems.some((i) => i.quantity <= 0)) { setError("All items must have a quantity > 0."); return; }
+    if (validItems.length === 0) {
+      setError("At least one item is required.");
+      return;
+    }
+    if (validItems.some((i) => i.quantity <= 0)) {
+      setError("All items must have a quantity > 0.");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -190,7 +221,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
           id: i.id || 0,
           // Item type tags the line (optional). A non-inventory line is mutually
           // exclusive with an item type; the backend nulls the other side.
-          itemTypeId: i.nonInventoryItemId ? null : (i.itemTypeId ? parseInt(i.itemTypeId) : null),
+          itemTypeId: i.nonInventoryItemId ? null : i.itemTypeId ? parseInt(i.itemTypeId) : null,
           nonInventoryItemId: i.nonInventoryItemId || null,
           description: i.description.trim(),
           // parseFloat preserves decimals (12.5, 0.0004) — server-side
@@ -198,17 +229,29 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
           quantity: parseFloat(i.quantity) || 1,
           unit: (i.unit || "").trim(),
           supplierId: i.supplierId || null,
-          actualUnitCost: i.actualUnitCost === "" ? null : i.actualUnitCost ?? null,
+          actualUnitCost: i.actualUnitCost === "" ? null : (i.actualUnitCost ?? null),
           itemTypeName: "",
         })),
       });
-      if (!challan.hasAutoPurchaseBills && has("purchasebills.manage.create") && validItems.every((line) =>
-        line.supplierId && line.actualUnitCost !== null && line.actualUnitCost !== undefined && line.actualUnitCost !== "")) {
+      if (
+        !challan.hasAutoPurchaseBills &&
+        has("purchasebills.manage.create") &&
+        validItems.every(
+          (line) =>
+            line.supplierId &&
+            line.actualUnitCost !== null &&
+            line.actualUnitCost !== undefined &&
+            line.actualUnitCost !== "",
+        )
+      ) {
         if (purchaseRequested.current) {
-          try { await purchasePreview.create(challan.id); }
-          catch (err) {
+          try {
+            await purchasePreview.create(challan.id);
+          } catch (err) {
             setSavedAwaitingPurchase(true);
-            setError(`Challan saved. ${err.response?.data?.error || "Could not create purchase bills."}`);
+            setError(
+              `Challan saved. ${err.response?.data?.error || "Could not create purchase bills."}`,
+            );
             return;
           }
         }
@@ -227,19 +270,57 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       {purchasePreview.dialog}
       {/* Outside the form: a portal still bubbles React events, so a nested submit would save this form too. */}
-      {billEdit && createPortal(<BilledChallanEditForm challan={challan} onClose={() => setBillEdit(false)}
-        onSaved={() => { setBillEdit(false); onSaved(); }} />, document.body)}
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      {billEdit &&
+        createPortal(
+          <BilledChallanEditForm
+            challan={challan}
+            onClose={() => setBillEdit(false)}
+            onSaved={() => {
+              setBillEdit(false);
+              onSaved();
+            }}
+          />,
+          document.body,
+        )}
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>
             {isDuplicate ? "Edit Duplicate Challan" : "Edit Challan"} #{challan.challanNumber}
           </h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            &times;
+          </button>
         </div>
         <form onSubmit={handleSubmit}>
           <div data-admin-body="" style={formStyles.body}>
-            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={challan.companyId} divisionId={challan.divisionId} documentType="challan" variant="edit" currentNumber={challan.challanNumber} editRecordId={challan.id} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} lockedReason={isDuplicate ? "Duplicate challan numbers are inherited and cannot be changed." : undefined} disabled={saving} /></div>
-            {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
+            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}>
+              <BillNumberField
+                companyId={challan.companyId}
+                divisionId={challan.divisionId}
+                documentType="challan"
+                variant="edit"
+                currentNumber={challan.challanNumber}
+                editRecordId={challan.id}
+                number={customNumber}
+                onNumberChange={setCustomNumber}
+                onValidityChange={setNumberValid}
+                lockedReason={
+                  isDuplicate
+                    ? "Duplicate challan numbers are inherited and cannot be changed."
+                    : undefined
+                }
+                disabled={saving}
+              />
+            </div>
+            {error && (
+              <div ref={errRef} style={styles.errorAlert}>
+                {error}
+              </div>
+            )}
 
             {/* Duplicate-mode banner — explains why so many fields are
                 read-only and what the operator IS allowed to change. */}
@@ -248,30 +329,69 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
                 <MdContentCopy size={16} />
                 <span>
                   This is a <strong>duplicate</strong>
-                  {challan.duplicatedFromChallanNumber
-                    ? <> of <strong>Challan #{challan.duplicatedFromChallanNumber}</strong></>
-                    : null}
-                  . Only <strong>PO Number</strong>, <strong>PO Date</strong>, and <strong>Items</strong> can be changed —
-                  Client, Site, Delivery Date, and Indent No are inherited from the original.
+                  {challan.duplicatedFromChallanNumber ? (
+                    <>
+                      {" "}
+                      of <strong>Challan #{challan.duplicatedFromChallanNumber}</strong>
+                    </>
+                  ) : null}
+                  . Only <strong>PO Number</strong>, <strong>PO Date</strong>, and{" "}
+                  <strong>Items</strong> can be changed — Client, Site, Delivery Date, and Indent No
+                  are inherited from the original.
                 </span>
               </div>
             )}
 
             {/* Status preview banner — shows what the Save click will do to
                 the challan's status. Especially useful when clearing the PO. */}
-            <div style={{ ...styles.statusBanner, backgroundColor: statusWillChange ? colors.warningLight : "#eef4fb", borderColor: statusWillChange ? "#ffcc80" : "#90caf9", color: statusWillChange ? "#e65100" : colors.blue }}>
+            <div
+              style={{
+                ...styles.statusBanner,
+                backgroundColor: statusWillChange ? colors.warningLight : "#eef4fb",
+                borderColor: statusWillChange ? "#ffcc80" : "#90caf9",
+                color: statusWillChange ? "#e65100" : colors.blue,
+              }}
+            >
               <MdInfo size={16} />
               <span>
                 Status: <strong>{challan.status}</strong>
-                {statusWillChange && <> → will become <strong>{previewStatus}</strong> after save</>}
-                {!statusWillChange && <> (will stay <strong>{previewStatus}</strong>)</>}
+                {statusWillChange && (
+                  <>
+                    {" "}
+                    → will become <strong>{previewStatus}</strong> after save
+                  </>
+                )}
+                {!statusWillChange && (
+                  <>
+                    {" "}
+                    (will stay <strong>{previewStatus}</strong>)
+                  </>
+                )}
               </span>
             </div>
 
             {canEditBilledDelivery(challan, has) && (
-              <div style={{ ...styles.statusBanner, backgroundColor: "#eef4fb", borderColor: "#90caf9", color: colors.blue, flexWrap: "wrap" }}>
-                <span style={{ flex: "1 1 220px", minWidth: 0 }}>This challan is on bill #{challan.invoiceNumber}. To change its lines and bill rates together, edit the delivery with its bill.</span>
-                <button type="button" style={{ ...formStyles.button, ...formStyles.submit, minHeight: 44 }} disabled={saving} onClick={() => setBillEdit(true)}>Edit delivery &amp; update bill</button>
+              <div
+                style={{
+                  ...styles.statusBanner,
+                  backgroundColor: "#eef4fb",
+                  borderColor: "#90caf9",
+                  color: colors.blue,
+                  flexWrap: "wrap",
+                }}
+              >
+                <span style={{ flex: "1 1 220px", minWidth: 0 }}>
+                  This challan is on bill #{challan.invoiceNumber}. To change its lines and bill
+                  rates together, edit the delivery with its bill.
+                </span>
+                <button
+                  type="button"
+                  style={{ ...formStyles.button, ...formStyles.submit, minHeight: 44 }}
+                  disabled={saving}
+                  onClick={() => setBillEdit(true)}
+                >
+                  Edit delivery &amp; update bill
+                </button>
               </div>
             )}
 
@@ -291,7 +411,9 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
                 >
                   <option value="">Select a client</option>
                   {clients.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -308,7 +430,11 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
                     disabled={isDuplicate}
                   >
                     <option value="">(none)</option>
-                    {clientSites.map((s) => <option key={s} value={s}>{s}</option>)}
+                    {clientSites.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
                   </select>
                 ) : (
                   <input
@@ -323,8 +449,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
               </div>
               <div style={{ flex: 1, minWidth: 150 }}>
                 <label style={styles.label}>
-                  Delivery Date *
-                  {isDuplicate && <span style={styles.lockedHint}> (locked)</span>}
+                  Delivery Date *{isDuplicate && <span style={styles.lockedHint}> (locked)</span>}
                 </label>
                 <input
                   type="date"
@@ -386,9 +511,11 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
               <div style={{ flex: 1, minWidth: 180 }}>
                 <label style={styles.label}>
                   Indent No
-                  {isDuplicate
-                    ? <span style={styles.lockedHint}> (locked)</span>
-                    : <span style={styles.labelHint}> (optional)</span>}
+                  {isDuplicate ? (
+                    <span style={styles.lockedHint}> (locked)</span>
+                  ) : (
+                    <span style={styles.labelHint}> (optional)</span>
+                  )}
                 </label>
                 <input
                   type="text"
@@ -413,15 +540,70 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
               coerceEmptyQtyToOne
               itemsLabel="Items *"
             />
-            <ChallanPrivateCosts companyId={challan.companyId} items={items} onItemsChange={setItems} suppliers={suppliers} />
-            {challan.hasAutoPurchaseBills ? <p>Supplier purchase bills already exist. Manage corrections in Purchases.</p> : has("purchasebills.manage.create") && has("challans.list.view") && <div style={{ marginTop: 12 }}><button type="button" style={{ ...formStyles.button, ...formStyles.submit }} disabled={saving || savedAwaitingPurchase || !numberValid || !items.length || !items.every(i => i.supplierId && i.actualUnitCost != null && i.actualUnitCost !== "")} onClick={e => { purchaseRequested.current = true; e.currentTarget.closest("form").requestSubmit(); }}>Save & preview supplier purchases</button><p style={{ fontSize: ".875rem" }}>Set a supplier and actual unit cost on every line to review purchase bills.</p></div>}
-            {savedAwaitingPurchase && <div style={{ padding: 12, marginTop: 10, background: "#fff3e0", borderRadius: 8 }}>
-              Your challan was saved. Purchase bills still need to be created.
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <button type="button" disabled={saving || !numberValid} onClick={async () => { setSaving(true); try { await purchasePreview.create(challan.id); onSaved(); } catch (err) { setError(err.response?.data?.error || "Could not create purchase bills."); } finally { setSaving(false); } }}>Retry purchase bills</button>
-                <button type="button" onClick={onSaved}>Close without purchase bills</button>
+            <ChallanPrivateCosts
+              companyId={challan.companyId}
+              items={items}
+              onItemsChange={setItems}
+              suppliers={suppliers}
+            />
+            {challan.hasAutoPurchaseBills ? (
+              <p>Supplier purchase bills already exist. Manage corrections in Purchases.</p>
+            ) : (
+              has("purchasebills.manage.create") &&
+              has("challans.list.view") && (
+                <div style={{ marginTop: 12 }}>
+                  <button
+                    type="button"
+                    style={{ ...formStyles.button, ...formStyles.submit }}
+                    disabled={
+                      saving ||
+                      savedAwaitingPurchase ||
+                      !numberValid ||
+                      !items.length ||
+                      !items.every(
+                        (i) => i.supplierId && i.actualUnitCost != null && i.actualUnitCost !== "",
+                      )
+                    }
+                    onClick={(e) => {
+                      purchaseRequested.current = true;
+                      e.currentTarget.closest("form").requestSubmit();
+                    }}
+                  >
+                    Save & preview supplier purchases
+                  </button>
+                  <p style={{ fontSize: ".875rem" }}>
+                    Set a supplier and actual unit cost on every line to review purchase bills.
+                  </p>
+                </div>
+              )
+            )}
+            {savedAwaitingPurchase && (
+              <div style={{ padding: 12, marginTop: 10, background: "#fff3e0", borderRadius: 8 }}>
+                Your challan was saved. Purchase bills still need to be created.
+                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                  <button
+                    type="button"
+                    disabled={saving || !numberValid}
+                    onClick={async () => {
+                      setSaving(true);
+                      try {
+                        await purchasePreview.create(challan.id);
+                        onSaved();
+                      } catch (err) {
+                        setError(err.response?.data?.error || "Could not create purchase bills.");
+                      } finally {
+                        setSaving(false);
+                      }
+                    }}
+                  >
+                    Retry purchase bills
+                  </button>
+                  <button type="button" onClick={onSaved}>
+                    Close without purchase bills
+                  </button>
+                </div>
               </div>
-            </div>}
+            )}
 
             <DocumentNotesEditor value={notes} onChange={setNotes} />
             {/* Saved record — uploads attach to the challan immediately. */}
@@ -433,7 +615,12 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
             />
           </div>
           <div data-admin-footer="" style={formStyles.footer}>
-            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>
+            <button
+              data-admin-close=""
+              type="button"
+              style={{ ...formStyles.button, ...formStyles.cancel }}
+              onClick={onClose}
+            >
               Cancel
             </button>
             <button

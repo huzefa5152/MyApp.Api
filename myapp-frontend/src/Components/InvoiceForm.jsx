@@ -1,6 +1,15 @@
 import FreightChargesField from "./FreightChargesField";
 import { useState, useEffect, useMemo, useRef } from "react";
-import { MdSearch, MdCheck, MdInfo, MdLock, MdAdd, MdPersonAdd, MdExpandMore, MdExpandLess } from "react-icons/md";
+import {
+  MdSearch,
+  MdCheck,
+  MdInfo,
+  MdLock,
+  MdAdd,
+  MdPersonAdd,
+  MdExpandMore,
+  MdExpandLess,
+} from "react-icons/md";
 import { getPendingChallansByCompany } from "../api/challanApi";
 import { getSalesOrdersForPicker } from "../api/salesOrderApi";
 import { createInvoice, getLastRatesForChallan } from "../api/invoiceApi";
@@ -88,7 +97,16 @@ const SCENARIO_META = {
   SN028: { buyerKind: "walk-in" },
 };
 
-export default function InvoiceForm({ companyId, company, onClose, onSaved, prefillChallanId, prefillChallanIds, billsMode = false, defaultDivisionId }) {
+export default function InvoiceForm({
+  companyId,
+  company,
+  onClose,
+  onSaved,
+  prefillChallanId,
+  prefillChallanIds,
+  billsMode = false,
+  defaultDivisionId,
+}) {
   // billsMode: true when this form is mounted from the Bills tab. Hides
   // the HS Code and Sale Type columns — those stay Invoice-tab concerns.
   // Item Type affordances (per-row picker, bulk-apply toolbar, "+ New
@@ -100,7 +118,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // The FBR scenario picker is separately fbrEnabled-gated. Description
   // stays the existing challan-style SmartItemAutocomplete.
   const { has } = usePermissions();
-  const canCreateClient   = has("clients.manage.create");
+  const canCreateClient = has("clients.manage.create");
   const canCreateItemType = has("itemtypes.manage.create");
   // FBR integration toggle (company-level). When off, the bill is a plain
   // non-FBR bill: no scenario step, editable GST, no scenario saved.
@@ -123,8 +141,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // Phones and tablets get stacked cards instead of the line table (CLAUDE.md §3):
   // the table needs ~1000px, so below 1024px it would scroll sideways in its region.
   const isNarrow = useIsNarrow(1024);
-  const toggleLeftOut = (ids) => setLeftOutIds((p) => ids.every((id) => p.includes(id))
-    ? p.filter((x) => !ids.includes(x)) : [...new Set([...p, ...ids])]);
+  const toggleLeftOut = (ids) =>
+    setLeftOutIds((p) =>
+      ids.every((id) => p.includes(id))
+        ? p.filter((x) => !ids.includes(x))
+        : [...new Set([...p, ...ids])],
+    );
   const [itemPrices, setItemPrices] = useState({});
   const [itemDescriptions, setItemDescriptions] = useState({});
   const [commonPoDate, setCommonPoDate] = useState("");
@@ -240,7 +262,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     if (!newId || !picked) return;
     setItemTypeIds((prev) => {
       const next = { ...prev };
-      const newHs = {}, newSt = {}, newUom = {}, newFbrUom = {}, clearNi = {}, newAcct = {};
+      const newHs = {},
+        newSt = {},
+        newUom = {},
+        newFbrUom = {},
+        clearNi = {},
+        newAcct = {};
       for (const item of allItems) {
         const id = item.id;
         if (mode === "empty" && next[id]) continue;
@@ -259,12 +286,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
       }
       // Apply the keyed updates outside this updater so each set runs.
       setTimeout(() => {
-        if (Object.keys(newHs).length) setItemHsCodes(p => ({ ...p, ...newHs }));
-        if (Object.keys(newSt).length) setItemSaleTypes(p => ({ ...p, ...newSt }));
-        if (Object.keys(newUom).length) setItemUoms(p => ({ ...p, ...newUom }));
-        if (Object.keys(newFbrUom).length) setItemFbrUomIds(p => ({ ...p, ...newFbrUom }));
-        if (Object.keys(clearNi).length) setItemNonInvIds(p => ({ ...p, ...clearNi }));
-        if (Object.keys(newAcct).length) setItemAccountIds(p => ({ ...p, ...newAcct }));
+        if (Object.keys(newHs).length) setItemHsCodes((p) => ({ ...p, ...newHs }));
+        if (Object.keys(newSt).length) setItemSaleTypes((p) => ({ ...p, ...newSt }));
+        if (Object.keys(newUom).length) setItemUoms((p) => ({ ...p, ...newUom }));
+        if (Object.keys(newFbrUom).length) setItemFbrUomIds((p) => ({ ...p, ...newFbrUom }));
+        if (Object.keys(clearNi).length) setItemNonInvIds((p) => ({ ...p, ...clearNi }));
+        if (Object.keys(newAcct).length) setItemAccountIds((p) => ({ ...p, ...newAcct }));
       }, 0);
       return next;
     });
@@ -344,9 +371,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         // pre-ticks challans still in the pending/unbilled list; the client is
         // taken from the first match. If none match (billed since), fall back
         // to the empty state silently.
-        const prefillIds = (prefillChallanIds && prefillChallanIds.length)
-          ? prefillChallanIds
-          : (prefillChallanId ? [prefillChallanId] : []);
+        const prefillIds =
+          prefillChallanIds && prefillChallanIds.length
+            ? prefillChallanIds
+            : prefillChallanId
+              ? [prefillChallanId]
+              : [];
         if (prefillIds.length) {
           const matched = billableChallans.filter((c) => prefillIds.includes(c.id));
           if (matched.length) {
@@ -378,15 +408,23 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // Per-company Non-Inventory Items (GL-account shortcut lines: Freight, Discount, …).
   // A company with GL off / no items resolves to [] and the picker shows none.
   useEffect(() => {
-    if (!companyId) { setNonInvItems([]); return; }
-    getNonInventoryItemsByCompany(companyId, true).then(({ data }) => setNonInvItems(data || [])).catch(() => setNonInvItems([]));
+    if (!companyId) {
+      setNonInvItems([]);
+      return;
+    }
+    getNonInventoryItemsByCompany(companyId, true)
+      .then(({ data }) => setNonInvItems(data || []))
+      .catch(() => setNonInvItems([]));
   }, [companyId]);
 
   // GL accounts (income side highlighted) for the per-line Account picker.
   // Empty when GL isn't set up / the caller lacks accounting.coa.view → the
   // Account column stays hidden and lines post to the derived default.
   useEffect(() => {
-    if (!companyId) { setAccounts([]); return; }
+    if (!companyId) {
+      setAccounts([]);
+      return;
+    }
     getAccountsFlat(companyId)
       .then(({ data }) => setAccounts((data || []).filter((a) => a.isActive)))
       .catch(() => setAccounts([]));
@@ -443,15 +481,18 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [selectedIds, companyId, fetchedRateChallanIds]);
 
   // Decorate scenarios with local meta — same shape as StandaloneInvoiceForm.
   const enrichedScenarios = useMemo(
-    () => scenarios.map((s) => ({
-      ...s,
-      meta: SCENARIO_META[s.code] || { buyerKind: "either" },
-    })),
+    () =>
+      scenarios.map((s) => ({
+        ...s,
+        meta: SCENARIO_META[s.code] || { buyerKind: "either" },
+      })),
     [scenarios],
   );
 
@@ -472,9 +513,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     // An item type with NO sale type counts as the standard-rate default
     // (utils/saleType.js) -- otherwise the bill\'s own item vanished from
     // this list and the picker rendered blank on edit.
-    return itemTypes.filter(
-      (it) => matchesScenarioSaleType(it, chosenScenario.saleType),
-    );
+    return itemTypes.filter((it) => matchesScenarioSaleType(it, chosenScenario.saleType));
   }, [itemTypes, chosenScenario]);
 
   // When operator picks a scenario, snap the GST Rate to that scenario's
@@ -605,7 +644,11 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // refetch and prefill prices for the newly ticked challans.
   const handleSalesOrderPick = (id) => {
     setSalesOrderId(id ? String(id) : "");
-    if (!id) { setSoPickMsg(""); resetSalesOrderDetails(); return; }
+    if (!id) {
+      setSoPickMsg("");
+      resetSalesOrderDetails();
+      return;
+    }
     const so = salesOrders.find((o) => String(o.id) === String(id));
     if (!so) return;
     const soChallans = allChallans.filter((c) => c.salesOrderId === so.id);
@@ -616,15 +659,16 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     // Prefill the bill's customer PO from the order (operator can still edit).
     if (so.customerPoNumber) setBillPoNumber(so.customerPoNumber);
     if (so.customerPoDate) setBillPoDate(String(so.customerPoDate).slice(0, 10));
-    setSoPickMsg(soChallans.length
-      ? `Selected ${soChallans.length} unbilled challan${soChallans.length !== 1 ? "s" : ""} from Sales Order #${so.salesOrderNumber}.`
-      : `Sales Order #${so.salesOrderNumber} has no unbilled challans — create a challan for it first, or tick challans manually below.`);
+    setSoPickMsg(
+      soChallans.length
+        ? `Selected ${soChallans.length} unbilled challan${soChallans.length !== 1 ? "s" : ""} from Sales Order #${so.salesOrderNumber}.`
+        : `Sales Order #${so.salesOrderNumber} has no unbilled challans — create a challan for it first, or tick challans manually below.`,
+    );
   };
-
 
   const selectedChallans = clientChallans.filter((c) => selectedIds.includes(c.id));
   const shownItems = selectedChallans.flatMap((c) =>
-    c.items.map((item) => ({ ...item, challanNumber: c.challanNumber }))
+    c.items.map((item) => ({ ...item, challanNumber: c.challanNumber })),
   );
   // Everything below (rows, totals, validation, the payload) is the billed lines only.
   const allItems = shownItems.filter((item) => !leftOutIds.includes(item.id));
@@ -640,11 +684,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // FIRST delivery of a group leads it: the row's item type, description,
   // price and FBR fields are the lead's, and every delivery in the group
   // inherits them when the bill is written.
-  const rowKeyOf = (item) => [
-    (itemDescriptions[item.id] ?? item.description ?? "").trim().toLowerCase(),
-    (itemUoms[item.id] ?? item.unit ?? "").trim().toLowerCase(),
-    String(parseFloat(itemPrices[item.id]) || 0),
-  ].join("|");
+  const rowKeyOf = (item) =>
+    [
+      (itemDescriptions[item.id] ?? item.description ?? "").trim().toLowerCase(),
+      (itemUoms[item.id] ?? item.unit ?? "").trim().toLowerCase(),
+      String(parseFloat(itemPrices[item.id]) || 0),
+    ].join("|");
 
   const billRows = (() => {
     const groups = new Map();
@@ -660,7 +705,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
       const lead = ordered[0];
       const delivered = ordered.reduce((sum, m) => sum + (Number(m.quantity) || 0), 0);
       const typed = rowQtys[lead.id];
-      const quantity = typed === undefined || typed === "" ? delivered : (Number(typed) || 0);
+      const quantity = typed === undefined || typed === "" ? delivered : Number(typed) || 0;
       return { ...lead, members: ordered, delivered, quantity, isMerged: ordered.length > 1 };
     });
   })();
@@ -671,8 +716,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // Splitting a merged row back over its deliveries is a rule in its own right —
   // see utils/deliverySplit.js, pinned by scripts/test_delivery_split.mjs.
   const splitAcrossDeliveries = (row) =>
-    splitDeliveryQuantities(row.quantity, row.members)
-      .map((qty, k) => ({ item: row.members[k], qty }));
+    splitDeliveryQuantities(row.quantity, row.members).map((qty, k) => ({
+      item: row.members[k],
+      qty,
+    }));
 
   // A row billed below its floor would mark a challan billed with none of its
   // goods on the bill, and it could never be billed again. Caught before saving.
@@ -710,7 +757,13 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   useEffect(() => {
     const rows = selectedChallans.flatMap((c) => c.items || []);
     if (rows.length === 0) return;
-    const sType = {}, sNonInv = {}, sHs = {}, sSt = {}, sUom = {}, sFbrUom = {}, sAcct = {};
+    const sType = {},
+      sNonInv = {},
+      sHs = {},
+      sSt = {},
+      sUom = {},
+      sFbrUom = {},
+      sAcct = {};
     for (const it of rows) {
       const id = it.id;
       // A number (picked) or explicit null (cleared) means the operator owns
@@ -750,7 +803,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     const price = parseFloat(itemPrices[row.id]) || 0;
     return sum + row.quantity * price;
   }, 0);
-  const gstAmount = Math.round(subtotal * gstRate / 100 * 100) / 100;
+  const gstAmount = Math.round(((subtotal * gstRate) / 100) * 100) / 100;
   const grandTotal = subtotal + gstAmount;
   const freightResolved = Number(freightCharges || 0);
   const commercialTotal = grandTotal + freightResolved;
@@ -759,20 +812,25 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // 2dp exactly like the backend (Math.round(x*100)/100). Fixed-amount mode =
   // the typed PKR value. Balance due the buyer pays = grandTotal − WHT.
   const computedWhtAmount = Math.round(grandTotal * (parseFloat(whtRate) || 0)) / 100;
-  const whtResolved = whtMode === "none" ? 0 : (whtMode === "rate" ? computedWhtAmount : (parseFloat(whtAmount) || 0));
+  const whtResolved =
+    whtMode === "none" ? 0 : whtMode === "rate" ? computedWhtAmount : parseFloat(whtAmount) || 0;
   const balanceDue = Math.max(0, commercialTotal - whtResolved);
 
-  const allPricesValid = allItems.length > 0 && allItems.every((i) => itemPrices[i.id] && parseFloat(itemPrices[i.id]) > 0);
+  const allPricesValid =
+    allItems.length > 0 &&
+    allItems.every((i) => itemPrices[i.id] && parseFloat(itemPrices[i.id]) > 0);
   // Every line must be complete before the bill can be created: a classification
   // (Item Type OR Non-Inventory item), a non-empty description, qty > 0, and
   // unit price > 0. Gates the Create Bill button (disabled until all pass).
-  const allLinesComplete = allItems.length > 0 && allItems.every((i) => {
-    const hasPick = !!(itemTypeIds[i.id] || itemNonInvIds[i.id]);
-    const desc = ((itemDescriptions[i.id] ?? i.description) || "").trim();
-    const qty = Number(i.quantity) || 0;
-    const price = parseFloat(itemPrices[i.id]) || 0;
-    return hasPick && desc.length > 0 && qty > 0 && price > 0;
-  });
+  const allLinesComplete =
+    allItems.length > 0 &&
+    allItems.every((i) => {
+      const hasPick = !!(itemTypeIds[i.id] || itemNonInvIds[i.id]);
+      const desc = ((itemDescriptions[i.id] ?? i.description) || "").trim();
+      const qty = Number(i.quantity) || 0;
+      const price = parseFloat(itemPrices[i.id]) || 0;
+      return hasPick && desc.length > 0 && qty > 0 && price > 0;
+    });
 
   // A merged row is ONE line to the operator, so an edit to the fields that
   // DEFINE the row — description, UOM, unit price — has to reach every delivery
@@ -812,7 +870,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // (this is a sales bill, so use the item's defaultSalePrice).
   const handleNonInvPick = (item, n) => {
     const id = item.id;
-    if (!n) { setItemNonInvIds((p) => ({ ...p, [id]: null })); return; }
+    if (!n) {
+      setItemNonInvIds((p) => ({ ...p, [id]: null }));
+      return;
+    }
     setItemNonInvIds((p) => ({ ...p, [id]: n.id }));
     setItemTypeIds((p) => ({ ...p, [id]: null }));
     // A non-inventory item posts to its own mapped account — clear any per-line
@@ -822,7 +883,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     setItemSaleTypes((p) => ({ ...p, [id]: "" }));
     setItemFbrUomIds((p) => ({ ...p, [id]: null }));
     const curDesc = (itemDescriptions[id] ?? item.description) || "";
-    if (!curDesc.trim()) setForRow(setItemDescriptions, id, n.defaultLineDescription || n.name || "");
+    if (!curDesc.trim())
+      setForRow(setItemDescriptions, id, n.defaultLineDescription || n.name || "");
     const curUom = (itemUoms[id] ?? item.unit) || "";
     if (!curUom.trim()) setForRow(setItemUoms, id, n.unitName || "");
     if ((!itemPrices[id] || Number(itemPrices[id]) === 0) && n.defaultSalePrice != null) {
@@ -837,15 +899,24 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     if (!selectedClientId) return setError("Select a client first.");
     if (selectedIds.length === 0) return setError("Select at least one challan.");
     if (!company || company.startingInvoiceNumber === 0)
-      return setError("Starting invoice number has not been set for this company. Please set it in the Companies page first.");
+      return setError(
+        "Starting invoice number has not been set for this company. Please set it in the Companies page first.",
+      );
 
     if (billNumberMode === "custom" && !billNumberOk)
       return setError("Enter a bill number that isn't already in use, or switch back to Auto.");
 
-    const emptied = selectedChallans.find((c) => c.items.length > 0 && c.items.every((i) => leftOutIds.includes(i.id)));
-    if (emptied) return setError(`Challan #${emptied.challanNumber}: every line is left out. Untick the challan instead.`);
+    const emptied = selectedChallans.find(
+      (c) => c.items.length > 0 && c.items.every((i) => leftOutIds.includes(i.id)),
+    );
+    if (emptied)
+      return setError(
+        `Challan #${emptied.challanNumber}: every line is left out. Untick the challan instead.`,
+      );
 
-    const missingPrices = allItems.filter((i) => !itemPrices[i.id] || parseFloat(itemPrices[i.id]) <= 0);
+    const missingPrices = allItems.filter(
+      (i) => !itemPrices[i.id] || parseFloat(itemPrices[i.id]) <= 0,
+    );
     if (missingPrices.length > 0) return setError("Enter unit price for all items.");
     // Billing a delivery as nothing would mark its challan billed while none of
     // its goods were invoiced, and the goods would never be billable again.
@@ -856,13 +927,15 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
       const n = row.members.length;
       return setError(
         `"${itemDescriptions[row.id] || row.description}": the quantity you entered is lower than the minimum ` +
-        `for ${n} selected delivery challan${n > 1 ? "s" : ""}. Enter at least ${parseFloat(floor.toFixed(4))}, ` +
-        `or remove ${n > 1 ? "one or more challans" : "that challan"} from this bill.`);
+          `for ${n} selected delivery challan${n > 1 ? "s" : ""}. Enter at least ${parseFloat(floor.toFixed(4))}, ` +
+          `or remove ${n > 1 ? "one or more challans" : "that challan"} from this bill.`,
+      );
     }
 
     // Every line on a bill must be classified — an Item Type OR a Non-Inventory item.
     const missingPick = allItems.filter((i) => !itemTypeIds[i.id] && !itemNonInvIds[i.id]);
-    if (missingPick.length > 0) return setError("Every line must have an Item Type or Non-Inventory item selected.");
+    if (missingPick.length > 0)
+      return setError("Every line must have an Item Type or Non-Inventory item selected.");
 
     setSaving(true);
     try {
@@ -883,7 +956,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
       // tag pattern is "[SNxxx]" — see FbrService.PostInvoiceAsync.
       const paymentTermsToSave = scenarioCode
         ? `[${scenarioCode}] ${paymentTerms || chosenScenario?.description || ""}`.trim()
-        : (paymentTerms || null);
+        : paymentTerms || null;
 
       const { data: created } = await createInvoice({
         date: new Date(invoiceDate).toISOString(),
@@ -895,7 +968,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         invoiceNumber: billNumberPayload(billNumberMode, billNumber),
         // Withholding tax: rate-mode ships the %, fixed-amount mode ships null
         // rate + the typed amount. Backend recomputes/clamps the amount.
-        withholdingTaxRate: whtMode === "rate" ? (parseFloat(whtRate) || 0) : null,
+        withholdingTaxRate: whtMode === "rate" ? parseFloat(whtRate) || 0 : null,
         withholdingTaxAmount: whtResolved,
         freightCharges: Number(freightCharges || 0),
         paymentTerms: paymentTermsToSave,
@@ -904,31 +977,31 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         paymentMode: paymentMode || null,
         challanIds: selectedIds,
         items: billRows.flatMap((row) => {
-          const item = row;   // classification/price come from the row the operator edited
+          const item = row; // classification/price come from the row the operator edited
           return splitAcrossDeliveries(row).map(({ item: member, qty }) => ({
-          deliveryItemId: member.id,
-          // The row's quantity, split back over its deliveries oldest-first.
-          quantity: qty,
-          unitPrice: parseFloat(itemPrices[item.id]),
-          description: itemDescriptions[item.id] || item.description,
-          // ItemType link (new) — when set, backend re-derives HS/UOM/SaleType from catalog
-          itemTypeId: itemTypeIds[item.id] || null,
-          // Non-Inventory line (Freight / Discount / …) — mutually exclusive with itemTypeId.
-          nonInventoryItemId: itemNonInvIds[item.id] || null,
-          // Per-line GL income account (auto-filled from the item type's overlay,
-          // overridable). Server validates against the company CoA; null → derived.
-          accountId: itemAccountIds[item.id] || null,
-          // Optional FBR fields — sent only if user filled them in (or auto-filled from picked ItemType)
-          uom: itemUoms[item.id]?.trim() || null,
-          fbrUOMId: itemFbrUomIds[item.id] || null,
-          hsCode: itemHsCodes[item.id]?.trim() || null,
-          // Sale Type: when a scenario is locked in, EVERY line ships the
-          // scenario's saleType regardless of any per-row override. Mixed-
-          // saletype bills get rejected by FBR with [0052]. The per-row
-          // select is only consulted in auto-detect (no scenario) mode.
-          saleType: chosenScenario
-            ? chosenScenario.saleType
-            : (itemSaleTypes[item.id]?.trim() || null),
+            deliveryItemId: member.id,
+            // The row's quantity, split back over its deliveries oldest-first.
+            quantity: qty,
+            unitPrice: parseFloat(itemPrices[item.id]),
+            description: itemDescriptions[item.id] || item.description,
+            // ItemType link (new) — when set, backend re-derives HS/UOM/SaleType from catalog
+            itemTypeId: itemTypeIds[item.id] || null,
+            // Non-Inventory line (Freight / Discount / …) — mutually exclusive with itemTypeId.
+            nonInventoryItemId: itemNonInvIds[item.id] || null,
+            // Per-line GL income account (auto-filled from the item type's overlay,
+            // overridable). Server validates against the company CoA; null → derived.
+            accountId: itemAccountIds[item.id] || null,
+            // Optional FBR fields — sent only if user filled them in (or auto-filled from picked ItemType)
+            uom: itemUoms[item.id]?.trim() || null,
+            fbrUOMId: itemFbrUomIds[item.id] || null,
+            hsCode: itemHsCodes[item.id]?.trim() || null,
+            // Sale Type: when a scenario is locked in, EVERY line ships the
+            // scenario's saleType regardless of any per-row override. Mixed-
+            // saletype bills get rejected by FBR with [0052]. The per-row
+            // select is only consulted in auto-detect (no scenario) mode.
+            saleType: chosenScenario
+              ? chosenScenario.saleType
+              : itemSaleTypes[item.id]?.trim() || null,
           }));
         }),
         poDateUpdates,
@@ -957,7 +1030,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
             // Same scenario-wins precedence as the submit payload above.
             saleType: chosenScenario
               ? chosenScenario.saleType
-              : (itemSaleTypes[item.id]?.trim() || null),
+              : itemSaleTypes[item.id]?.trim() || null,
             uom: itemUoms[item.id]?.trim() || item.unit || null,
             fbrUOMId: itemFbrUomIds[item.id] || null,
           }).catch(() => {});
@@ -968,7 +1041,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
       // the bill is already saved.
       try {
         if (created?.id) await attachmentRef.current?.flush(created.id);
-      } catch { /* attachments are best-effort */ }
+      } catch {
+        /* attachments are best-effort */
+      }
 
       onSaved();
     } catch (err) {
@@ -981,9 +1056,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // Clients that have at least one billable challan. The buyer picked via
   // the Sales-Order shortcut stays visible even with zero — the operator
   // must SEE the buyer land; the picker hint explains what's missing.
-  const clientsWithChallans = clients.filter((cl) =>
-    allChallans.some((ch) => ch.clientId === cl.id)
-    || String(cl.id) === String(selectedClientId)
+  const clientsWithChallans = clients.filter(
+    (cl) =>
+      allChallans.some((ch) => ch.clientId === cl.id) || String(cl.id) === String(selectedClientId),
   );
 
   // Apply the scenario's buyer-kind filter on top of the with-challan
@@ -1001,9 +1076,13 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
       if (!chosenScenario) return clientsWithChallans;
       const k = chosenScenario.meta.buyerKind;
       if (k === "b2b-registered")
-        return clientsWithChallans.filter((c) => (c.registrationType || "").toLowerCase() === "registered");
+        return clientsWithChallans.filter(
+          (c) => (c.registrationType || "").toLowerCase() === "registered",
+        );
       if (k === "b2b-unregistered" || k === "walk-in")
-        return clientsWithChallans.filter((c) => (c.registrationType || "").toLowerCase() !== "registered");
+        return clientsWithChallans.filter(
+          (c) => (c.registrationType || "").toLowerCase() !== "registered",
+        );
       return clientsWithChallans;
     })();
     if (selectedClientId && !base.some((c) => String(c.id) === String(selectedClientId))) {
@@ -1047,7 +1126,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // Account labels for the per-line Account (GL) column: the resolved company
   // default (named, shown when a line carries no explicit account) + a helper
   // naming a non-inventory line's own mapped sale account.
-  const defaultSaleAccountLabel = defaultAccountPlaceholder(accounts, company?.defaultSalesAccountId);
+  const defaultSaleAccountLabel = defaultAccountPlaceholder(
+    accounts,
+    company?.defaultSalesAccountId,
+  );
   const nonInvSaleAccountLabel = (nonInvId) => {
     const n = nonInvItems.find((x) => String(x.id) === String(nonInvId));
     return n?.saleAccountName ? `→ ${n.saleAccountName}` : "→ Suspense";
@@ -1062,220 +1144,325 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     const price = parseFloat(itemPrices[item.id]) || 0;
     const displayUom = itemUoms[item.id] ?? item.unit;
     return [
-    { key: "dc", label: "Bill · DC#", tdProps: { style: { ...styles.unifiedTd, fontSize: "0.76rem", color: colors.textSecondary } }, node: (
-      <>
-                                      <label style={styles.billTickCell} title="Billed now: untick to bill this line later">
-                                        <input type="checkbox" checked onChange={() => toggleLeftOut(item.members.map((m) => m.id))}
-                                          aria-label={`Bill ${item.description} now`} style={styles.billTickBox} />
-                                        <span>{item.isMerged
-                                          ? item.members.map((m) => m.challanNumber).join(", ")
-                                          : item.challanNumber}</span>
-                                      </label>
-      </>
-    ) },
-    { key: "type", label: "Item Type (FBR) *", tdProps: { style: styles.unifiedTd }, node: (
-      <>
-                                      {/* Picking an ItemType auto-fills HS Code, UOM, SaleType,
+      {
+        key: "dc",
+        label: "Bill · DC#",
+        tdProps: {
+          style: { ...styles.unifiedTd, fontSize: "0.76rem", color: colors.textSecondary },
+        },
+        node: (
+          <>
+            <label style={styles.billTickCell} title="Billed now: untick to bill this line later">
+              <input
+                type="checkbox"
+                checked
+                onChange={() => toggleLeftOut(item.members.map((m) => m.id))}
+                aria-label={`Bill ${item.description} now`}
+                style={styles.billTickBox}
+              />
+              <span>
+                {item.isMerged
+                  ? item.members.map((m) => m.challanNumber).join(", ")
+                  : item.challanNumber}
+              </span>
+            </label>
+          </>
+        ),
+      },
+      {
+        key: "type",
+        label: "Item Type (FBR) *",
+        tdProps: { style: styles.unifiedTd },
+        node: (
+          <>
+            {/* Picking an ItemType auto-fills HS Code, UOM, SaleType,
                                           FbrUOMId on this row — identical behaviour to EditBillForm.
                                           The '+ New Item Type' affordance lives once above the grid
                                           (was per-row before — moved to declutter the table). */}
-                                      <SearchableItemTypeSelect
-                                        divisionId={divisionId}
-                                        items={filteredItemTypes}
-                                        value={itemTypeIds[item.id] || ""}
-                                        nonInventoryItems={nonInvItems}
-                                        nonInventoryValue={itemNonInvIds[item.id] || ""}
-                                        onPickNonInventory={(n) => handleNonInvPick(item, n)}
-                                        onChange={(newId, picked) => {
-                                          setItemTypeIds((p) => ({ ...p, [item.id]: newId ? parseInt(newId) : null }));
-                                          if (picked) {
-                                            // Picking an ItemType clears any non-inventory binding (mutually exclusive).
-                                            setItemNonInvIds((p) => ({ ...p, [item.id]: null }));
-                                            // Auto-fill the line's GL income account from the item
-                                            // type's per-company overlay (null → engine derives).
-                                            setItemAccountIds((p) => ({ ...p, [item.id]: picked.saleAccountId ?? null }));
-                                            // Item Type binds only the FBR fields below — it never
-                                            // touches the Description, which stays the challan line's
-                                            // own product text (editable via SmartItemAutocomplete).
-                                            if (picked.hsCode) setItemHsCodes((p) => ({ ...p, [item.id]: picked.hsCode }));
-                                            if (picked.saleType) setItemSaleTypes((p) => ({ ...p, [item.id]: picked.saleType }));
-                                            if (picked.uom) setForRow(setItemUoms, item.id, picked.uom);
-                                            if (picked.fbrUOMId) setItemFbrUomIds((p) => ({ ...p, [item.id]: picked.fbrUOMId }));
-                                          } else {
-                                            // Clearing the ItemType also clears the bound HS Code,
-                                            // Sale Type and UOM — they were inherited from the
-                                            // catalog row, so removing the link should remove the
-                                            // values too. Otherwise stale FBR fields stay on the
-                                            // line and the operator silently ships wrong data.
-                                            // Description is left as-is so the operator can keep
-                                            // editing or clear via SmartItemAutocomplete.
-                                            setItemHsCodes((p) => ({ ...p, [item.id]: "" }));
-                                            setItemSaleTypes((p) => ({ ...p, [item.id]: "" }));
-                                            setForRow(setItemUoms, item.id, "");
-                                            setItemFbrUomIds((p) => ({ ...p, [item.id]: null }));
-                                            setItemAccountIds((p) => ({ ...p, [item.id]: null }));
-                                          }
-                                        }}
-                                        placeholder="— required —"
-                                        style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
-                                      />
-      </>
-    ) },
-    { key: "desc", label: "Description", tdProps: { style: styles.unifiedTd }, node: (
-      <>
-                                      {/* Description is ALWAYS editable and independent of the Item
+            <SearchableItemTypeSelect
+              divisionId={divisionId}
+              items={filteredItemTypes}
+              value={itemTypeIds[item.id] || ""}
+              nonInventoryItems={nonInvItems}
+              nonInventoryValue={itemNonInvIds[item.id] || ""}
+              onPickNonInventory={(n) => handleNonInvPick(item, n)}
+              onChange={(newId, picked) => {
+                setItemTypeIds((p) => ({ ...p, [item.id]: newId ? parseInt(newId) : null }));
+                if (picked) {
+                  // Picking an ItemType clears any non-inventory binding (mutually exclusive).
+                  setItemNonInvIds((p) => ({ ...p, [item.id]: null }));
+                  // Auto-fill the line's GL income account from the item
+                  // type's per-company overlay (null → engine derives).
+                  setItemAccountIds((p) => ({ ...p, [item.id]: picked.saleAccountId ?? null }));
+                  // Item Type binds only the FBR fields below — it never
+                  // touches the Description, which stays the challan line's
+                  // own product text (editable via SmartItemAutocomplete).
+                  if (picked.hsCode) setItemHsCodes((p) => ({ ...p, [item.id]: picked.hsCode }));
+                  if (picked.saleType)
+                    setItemSaleTypes((p) => ({ ...p, [item.id]: picked.saleType }));
+                  if (picked.uom) setForRow(setItemUoms, item.id, picked.uom);
+                  if (picked.fbrUOMId)
+                    setItemFbrUomIds((p) => ({ ...p, [item.id]: picked.fbrUOMId }));
+                } else {
+                  // Clearing the ItemType also clears the bound HS Code,
+                  // Sale Type and UOM — they were inherited from the
+                  // catalog row, so removing the link should remove the
+                  // values too. Otherwise stale FBR fields stay on the
+                  // line and the operator silently ships wrong data.
+                  // Description is left as-is so the operator can keep
+                  // editing or clear via SmartItemAutocomplete.
+                  setItemHsCodes((p) => ({ ...p, [item.id]: "" }));
+                  setItemSaleTypes((p) => ({ ...p, [item.id]: "" }));
+                  setForRow(setItemUoms, item.id, "");
+                  setItemFbrUomIds((p) => ({ ...p, [item.id]: null }));
+                  setItemAccountIds((p) => ({ ...p, [item.id]: null }));
+                }
+              }}
+              placeholder="— required —"
+              style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+            />
+          </>
+        ),
+      },
+      {
+        key: "desc",
+        label: "Description",
+        tdProps: { style: styles.unifiedTd },
+        node: (
+          <>
+            {/* Description is ALWAYS editable and independent of the Item
                                           Type. It seeds from the challan line's own product text
                                           (`?? item.description`) and the operator can search saved
                                           items, pick from the FBR catalog, or type freely. Picking an
                                           Item Type only sets the FBR fields (HS Code / UOM / Sale
                                           Type) — it never overwrites this text. */}
-                                      <SmartItemAutocomplete
-                                        companyId={companyId}
-                                        value={itemDescriptions[item.id] ?? item.description}
-                                        onChange={(v) => handleDescriptionChange(item.id, v)}
-                                        onPick={(picked) => handleItemPick(item.id, picked)}
-                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
-                                        placeholder="Search or type item…"
-                                        multiline
-                                      />
-      </>
-    ) },
-    { key: "qty", label: "Qty", tdProps: { style: { ...styles.unifiedTd, textAlign: "right", fontSize: "0.82rem", paddingRight: "0.5rem" } }, node: (
-      <>
-                                      {/* Editable: an item delivered several times is
+            <SmartItemAutocomplete
+              companyId={companyId}
+              value={itemDescriptions[item.id] ?? item.description}
+              onChange={(v) => handleDescriptionChange(item.id, v)}
+              onPick={(picked) => handleItemPick(item.id, picked)}
+              style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
+              placeholder="Search or type item…"
+              multiline
+            />
+          </>
+        ),
+      },
+      {
+        key: "qty",
+        label: "Qty",
+        tdProps: {
+          style: {
+            ...styles.unifiedTd,
+            textAlign: "right",
+            fontSize: "0.82rem",
+            paddingRight: "0.5rem",
+          },
+        },
+        node: (
+          <>
+            {/* Editable: an item delivered several times is
                                           billed as one quantity, and the split back
                                           over the deliveries happens on save. */}
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        step="any"
-                                        value={rowQtys[item.id] ?? num(item.quantity)}
-                                        onChange={(e) => setRowQtys((p) => ({ ...p, [item.id]: e.target.value }))}
-                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", textAlign: "right" }}
-                                        title={item.isMerged
-                                          ? `Delivered ${item.delivered} across DC ${item.members.map((m) => m.challanNumber).join(", ")}`
-                                          : "Quantity to bill"}
-                                      />
-                                      {item.isMerged && (() => {
-                                        // Show the operator WHERE the quantity lands before they
-                                        // save it. Reducing 56 to 52 takes the 4 off DC 2778 and
-                                        // leaves DC 2770 alone — which is impossible to guess from
-                                        // a single number, and is the whole point of the rule.
-                                        const floor = rowFloor(item.members);
-                                        if (isUnderFloor(item.quantity, item.members)) {
-                                          return (
-                                            <div style={{ fontSize: "0.68rem", color: colors.danger, marginTop: 2 }}>
-                                              min {num(floor)} for {item.members.length} challans
-                                            </div>
-                                          );
-                                        }
-                                        const parts = splitAcrossDeliveries(item);
-                                        const changed = parts.some(({ item: m, qty }) => qty !== m.quantity);
-                                        if (!changed) {
-                                          return (
-                                            <div style={{ fontSize: "0.68rem", color: colors.textSecondary, marginTop: 2 }}>
-                                              delivered {num(item.delivered)}
-                                            </div>
-                                          );
-                                        }
-                                        return (
-                                          <div style={{ fontSize: "0.68rem", color: colors.textSecondary, marginTop: 2, lineHeight: 1.35 }}>
-                                            {parts.map(({ item: m, qty }, k) => (
-                                              <span key={m.id}>
-                                                {k > 0 && " · "}
-                                                <span style={qty !== m.quantity
-                                                  ? { color: colors.danger, fontWeight: 600 }
-                                                  : undefined}>
-                                                  {m.challanNumber}: {num(qty)}
-                                                </span>
-                                              </span>
-                                            ))}
-                                          </div>
-                                        );
-                                      })()}
-      </>
-    ) },
-    { key: "uom", label: "UOM", tdProps: { style: styles.unifiedTd }, node: (
-      <>
-                                      {/* UOM autocomplete (same backing endpoint
+            <input
+              type="number"
+              min="0"
+              step="any"
+              value={rowQtys[item.id] ?? num(item.quantity)}
+              onChange={(e) => setRowQtys((p) => ({ ...p, [item.id]: e.target.value }))}
+              style={{
+                ...styles.input,
+                padding: "0.3rem 0.5rem",
+                fontSize: "0.8rem",
+                textAlign: "right",
+              }}
+              title={
+                item.isMerged
+                  ? `Delivered ${item.delivered} across DC ${item.members.map((m) => m.challanNumber).join(", ")}`
+                  : "Quantity to bill"
+              }
+            />
+            {item.isMerged &&
+              (() => {
+                // Show the operator WHERE the quantity lands before they
+                // save it. Reducing 56 to 52 takes the 4 off DC 2778 and
+                // leaves DC 2770 alone — which is impossible to guess from
+                // a single number, and is the whole point of the rule.
+                const floor = rowFloor(item.members);
+                if (isUnderFloor(item.quantity, item.members)) {
+                  return (
+                    <div style={{ fontSize: "0.68rem", color: colors.danger, marginTop: 2 }}>
+                      min {num(floor)} for {item.members.length} challans
+                    </div>
+                  );
+                }
+                const parts = splitAcrossDeliveries(item);
+                const changed = parts.some(({ item: m, qty }) => qty !== m.quantity);
+                if (!changed) {
+                  return (
+                    <div style={{ fontSize: "0.68rem", color: colors.textSecondary, marginTop: 2 }}>
+                      delivered {num(item.delivered)}
+                    </div>
+                  );
+                }
+                return (
+                  <div
+                    style={{
+                      fontSize: "0.68rem",
+                      color: colors.textSecondary,
+                      marginTop: 2,
+                      lineHeight: 1.35,
+                    }}
+                  >
+                    {parts.map(({ item: m, qty }, k) => (
+                      <span key={m.id}>
+                        {k > 0 && " · "}
+                        <span
+                          style={
+                            qty !== m.quantity
+                              ? { color: colors.danger, fontWeight: 600 }
+                              : undefined
+                          }
+                        >
+                          {m.challanNumber}: {num(qty)}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                );
+              })()}
+          </>
+        ),
+      },
+      {
+        key: "uom",
+        label: "UOM",
+        tdProps: { style: styles.unifiedTd },
+        node: (
+          <>
+            {/* UOM autocomplete (same backing endpoint
                                           as ChallanForm). Pre-fix this was a plain
                                           text input — operators had to retype
                                           "Pcs" / "KG" each row instead of picking
                                           from the saved-units list. */}
-                                      <LookupAutocomplete
-                                        endpoint="/lookup/units"
-                                        value={displayUom || ""}
-                                        onChange={(val) => setForRow(setItemUoms, item.id, val)}
-                                      />
-      </>
-    ) },
-    { key: "price", label: "Unit Price *", tdProps: { style: styles.unifiedTd }, node: (
-      <>
-                                      <input
-                                        type="number"
-                                        min={0}
-                                        step="any"
-                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
-                                        value={itemPrices[item.id] || ""}
-                                        onChange={(e) => handlePriceChange(item.id, e.target.value)}
-                                        placeholder="0.00"
-                                      />
-                                      {lastRates[item.id]?.lastUnitPrice != null && (
-                                        <div style={{
-                                          fontSize: "0.68rem", marginTop: 2, lineHeight: 1.2,
-                                          whiteSpace: "nowrap",
-                                          color: parseFloat(itemPrices[item.id]) === parseFloat(lastRates[item.id].lastUnitPrice)
-                                            ? "#5f6d7e" : "#2e7d32",
-                                        }}
-                                        title={`Last billed Rs. ${Number(lastRates[item.id].lastUnitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
-                                          + ` on bill #${lastRates[item.id].lastInvoiceNumber}`
-                                          + (lastRates[item.id].lastInvoiceDate ? ` (${new Date(lastRates[item.id].lastInvoiceDate).toLocaleDateString()})` : "")
-                                          + ` — matched by ${lastRates[item.id].matchedBy}`
-                                        }>
-                                          Last Rs.{Number(lastRates[item.id].lastUnitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                          {lastRates[item.id].lastInvoiceDate && (
-                                            <> · #{lastRates[item.id].lastInvoiceNumber}</>
-                                          )}
-                                          {parseFloat(itemPrices[item.id]) !== parseFloat(lastRates[item.id].lastUnitPrice) && (
-                                            <> · <b>edited</b></>
-                                          )}
-                                        </div>
-                                      )}
-      </>
-    ) },
-    { key: "total", label: "Line Total", tdProps: { style: { ...styles.unifiedTd, textAlign: "right", fontWeight: 600, fontSize: "0.82rem" } }, node: (
-      <>
-                                      {(item.quantity * price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-      </>
-    ) },
-    glOn && { key: "account", label: "Account (GL)", tdProps: { style: styles.unifiedTd }, node: (
-      <>
-                                        <AccountSelect
-                                          accounts={accounts}
-                                          value={itemAccountIds[item.id] ?? null}
-                                          onChange={(v) => setItemAccountIds((p) => ({ ...p, [item.id]: v }))}
-                                          side="income"
-                                          disabled={!!itemNonInvIds[item.id]}
-                                          placeholder={itemNonInvIds[item.id] ? nonInvSaleAccountLabel(itemNonInvIds[item.id]) : defaultSaleAccountLabel}
-                                          style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.76rem" }}
-                                        />
-      </>
-    ) },
-    !billsMode && { key: "hs", label: "HS Code", tdProps: { style: {
-          ...styles.unifiedTd,
-          backgroundColor: "#f4f6fa",
-          fontFamily: "monospace",
-          fontSize: "0.78rem",
-          color: itemHsCodes[item.id] ? colors.textPrimary : colors.textSecondary,
-          fontStyle: itemHsCodes[item.id] ? "normal" : "italic",
-        }, title: "HS Code auto-fills from the picked Item Type" }, node: (
-      <>
-                                        {itemHsCodes[item.id] || "—"}
-      </>
-    ) },
-    !billsMode && { key: "sale", label: "Sale Type", tdProps: { style: styles.unifiedTd }, node: (
-      <>
-                                      {/* Scenario-locked Sale Type — every line on the bill must use
+            <LookupAutocomplete
+              endpoint="/lookup/units"
+              value={displayUom || ""}
+              onChange={(val) => setForRow(setItemUoms, item.id, val)}
+            />
+          </>
+        ),
+      },
+      {
+        key: "price",
+        label: "Unit Price *",
+        tdProps: { style: styles.unifiedTd },
+        node: (
+          <>
+            <input
+              type="number"
+              min={0}
+              step="any"
+              style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
+              value={itemPrices[item.id] || ""}
+              onChange={(e) => handlePriceChange(item.id, e.target.value)}
+              placeholder="0.00"
+            />
+            {lastRates[item.id]?.lastUnitPrice != null && (
+              <div
+                style={{
+                  fontSize: "0.68rem",
+                  marginTop: 2,
+                  lineHeight: 1.2,
+                  whiteSpace: "nowrap",
+                  color:
+                    parseFloat(itemPrices[item.id]) === parseFloat(lastRates[item.id].lastUnitPrice)
+                      ? "#5f6d7e"
+                      : "#2e7d32",
+                }}
+                title={
+                  `Last billed Rs. ${Number(lastRates[item.id].lastUnitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}` +
+                  ` on bill #${lastRates[item.id].lastInvoiceNumber}` +
+                  (lastRates[item.id].lastInvoiceDate
+                    ? ` (${new Date(lastRates[item.id].lastInvoiceDate).toLocaleDateString()})`
+                    : "") +
+                  ` — matched by ${lastRates[item.id].matchedBy}`
+                }
+              >
+                Last Rs.
+                {Number(lastRates[item.id].lastUnitPrice).toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                })}
+                {lastRates[item.id].lastInvoiceDate && (
+                  <> · #{lastRates[item.id].lastInvoiceNumber}</>
+                )}
+                {parseFloat(itemPrices[item.id]) !==
+                  parseFloat(lastRates[item.id].lastUnitPrice) && (
+                  <>
+                    {" "}
+                    · <b>edited</b>
+                  </>
+                )}
+              </div>
+            )}
+          </>
+        ),
+      },
+      {
+        key: "total",
+        label: "Line Total",
+        tdProps: {
+          style: { ...styles.unifiedTd, textAlign: "right", fontWeight: 600, fontSize: "0.82rem" },
+        },
+        node: (
+          <>{(item.quantity * price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</>
+        ),
+      },
+      glOn && {
+        key: "account",
+        label: "Account (GL)",
+        tdProps: { style: styles.unifiedTd },
+        node: (
+          <>
+            <AccountSelect
+              accounts={accounts}
+              value={itemAccountIds[item.id] ?? null}
+              onChange={(v) => setItemAccountIds((p) => ({ ...p, [item.id]: v }))}
+              side="income"
+              disabled={!!itemNonInvIds[item.id]}
+              placeholder={
+                itemNonInvIds[item.id]
+                  ? nonInvSaleAccountLabel(itemNonInvIds[item.id])
+                  : defaultSaleAccountLabel
+              }
+              style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.76rem" }}
+            />
+          </>
+        ),
+      },
+      !billsMode && {
+        key: "hs",
+        label: "HS Code",
+        tdProps: {
+          style: {
+            ...styles.unifiedTd,
+            backgroundColor: "#f4f6fa",
+            fontFamily: "monospace",
+            fontSize: "0.78rem",
+            color: itemHsCodes[item.id] ? colors.textPrimary : colors.textSecondary,
+            fontStyle: itemHsCodes[item.id] ? "normal" : "italic",
+          },
+          title: "HS Code auto-fills from the picked Item Type",
+        },
+        node: <>{itemHsCodes[item.id] || "—"}</>,
+      },
+      !billsMode && {
+        key: "sale",
+        label: "Sale Type",
+        tdProps: { style: styles.unifiedTd },
+        node: (
+          <>
+            {/* Scenario-locked Sale Type — every line on the bill must use
                                           the scenario's saleType (FBR rejects mixed-saletype bills
                                           with [0052]). When a scenario is picked we render this as a
                                           read-only display showing the locked value; when no scenario
@@ -1283,64 +1470,80 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                           select so legacy mixed-cart bills still work. The submit
                                           payload uses chosenScenario.saleType when set, see
                                           handleSubmit's items.map. */}
-                                      {chosenScenario ? (
-                                        <input
-                                          type="text"
-                                          readOnly
-                                          value={chosenScenario.saleType}
-                                          style={{
-                                            ...styles.input,
-                                            padding: "0.3rem 0.5rem",
-                                            fontSize: "0.78rem",
-                                            backgroundColor: "#eef5ff",
-                                            cursor: "not-allowed",
-                                          }}
-                                          title={`Locked by ${chosenScenario.code}`}
-                                        />
-                                      ) : (
-                                        <select
-                                          style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
-                                          value={itemSaleTypes[item.id] || ""}
-                                          onChange={(e) => setItemSaleTypes((p) => ({ ...p, [item.id]: e.target.value }))}
-                                        >
-                                          <option value="">— select —</option>
-                                          <option>Goods at standard rate (default)</option>
-                                          <option>Goods at Reduced Rate</option>
-                                          <option>Goods at zero-rate</option>
-                                          <option>Exempt goods</option>
-                                          <option>3rd Schedule Goods</option>
-                                          <option>Services</option>
-                                          <option>Services (FED in ST Mode)</option>
-                                          <option>Goods (FED in ST Mode)</option>
-                                          <option>Steel Melting and re-rolling</option>
-                                          <option>Toll Manufacturing</option>
-                                          <option>Mobile Phones</option>
-                                          <option>Petroleum Products</option>
-                                          <option>Electric Vehicle</option>
-                                          <option>Cement /Concrete Block</option>
-                                          <option>Processing/Conversion of Goods</option>
-                                          <option>Cotton Ginners</option>
-                                          <option>Non-Adjustable Supplies</option>
-                                        </select>
-                                      )}
-      </>
-    ) },
+            {chosenScenario ? (
+              <input
+                type="text"
+                readOnly
+                value={chosenScenario.saleType}
+                style={{
+                  ...styles.input,
+                  padding: "0.3rem 0.5rem",
+                  fontSize: "0.78rem",
+                  backgroundColor: "#eef5ff",
+                  cursor: "not-allowed",
+                }}
+                title={`Locked by ${chosenScenario.code}`}
+              />
+            ) : (
+              <select
+                style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                value={itemSaleTypes[item.id] || ""}
+                onChange={(e) => setItemSaleTypes((p) => ({ ...p, [item.id]: e.target.value }))}
+              >
+                <option value="">— select —</option>
+                <option>Goods at standard rate (default)</option>
+                <option>Goods at Reduced Rate</option>
+                <option>Goods at zero-rate</option>
+                <option>Exempt goods</option>
+                <option>3rd Schedule Goods</option>
+                <option>Services</option>
+                <option>Services (FED in ST Mode)</option>
+                <option>Goods (FED in ST Mode)</option>
+                <option>Steel Melting and re-rolling</option>
+                <option>Toll Manufacturing</option>
+                <option>Mobile Phones</option>
+                <option>Petroleum Products</option>
+                <option>Electric Vehicle</option>
+                <option>Cement /Concrete Block</option>
+                <option>Processing/Conversion of Goods</option>
+                <option>Cotton Ginners</option>
+                <option>Non-Adjustable Supplies</option>
+              </select>
+            )}
+          </>
+        ),
+      },
     ].filter(Boolean);
   };
 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>Create Bill</h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            &times;
+          </button>
         </div>
         <form onSubmit={handleSubmit}>
-          <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "70vh", overflowY: "auto" }}>
-            {error && <div ref={errorRef} style={styles.errorAlert}>{error}</div>}
+          <div
+            data-admin-body=""
+            style={{ ...formStyles.body, maxHeight: "70vh", overflowY: "auto" }}
+          >
+            {error && (
+              <div ref={errorRef} style={styles.errorAlert}>
+                {error}
+              </div>
+            )}
 
             {loading ? (
-              <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>Loading...</div>
+              <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>
+                Loading...
+              </div>
             ) : (
               <>
                 {/* Optional "start from a Sales Order" (both FBR modes) —
@@ -1349,11 +1552,15 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                     details. */}
                 <div style={{ marginBottom: "1rem" }}>
                   <label style={styles.label}>
-                    Sales Order <span style={{ fontWeight: 400, color: colors.textSecondary }}>(optional — fills the buyer and selects its challans)</span>
+                    Sales Order{" "}
+                    <span style={{ fontWeight: 400, color: colors.textSecondary }}>
+                      (optional — fills the buyer and selects its challans)
+                    </span>
                   </label>
                   {salesOrderOptions.length === 0 ? (
                     <p style={{ color: colors.textSecondary, fontSize: "0.82rem", margin: 0 }}>
-                      No sales orders with unbilled challans{divisionId ? " in this division" : ""} — pick a buyer and challans below.
+                      No sales orders with unbilled challans{divisionId ? " in this division" : ""}{" "}
+                      — pick a buyer and challans below.
                     </p>
                   ) : (
                     <SearchableSelect
@@ -1365,7 +1572,18 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                       placeholder="— Start from a sales order —"
                     />
                   )}
-                  {soPickMsg && <div style={{ fontSize: "0.78rem", color: colors.teal, fontWeight: 600, marginTop: 4 }}>{soPickMsg}</div>}
+                  {soPickMsg && (
+                    <div
+                      style={{
+                        fontSize: "0.78rem",
+                        color: colors.teal,
+                        fontWeight: 600,
+                        marginTop: 4,
+                      }}
+                    >
+                      {soPickMsg}
+                    </div>
+                  )}
                 </div>
 
                 {/* Step 1 — Pick FBR scenario. Collapsed by default —
@@ -1374,586 +1592,947 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                     pick so the form scrolls back into Buyer / Items.
                     Same UX as StandaloneInvoiceForm. */}
                 {fbrEnabled && (
-                <div style={{ marginBottom: "1rem" }}>
-                  <button
-                    type="button"
-                    onClick={() => setScenarioPickerOpen((v) => !v)}
-                    style={styles.scenarioCollapseHeader}
-                  >
-                    <span style={styles.stepNum}>1</span>
-                    <span style={styles.scenarioCollapseTitle}>FBR Scenario</span>
-                    {chosenScenario ? (
-                      <span style={styles.scenarioCollapseSummary}>
-                        <span style={styles.scenarioCollapseCode}>{chosenScenario.code}</span>
-                        <span>·</span>
-                        <span>{chosenScenario.saleType}</span>
-                        <span>·</span>
-                        <span>{chosenScenario.defaultRate}% GST</span>
-                        {chosenScenario.meta.buyerKind === "b2b-registered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeBlue }}>Registered</span>}
-                        {chosenScenario.meta.buyerKind === "b2b-unregistered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeOrange }}>Unregistered</span>}
-                        {chosenScenario.meta.buyerKind === "walk-in" && <span style={{ ...styles.scenarioBadge, ...styles.badgePurple }}>Walk-in</span>}
-                      </span>
-                    ) : (
-                      <span style={styles.scenarioCollapseSummaryMuted}>
-                        Pick an FBR scenario to start
-                      </span>
-                    )}
-                    <span style={styles.scenarioCollapseChevron}>
-                      {scenarioPickerOpen ? <MdExpandLess size={20} /> : <MdExpandMore size={20} />}
-                      <span style={styles.scenarioCollapseChevronLabel}>
-                        {scenarioPickerOpen ? "Hide" : "Change"}
-                      </span>
-                    </span>
-                  </button>
-
-                  {scenarioPickerOpen && (
-                    <div style={styles.scenarioCollapseBody}>
-                      <p style={styles.stepHint}>
-                        Each scenario locks the Sale Type, GST rate, and buyer type.
-                        Only the scenarios applicable to your company's profile
-                        ({company?.fbrBusinessActivity || "—"} · {company?.fbrSector || "—"}) are listed.
-                      </p>
-                      {enrichedScenarios.length === 0 ? (
-                        <div style={styles.warnAlert}>
-                          <MdInfo size={16} /> No FBR scenarios available. Configure Business Activity
-                          and Sector on the Company before creating a bill.
-                        </div>
+                  <div style={{ marginBottom: "1rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => setScenarioPickerOpen((v) => !v)}
+                      style={styles.scenarioCollapseHeader}
+                    >
+                      <span style={styles.stepNum}>1</span>
+                      <span style={styles.scenarioCollapseTitle}>FBR Scenario</span>
+                      {chosenScenario ? (
+                        <span style={styles.scenarioCollapseSummary}>
+                          <span style={styles.scenarioCollapseCode}>{chosenScenario.code}</span>
+                          <span>·</span>
+                          <span>{chosenScenario.saleType}</span>
+                          <span>·</span>
+                          <span>{chosenScenario.defaultRate}% GST</span>
+                          {chosenScenario.meta.buyerKind === "b2b-registered" && (
+                            <span style={{ ...styles.scenarioBadge, ...styles.badgeBlue }}>
+                              Registered
+                            </span>
+                          )}
+                          {chosenScenario.meta.buyerKind === "b2b-unregistered" && (
+                            <span style={{ ...styles.scenarioBadge, ...styles.badgeOrange }}>
+                              Unregistered
+                            </span>
+                          )}
+                          {chosenScenario.meta.buyerKind === "walk-in" && (
+                            <span style={{ ...styles.scenarioBadge, ...styles.badgePurple }}>
+                              Walk-in
+                            </span>
+                          )}
+                        </span>
                       ) : (
-                        <div style={styles.scenarioGrid}>
-                          {enrichedScenarios.map((s) => {
-                            const active = scenarioCode === s.code;
-                            return (
-                              <button
-                                type="button"
-                                key={s.code}
-                                onClick={() => {
-                                  setScenarioCode(s.code);
-                                  setScenarioPickerOpen(false);
-                                }}
-                                style={{
-                                  ...styles.scenarioCard,
-                                  borderColor: active ? colors.blue : colors.cardBorder,
-                                  backgroundColor: active ? "#e3f2fd" : "#fff",
-                                }}
-                              >
-                                <div style={styles.scenarioCardHeader}>
-                                  <span style={styles.scenarioCode}>{s.code}</span>
-                                  {active && <MdCheck size={16} color={colors.blue} />}
-                                </div>
-                                <div style={styles.scenarioSaleType}>{s.saleType}</div>
-                                <div style={styles.scenarioRate}>{s.defaultRate}% GST</div>
-                                <div style={styles.scenarioBadges}>
-                                  {s.meta.buyerKind === "b2b-registered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeBlue }}>Registered buyer</span>}
-                                  {s.meta.buyerKind === "b2b-unregistered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeOrange }}>Unregistered buyer</span>}
-                                  {s.meta.buyerKind === "walk-in" && <span style={{ ...styles.scenarioBadge, ...styles.badgePurple }}>Walk-in retail</span>}
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
+                        <span style={styles.scenarioCollapseSummaryMuted}>
+                          Pick an FBR scenario to start
+                        </span>
                       )}
-                    </div>
-                  )}
-                </div>
+                      <span style={styles.scenarioCollapseChevron}>
+                        {scenarioPickerOpen ? (
+                          <MdExpandLess size={20} />
+                        ) : (
+                          <MdExpandMore size={20} />
+                        )}
+                        <span style={styles.scenarioCollapseChevronLabel}>
+                          {scenarioPickerOpen ? "Hide" : "Change"}
+                        </span>
+                      </span>
+                    </button>
+
+                    {scenarioPickerOpen && (
+                      <div style={styles.scenarioCollapseBody}>
+                        <p style={styles.stepHint}>
+                          Each scenario locks the Sale Type, GST rate, and buyer type. Only the
+                          scenarios applicable to your company's profile (
+                          {company?.fbrBusinessActivity || "—"} · {company?.fbrSector || "—"}) are
+                          listed.
+                        </p>
+                        {enrichedScenarios.length === 0 ? (
+                          <div style={styles.warnAlert}>
+                            <MdInfo size={16} /> No FBR scenarios available. Configure Business
+                            Activity and Sector on the Company before creating a bill.
+                          </div>
+                        ) : (
+                          <div style={styles.scenarioGrid}>
+                            {enrichedScenarios.map((s) => {
+                              const active = scenarioCode === s.code;
+                              return (
+                                <button
+                                  type="button"
+                                  key={s.code}
+                                  onClick={() => {
+                                    setScenarioCode(s.code);
+                                    setScenarioPickerOpen(false);
+                                  }}
+                                  style={{
+                                    ...styles.scenarioCard,
+                                    borderColor: active ? colors.blue : colors.cardBorder,
+                                    backgroundColor: active ? "#e3f2fd" : "#fff",
+                                  }}
+                                >
+                                  <div style={styles.scenarioCardHeader}>
+                                    <span style={styles.scenarioCode}>{s.code}</span>
+                                    {active && <MdCheck size={16} color={colors.blue} />}
+                                  </div>
+                                  <div style={styles.scenarioSaleType}>{s.saleType}</div>
+                                  <div style={styles.scenarioRate}>{s.defaultRate}% GST</div>
+                                  <div style={styles.scenarioBadges}>
+                                    {s.meta.buyerKind === "b2b-registered" && (
+                                      <span
+                                        style={{ ...styles.scenarioBadge, ...styles.badgeBlue }}
+                                      >
+                                        Registered buyer
+                                      </span>
+                                    )}
+                                    {s.meta.buyerKind === "b2b-unregistered" && (
+                                      <span
+                                        style={{ ...styles.scenarioBadge, ...styles.badgeOrange }}
+                                      >
+                                        Unregistered buyer
+                                      </span>
+                                    )}
+                                    {s.meta.buyerKind === "walk-in" && (
+                                      <span
+                                        style={{ ...styles.scenarioBadge, ...styles.badgePurple }}
+                                      >
+                                        Walk-in retail
+                                      </span>
+                                    )}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {/* Step 2 — Pick a client. Collapsible — expanded by
                     default. Filtered by scenario.buyerKind + "has at least
                     one pending challan". Inline "+ New Buyer" button. */}
-                {(chosenScenario || !fbrEnabled) && (() => {
-                  const selectedBuyer = clientsForScenario.find((c) => String(c.id) === String(selectedClientId));
-                  const pendingCount = selectedBuyer ? allChallans.filter((ch) => ch.clientId === selectedBuyer.id).length : 0;
-                  return (
-                    <div style={{ marginBottom: "1.25rem" }}>
-                      <button
-                        type="button"
-                        onClick={() => setBuyerOpen((v) => !v)}
-                        style={styles.scenarioCollapseHeader}
-                      >
-                        <span style={styles.stepNum}>2</span>
-                        <span style={styles.scenarioCollapseTitle}>
-                          {chosenScenario?.meta.buyerKind === "walk-in" ? "Walk-in Buyer" : "Buyer"}
-                        </span>
-                        {selectedBuyer ? (
-                          <span style={styles.scenarioCollapseSummary}>
-                            <span>{selectedBuyer.name}</span>
-                            <span style={styles.scenarioCollapseMeta}>· {pendingCount} pending DC{pendingCount !== 1 ? "s" : ""}</span>
+                {(chosenScenario || !fbrEnabled) &&
+                  (() => {
+                    const selectedBuyer = clientsForScenario.find(
+                      (c) => String(c.id) === String(selectedClientId),
+                    );
+                    const pendingCount = selectedBuyer
+                      ? allChallans.filter((ch) => ch.clientId === selectedBuyer.id).length
+                      : 0;
+                    return (
+                      <div style={{ marginBottom: "1.25rem" }}>
+                        <button
+                          type="button"
+                          onClick={() => setBuyerOpen((v) => !v)}
+                          style={styles.scenarioCollapseHeader}
+                        >
+                          <span style={styles.stepNum}>2</span>
+                          <span style={styles.scenarioCollapseTitle}>
+                            {chosenScenario?.meta.buyerKind === "walk-in"
+                              ? "Walk-in Buyer"
+                              : "Buyer"}
                           </span>
-                        ) : (
-                          <span style={styles.scenarioCollapseSummaryMuted}>
-                            Choose a buyer
+                          {selectedBuyer ? (
+                            <span style={styles.scenarioCollapseSummary}>
+                              <span>{selectedBuyer.name}</span>
+                              <span style={styles.scenarioCollapseMeta}>
+                                · {pendingCount} pending DC{pendingCount !== 1 ? "s" : ""}
+                              </span>
+                            </span>
+                          ) : (
+                            <span style={styles.scenarioCollapseSummaryMuted}>Choose a buyer</span>
+                          )}
+                          <span style={styles.scenarioCollapseChevron}>
+                            {buyerOpen ? <MdExpandLess size={20} /> : <MdExpandMore size={20} />}
+                            <span style={styles.scenarioCollapseChevronLabel}>
+                              {buyerOpen ? "Hide" : "Change"}
+                            </span>
                           </span>
-                        )}
-                        <span style={styles.scenarioCollapseChevron}>
-                          {buyerOpen ? <MdExpandLess size={20} /> : <MdExpandMore size={20} />}
-                          <span style={styles.scenarioCollapseChevronLabel}>
-                            {buyerOpen ? "Hide" : "Change"}
-                          </span>
-                        </span>
-                      </button>
+                        </button>
 
-                      {buyerOpen && (
-                        <div style={styles.scenarioCollapseBody}>
-                          <div style={styles.inlineRow}>
-                            {clientsForScenario.length === 0 ? (
-                              <div style={{ ...styles.warnAlert, flex: 1 }}>
-                                <MdInfo size={16} />
-                                No matching{" "}
-                                {chosenScenario?.meta.buyerKind === "b2b-registered" ? "Registered"
-                                  : chosenScenario?.meta.buyerKind === "b2b-unregistered" ? "Unregistered"
-                                  : chosenScenario?.meta.buyerKind === "walk-in" ? "Unregistered (Walk-in)" : ""}{" "}
-                                clients with pending challans.
-                                {canCreateClient ? " Add a buyer below." : " Switch scenarios or ask an admin to add one."}
-                              </div>
-                            ) : (
-                              <div style={{ flex: 1 }}>
-                                <SearchableSelect
-                                  items={clientsForScenario.map((cl) => {
-                                    const count = allChallans.filter((ch) => ch.clientId === cl.id).length;
-                                    return { ...cl, _label: `${cl.name} (${count} pending DC${count !== 1 ? "s" : ""})` };
-                                  })}
-                                  value={selectedClientId}
-                                  onChange={(id) => handleClientChange({ target: { value: id ? String(id) : "" } })}
-                                  labelKey="_label"
-                                  searchKeys={["name", "ntn"]}
-                                  placeholder="— Choose a buyer —"
+                        {buyerOpen && (
+                          <div style={styles.scenarioCollapseBody}>
+                            <div style={styles.inlineRow}>
+                              {clientsForScenario.length === 0 ? (
+                                <div style={{ ...styles.warnAlert, flex: 1 }}>
+                                  <MdInfo size={16} />
+                                  No matching{" "}
+                                  {chosenScenario?.meta.buyerKind === "b2b-registered"
+                                    ? "Registered"
+                                    : chosenScenario?.meta.buyerKind === "b2b-unregistered"
+                                      ? "Unregistered"
+                                      : chosenScenario?.meta.buyerKind === "walk-in"
+                                        ? "Unregistered (Walk-in)"
+                                        : ""}{" "}
+                                  clients with pending challans.
+                                  {canCreateClient
+                                    ? " Add a buyer below."
+                                    : " Switch scenarios or ask an admin to add one."}
+                                </div>
+                              ) : (
+                                <div style={{ flex: 1 }}>
+                                  <SearchableSelect
+                                    items={clientsForScenario.map((cl) => {
+                                      const count = allChallans.filter(
+                                        (ch) => ch.clientId === cl.id,
+                                      ).length;
+                                      return {
+                                        ...cl,
+                                        _label: `${cl.name} (${count} pending DC${count !== 1 ? "s" : ""})`,
+                                      };
+                                    })}
+                                    value={selectedClientId}
+                                    onChange={(id) =>
+                                      handleClientChange({
+                                        target: { value: id ? String(id) : "" },
+                                      })
+                                    }
+                                    labelKey="_label"
+                                    searchKeys={["name", "ntn"]}
+                                    placeholder="— Choose a buyer —"
+                                  />
+                                </div>
+                              )}
+                              {canCreateClient ? (
+                                <button
+                                  type="button"
+                                  style={styles.inlineAddBtn}
+                                  onClick={() => setShowAddClient(true)}
+                                  title="Create a new buyer without leaving this form"
+                                >
+                                  <MdPersonAdd size={14} /> New Buyer
+                                </button>
+                              ) : (
+                                <PermissionLackedHint
+                                  perm="clients.manage.create"
+                                  what="add a new buyer"
                                 />
-                              </div>
-                            )}
-                            {canCreateClient ? (
-                              <button
-                                type="button"
-                                style={styles.inlineAddBtn}
-                                onClick={() => setShowAddClient(true)}
-                                title="Create a new buyer without leaving this form"
+                              )}
+                            </div>
+                            {company && company.startingInvoiceNumber === 0 && (
+                              <div
+                                style={{
+                                  ...styles.errorAlert,
+                                  marginTop: "0.5rem",
+                                  marginBottom: 0,
+                                }}
                               >
-                                <MdPersonAdd size={14} /> New Buyer
-                              </button>
-                            ) : (
-                              <PermissionLackedHint perm="clients.manage.create" what="add a new buyer" />
+                                Starting bill number not set for this company. Please configure it
+                                in the Companies page.
+                              </div>
                             )}
                           </div>
-                          {company && company.startingInvoiceNumber === 0 && (
-                            <div style={{ ...styles.errorAlert, marginTop: "0.5rem", marginBottom: 0 }}>
-                              Starting bill number not set for this company. Please configure it in the Companies page.
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
+                        )}
+                      </div>
+                    );
+                  })()}
 
                 {/* Step 3 — Bill details (collapsible inputs row) +
                     DC selection + items. Same UX as StandaloneInvoiceForm:
                     the inputs row is collapsible (default open) so the
                     operator can free vertical space for the items grid. */}
-                {(chosenScenario || !fbrEnabled) && selectedClientId && company?.startingInvoiceNumber > 0 && (
-                  <>
-                    <div style={{ marginBottom: "0.75rem" }}>
-                      <button
-                        type="button"
-                        onClick={() => setBillHeaderOpen((v) => !v)}
-                        style={styles.scenarioCollapseHeader}
-                      >
-                        <span style={styles.stepNum}>3</span>
-                        <span style={styles.scenarioCollapseTitle}>Bill Details</span>
-                        <span style={styles.scenarioCollapseSummary}>
-                          <span>{billNumberMode === "custom" ? `#${billNumber || "—"}` : "Auto #"}</span>
-                          <span>·</span>
-                          <span>{invoiceDate || "—"}</span>
-                          <span>·</span>
-                          <span>{gstRate}% GST</span>
-                          <span>·</span>
-                          <span>{documentType === 4 ? "Sale Invoice" : documentType === 9 ? "Debit Note" : documentType === 10 ? "Credit Note" : "—"}</span>
-                          {paymentMode && <><span>·</span><span>{paymentMode}</span></>}
-                        </span>
-                        <span style={styles.scenarioCollapseChevron}>
-                          {billHeaderOpen ? <MdExpandLess size={20} /> : <MdExpandMore size={20} />}
-                          <span style={styles.scenarioCollapseChevronLabel}>
-                            {billHeaderOpen ? "Hide" : "Edit"}
+                {(chosenScenario || !fbrEnabled) &&
+                  selectedClientId &&
+                  company?.startingInvoiceNumber > 0 && (
+                    <>
+                      <div style={{ marginBottom: "0.75rem" }}>
+                        <button
+                          type="button"
+                          onClick={() => setBillHeaderOpen((v) => !v)}
+                          style={styles.scenarioCollapseHeader}
+                        >
+                          <span style={styles.stepNum}>3</span>
+                          <span style={styles.scenarioCollapseTitle}>Bill Details</span>
+                          <span style={styles.scenarioCollapseSummary}>
+                            <span>
+                              {billNumberMode === "custom" ? `#${billNumber || "—"}` : "Auto #"}
+                            </span>
+                            <span>·</span>
+                            <span>{invoiceDate || "—"}</span>
+                            <span>·</span>
+                            <span>{gstRate}% GST</span>
+                            <span>·</span>
+                            <span>
+                              {documentType === 4
+                                ? "Sale Invoice"
+                                : documentType === 9
+                                  ? "Debit Note"
+                                  : documentType === 10
+                                    ? "Credit Note"
+                                    : "—"}
+                            </span>
+                            {paymentMode && (
+                              <>
+                                <span>·</span>
+                                <span>{paymentMode}</span>
+                              </>
+                            )}
                           </span>
-                        </span>
-                      </button>
+                          <span style={styles.scenarioCollapseChevron}>
+                            {billHeaderOpen ? (
+                              <MdExpandLess size={20} />
+                            ) : (
+                              <MdExpandMore size={20} />
+                            )}
+                            <span style={styles.scenarioCollapseChevronLabel}>
+                              {billHeaderOpen ? "Hide" : "Edit"}
+                            </span>
+                          </span>
+                        </button>
 
-                      {billHeaderOpen && (
-                        <div style={{ ...styles.scenarioCollapseBody, marginBottom: 0 }}>
-                          <div style={styles.fieldGrid}>
-                            <div style={{ flex: 1, minWidth: 180 }}>
-                              <BillNumberField
+                        {billHeaderOpen && (
+                          <div style={{ ...styles.scenarioCollapseBody, marginBottom: 0 }}>
+                            <div style={styles.fieldGrid}>
+                              <div style={{ flex: 1, minWidth: 180 }}>
+                                <BillNumberField
+                                  companyId={companyId}
+                                  divisionId={divisionId}
+                                  mode={billNumberMode}
+                                  onModeChange={setBillNumberMode}
+                                  number={billNumber}
+                                  onNumberChange={setBillNumber}
+                                  onValidityChange={setBillNumberOk}
+                                  disabled={saving}
+                                />
+                              </div>
+                              <DivisionSelect
                                 companyId={companyId}
-                                divisionId={divisionId}
-                                mode={billNumberMode}
-                                onModeChange={setBillNumberMode}
-                                number={billNumber}
-                                onNumberChange={setBillNumber}
-                                onValidityChange={setBillNumberOk}
-                                disabled={saving}
-                              />
-                            </div>
-                            <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={styles.label} style={styles.input} wrapStyle={{ flex: 1, minWidth: 140 }} />
-                            <div style={{ flex: 1, minWidth: 140 }}>
-                              <label style={styles.label}>Bill Date</label>
-                              <input type="date" style={styles.input} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
-                            </div>
-                            <div style={{ flex: 1, minWidth: 100 }}>
-                              <label style={{ ...styles.label, whiteSpace: "nowrap" }}>
-                                GST Rate (%){chosenScenario && <span style={styles.lockedTag} title={`Locked by ${chosenScenario.code}`}>🔒 locked</span>}
-                              </label>
-                              <input
-                                type="number"
-                                style={{
-                                  ...styles.input,
-                                  backgroundColor: chosenScenario ? "#eef5ff" : colors.inputBg,
-                                  cursor: chosenScenario ? "not-allowed" : "text",
-                                }}
-                                value={gstRate}
-                                onChange={(e) => setGstRate(e.target.value)}
-                                readOnly={!!chosenScenario}
-                                title={chosenScenario ? `Locked by ${chosenScenario.code}. Switch scenario to change.` : ""}
-                                min={0} max={100} step={0.5}
-                              />
-                            </div>
-                            <div style={{ flex: 1, minWidth: 140 }}>
-                              <label style={styles.label}>Withholding Tax</label>
-                              <select style={styles.input} value={whtMode} onChange={(e) => setWhtMode(e.target.value)} title="Income tax withheld on top of GST — reduces the balance due, not the invoice total">
-                                <option value="none">None</option>
-                                <option value="rate">Rate %</option>
-                                <option value="amount">Fixed amount</option>
-                              </select>
-                            </div>
-                            {whtMode === "rate" && (
-                              <div style={{ flex: 1, minWidth: 120 }}>
-                                <label style={styles.label}>WHT Rate (%)</label>
-                                <input
-                                  type="number" min={0} step={0.01}
-                                  style={styles.input}
-                                  value={whtRate}
-                                  onChange={(e) => setWhtRate(e.target.value)}
-                                  placeholder="e.g. 5.5"
-                                />
-                              </div>
-                            )}
-                            {whtMode === "amount" && (
-                              <div style={{ flex: 1, minWidth: 120 }}>
-                                <label style={styles.label}>WHT Amount (Rs.)</label>
-                                <input
-                                  type="number" min={0} step={0.01}
-                                  style={styles.input}
-                                  value={whtAmount}
-                                  onChange={(e) => setWhtAmount(e.target.value)}
-                                  placeholder="0.00"
-                                />
-                              </div>
-                            )}
-                            <div style={{ flex: 1, minWidth: 140 }}>
-                              <label style={styles.label}>Payment Terms</label>
-                              <input type="text" style={styles.input} value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="Optional" />
-                            </div>
-                            <div style={{ flex: 1, minWidth: 140 }}>
-                              <label style={styles.label}>
-                                Document Type <span style={styles.optionalTag}>FBR</span>
-                              </label>
-                              <input
-                                type="text"
-                                style={{ ...styles.input, backgroundColor: "#eef5ff", cursor: "not-allowed" }}
-                                value="Sale Invoice"
-                                readOnly
-                                title="This screen creates Sale Invoices only. Credit / Debit Notes will get their own dedicated screens."
-                              />
-                            </div>
-                            <div style={{ flex: 1, minWidth: 140 }}>
-                              <label style={styles.label}>
-                                Payment Mode <span style={styles.optionalTag}>FBR</span>
-                              </label>
-                              <select
+                                value={divisionId}
+                                onChange={setDivisionId}
+                                mode="select"
+                                label={
+                                  <>
+                                    Division <span style={{ fontWeight: 400 }}>(optional)</span>
+                                  </>
+                                }
+                                labelStyle={styles.label}
                                 style={styles.input}
-                                value={paymentMode}
-                                onChange={(e) => setPaymentMode(e.target.value)}
-                              >
-                                <option value="">— optional —</option>
-                                <option>Cash</option>
-                                <option>Credit</option>
-                                <option>Bank Transfer</option>
-                                <option>Cheque</option>
-                                <option>Online</option>
-                              </select>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Challan selection */}
-                    <div style={{ marginBottom: "1rem", minWidth: 0 }}>
-                      {clientChallans.length === 0 ? (
-                        <p style={{ color: colors.textSecondary, fontSize: "0.85rem" }}>No pending challans for this client.</p>
-                      ) : (
-                        <>
-                          {/* With PO / Without PO tabs, grouped by PO and date (ported from Trader). */}
-                          <ChallanBillingPicker key={selectedClientId} challans={clientChallans} selectedIds={selectedIds} onChange={setSelectedIds} />
-                          {selectedIds.length > 0 && (
-                            <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginTop: "0.6rem" }}>
-                              <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem", flex: "1 1 180px" }}>
-                                <label style={{ fontSize: "0.82rem", fontWeight: 600, color: colors.textSecondary }}>Customer PO #</label>
-                                <input
-                                  type="text"
-                                  placeholder="From order, or enter manually"
-                                  style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.82rem" }}
-                                  value={billPoNumber}
-                                  onChange={(e) => setBillPoNumber(e.target.value)}
-                                />
-                              </div>
-                              <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-                                <label style={{ fontSize: "0.82rem", fontWeight: 600, color: colors.textSecondary }}>PO Date</label>
+                                wrapStyle={{ flex: 1, minWidth: 140 }}
+                              />
+                              <div style={{ flex: 1, minWidth: 140 }}>
+                                <label style={styles.label}>Bill Date</label>
                                 <input
                                   type="date"
-                                  style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.82rem", width: "auto" }}
-                                  value={billPoDate}
-                                  onChange={(e) => setBillPoDate(e.target.value)}
+                                  style={styles.input}
+                                  value={invoiceDate}
+                                  onChange={(e) => setInvoiceDate(e.target.value)}
                                 />
                               </div>
+                              <div style={{ flex: 1, minWidth: 100 }}>
+                                <label style={{ ...styles.label, whiteSpace: "nowrap" }}>
+                                  GST Rate (%)
+                                  {chosenScenario && (
+                                    <span
+                                      style={styles.lockedTag}
+                                      title={`Locked by ${chosenScenario.code}`}
+                                    >
+                                      🔒 locked
+                                    </span>
+                                  )}
+                                </label>
+                                <input
+                                  type="number"
+                                  style={{
+                                    ...styles.input,
+                                    backgroundColor: chosenScenario ? "#eef5ff" : colors.inputBg,
+                                    cursor: chosenScenario ? "not-allowed" : "text",
+                                  }}
+                                  value={gstRate}
+                                  onChange={(e) => setGstRate(e.target.value)}
+                                  readOnly={!!chosenScenario}
+                                  title={
+                                    chosenScenario
+                                      ? `Locked by ${chosenScenario.code}. Switch scenario to change.`
+                                      : ""
+                                  }
+                                  min={0}
+                                  max={100}
+                                  step={0.5}
+                                />
+                              </div>
+                              <div style={{ flex: 1, minWidth: 140 }}>
+                                <label style={styles.label}>Withholding Tax</label>
+                                <select
+                                  style={styles.input}
+                                  value={whtMode}
+                                  onChange={(e) => setWhtMode(e.target.value)}
+                                  title="Income tax withheld on top of GST — reduces the balance due, not the invoice total"
+                                >
+                                  <option value="none">None</option>
+                                  <option value="rate">Rate %</option>
+                                  <option value="amount">Fixed amount</option>
+                                </select>
+                              </div>
+                              {whtMode === "rate" && (
+                                <div style={{ flex: 1, minWidth: 120 }}>
+                                  <label style={styles.label}>WHT Rate (%)</label>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step={0.01}
+                                    style={styles.input}
+                                    value={whtRate}
+                                    onChange={(e) => setWhtRate(e.target.value)}
+                                    placeholder="e.g. 5.5"
+                                  />
+                                </div>
+                              )}
+                              {whtMode === "amount" && (
+                                <div style={{ flex: 1, minWidth: 120 }}>
+                                  <label style={styles.label}>WHT Amount (Rs.)</label>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step={0.01}
+                                    style={styles.input}
+                                    value={whtAmount}
+                                    onChange={(e) => setWhtAmount(e.target.value)}
+                                    placeholder="0.00"
+                                  />
+                                </div>
+                              )}
+                              <div style={{ flex: 1, minWidth: 140 }}>
+                                <label style={styles.label}>Payment Terms</label>
+                                <input
+                                  type="text"
+                                  style={styles.input}
+                                  value={paymentTerms}
+                                  onChange={(e) => setPaymentTerms(e.target.value)}
+                                  placeholder="Optional"
+                                />
+                              </div>
+                              <div style={{ flex: 1, minWidth: 140 }}>
+                                <label style={styles.label}>
+                                  Document Type <span style={styles.optionalTag}>FBR</span>
+                                </label>
+                                <input
+                                  type="text"
+                                  style={{
+                                    ...styles.input,
+                                    backgroundColor: "#eef5ff",
+                                    cursor: "not-allowed",
+                                  }}
+                                  value="Sale Invoice"
+                                  readOnly
+                                  title="This screen creates Sale Invoices only. Credit / Debit Notes will get their own dedicated screens."
+                                />
+                              </div>
+                              <div style={{ flex: 1, minWidth: 140 }}>
+                                <label style={styles.label}>
+                                  Payment Mode <span style={styles.optionalTag}>FBR</span>
+                                </label>
+                                <select
+                                  style={styles.input}
+                                  value={paymentMode}
+                                  onChange={(e) => setPaymentMode(e.target.value)}
+                                >
+                                  <option value="">— optional —</option>
+                                  <option>Cash</option>
+                                  <option>Credit</option>
+                                  <option>Bank Transfer</option>
+                                  <option>Cheque</option>
+                                  <option>Online</option>
+                                </select>
+                              </div>
                             </div>
-                          )}
-                        </>
-                      )}
-                    </div>
+                          </div>
+                        )}
+                      </div>
 
-                    {/* Scenario-locked Sale Type banner — same affordance
+                      {/* Challan selection */}
+                      <div style={{ marginBottom: "1rem", minWidth: 0 }}>
+                        {clientChallans.length === 0 ? (
+                          <p style={{ color: colors.textSecondary, fontSize: "0.85rem" }}>
+                            No pending challans for this client.
+                          </p>
+                        ) : (
+                          <>
+                            {/* With PO / Without PO tabs, grouped by PO and date (ported from Trader). */}
+                            <ChallanBillingPicker
+                              key={selectedClientId}
+                              challans={clientChallans}
+                              selectedIds={selectedIds}
+                              onChange={setSelectedIds}
+                            />
+                            {selectedIds.length > 0 && (
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: "1rem",
+                                  flexWrap: "wrap",
+                                  marginTop: "0.6rem",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "0.2rem",
+                                    flex: "1 1 180px",
+                                  }}
+                                >
+                                  <label
+                                    style={{
+                                      fontSize: "0.82rem",
+                                      fontWeight: 600,
+                                      color: colors.textSecondary,
+                                    }}
+                                  >
+                                    Customer PO #
+                                  </label>
+                                  <input
+                                    type="text"
+                                    placeholder="From order, or enter manually"
+                                    style={{
+                                      ...styles.input,
+                                      padding: "0.3rem 0.5rem",
+                                      fontSize: "0.82rem",
+                                    }}
+                                    value={billPoNumber}
+                                    onChange={(e) => setBillPoNumber(e.target.value)}
+                                  />
+                                </div>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "0.2rem",
+                                  }}
+                                >
+                                  <label
+                                    style={{
+                                      fontSize: "0.82rem",
+                                      fontWeight: 600,
+                                      color: colors.textSecondary,
+                                    }}
+                                  >
+                                    PO Date
+                                  </label>
+                                  <input
+                                    type="date"
+                                    style={{
+                                      ...styles.input,
+                                      padding: "0.3rem 0.5rem",
+                                      fontSize: "0.82rem",
+                                      width: "auto",
+                                    }}
+                                    value={billPoDate}
+                                    onChange={(e) => setBillPoDate(e.target.value)}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+
+                      {/* Scenario-locked Sale Type banner — same affordance
                         as StandaloneInvoiceForm so the operator can see at
                         a glance which sale type every item line will end
                         up with. Hidden when no scenario is picked
                         (auto-detect mode). */}
-                    {chosenScenario && (
-                      <div style={styles.lockedSaleType}>
-                        <span style={styles.lockedSaleTypeIcon}>🔒</span>
-                        <span><b>Sale Type locked:</b> {chosenScenario.saleType}</span>
-                        <span style={styles.lockedSaleTypeHint}>
-                          (every item below uses this — required by {chosenScenario.code})
-                        </span>
-                      </div>
-                    )}
+                      {chosenScenario && (
+                        <div style={styles.lockedSaleType}>
+                          <span style={styles.lockedSaleTypeIcon}>🔒</span>
+                          <span>
+                            <b>Sale Type locked:</b> {chosenScenario.saleType}
+                          </span>
+                          <span style={styles.lockedSaleTypeHint}>
+                            (every item below uses this — required by {chosenScenario.code})
+                          </span>
+                        </div>
+                      )}
 
-                    {/* Items - unified single-row table (same layout as Edit Bill) */}
-                    {shownItems.length > 0 && (
-                      <div>
-                        <div style={styles.itemsHeaderBar}>
-                          <label style={{ ...styles.label, margin: 0 }}>
-                            Items ({allItems.length === shownItems.length ? allItems.length : `${allItems.length} of ${shownItems.length} billed`})
-                            <span style={styles.leaveOutHint}> — untick a line to bill it later; it stays on its challan as pending</span>
-                          </label>
-                          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-                            {/* 2026-05-13: previously hidden when billsMode
+                      {/* Items - unified single-row table (same layout as Edit Bill) */}
+                      {shownItems.length > 0 && (
+                        <div>
+                          <div style={styles.itemsHeaderBar}>
+                            <label style={{ ...styles.label, margin: 0 }}>
+                              Items (
+                              {allItems.length === shownItems.length
+                                ? allItems.length
+                                : `${allItems.length} of ${shownItems.length} billed`}
+                              )
+                              <span style={styles.leaveOutHint}>
+                                {" "}
+                                — untick a line to bill it later; it stays on its challan as pending
+                              </span>
+                            </label>
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: "0.5rem",
+                                alignItems: "center",
+                                flexWrap: "wrap",
+                              }}
+                            >
+                              {/* 2026-05-13: previously hidden when billsMode
                                 was true (Bills tab). Operators asked for
                                 the shortcut on every bill-creation flow,
                                 so it's now visible in both Bills and
                                 Invoices modes. Permission is still
                                 checked — no perm → PermissionLackedHint. */}
-                            {canCreateItemType ? (
-                              <button
-                                type="button"
-                                style={styles.inlineAddBtn}
-                                onClick={() => setShowAddItemType(true)}
-                                title="Add a new item type to your catalog"
-                              >
-                                <MdAdd size={14} /> New Item Type
-                              </button>
-                            ) : (
-                              <PermissionLackedHint inline perm="itemtypes.manage.create" what="add a new item type" />
-                            )}
-                            <div style={styles.hintRow}>
-                              <span style={styles.hintPill}>Tip</span>
-                              Pick from <b>SAVED</b> (remembered defaults) or <b>FBR catalog</b> to auto-fill HS Code & UOM.
+                              {canCreateItemType ? (
+                                <button
+                                  type="button"
+                                  style={styles.inlineAddBtn}
+                                  onClick={() => setShowAddItemType(true)}
+                                  title="Add a new item type to your catalog"
+                                >
+                                  <MdAdd size={14} /> New Item Type
+                                </button>
+                              ) : (
+                                <PermissionLackedHint
+                                  inline
+                                  perm="itemtypes.manage.create"
+                                  what="add a new item type"
+                                />
+                              )}
+                              <div style={styles.hintRow}>
+                                <span style={styles.hintPill}>Tip</span>
+                                Pick from <b>SAVED</b> (remembered defaults) or <b>FBR catalog</b>{" "}
+                                to auto-fill HS Code & UOM.
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        {autoFilledFromHistory && (
-                          <div style={{
-                            display: "flex", alignItems: "flex-start", gap: "0.5rem",
-                            padding: "0.55rem 0.85rem", marginBottom: "0.5rem",
-                            backgroundColor: "#fff8e1", border: "1px solid #ffcc80",
-                            borderRadius: 8, fontSize: "0.82rem", color: "#bf360c"
-                          }}>
-                            <span style={{ fontSize: "1rem", lineHeight: 1 }}>⚠</span>
-                            <div>
-                              <b>Rates pre-filled from last bill.</b>
-                              {" "}Verify each unit price below — material prices may have changed since the previous order. Override any row that needs a new rate.
+                          {autoFilledFromHistory && (
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "flex-start",
+                                gap: "0.5rem",
+                                padding: "0.55rem 0.85rem",
+                                marginBottom: "0.5rem",
+                                backgroundColor: "#fff8e1",
+                                border: "1px solid #ffcc80",
+                                borderRadius: 8,
+                                fontSize: "0.82rem",
+                                color: "#bf360c",
+                              }}
+                            >
+                              <span style={{ fontSize: "1rem", lineHeight: 1 }}>⚠</span>
+                              <div>
+                                <b>Rates pre-filled from last bill.</b> Verify each unit price below
+                                — material prices may have changed since the previous order.
+                                Override any row that needs a new rate.
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
 
-                        {/* Bulk "apply same Item Type to all lines" — shared
+                          {/* Bulk "apply same Item Type to all lines" — shared
                             component (retains the picked value). Visible in Bills
                             mode too — a type picked at bill time persists to the
                             Invoices tab. */}
-                        <BulkItemTypeBar
-                          itemCount={allItems.length}
-                          itemTypes={filteredItemTypes}
-                          nonInventoryItems={nonInvItems}
-                          divisionId={divisionId}
-                          onApplyItemType={(id, picked, mode) => applyItemTypeToAll(id, picked, mode)}
-                          onApplyNonInv={(n, mode) => applyNonInvToAll(n, mode)}
-                          onClearAll={() => clearAllItemTypes()}
-                          anyTagged={Object.values(itemTypeIds).some(Boolean)}
-                        />
+                          <BulkItemTypeBar
+                            itemCount={allItems.length}
+                            itemTypes={filteredItemTypes}
+                            nonInventoryItems={nonInvItems}
+                            divisionId={divisionId}
+                            onApplyItemType={(id, picked, mode) =>
+                              applyItemTypeToAll(id, picked, mode)
+                            }
+                            onApplyNonInv={(n, mode) => applyNonInvToAll(n, mode)}
+                            onClearAll={() => clearAllItemTypes()}
+                            anyTagged={Object.values(itemTypeIds).some(Boolean)}
+                          />
 
-                        {isNarrow ? (
-                          <div style={styles.mcards}>
-                            {billRows.map((item) => {
-                              const cells = Object.fromEntries(billRowCells(item).map((c) => [c.key, c]));
-                              const field = (key) => cells[key] && (
-                                <div style={{ minWidth: 0 }}>
-                                  <label style={styles.mlabel}>{cells[key].label}</label>
-                                  {cells[key].node}
-                                </div>
-                              );
-                              return (
-                                <div key={item.id} style={styles.mcard}>
-                                  <div style={styles.mcardHead}>
-                                    <label style={styles.billTick}>
-                                      <input type="checkbox" checked onChange={() => toggleLeftOut(item.members.map((m) => m.id))}
-                                        aria-label={`Bill ${item.description} now`} style={styles.billTickBox} />
-                                      Bill
-                                    </label>
-                                    <span style={styles.mdc}>DC #{item.members.map((m) => m.challanNumber).join(", ")}</span>
-                                  </div>
-                                  <div style={styles.mstack}>
-                                    {field("type")}
-                                    {field("desc")}
-                                    <div style={styles.mgrid3}>{field("qty")}{field("uom")}{field("price")}</div>
-                                    {field("account")}
-                                    {field("hs")}
-                                    {field("sale")}
-                                  </div>
-                                  <div style={styles.mamt}>
-                                    <span style={styles.mlabel}>Line Total</span>
-                                    <span style={{ fontWeight: 700, color: colors.textPrimary }}>Rs. {cells.total.node}</span>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                            {leftOutItems.map((item) => (
-                              <div key={`out-${item.id}`} style={{ ...styles.mcard, ...styles.leftOutRow }}>
-                                <div style={styles.mcardHead}>
-                                  <label style={styles.billTick}>
-                                    <input type="checkbox" checked={false} onChange={() => toggleLeftOut([item.id])}
-                                      aria-label={`Bill ${item.description} now`} style={styles.billTickBox} />
-                                    Later
-                                  </label>
-                                  <span style={styles.mdc}>DC #{item.challanNumber}</span>
-                                </div>
-                                <div style={{ overflowWrap: "anywhere", fontSize: "0.85rem" }}>
-                                  <span style={{ textDecoration: "line-through" }}>{item.description}</span>
-                                  {" "}· {num(item.quantity)} {item.unit}
-                                  <div style={{ color: "#8a5a00", fontWeight: 600 }}>Billed later — stays pending on DC #{item.challanNumber}</div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                        <div data-admin-table-region="" style={styles.unifiedTableWrap}>
-                          <table style={styles.unifiedTable}>
-                            <thead>
-                              <tr style={styles.unifiedThead}>
-                                <th style={{ ...styles.unifiedTh, width: "6%" }}>Bill · DC#</th>
-                                <th style={{ ...styles.unifiedTh, width: "14%" }}>Item Type (FBR) *</th>
-                                <th style={{ ...styles.unifiedTh, width: "16%" }}>Description</th>
-                                <th style={{ ...styles.unifiedTh, width: "9%" }}>Qty</th>
-                                <th style={{ ...styles.unifiedTh, width: "8%" }}>UOM</th>
-                                <th style={{ ...styles.unifiedTh, width: "8%" }}>Unit Price *</th>
-                                <th style={{ ...styles.unifiedTh, width: "9%" }}>Line Total</th>
-                                {/* Account (GL) — which income account this line's
-                                    amount posts to. Shown in BOTH Bills and Invoices
-                                    modes when the company has a Chart of Accounts. */}
-                                {glOn && (
-                                  <th style={{ ...styles.unifiedTh, width: "14%" }} title="GL income account this line posts to">Account (GL)</th>
-                                )}
-                                {/* HS Code is FBR data — only relevant on the
-                                    Invoices tab. Bills mode is pre-FBR data
-                                    entry, so hide it. */}
-                                {!billsMode && (
-                                  <th style={{ ...styles.unifiedTh, width: "10%" }}>HS Code</th>
-                                )}
-                                {/* Sale Type is FBR-only data — same gating as HS Code.
-                                    2026-05-08: was visible in both modes, which broke the symmetry
-                                    with EditBillForm's Bills view. */}
-                                {!billsMode && (
-                                  <th style={{ ...styles.unifiedTh, width: "22%" }}>Sale Type</th>
-                                )}
-                              </tr>
-                            </thead>
-                            <tbody>
+                          {isNarrow ? (
+                            <div style={styles.mcards}>
                               {billRows.map((item) => {
+                                const cells = Object.fromEntries(
+                                  billRowCells(item).map((c) => [c.key, c]),
+                                );
+                                const field = (key) =>
+                                  cells[key] && (
+                                    <div style={{ minWidth: 0 }}>
+                                      <label style={styles.mlabel}>{cells[key].label}</label>
+                                      {cells[key].node}
+                                    </div>
+                                  );
                                 return (
-                                  <tr key={item.id} style={styles.unifiedRow}>
-                                    {billRowCells(item).map((c) => <td key={c.key} {...c.tdProps}>{c.node}</td>)}
-                                  </tr>
+                                  <div key={item.id} style={styles.mcard}>
+                                    <div style={styles.mcardHead}>
+                                      <label style={styles.billTick}>
+                                        <input
+                                          type="checkbox"
+                                          checked
+                                          onChange={() =>
+                                            toggleLeftOut(item.members.map((m) => m.id))
+                                          }
+                                          aria-label={`Bill ${item.description} now`}
+                                          style={styles.billTickBox}
+                                        />
+                                        Bill
+                                      </label>
+                                      <span style={styles.mdc}>
+                                        DC #{item.members.map((m) => m.challanNumber).join(", ")}
+                                      </span>
+                                    </div>
+                                    <div style={styles.mstack}>
+                                      {field("type")}
+                                      {field("desc")}
+                                      <div style={styles.mgrid3}>
+                                        {field("qty")}
+                                        {field("uom")}
+                                        {field("price")}
+                                      </div>
+                                      {field("account")}
+                                      {field("hs")}
+                                      {field("sale")}
+                                    </div>
+                                    <div style={styles.mamt}>
+                                      <span style={styles.mlabel}>Line Total</span>
+                                      <span style={{ fontWeight: 700, color: colors.textPrimary }}>
+                                        Rs. {cells.total.node}
+                                      </span>
+                                    </div>
+                                  </div>
                                 );
                               })}
-                              {/* Lines left off this bill: each returns to a pending row of its challan. */}
                               {leftOutItems.map((item) => (
-                                <tr key={`out-${item.id}`} style={{ ...styles.unifiedRow, ...styles.leftOutRow }}>
-                                  <td style={{ ...styles.unifiedTd, fontSize: "0.76rem", color: colors.textSecondary }}>
-                                    <label style={styles.billTickCell} title="Left out: billed later. Tick to bill it now">
-                                      <input type="checkbox" checked={false} onChange={() => toggleLeftOut([item.id])}
-                                        aria-label={`Bill ${item.description} now`} style={styles.billTickBox} />
-                                      <span>{item.challanNumber}</span>
+                                <div
+                                  key={`out-${item.id}`}
+                                  style={{ ...styles.mcard, ...styles.leftOutRow }}
+                                >
+                                  <div style={styles.mcardHead}>
+                                    <label style={styles.billTick}>
+                                      <input
+                                        type="checkbox"
+                                        checked={false}
+                                        onChange={() => toggleLeftOut([item.id])}
+                                        aria-label={`Bill ${item.description} now`}
+                                        style={styles.billTickBox}
+                                      />
+                                      Later
                                     </label>
-                                  </td>
-                                  <td colSpan={glOn ? 7 : 6} style={styles.unifiedTd}>
-                                    {/* Sticky + capped so the note stays readable inside the
-                                        horizontally scrolling table on a phone. */}
-                                    <span style={styles.leftOutNote}>
-                                      <span style={{ textDecoration: "line-through" }}>{item.description}</span>
-                                      {" "}· {num(item.quantity)} {item.unit}
-                                      <span style={{ color: "#8a5a00", fontWeight: 600 }}> — billed later, stays pending on DC #{item.challanNumber}</span>
-                                    </span>
-                                  </td>
-                                  {!billsMode && <td style={styles.unifiedTd} colSpan={2} />}
-                                </tr>
+                                    <span style={styles.mdc}>DC #{item.challanNumber}</span>
+                                  </div>
+                                  <div style={{ overflowWrap: "anywhere", fontSize: "0.85rem" }}>
+                                    <span style={{ textDecoration: "line-through" }}>
+                                      {item.description}
+                                    </span>{" "}
+                                    · {num(item.quantity)} {item.unit}
+                                    <div style={{ color: "#8a5a00", fontWeight: 600 }}>
+                                      Billed later — stays pending on DC #{item.challanNumber}
+                                    </div>
+                                  </div>
+                                </div>
                               ))}
-                            </tbody>
-                          </table>
-                        </div>
-                        )}
-                        <p style={styles.fbrToggleHint}>
-                          <b>*</b> Item Type (or a Non-Inventory item) and Unit Price are required on every line.
-                          HS Code &amp; Sale Type are optional — needed only when submitting to FBR. They auto-fill when you pick an item.
-                          {!canCreateItemType && (
-                            <span style={{ marginLeft: 8 }}>
-                              · <PermissionLackedHint inline perm="itemtypes.manage.create" what="add a new item type" />
-                            </span>
+                            </div>
+                          ) : (
+                            <div data-admin-table-region="" style={styles.unifiedTableWrap}>
+                              <table style={styles.unifiedTable}>
+                                <thead>
+                                  <tr style={styles.unifiedThead}>
+                                    <th style={{ ...styles.unifiedTh, width: "6%" }}>Bill · DC#</th>
+                                    <th style={{ ...styles.unifiedTh, width: "14%" }}>
+                                      Item Type (FBR) *
+                                    </th>
+                                    <th style={{ ...styles.unifiedTh, width: "16%" }}>
+                                      Description
+                                    </th>
+                                    <th style={{ ...styles.unifiedTh, width: "9%" }}>Qty</th>
+                                    <th style={{ ...styles.unifiedTh, width: "8%" }}>UOM</th>
+                                    <th style={{ ...styles.unifiedTh, width: "8%" }}>
+                                      Unit Price *
+                                    </th>
+                                    <th style={{ ...styles.unifiedTh, width: "9%" }}>Line Total</th>
+                                    {/* Account (GL) — which income account this line's
+                                    amount posts to. Shown in BOTH Bills and Invoices
+                                    modes when the company has a Chart of Accounts. */}
+                                    {glOn && (
+                                      <th
+                                        style={{ ...styles.unifiedTh, width: "14%" }}
+                                        title="GL income account this line posts to"
+                                      >
+                                        Account (GL)
+                                      </th>
+                                    )}
+                                    {/* HS Code is FBR data — only relevant on the
+                                    Invoices tab. Bills mode is pre-FBR data
+                                    entry, so hide it. */}
+                                    {!billsMode && (
+                                      <th style={{ ...styles.unifiedTh, width: "10%" }}>HS Code</th>
+                                    )}
+                                    {/* Sale Type is FBR-only data — same gating as HS Code.
+                                    2026-05-08: was visible in both modes, which broke the symmetry
+                                    with EditBillForm's Bills view. */}
+                                    {!billsMode && (
+                                      <th style={{ ...styles.unifiedTh, width: "22%" }}>
+                                        Sale Type
+                                      </th>
+                                    )}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {billRows.map((item) => {
+                                    return (
+                                      <tr key={item.id} style={styles.unifiedRow}>
+                                        {billRowCells(item).map((c) => (
+                                          <td key={c.key} {...c.tdProps}>
+                                            {c.node}
+                                          </td>
+                                        ))}
+                                      </tr>
+                                    );
+                                  })}
+                                  {/* Lines left off this bill: each returns to a pending row of its challan. */}
+                                  {leftOutItems.map((item) => (
+                                    <tr
+                                      key={`out-${item.id}`}
+                                      style={{ ...styles.unifiedRow, ...styles.leftOutRow }}
+                                    >
+                                      <td
+                                        style={{
+                                          ...styles.unifiedTd,
+                                          fontSize: "0.76rem",
+                                          color: colors.textSecondary,
+                                        }}
+                                      >
+                                        <label
+                                          style={styles.billTickCell}
+                                          title="Left out: billed later. Tick to bill it now"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={false}
+                                            onChange={() => toggleLeftOut([item.id])}
+                                            aria-label={`Bill ${item.description} now`}
+                                            style={styles.billTickBox}
+                                          />
+                                          <span>{item.challanNumber}</span>
+                                        </label>
+                                      </td>
+                                      <td colSpan={glOn ? 7 : 6} style={styles.unifiedTd}>
+                                        {/* Sticky + capped so the note stays readable inside the
+                                        horizontally scrolling table on a phone. */}
+                                        <span style={styles.leftOutNote}>
+                                          <span style={{ textDecoration: "line-through" }}>
+                                            {item.description}
+                                          </span>{" "}
+                                          · {num(item.quantity)} {item.unit}
+                                          <span style={{ color: "#8a5a00", fontWeight: 600 }}>
+                                            {" "}
+                                            — billed later, stays pending on DC #
+                                            {item.challanNumber}
+                                          </span>
+                                        </span>
+                                      </td>
+                                      {!billsMode && <td style={styles.unifiedTd} colSpan={2} />}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
                           )}
-                        </p>
+                          <p style={styles.fbrToggleHint}>
+                            <b>*</b> Item Type (or a Non-Inventory item) and Unit Price are required
+                            on every line. HS Code &amp; Sale Type are optional — needed only when
+                            submitting to FBR. They auto-fill when you pick an item.
+                            {!canCreateItemType && (
+                              <span style={{ marginLeft: 8 }}>
+                                ·{" "}
+                                <PermissionLackedHint
+                                  inline
+                                  perm="itemtypes.manage.create"
+                                  what="add a new item type"
+                                />
+                              </span>
+                            )}
+                          </p>
 
-                        {billsMode && <FreightChargesField value={freightCharges} onChange={setFreightCharges} />}
-                        {/* Totals */}
-                        <div style={styles.totalsBox}>
-                          <div style={styles.totalRow}><span>Subtotal:</span><span>Rs. {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
-                          <div style={styles.totalRow}><span>GST ({gstRate}%):</span><span>Rs. {gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
-                          {billsMode && Number(freightCharges) > 0 && (
-                            <div style={styles.totalRow}><span>Freight / cartage:</span><span>Rs. {Number(freightCharges).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                          {billsMode && (
+                            <FreightChargesField
+                              value={freightCharges}
+                              onChange={setFreightCharges}
+                            />
                           )}
-                          <div style={{ ...styles.totalRow, fontWeight: 700, fontSize: "1rem", borderTop: "2px solid #333", paddingTop: "0.5rem" }}>
-                            <span>{billsMode ? "Commercial Total:" : "Grand Total:"}</span><span>Rs. {(billsMode ? commercialTotal : grandTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                          </div>
-                          {whtResolved > 0 && (
-                            <>
+                          {/* Totals */}
+                          <div style={styles.totalsBox}>
+                            <div style={styles.totalRow}>
+                              <span>Subtotal:</span>
+                              <span>
+                                Rs.{" "}
+                                {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            <div style={styles.totalRow}>
+                              <span>GST ({gstRate}%):</span>
+                              <span>
+                                Rs.{" "}
+                                {gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            {billsMode && Number(freightCharges) > 0 && (
                               <div style={styles.totalRow}>
-                                <span>Withholding tax{whtMode === "rate" ? ` (${whtRate}%)` : ""}:</span>
-                                <span>Rs. {whtResolved.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                <span>Freight / cartage:</span>
+                                <span>
+                                  Rs.{" "}
+                                  {Number(freightCharges).toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}
+                                </span>
                               </div>
-                              <div style={{ ...styles.totalRow, fontWeight: 700, fontSize: "1rem", borderTop: "2px solid #333", paddingTop: "0.5rem" }}>
-                                <span>Balance due:</span><span>Rs. {balanceDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                              </div>
-                            </>
-                          )}
+                            )}
+                            <div
+                              style={{
+                                ...styles.totalRow,
+                                fontWeight: 700,
+                                fontSize: "1rem",
+                                borderTop: "2px solid #333",
+                                paddingTop: "0.5rem",
+                              }}
+                            >
+                              <span>{billsMode ? "Commercial Total:" : "Grand Total:"}</span>
+                              <span>
+                                Rs.{" "}
+                                {(billsMode ? commercialTotal : grandTotal).toLocaleString(
+                                  undefined,
+                                  { minimumFractionDigits: 2 },
+                                )}
+                              </span>
+                            </div>
+                            {whtResolved > 0 && (
+                              <>
+                                <div style={styles.totalRow}>
+                                  <span>
+                                    Withholding tax{whtMode === "rate" ? ` (${whtRate}%)` : ""}:
+                                  </span>
+                                  <span>
+                                    Rs.{" "}
+                                    {whtResolved.toLocaleString(undefined, {
+                                      minimumFractionDigits: 2,
+                                    })}
+                                  </span>
+                                </div>
+                                <div
+                                  style={{
+                                    ...styles.totalRow,
+                                    fontWeight: 700,
+                                    fontSize: "1rem",
+                                    borderTop: "2px solid #333",
+                                    paddingTop: "0.5rem",
+                                  }}
+                                >
+                                  <span>Balance due:</span>
+                                  <span>
+                                    Rs.{" "}
+                                    {balanceDue.toLocaleString(undefined, {
+                                      minimumFractionDigits: 2,
+                                    })}
+                                  </span>
+                                </div>
+                              </>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </>
-                )}
+                      )}
+                    </>
+                  )}
 
                 {/* Attachments — staged client-side until the bill is created,
                     then flushed against the new id (see handleSubmit). */}
@@ -1975,14 +2554,39 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
               </span>
             ) : allItems.length > 0 && !allLinesComplete ? (
               <span style={{ fontSize: "0.8rem", color: colors.danger, marginRight: "auto" }}>
-                Every line needs an Item Type (or Non-Inventory item), a description, quantity &gt; 0 and unit price &gt; 0.
+                Every line needs an Item Type (or Non-Inventory item), a description, quantity &gt;
+                0 and unit price &gt; 0.
               </span>
             ) : null}
-            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            <button
+              data-admin-close=""
+              type="button"
+              style={{ ...formStyles.button, ...formStyles.cancel }}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
             <button
               type="submit"
-              style={{ ...formStyles.button, ...formStyles.submit, opacity: saving || !selectedClientId || selectedIds.length === 0 || !allLinesComplete || !billNumberOk ? 0.6 : 1 }}
-              disabled={saving || !selectedClientId || selectedIds.length === 0 || !allLinesComplete || !billNumberOk}
+              style={{
+                ...formStyles.button,
+                ...formStyles.submit,
+                opacity:
+                  saving ||
+                  !selectedClientId ||
+                  selectedIds.length === 0 ||
+                  !allLinesComplete ||
+                  !billNumberOk
+                    ? 0.6
+                    : 1,
+              }}
+              disabled={
+                saving ||
+                !selectedClientId ||
+                selectedIds.length === 0 ||
+                !allLinesComplete ||
+                !billNumberOk
+              }
             >
               {saving ? "Creating..." : "Create Bill"}
             </button>
@@ -2015,7 +2619,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
           scenarioSaleType={chosenScenario?.saleType}
           showGlMapping
           defaultDivisionId={divisionId || null}
-          onClose={() => { setShowAddItemType(false); setPendingItemTypeRowId(null); }}
+          onClose={() => {
+            setShowAddItemType(false);
+            setPendingItemTypeRowId(null);
+          }}
           onSaved={(created) => onItemTypeCreated(created)}
         />
       )}
@@ -2029,56 +2636,332 @@ const styles = {
   // that wrap cleanly (no lone last field stretching full width). Collapses to
   // one column on phones; alignItems:end keeps inputs aligned when a label
   // (e.g. "GST Rate (%) 🔒 locked") wraps to two lines.
-  fieldGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(180px, 100%), 1fr))", gap: "0.75rem 1rem", marginBottom: "1rem", alignItems: "end" },
-  label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
-  input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", boxSizing: "border-box" },
-  select: { width: "100%", padding: "0.6rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", cursor: "pointer" },
-  errorAlert: { backgroundColor: colors.dangerLight, color: colors.danger, padding: "0.65rem 1rem", borderRadius: 8, marginBottom: "1rem", fontWeight: 500, border: `1px solid ${colors.danger}30`, fontSize: "0.85rem" },
+  fieldGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(min(180px, 100%), 1fr))",
+    gap: "0.75rem 1rem",
+    marginBottom: "1rem",
+    alignItems: "end",
+  },
+  label: {
+    display: "block",
+    marginBottom: "0.35rem",
+    fontWeight: 600,
+    fontSize: "0.85rem",
+    color: colors.textSecondary,
+  },
+  input: {
+    width: "100%",
+    padding: "0.55rem 0.75rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    fontSize: "0.9rem",
+    backgroundColor: colors.inputBg,
+    color: colors.textPrimary,
+    outline: "none",
+    boxSizing: "border-box",
+  },
+  select: {
+    width: "100%",
+    padding: "0.6rem 0.75rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    fontSize: "0.9rem",
+    backgroundColor: colors.inputBg,
+    color: colors.textPrimary,
+    outline: "none",
+    cursor: "pointer",
+  },
+  errorAlert: {
+    backgroundColor: colors.dangerLight,
+    color: colors.danger,
+    padding: "0.65rem 1rem",
+    borderRadius: 8,
+    marginBottom: "1rem",
+    fontWeight: 500,
+    border: `1px solid ${colors.danger}30`,
+    fontSize: "0.85rem",
+  },
   mcards: { display: "flex", flexDirection: "column", gap: "0.6rem", minWidth: 0 },
-  mcard: { border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff", minWidth: 0 },
-  mcardHead: { display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem", flexWrap: "wrap" },
+  mcard: {
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 12,
+    padding: "0.7rem 0.75rem",
+    background: "#fff",
+    minWidth: 0,
+  },
+  mcardHead: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    marginBottom: "0.5rem",
+    flexWrap: "wrap",
+  },
   mstack: { display: "flex", flexDirection: "column", gap: "0.5rem", minWidth: 0 },
-  mdc: { fontSize: "0.7rem", fontWeight: 700, color: "#0d47a1", background: "#e3f2fd", borderRadius: 6, padding: "0.15rem 0.45rem", overflowWrap: "anywhere" },
-  mlabel: { display: "block", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.03em", color: colors.textSecondary, fontWeight: 700, marginBottom: "0.2rem" },
-  mgrid3: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(96px, 100%), 1fr))", gap: "0.5rem" },
-  mamt: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.55rem", paddingTop: "0.45rem", borderTop: `1px dashed ${colors.cardBorder}`, fontSize: "0.85rem", color: colors.textSecondary, gap: "0.5rem", flexWrap: "wrap" },
-  billTick: { display: "inline-flex", alignItems: "center", gap: "0.4rem", fontSize: "0.78rem", fontWeight: 700, color: "#0d47a1", minHeight: 44, minWidth: 44, cursor: "pointer" },
-  billTickCell: { display: "flex", flexDirection: "column", alignItems: "center", gap: 2, cursor: "pointer", minHeight: 44, justifyContent: "center" },
+  mdc: {
+    fontSize: "0.7rem",
+    fontWeight: 700,
+    color: "#0d47a1",
+    background: "#e3f2fd",
+    borderRadius: 6,
+    padding: "0.15rem 0.45rem",
+    overflowWrap: "anywhere",
+  },
+  mlabel: {
+    display: "block",
+    fontSize: "0.68rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+    color: colors.textSecondary,
+    fontWeight: 700,
+    marginBottom: "0.2rem",
+  },
+  mgrid3: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(96px, 100%), 1fr))",
+    gap: "0.5rem",
+  },
+  mamt: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: "0.55rem",
+    paddingTop: "0.45rem",
+    borderTop: `1px dashed ${colors.cardBorder}`,
+    fontSize: "0.85rem",
+    color: colors.textSecondary,
+    gap: "0.5rem",
+    flexWrap: "wrap",
+  },
+  billTick: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    fontSize: "0.78rem",
+    fontWeight: 700,
+    color: "#0d47a1",
+    minHeight: 44,
+    minWidth: 44,
+    cursor: "pointer",
+  },
+  billTickCell: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 2,
+    cursor: "pointer",
+    minHeight: 44,
+    justifyContent: "center",
+  },
   billTickBox: { width: 20, height: 20, cursor: "pointer", margin: 0 },
-  leftOutNote: { position: "sticky", left: 8, display: "inline-block", maxWidth: "min(640px, calc(100vw - 140px))", whiteSpace: "normal", overflowWrap: "anywhere" },
+  leftOutNote: {
+    position: "sticky",
+    left: 8,
+    display: "inline-block",
+    maxWidth: "min(640px, calc(100vw - 140px))",
+    whiteSpace: "normal",
+    overflowWrap: "anywhere",
+  },
   leftOutRow: { opacity: 0.6, backgroundColor: "#fffdf5" },
   leaveOutHint: { fontWeight: 400, fontSize: "0.72rem", color: "#5f6d7e" },
-  challanGrid: { display: "flex", flexDirection: "column", gap: "0.4rem", maxHeight: 200, overflowY: "auto" },
-  challanCard: { display: "flex", alignItems: "center", padding: "0.5rem 0.75rem", borderRadius: 8, border: "2px solid", cursor: "pointer", transition: "all 0.2s", fontSize: "0.88rem" },
-  selectAllBtn: { padding: "0.25rem 0.6rem", borderRadius: 6, border: `1px solid ${colors.inputBorder}`, backgroundColor: "#fff", fontSize: "0.75rem", fontWeight: 600, color: colors.blue, cursor: "pointer" },
+  challanGrid: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.4rem",
+    maxHeight: 200,
+    overflowY: "auto",
+  },
+  challanCard: {
+    display: "flex",
+    alignItems: "center",
+    padding: "0.5rem 0.75rem",
+    borderRadius: 8,
+    border: "2px solid",
+    cursor: "pointer",
+    transition: "all 0.2s",
+    fontSize: "0.88rem",
+  },
+  selectAllBtn: {
+    padding: "0.25rem 0.6rem",
+    borderRadius: 6,
+    border: `1px solid ${colors.inputBorder}`,
+    backgroundColor: "#fff",
+    fontSize: "0.75rem",
+    fontWeight: 600,
+    color: colors.blue,
+    cursor: "pointer",
+  },
   itemsTable: { display: "flex", flexDirection: "column", gap: "0.3rem", marginBottom: "1rem" },
-  itemsHeader: { display: "flex", gap: "0.5rem", alignItems: "center", padding: "0.4rem 0.5rem", backgroundColor: "#f0f4f8", borderRadius: 6, fontSize: "0.75rem", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase" },
-  itemRow: { display: "flex", gap: "0.5rem", alignItems: "center", padding: "0.4rem 0.5rem", borderRadius: 6, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#fafbfc" },
-  totalsBox: { display: "flex", flexDirection: "column", gap: "0.35rem", alignItems: "flex-end", padding: "1rem", backgroundColor: "#f8f9fb", borderRadius: 8, border: `1px solid ${colors.cardBorder}` },
-  totalRow: { display: "flex", gap: "2rem", justifyContent: "flex-end", fontSize: "0.9rem", minWidth: 280 },
-  poDateInfo: { display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.5rem", padding: "0.5rem 0.75rem", borderRadius: 8, backgroundColor: "#e3f2fd", border: "1px solid #0d47a130", flexWrap: "wrap" },
+  itemsHeader: {
+    display: "flex",
+    gap: "0.5rem",
+    alignItems: "center",
+    padding: "0.4rem 0.5rem",
+    backgroundColor: "#f0f4f8",
+    borderRadius: 6,
+    fontSize: "0.75rem",
+    fontWeight: 700,
+    color: colors.textSecondary,
+    textTransform: "uppercase",
+  },
+  itemRow: {
+    display: "flex",
+    gap: "0.5rem",
+    alignItems: "center",
+    padding: "0.4rem 0.5rem",
+    borderRadius: 6,
+    border: `1px solid ${colors.cardBorder}`,
+    backgroundColor: "#fafbfc",
+  },
+  totalsBox: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.35rem",
+    alignItems: "flex-end",
+    padding: "1rem",
+    backgroundColor: "#f8f9fb",
+    borderRadius: 8,
+    border: `1px solid ${colors.cardBorder}`,
+  },
+  totalRow: {
+    display: "flex",
+    gap: "2rem",
+    justifyContent: "flex-end",
+    fontSize: "0.9rem",
+    minWidth: 280,
+  },
+  poDateInfo: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    marginTop: "0.5rem",
+    padding: "0.5rem 0.75rem",
+    borderRadius: 8,
+    backgroundColor: "#e3f2fd",
+    border: "1px solid #0d47a130",
+    flexWrap: "wrap",
+  },
   fbrToggleHint: { margin: "0.3rem 0 0", fontSize: "0.75rem", color: colors.textSecondary },
-  optionalTag: { marginLeft: "0.3rem", padding: "0.05rem 0.35rem", borderRadius: 4, backgroundColor: "#fff3e0", color: "#e65100", fontSize: "0.62rem", fontWeight: 800, letterSpacing: "0.03em", textTransform: "uppercase" },
-  itemsHeaderBar: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.5rem" },
-  hintRow: { display: "inline-flex", alignItems: "center", gap: "0.35rem", fontSize: "0.75rem", color: colors.textSecondary },
-  hintPill: { padding: "0.05rem 0.4rem", borderRadius: 4, backgroundColor: "#e3f2fd", color: colors.blue, fontSize: "0.65rem", fontWeight: 800, letterSpacing: "0.03em" },
-  unifiedTableWrap: { width: "100%", overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 8 },
+  optionalTag: {
+    marginLeft: "0.3rem",
+    padding: "0.05rem 0.35rem",
+    borderRadius: 4,
+    backgroundColor: "#fff3e0",
+    color: "#e65100",
+    fontSize: "0.62rem",
+    fontWeight: 800,
+    letterSpacing: "0.03em",
+    textTransform: "uppercase",
+  },
+  itemsHeaderBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: "0.5rem",
+    marginBottom: "0.5rem",
+  },
+  hintRow: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.35rem",
+    fontSize: "0.75rem",
+    color: colors.textSecondary,
+  },
+  hintPill: {
+    padding: "0.05rem 0.4rem",
+    borderRadius: 4,
+    backgroundColor: "#e3f2fd",
+    color: colors.blue,
+    fontSize: "0.65rem",
+    fontWeight: 800,
+    letterSpacing: "0.03em",
+  },
+  unifiedTableWrap: {
+    width: "100%",
+    overflowX: "auto",
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 8,
+  },
   unifiedTable: { width: "100%", borderCollapse: "collapse", minWidth: 1000 },
   unifiedThead: { backgroundColor: "#eff3f8" },
-  unifiedTh: { padding: "0.5rem 0.45rem", textAlign: "left", fontSize: "0.7rem", fontWeight: 800, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", borderBottom: `1px solid ${colors.cardBorder}` },
+  unifiedTh: {
+    padding: "0.5rem 0.45rem",
+    textAlign: "left",
+    fontSize: "0.7rem",
+    fontWeight: 800,
+    color: colors.textSecondary,
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+  },
   unifiedRow: { backgroundColor: "#fff" },
-  unifiedTd: { padding: "0.3rem 0.4rem", fontSize: "0.8rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "middle" },
+  unifiedTd: {
+    padding: "0.3rem 0.4rem",
+    fontSize: "0.8rem",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+    verticalAlign: "middle",
+  },
 
   // Scenario-locked GST + Sale Type affordances (same look as StandaloneInvoiceForm).
-  lockedTag: { marginLeft: "0.3rem", padding: "0.05rem 0.3rem", borderRadius: 4, backgroundColor: "#e0f2f1", color: "#00695c", fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", whiteSpace: "nowrap", display: "inline-block" },
-  lockedSaleType: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0.85rem", marginBottom: "0.6rem", borderRadius: 8, backgroundColor: "#e0f2f1", border: "1px solid #80cbc4", color: "#00695c", fontSize: "0.82rem" },
+  lockedTag: {
+    marginLeft: "0.3rem",
+    padding: "0.05rem 0.3rem",
+    borderRadius: 4,
+    backgroundColor: "#e0f2f1",
+    color: "#00695c",
+    fontSize: "0.62rem",
+    fontWeight: 700,
+    letterSpacing: "0.03em",
+    textTransform: "uppercase",
+    whiteSpace: "nowrap",
+    display: "inline-block",
+  },
+  lockedSaleType: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: "0.5rem",
+    padding: "0.5rem 0.85rem",
+    marginBottom: "0.6rem",
+    borderRadius: 8,
+    backgroundColor: "#e0f2f1",
+    border: "1px solid #80cbc4",
+    color: "#00695c",
+    fontSize: "0.82rem",
+  },
   lockedSaleTypeIcon: { fontSize: "0.85rem" },
   lockedSaleTypeHint: { color: "#00695c", opacity: 0.8, fontSize: "0.75rem" },
 
   // ── Step labels + scenario picker grid (same as StandaloneInvoiceForm) ──
-  stepLabel: { display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.95rem", fontWeight: 700, color: colors.textPrimary, marginBottom: "0.4rem" },
-  stepNum: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", backgroundColor: colors.blue, color: "#fff", fontSize: "0.78rem", fontWeight: 800, flexShrink: 0 },
-  stepHint: { margin: "0 0 0.6rem 30px", fontSize: "0.78rem", color: colors.textSecondary, lineHeight: 1.4 },
+  stepLabel: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    fontSize: "0.95rem",
+    fontWeight: 700,
+    color: colors.textPrimary,
+    marginBottom: "0.4rem",
+  },
+  stepNum: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 22,
+    height: 22,
+    borderRadius: "50%",
+    backgroundColor: colors.blue,
+    color: "#fff",
+    fontSize: "0.78rem",
+    fontWeight: 800,
+    flexShrink: 0,
+  },
+  stepHint: {
+    margin: "0 0 0.6rem 30px",
+    fontSize: "0.78rem",
+    color: colors.textSecondary,
+    lineHeight: 1.4,
+  },
   // Collapsible Step 1 (FBR Scenario picker) — clickable header bar that
   // shows the auto-defaulted scenario summary and toggles the card grid.
   // Mirrors StandaloneInvoiceForm so the two creation flows feel identical.
@@ -2148,22 +3031,103 @@ const styles = {
     border: `1px solid ${colors.cardBorder}`,
     backgroundColor: "#fff",
   },
-  warnAlert: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.65rem 0.85rem", borderRadius: 8, backgroundColor: colors.warnLight, border: `1px solid ${colors.warn}30`, color: colors.warn, fontSize: "0.85rem" },
-  scenarioGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "0.6rem", marginTop: "0.25rem" },
-  scenarioCard: { textAlign: "left", padding: "0.7rem 0.85rem", borderRadius: 10, border: "2px solid", cursor: "pointer", display: "flex", flexDirection: "column", gap: "0.3rem", transition: "all 0.15s", backgroundColor: "#fff", fontFamily: "inherit" },
+  warnAlert: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    padding: "0.65rem 0.85rem",
+    borderRadius: 8,
+    backgroundColor: colors.warnLight,
+    border: `1px solid ${colors.warn}30`,
+    color: colors.warn,
+    fontSize: "0.85rem",
+  },
+  scenarioGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+    gap: "0.6rem",
+    marginTop: "0.25rem",
+  },
+  scenarioCard: {
+    textAlign: "left",
+    padding: "0.7rem 0.85rem",
+    borderRadius: 10,
+    border: "2px solid",
+    cursor: "pointer",
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.3rem",
+    transition: "all 0.15s",
+    backgroundColor: "#fff",
+    fontFamily: "inherit",
+  },
   scenarioCardHeader: { display: "flex", justifyContent: "space-between", alignItems: "center" },
-  scenarioCode: { fontWeight: 800, fontSize: "0.95rem", color: colors.blue, fontFamily: "monospace" },
-  scenarioSaleType: { fontSize: "0.82rem", color: colors.textPrimary, fontWeight: 600, lineHeight: 1.25 },
+  scenarioCode: {
+    fontWeight: 800,
+    fontSize: "0.95rem",
+    color: colors.blue,
+    fontFamily: "monospace",
+  },
+  scenarioSaleType: {
+    fontSize: "0.82rem",
+    color: colors.textPrimary,
+    fontWeight: 600,
+    lineHeight: 1.25,
+  },
   scenarioRate: { fontSize: "0.74rem", color: colors.textSecondary },
   scenarioBadges: { display: "flex", flexWrap: "wrap", gap: "0.25rem", marginTop: "0.15rem" },
-  scenarioBadge: { fontSize: "0.65rem", padding: "0.1rem 0.4rem", borderRadius: 4, fontWeight: 700, letterSpacing: "0.02em" },
+  scenarioBadge: {
+    fontSize: "0.65rem",
+    padding: "0.1rem 0.4rem",
+    borderRadius: 4,
+    fontWeight: 700,
+    letterSpacing: "0.02em",
+  },
   badgeBlue: { backgroundColor: "#e3f2fd", color: "#0d47a1" },
   badgeOrange: { backgroundColor: "#fff3e0", color: "#e65100" },
   badgePurple: { backgroundColor: "#f3e5f5", color: "#6a1b9a" },
 
   // ── Inline create buttons (next to Buyer dropdown + per-row Item Type) ──
   inlineRow: { display: "flex", gap: "0.5rem", alignItems: "stretch", flexWrap: "wrap" },
-  inlineAddBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.45rem 0.75rem", borderRadius: 6, border: `1px solid ${colors.blue}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
-  tinyAddBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0.25rem", borderRadius: 6, border: `1px solid ${colors.blue}`, backgroundColor: "#fff", color: colors.blue, cursor: "pointer", flexShrink: 0 },
-  bulkClearBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.35rem 0.7rem", borderRadius: 6, border: `1px solid ${colors.danger}`, backgroundColor: "#fff", color: colors.danger, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 },
+  inlineAddBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    padding: "0.45rem 0.75rem",
+    borderRadius: 6,
+    border: `1px solid ${colors.blue}`,
+    backgroundColor: "#fff",
+    color: colors.blue,
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+  tinyAddBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "0.25rem",
+    borderRadius: 6,
+    border: `1px solid ${colors.blue}`,
+    backgroundColor: "#fff",
+    color: colors.blue,
+    cursor: "pointer",
+    flexShrink: 0,
+  },
+  bulkClearBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    padding: "0.35rem 0.7rem",
+    borderRadius: 6,
+    border: `1px solid ${colors.danger}`,
+    backgroundColor: "#fff",
+    color: colors.danger,
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    flexShrink: 0,
+  },
 };

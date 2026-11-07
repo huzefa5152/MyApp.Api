@@ -44,24 +44,37 @@ export default function SearchableSelect({
   const searchRef = useRef(null);
   const wrapperRef = useRef(null);
 
-  const keys = useMemo(() => (searchKeys && searchKeys.length ? searchKeys : [labelKey]), [searchKeys, labelKey]);
+  const keys = useMemo(
+    () => (searchKeys && searchKeys.length ? searchKeys : [labelKey]),
+    [searchKeys, labelKey],
+  );
 
   const selected = useMemo(
     () => (items || []).find((it) => String(it[valueKey]) === String(value)),
-    [items, value, valueKey]
+    [items, value, valueKey],
   );
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
     const arr = items || [];
     if (!term) return arr;
-    return arr.filter((it) => keys.some((k) => String(it[k] ?? "").toLowerCase().includes(term)));
+    return arr.filter((it) =>
+      keys.some((k) =>
+        String(it[k] ?? "")
+          .toLowerCase()
+          .includes(term),
+      ),
+    );
   }, [items, query, keys]);
 
   useEffect(() => {
     const onMouseDown = (e) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target) &&
-          triggerRef.current && !triggerRef.current.contains(e.target)) {
+      if (
+        wrapperRef.current &&
+        !wrapperRef.current.contains(e.target) &&
+        triggerRef.current &&
+        !triggerRef.current.contains(e.target)
+      ) {
         setOpen(false);
       }
     };
@@ -79,7 +92,9 @@ export default function SearchableSelect({
 
   useEffect(() => {
     if (!open) return;
-    const recompute = () => { if (triggerRef.current) setTriggerRect(triggerRef.current.getBoundingClientRect()); };
+    const recompute = () => {
+      if (triggerRef.current) setTriggerRect(triggerRef.current.getBoundingClientRect());
+    };
     recompute();
     window.addEventListener("scroll", recompute, true);
     window.addEventListener("resize", recompute);
@@ -89,15 +104,31 @@ export default function SearchableSelect({
     };
   }, [open]);
 
-  const pick = (it) => { onChange?.(it ? it[valueKey] : "", it || null); setOpen(false); };
-  const clear = (e) => { e.stopPropagation(); onChange?.("", null); };
+  const pick = (it) => {
+    onChange?.(it ? it[valueKey] : "", it || null);
+    setOpen(false);
+  };
+  const clear = (e) => {
+    e.stopPropagation();
+    onChange?.("", null);
+  };
 
   const onKeyDown = (e) => {
     if (!open) return;
-    if (e.key === "ArrowDown") { e.preventDefault(); setHighlightIdx((i) => Math.min(filtered.length - 1, i + 1)); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); setHighlightIdx((i) => Math.max(0, i - 1)); }
-    else if (e.key === "Enter") { e.preventDefault(); if (highlightIdx >= 0 && highlightIdx < filtered.length) pick(filtered[highlightIdx]); }
-    else if (e.key === "Escape") { e.stopPropagation(); setOpen(false); triggerRef.current?.focus(); }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightIdx((i) => Math.min(filtered.length - 1, i + 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightIdx((i) => Math.max(0, i - 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (highlightIdx >= 0 && highlightIdx < filtered.length) pick(filtered[highlightIdx]);
+    } else if (e.key === "Escape") {
+      e.stopPropagation();
+      setOpen(false);
+      triggerRef.current?.focus();
+    }
   };
 
   return (
@@ -112,67 +143,118 @@ export default function SearchableSelect({
         ref={triggerRef}
         disabled={disabled || loading}
         onClick={() => setOpen((v) => !v)}
-        style={{ ...styles.trigger, ...(disabled || loading ? { opacity: 0.6, cursor: "not-allowed" } : {}), ...style }}
+        style={{
+          ...styles.trigger,
+          ...(disabled || loading ? { opacity: 0.6, cursor: "not-allowed" } : {}),
+          ...style,
+        }}
       >
         <span style={styles.triggerLabel}>
-          {loading ? <span style={styles.placeholder}>Loading…</span>
-            : selected ? selected[labelKey]
-              : <span style={styles.placeholder}>{placeholder}</span>}
+          {loading ? (
+            <span style={styles.placeholder}>Loading…</span>
+          ) : selected ? (
+            selected[labelKey]
+          ) : (
+            <span style={styles.placeholder}>{placeholder}</span>
+          )}
         </span>
         {allowClear && selected && !disabled && (
-          <span onClick={clear} style={styles.clearBtn} title="Clear">×</span>
+          <span onClick={clear} style={styles.clearBtn} title="Clear">
+            ×
+          </span>
         )}
         <MdArrowDropDown size={18} style={{ flexShrink: 0, color: "#5f6d7e" }} />
       </button>
 
-      {open && triggerRect && createPortal(
-        <div data-admin-popup="" ref={wrapperRef} style={styles.dropdown(triggerRect)} onKeyDown={onKeyDown}>
-          <div style={styles.searchRow}>
-            <MdSearch size={16} style={styles.searchIcon} />
-            <input
-              ref={searchRef}
-              type="text"
-              placeholder="Search…"
-              value={query}
-              onChange={(e) => { setQuery(e.target.value); setHighlightIdx(0); }}
-              onKeyDown={onKeyDown}
-              style={styles.searchInput}
-            />
-          </div>
-          <div id={listId} role="listbox" aria-label={ariaLabel || placeholder} style={styles.list}>
-            {filtered.length === 0 && (
-              <div style={styles.empty}>{(items || []).length === 0 ? "No options." : `No match for "${query}".`}</div>
-            )}
-            {filtered.map((it, idx) => (
-              <div
-                key={it[valueKey]}
-                role="option"
-                aria-selected={String(it[valueKey]) === String(value)}
-                onMouseDown={() => pick(it)}
-                onMouseEnter={() => setHighlightIdx(idx)}
-                style={{ ...styles.row, backgroundColor: idx === highlightIdx ? "#e3f2fd" : "transparent" }}
-              >
-                {it[labelKey]}
-              </div>
-            ))}
-          </div>
-        </div>,
-        document.body
-      )}
+      {open &&
+        triggerRect &&
+        createPortal(
+          <div
+            data-admin-popup=""
+            ref={wrapperRef}
+            style={styles.dropdown(triggerRect)}
+            onKeyDown={onKeyDown}
+          >
+            <div style={styles.searchRow}>
+              <MdSearch size={16} style={styles.searchIcon} />
+              <input
+                ref={searchRef}
+                type="text"
+                placeholder="Search…"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setHighlightIdx(0);
+                }}
+                onKeyDown={onKeyDown}
+                style={styles.searchInput}
+              />
+            </div>
+            <div
+              id={listId}
+              role="listbox"
+              aria-label={ariaLabel || placeholder}
+              style={styles.list}
+            >
+              {filtered.length === 0 && (
+                <div style={styles.empty}>
+                  {(items || []).length === 0 ? "No options." : `No match for "${query}".`}
+                </div>
+              )}
+              {filtered.map((it, idx) => (
+                <div
+                  key={it[valueKey]}
+                  role="option"
+                  aria-selected={String(it[valueKey]) === String(value)}
+                  onMouseDown={() => pick(it)}
+                  onMouseEnter={() => setHighlightIdx(idx)}
+                  style={{
+                    ...styles.row,
+                    backgroundColor: idx === highlightIdx ? "#e3f2fd" : "transparent",
+                  }}
+                >
+                  {it[labelKey]}
+                </div>
+              ))}
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
 
 const styles = {
   trigger: {
-    display: "flex", alignItems: "center", gap: "0.25rem", width: "100%",
-    padding: "0.55rem 0.7rem", border: "1px solid #d0d7e2", borderRadius: 8,
-    backgroundColor: "#f8f9fb", fontSize: "0.9rem", color: "#1a2332",
-    cursor: "pointer", textAlign: "left", minHeight: 40,
+    display: "flex",
+    alignItems: "center",
+    gap: "0.25rem",
+    width: "100%",
+    padding: "0.55rem 0.7rem",
+    border: "1px solid #d0d7e2",
+    borderRadius: 8,
+    backgroundColor: "#f8f9fb",
+    fontSize: "0.9rem",
+    color: "#1a2332",
+    cursor: "pointer",
+    textAlign: "left",
+    minHeight: 40,
   },
-  triggerLabel: { flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  triggerLabel: {
+    flex: 1,
+    minWidth: 0,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
   placeholder: { color: "#94a3b8" },
-  clearBtn: { fontSize: "1.05rem", color: "#94a3b8", padding: "0 0.3rem", cursor: "pointer", lineHeight: 1 },
+  clearBtn: {
+    fontSize: "1.05rem",
+    color: "#94a3b8",
+    padding: "0 0.3rem",
+    cursor: "pointer",
+    lineHeight: 1,
+  },
   dropdown: (rect) => {
     const spaceBelow = window.innerHeight - rect.bottom;
     const listHeight = 360;
@@ -183,20 +265,50 @@ const styles = {
       bottom: flipAbove ? window.innerHeight - rect.top + 2 : undefined,
       left: rect.left,
       width: Math.max(rect.width, 240),
-      maxHeight: flipAbove ? Math.min(listHeight, rect.top - 10) : Math.min(listHeight, spaceBelow - 10),
-      backgroundColor: "#fff", border: "1px solid #d0d7e2", borderRadius: 8,
-      boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 9999,
-      display: "flex", flexDirection: "column",
+      maxHeight: flipAbove
+        ? Math.min(listHeight, rect.top - 10)
+        : Math.min(listHeight, spaceBelow - 10),
+      backgroundColor: "#fff",
+      border: "1px solid #d0d7e2",
+      borderRadius: 8,
+      boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+      zIndex: 9999,
+      display: "flex",
+      flexDirection: "column",
     };
   },
-  searchRow: { display: "flex", alignItems: "center", padding: "0.45rem 0.65rem", borderBottom: "1px solid #e8edf3", position: "relative" },
+  searchRow: {
+    display: "flex",
+    alignItems: "center",
+    padding: "0.45rem 0.65rem",
+    borderBottom: "1px solid #e8edf3",
+    position: "relative",
+  },
   searchIcon: { position: "absolute", left: 12, color: "#94a3b8" },
-  searchInput: { width: "100%", padding: "0.35rem 0.35rem 0.35rem 1.85rem", border: "1px solid #e8edf3", borderRadius: 6, fontSize: "0.85rem", outline: "none", backgroundColor: "#f8f9fb" },
+  searchInput: {
+    width: "100%",
+    padding: "0.35rem 0.35rem 0.35rem 1.85rem",
+    border: "1px solid #e8edf3",
+    borderRadius: 6,
+    fontSize: "0.85rem",
+    outline: "none",
+    backgroundColor: "#f8f9fb",
+  },
   list: { overflowY: "auto", flex: 1 },
   // Wrap long option labels instead of nowrap+ellipsis. Many real names share
   // a long prefix (e.g. "CHINA STATE CONSTRUCTION …") — truncating made every
   // row read identically so the user couldn't tell them apart. Full wrap keeps
   // the whole name visible; the distinguishing tail is never hidden.
-  row: { padding: "0.5rem 0.7rem", cursor: "pointer", borderBottom: "1px solid #f0f4f8", fontSize: "0.88rem", color: "#1a2332", lineHeight: 1.35, whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word" },
+  row: {
+    padding: "0.5rem 0.7rem",
+    cursor: "pointer",
+    borderBottom: "1px solid #f0f4f8",
+    fontSize: "0.88rem",
+    color: "#1a2332",
+    lineHeight: 1.35,
+    whiteSpace: "normal",
+    overflowWrap: "anywhere",
+    wordBreak: "break-word",
+  },
   empty: { padding: "0.8rem", color: "#5f6d7e", fontSize: "0.85rem" },
 };

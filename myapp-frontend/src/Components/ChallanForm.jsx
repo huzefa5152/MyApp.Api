@@ -32,7 +32,13 @@ const colors = {
   success: "#28a745",
 };
 
-const blankItem = () => ({ description: "", quantity: 1, unit: "", itemTypeId: null, nonInventoryItemId: null });
+const blankItem = () => ({
+  description: "",
+  quantity: 1,
+  unit: "",
+  itemTypeId: null,
+  nonInventoryItemId: null,
+});
 
 export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisionId }) {
   const [client, setClient] = useState(null);
@@ -69,13 +75,29 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
   const [purchaseError, setPurchaseError] = useState("");
 
   const offerPurchaseBills = async (saved, lines) => {
-    if (!saved?.id || !has("purchasebills.manage.create") || !lines.length ||
-      !lines.every((line) => line.supplierId && line.actualUnitCost !== null && line.actualUnitCost !== undefined && line.actualUnitCost !== "")) return true;
+    if (
+      !saved?.id ||
+      !has("purchasebills.manage.create") ||
+      !lines.length ||
+      !lines.every(
+        (line) =>
+          line.supplierId &&
+          line.actualUnitCost !== null &&
+          line.actualUnitCost !== undefined &&
+          line.actualUnitCost !== "",
+      )
+    )
+      return true;
     if (!purchaseRequested.current) return true;
-    try { await purchasePreview.create(saved.id); return true; }
-    catch (err) {
+    try {
+      await purchasePreview.create(saved.id);
+      return true;
+    } catch (err) {
       setSavedChallanId(saved.id);
-      setPurchaseError(err.response?.data?.error || "The challan was saved, but purchase bills could not be created.");
+      setPurchaseError(
+        err.response?.data?.error ||
+          "The challan was saved, but purchase bills could not be created.",
+      );
       setSaving(false);
       return false;
     }
@@ -88,8 +110,8 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
   // created against the order so delivery tracking updates.
   const [openOrders, setOpenOrders] = useState([]);
   const [salesOrderId, setSalesOrderId] = useState("");
-  const [order, setOrder] = useState(null);           // full order (with items) once picked
-  const [orderQtys, setOrderQtys] = useState({});     // salesOrderItemId → qty to deliver
+  const [order, setOrder] = useState(null); // full order (with items) once picked
+  const [orderQtys, setOrderQtys] = useState({}); // salesOrderItemId → qty to deliver
   // salesOrderItemId → { itemTypeId, nonInventoryItemId } — the challan line's
   // item type. Defaults to the order line's (carries over); editable so the
   // operator can tag inventory when the order line was un-classified.
@@ -98,13 +120,18 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
   const fromOrder = !!order;
 
   useEffect(() => {
-    getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([]));
+    getAllUnits()
+      .then(({ data }) => setUnits(data))
+      .catch(() => setUnits([]));
   }, []);
 
   // Open (not fully-delivered) orders for the optional picker — these are the
   // orders that still have something left to deliver.
   useEffect(() => {
-    if (!companyId) { setOpenOrders([]); return; }
+    if (!companyId) {
+      setOpenOrders([]);
+      return;
+    }
     getOpenSalesOrdersByCompany(companyId)
       .then(({ data }) => setOpenOrders(data || []))
       .catch(() => setOpenOrders([]));
@@ -121,14 +148,20 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
   const pickOrder = async (id) => {
     setSalesOrderId(id ? String(id) : "");
     setError("");
-    if (!id) { setOrder(null); setOrderQtys({}); return; }
+    if (!id) {
+      setOrder(null);
+      setOrderQtys({});
+      return;
+    }
     setLoadingOrder(true);
     try {
       const { data } = await getSalesOrderById(id);
       const deliverable = (data.items || []).filter((i) => Number(i.remainingQuantity) > 0);
       if (deliverable.length === 0) {
         setError("This sales order has nothing left to deliver.");
-        setOrder(null); setOrderQtys({}); setSalesOrderId("");
+        setOrder(null);
+        setOrderQtys({});
+        setSalesOrderId("");
         return;
       }
       setOrder(data);
@@ -137,7 +170,10 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
       const t = {};
       deliverable.forEach((i) => {
         m[i.id] = i.remainingQuantity;
-        t[i.id] = { itemTypeId: i.itemTypeId ?? null, nonInventoryItemId: i.nonInventoryItemId ?? null };
+        t[i.id] = {
+          itemTypeId: i.itemTypeId ?? null,
+          nonInventoryItemId: i.nonInventoryItemId ?? null,
+        };
       });
       setOrderQtys(m);
       setOrderItemTypes(t);
@@ -148,50 +184,84 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
       if (!deliveryDate) setDeliveryDate(new Date().toISOString().slice(0, 10));
     } catch {
       setError("Failed to load the selected sales order.");
-      setOrder(null); setOrderQtys({}); setSalesOrderId("");
+      setOrder(null);
+      setOrderQtys({});
+      setSalesOrderId("");
     } finally {
       setLoadingOrder(false);
     }
   };
 
-  const clearOrder = () => { setSalesOrderId(""); setOrder(null); setOrderQtys({}); setOrderItemTypes({}); };
+  const clearOrder = () => {
+    setSalesOrderId("");
+    setOrder(null);
+    setOrderQtys({});
+    setOrderItemTypes({});
+  };
 
   const setOrderItemType = (itemId, newId) =>
-    setOrderItemTypes((p) => ({ ...p, [itemId]: { itemTypeId: newId ? parseInt(newId) : null, nonInventoryItemId: null } }));
+    setOrderItemTypes((p) => ({
+      ...p,
+      [itemId]: { itemTypeId: newId ? parseInt(newId) : null, nonInventoryItemId: null },
+    }));
   const setOrderNonInv = (itemId, n) =>
-    setOrderItemTypes((p) => ({ ...p, [itemId]: { itemTypeId: null, nonInventoryItemId: n ? n.id : null } }));
-  const applyOrderItemType = (newId) => setOrderItemTypes((previous) => {
-    const next = { ...previous };
-    deliverableItems.forEach((item) => { next[item.id] = { itemTypeId: newId ? Number(newId) : null, nonInventoryItemId: null }; });
-    return next;
-  });
-
+    setOrderItemTypes((p) => ({
+      ...p,
+      [itemId]: { itemTypeId: null, nonInventoryItemId: n ? n.id : null },
+    }));
+  const applyOrderItemType = (newId) =>
+    setOrderItemTypes((previous) => {
+      const next = { ...previous };
+      deliverableItems.forEach((item) => {
+        next[item.id] = { itemTypeId: newId ? Number(newId) : null, nonInventoryItemId: null };
+      });
+      return next;
+    });
 
   const setOrderQty = (itemId, remaining, raw) => {
     // Clamp to [0, remaining] — you can't deliver more than what's left.
     let v = raw === "" ? "" : Number(raw);
-    if (v !== "" && !Number.isNaN(v)) { if (v < 0) v = 0; if (v > remaining) v = remaining; }
+    if (v !== "" && !Number.isNaN(v)) {
+      if (v < 0) v = 0;
+      if (v > remaining) v = remaining;
+    }
     setOrderQtys((p) => ({ ...p, [itemId]: v }));
   };
   const deliverableItems = (order?.items || []).filter((i) => Number(i.remainingQuantity) > 0);
   const deliveredItems = deliverableItems.filter((item) => Number(orderQtys[item.id]) > 0);
-  const bulkOrderItemTypeId = deliverableItems.length && deliverableItems.every((item) => orderItemTypes[item.id]?.itemTypeId && orderItemTypes[item.id]?.itemTypeId === orderItemTypes[deliverableItems[0].id]?.itemTypeId)
-    ? orderItemTypes[deliverableItems[0].id].itemTypeId : "";
+  const bulkOrderItemTypeId =
+    deliverableItems.length &&
+    deliverableItems.every(
+      (item) =>
+        orderItemTypes[item.id]?.itemTypeId &&
+        orderItemTypes[item.id]?.itemTypeId === orderItemTypes[deliverableItems[0].id]?.itemTypeId,
+    )
+      ? orderItemTypes[deliverableItems[0].id].itemTypeId
+      : "";
   const anyOrderQty = Object.values(orderQtys).some((q) => Number(q) > 0);
   const setAllRemaining = () => {
     const m = {};
-    deliverableItems.forEach((i) => { m[i.id] = i.remainingQuantity; });
+    deliverableItems.forEach((i) => {
+      m[i.id] = i.remainingQuantity;
+    });
     setOrderQtys(m);
   };
   const clearAllQtys = () => setOrderQtys({});
   useEffect(() => {
-    getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([]));
+    getItemTypes(companyId)
+      .then(({ data }) => setItemTypes(data || []))
+      .catch(() => setItemTypes([]));
   }, [companyId]);
   // Per-company Non-Inventory Items (GL-account shortcut lines: Freight, Discount, …).
   // A company with GL off / no items resolves to [] and the picker shows none.
   useEffect(() => {
-    if (!companyId) { setNonInvItems([]); return; }
-    getNonInventoryItemsByCompany(companyId, true).then(({ data }) => setNonInvItems(data || [])).catch(() => setNonInvItems([]));
+    if (!companyId) {
+      setNonInvItems([]);
+      return;
+    }
+    getNonInventoryItemsByCompany(companyId, true)
+      .then(({ data }) => setNonInvItems(data || []))
+      .catch(() => setNonInvItems([]));
   }, [companyId]);
 
   const handleSubmit = async (e) => {
@@ -208,7 +278,10 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
           itemTypeId: orderItemTypes[i.id]?.itemTypeId || null,
           nonInventoryItemId: orderItemTypes[i.id]?.nonInventoryItemId || null,
           supplierId: orderPrivate[i.id]?.supplierId || null,
-          actualUnitCost: orderPrivate[i.id]?.actualUnitCost === "" ? null : orderPrivate[i.id]?.actualUnitCost ?? null,
+          actualUnitCost:
+            orderPrivate[i.id]?.actualUnitCost === ""
+              ? null
+              : (orderPrivate[i.id]?.actualUnitCost ?? null),
         }))
         .filter((l) => l.quantity > 0);
       if (lines.length === 0) {
@@ -225,11 +298,20 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
           notes: notes.trim() || null,
           lines,
         });
-        try { if (saved?.id) await attachmentRef.current?.flush(saved.id); } catch { /* best-effort */ }
+        try {
+          if (saved?.id) await attachmentRef.current?.flush(saved.id);
+        } catch {
+          /* best-effort */
+        }
         if (await offerPurchaseBills(saved, lines)) onClose();
       } catch (err) {
         const serverMsg = err.response?.data?.error || err.response?.data?.message;
-        setError(serverMsg || (!err.response ? "Could not reach the server. Please try again." : "Could not create the challan. Please try again."));
+        setError(
+          serverMsg ||
+            (!err.response
+              ? "Could not reach the server. Please try again."
+              : "Could not create the challan. Please try again."),
+        );
         setSaving(false);
       }
       return;
@@ -248,11 +330,11 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
     setSaving(true);
     try {
       const payloadItems = validItems.map((i) => ({
-          ...i,
-          itemTypeId: i.itemTypeId || null,
-          nonInventoryItemId: i.nonInventoryItemId || null,
-          quantity: typeof i.quantity === "number" ? i.quantity : (parseFloat(i.quantity) || 1),
-          actualUnitCost: i.actualUnitCost === "" ? null : i.actualUnitCost ?? null,
+        ...i,
+        itemTypeId: i.itemTypeId || null,
+        nonInventoryItemId: i.nonInventoryItemId || null,
+        quantity: typeof i.quantity === "number" ? i.quantity : parseFloat(i.quantity) || 1,
+        actualUnitCost: i.actualUnitCost === "" ? null : (i.actualUnitCost ?? null),
       }));
       const saved = await onSaved({
         customNumber: billNumberPayload(numberMode, customNumber),
@@ -271,7 +353,9 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
       // BEFORE onClose() unmounts this form (and its staged files with it).
       try {
         if (saved?.id) await attachmentRef.current?.flush(saved.id);
-      } catch { /* attachments are best-effort — the challan is already saved */ }
+      } catch {
+        /* attachments are best-effort — the challan is already saved */
+      }
       if (await offerPurchaseBills(saved, payloadItems)) onClose();
     } catch (err) {
       // Server-supplied user-friendly message wins; otherwise show a
@@ -280,15 +364,18 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
       // not user-facing, so we don't surface it.
       const serverMsg = err.response?.data?.error || err.response?.data?.message;
       if (serverMsg) setError(serverMsg);
-      else if (!err.response) setError("Could not reach the server. Please check your connection and try again.");
+      else if (!err.response)
+        setError("Could not reach the server. Please check your connection and try again.");
       else setError("Could not save the challan. Please try again or contact an administrator.");
       setSaving(false);
     }
   };
 
-  const isDisabled = !numberValid || (fromOrder
-    ? (!anyOrderQty || saving)
-    : (items.some((i) => !i.description.trim()) || !client || saving));
+  const isDisabled =
+    !numberValid ||
+    (fromOrder
+      ? !anyOrderQty || saving
+      : items.some((i) => !i.description.trim()) || !client || saving);
 
   // Backdrop click is intentionally a no-op — the user can lose minutes
   // of typed data with one stray click otherwise. Use the X in the
@@ -296,45 +383,83 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
       {purchasePreview.dialog}
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>Create Delivery Challan</h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            &times;
+          </button>
         </div>
 
         <form onSubmit={handleSubmit}>
           <div data-admin-body="" style={formStyles.body}>
-            {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
+            {error && (
+              <div ref={errRef} style={styles.errorAlert}>
+                {error}
+              </div>
+            )}
 
             {/* Number and the Sales Order picker share one row instead of two. */}
             <div className="doc-header-row">
-              <div className="doc-header-row__number"><BillNumberField companyId={companyId} divisionId={fromOrder ? order?.divisionId : divisionId} documentType="challan" mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
+              <div className="doc-header-row__number">
+                <BillNumberField
+                  companyId={companyId}
+                  divisionId={fromOrder ? order?.divisionId : divisionId}
+                  documentType="challan"
+                  mode={numberMode}
+                  onModeChange={setNumberMode}
+                  number={customNumber}
+                  onNumberChange={setCustomNumber}
+                  onValidityChange={setNumberValid}
+                  disabled={saving}
+                />
+              </div>
               <div className="doc-header-row__grow">
-
                 {/* Optional: build this challan by delivering an open Sales Order.
                     Picking one fills every undelivered line; the operator just sets
                     how much to deliver now. */}
                 <div style={styles.soPickerCard}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                    <span style={styles.soPickerLabel}>Deliver a Sales Order <span style={{ fontWeight: 400, color: colors.textSecondary }}>(optional)</span></span>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <span style={styles.soPickerLabel}>
+                      Deliver a Sales Order{" "}
+                      <span style={{ fontWeight: 400, color: colors.textSecondary }}>
+                        (optional)
+                      </span>
+                    </span>
                     <div style={{ flex: 1, minWidth: 240 }}>
                       <SearchableSelect
                         items={orderOptions}
                         value={salesOrderId}
                         onChange={(id) => pickOrder(id)}
                         searchKeys={["name", "salesOrderNumber", "clientName"]}
-                        placeholder={openOrders.length ? "Search open sales orders…" : "No open sales orders"}
+                        placeholder={
+                          openOrders.length ? "Search open sales orders…" : "No open sales orders"
+                        }
                         disabled={loadingOrder || openOrders.length === 0}
                       />
                     </div>
                     {fromOrder && (
-                      <button type="button" style={styles.soClearBtn} onClick={clearOrder}>Clear &amp; enter manually</button>
+                      <button type="button" style={styles.soClearBtn} onClick={clearOrder}>
+                        Clear &amp; enter manually
+                      </button>
                     )}
                   </div>
                   {fromOrder && (
                     <div style={styles.soBanner}>
-                      Delivering <strong>SO #{order.salesOrderNumber}</strong> for <strong>{order.clientName}</strong>.
-                      Enter how much to deliver per line — defaults to the remaining quantity, capped at it; set 0 to skip a line.
+                      Delivering <strong>SO #{order.salesOrderNumber}</strong> for{" "}
+                      <strong>{order.clientName}</strong>. Enter how much to deliver per line —
+                      defaults to the remaining quantity, capped at it; set 0 to skip a line.
                     </div>
                   )}
                 </div>
@@ -345,110 +470,215 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
                 Edit Challan so operators see identical shape on both flows.
                 Site is dropdown when the picked client has presets, free-text
                 otherwise so one-offs still work. */}
-            <section className="admin-details-panel" aria-label="Delivery details"><h6 className="admin-section-heading">Delivery details</h6><div data-admin-form-row="" style={styles.row}>
-              <div style={{ flex: 2, minWidth: 220 }}>
-                {fromOrder ? (
-                  <>
-                    <label style={styles.label}>Client</label>
-                    <div style={{ ...styles.input, backgroundColor: "#eef2ff", color: colors.textPrimary, fontWeight: 600, display: "flex", alignItems: "center" }}>
-                      {client?.label || order.clientName}
-                      <span style={{ marginLeft: "auto", fontSize: "0.7rem", fontWeight: 600, color: colors.blue }}>from order</span>
-                    </div>
-                  </>
-                ) : (
-                  <SelectDropdown
-                    label="Client"
-                    endpoint={`/clients/company/${companyId}`}
-                    value={client}
-                    onChange={(val) => { setClient(val); setSite(""); }}
-                    placeholder="Choose client"
-                    className=""
+            <section className="admin-details-panel" aria-label="Delivery details">
+              <h6 className="admin-section-heading">Delivery details</h6>
+              <div data-admin-form-row="" style={styles.row}>
+                <div style={{ flex: 2, minWidth: 220 }}>
+                  {fromOrder ? (
+                    <>
+                      <label style={styles.label}>Client</label>
+                      <div
+                        style={{
+                          ...styles.input,
+                          backgroundColor: "#eef2ff",
+                          color: colors.textPrimary,
+                          fontWeight: 600,
+                          display: "flex",
+                          alignItems: "center",
+                        }}
+                      >
+                        {client?.label || order.clientName}
+                        <span
+                          style={{
+                            marginLeft: "auto",
+                            fontSize: "0.7rem",
+                            fontWeight: 600,
+                            color: colors.blue,
+                          }}
+                        >
+                          from order
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <SelectDropdown
+                      label="Client"
+                      endpoint={`/clients/company/${companyId}`}
+                      value={client}
+                      onChange={(val) => {
+                        setClient(val);
+                        setSite("");
+                      }}
+                      placeholder="Choose client"
+                      className=""
+                    />
+                  )}
+                </div>
+                <div style={{ flex: 1.5, minWidth: 180 }}>
+                  <label style={styles.label}>Site / Department</label>
+                  {(() => {
+                    const clientSites = client?.site
+                      ? client.site
+                          .split(";")
+                          .map((s) => s.trim())
+                          .filter(Boolean)
+                      : [];
+                    return clientSites.length > 0 ? (
+                      <select
+                        style={styles.input}
+                        value={site}
+                        onChange={(e) => setSite(e.target.value)}
+                      >
+                        <option value="">(none)</option>
+                        {clientSites.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        style={styles.input}
+                        placeholder={client ? "Optional" : "Pick a client first"}
+                        value={site}
+                        onChange={(e) => setSite(e.target.value)}
+                        disabled={!client}
+                      />
+                    );
+                  })()}
+                </div>
+                <div style={{ flex: 1, minWidth: 150 }}>
+                  <label style={styles.label}>Delivery Date</label>
+                  <input
+                    type="date"
+                    style={styles.input}
+                    value={deliveryDate}
+                    onChange={(e) => setDeliveryDate(e.target.value)}
+                  />
+                </div>
+                {!fromOrder && (
+                  <DivisionSelect
+                    companyId={companyId}
+                    value={divisionId}
+                    onChange={setDivisionId}
+                    mode="select"
+                    label={
+                      <>
+                        Division{" "}
+                        <span style={{ color: "#5f6d7e", fontWeight: 400 }}>(optional)</span>
+                      </>
+                    }
+                    labelStyle={styles.label}
+                    style={styles.input}
+                    wrapStyle={{ flex: 1, minWidth: 150 }}
                   />
                 )}
               </div>
-              <div style={{ flex: 1.5, minWidth: 180 }}>
-                <label style={styles.label}>Site / Department</label>
-                {(() => {
-                  const clientSites = client?.site
-                    ? client.site.split(";").map((s) => s.trim()).filter(Boolean)
-                    : [];
-                  return clientSites.length > 0 ? (
-                    <select
-                      style={styles.input}
-                      value={site}
-                      onChange={(e) => setSite(e.target.value)}
-                    >
-                      <option value="">(none)</option>
-                      {clientSites.map((s) => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      style={styles.input}
-                      placeholder={client ? "Optional" : "Pick a client first"}
-                      value={site}
-                      onChange={(e) => setSite(e.target.value)}
-                      disabled={!client}
-                    />
-                  );
-                })()}
-              </div>
-              <div style={{ flex: 1, minWidth: 150 }}>
-                <label style={styles.label}>Delivery Date</label>
-                <input type="date" style={styles.input} value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
-              </div>
-              {!fromOrder && (
-                <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ color: "#5f6d7e", fontWeight: 400 }}>(optional)</span></>} labelStyle={styles.label} style={styles.input} wrapStyle={{ flex: 1, minWidth: 150 }} />
-              )}
-            </div></section>
+            </section>
 
             {/* PO row: Number + Date + Indent No — flex weights match
                 ChallanEditForm's PO row so Add and Edit look identical.
                 Hidden in deliver-from-order mode (inherited from the order). */}
             {!fromOrder && (
-            <div data-admin-form-row="" style={styles.row}>
-              <div style={{ flex: 1, minWidth: 180 }}>
-                <label style={styles.label}>PO Number</label>
-                <input type="text" style={styles.input} value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Enter PO number" />
+              <div data-admin-form-row="" style={styles.row}>
+                <div style={{ flex: 1, minWidth: 180 }}>
+                  <label style={styles.label}>PO Number</label>
+                  <input
+                    type="text"
+                    style={styles.input}
+                    value={poNumber}
+                    onChange={(e) => setPoNumber(e.target.value)}
+                    placeholder="Enter PO number"
+                  />
+                </div>
+                <div style={{ flex: 1, minWidth: 140 }}>
+                  <label style={styles.label}>PO Date</label>
+                  <input
+                    type="date"
+                    style={styles.input}
+                    value={poDate}
+                    onChange={(e) => setPoDate(e.target.value)}
+                  />
+                </div>
+                <div style={{ flex: 1, minWidth: 180 }}>
+                  <label style={styles.label}>
+                    Indent No <span style={{ color: "#5f6d7e", fontWeight: 400 }}>(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    style={styles.input}
+                    value={indentNo}
+                    onChange={(e) => setIndentNo(e.target.value)}
+                    placeholder="Enter indent number"
+                  />
+                </div>
               </div>
-              <div style={{ flex: 1, minWidth: 140 }}>
-                <label style={styles.label}>PO Date</label>
-                <input type="date" style={styles.input} value={poDate} onChange={(e) => setPoDate(e.target.value)} />
-              </div>
-              <div style={{ flex: 1, minWidth: 180 }}>
-                <label style={styles.label}>
-                  Indent No <span style={{ color: "#5f6d7e", fontWeight: 400 }}>(optional)</span>
-                </label>
-                <input
-                  type="text"
-                  style={styles.input}
-                  value={indentNo}
-                  onChange={(e) => setIndentNo(e.target.value)}
-                  placeholder="Enter indent number"
-                />
-              </div>
-            </div>
             )}
 
             {/* Deliver-from-order grid — read-only lines, operator sets qty. */}
             {fromOrder && (
               <div style={{ marginTop: "0.25rem" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem", flexWrap: "wrap", gap: "0.5rem" }}>
-                  <label style={{ ...styles.label, margin: 0 }}>Items to deliver ({deliverableItems.length})</label>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: "0.5rem",
+                    flexWrap: "wrap",
+                    gap: "0.5rem",
+                  }}
+                >
+                  <label style={{ ...styles.label, margin: 0 }}>
+                    Items to deliver ({deliverableItems.length})
+                  </label>
                   <div style={{ display: "flex", gap: "0.5rem" }}>
-                    <button type="button" style={styles.soQuickBtn} onClick={setAllRemaining}>Deliver all remaining</button>
-                    <button type="button" style={{ ...styles.soQuickBtn, color: colors.textSecondary, borderColor: colors.cardBorder, background: "#fff" }} onClick={clearAllQtys}>Clear all</button>
+                    <button type="button" style={styles.soQuickBtn} onClick={setAllRemaining}>
+                      Deliver all remaining
+                    </button>
+                    <button
+                      type="button"
+                      style={{
+                        ...styles.soQuickBtn,
+                        color: colors.textSecondary,
+                        borderColor: colors.cardBorder,
+                        background: "#fff",
+                      }}
+                      onClick={clearAllQtys}
+                    >
+                      Clear all
+                    </button>
                   </div>
                 </div>
-                {deliverableItems.length > 1 && <div style={{ maxWidth: 340, marginBottom: 10, fontSize: 12, fontWeight: 700 }}>
-                  Apply Item Type to all lines
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}><SearchableItemTypeSelect divisionId={divisionId} items={itemTypes} value={bulkOrderItemTypeId} onChange={applyOrderItemType} placeholder="Search item type to apply" /></div>
-                    <button type="button" disabled={!deliverableItems.some((item) => orderItemTypes[item.id]?.itemTypeId || orderItemTypes[item.id]?.nonInventoryItemId)} onClick={() => applyOrderItemType("")}>Clear all</button>
+                {deliverableItems.length > 1 && (
+                  <div style={{ maxWidth: 340, marginBottom: 10, fontSize: 12, fontWeight: 700 }}>
+                    Apply Item Type to all lines
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <SearchableItemTypeSelect
+                          divisionId={divisionId}
+                          items={itemTypes}
+                          value={bulkOrderItemTypeId}
+                          onChange={applyOrderItemType}
+                          placeholder="Search item type to apply"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        disabled={
+                          !deliverableItems.some(
+                            (item) =>
+                              orderItemTypes[item.id]?.itemTypeId ||
+                              orderItemTypes[item.id]?.nonInventoryItemId,
+                          )
+                        }
+                        onClick={() => applyOrderItemType("")}
+                      >
+                        Clear all
+                      </button>
+                    </div>
                   </div>
-                </div>}
+                )}
                 <div data-admin-table-region="" style={{ overflowX: "auto" }}>
                   <table style={styles.soTable}>
                     <thead>
@@ -468,8 +698,14 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
                         return (
                           <tr key={i.id} style={{ opacity: q > 0 ? 1 : 0.55 }}>
                             <td style={styles.soTd}>
-                              <div style={{ fontWeight: 600, color: colors.textPrimary }}><RichText text={i.description} /></div>
-                              {i.unit && <div style={{ fontSize: "0.72rem", color: colors.textSecondary }}>{i.unit}</div>}
+                              <div style={{ fontWeight: 600, color: colors.textPrimary }}>
+                                <RichText text={i.description} />
+                              </div>
+                              {i.unit && (
+                                <div style={{ fontSize: "0.72rem", color: colors.textSecondary }}>
+                                  {i.unit}
+                                </div>
+                              )}
                             </td>
                             <td style={{ ...styles.soTd, minWidth: 200 }}>
                               <SearchableItemTypeSelect
@@ -485,14 +721,34 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
                               />
                             </td>
                             <td style={{ ...styles.soTd, textAlign: "center" }}>{i.quantity}</td>
-                            <td style={{ ...styles.soTd, textAlign: "center" }}>{i.deliveredQuantity}</td>
-                            <td style={{ ...styles.soTd, textAlign: "center", fontWeight: 700, color: colors.blue }}>{i.remainingQuantity}</td>
+                            <td style={{ ...styles.soTd, textAlign: "center" }}>
+                              {i.deliveredQuantity}
+                            </td>
+                            <td
+                              style={{
+                                ...styles.soTd,
+                                textAlign: "center",
+                                fontWeight: 700,
+                                color: colors.blue,
+                              }}
+                            >
+                              {i.remainingQuantity}
+                            </td>
                             <td style={{ ...styles.soTd, textAlign: "right" }}>
                               <input
-                                type="number" min="0" max={i.remainingQuantity} step="any"
-                                style={{ ...styles.input, textAlign: "right", padding: "0.4rem 0.45rem" }}
+                                type="number"
+                                min="0"
+                                max={i.remainingQuantity}
+                                step="any"
+                                style={{
+                                  ...styles.input,
+                                  textAlign: "right",
+                                  padding: "0.4rem 0.45rem",
+                                }}
                                 value={orderQtys[i.id] ?? 0}
-                                onChange={(e) => setOrderQty(i.id, i.remainingQuantity, e.target.value)}
+                                onChange={(e) =>
+                                  setOrderQty(i.id, i.remainingQuantity, e.target.value)
+                                }
                               />
                             </td>
                           </tr>
@@ -505,40 +761,134 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
             )}
 
             {!fromOrder && (
-            <div style={{ marginTop: "0.25rem" }}>
-              <LineItemsEditor
-                items={items}
-                onItemsChange={setItems}
-                makeBlankItem={blankItem}
-                units={units}
-                itemTypes={itemTypes}
-                nonInventoryItems={nonInvItems}
-                divisionId={divisionId}
-                itemsLabel="Items"
-              />
-              <ChallanPrivateCosts companyId={companyId} items={items} onItemsChange={setItems} suppliers={suppliers} />
-              {has("purchasebills.manage.create") && has("challans.list.view") && <div style={{ marginTop: 12 }}><button type="button" style={{ ...formStyles.button, ...formStyles.submit }} disabled={isDisabled || !!savedChallanId || !items.length || !items.every(i => i.supplierId && i.actualUnitCost != null && i.actualUnitCost !== "")} onClick={e => { purchaseRequested.current = true; e.currentTarget.closest("form").requestSubmit(); }}>Save & preview supplier purchases</button><p style={{ fontSize: ".875rem" }}>Set a supplier and actual unit cost on every line to review purchase bills.</p></div>}
-            </div>
+              <div style={{ marginTop: "0.25rem" }}>
+                <LineItemsEditor
+                  items={items}
+                  onItemsChange={setItems}
+                  makeBlankItem={blankItem}
+                  units={units}
+                  itemTypes={itemTypes}
+                  nonInventoryItems={nonInvItems}
+                  divisionId={divisionId}
+                  itemsLabel="Items"
+                />
+                <ChallanPrivateCosts
+                  companyId={companyId}
+                  items={items}
+                  onItemsChange={setItems}
+                  suppliers={suppliers}
+                />
+                {has("purchasebills.manage.create") && has("challans.list.view") && (
+                  <div style={{ marginTop: 12 }}>
+                    <button
+                      type="button"
+                      style={{ ...formStyles.button, ...formStyles.submit }}
+                      disabled={
+                        isDisabled ||
+                        !!savedChallanId ||
+                        !items.length ||
+                        !items.every(
+                          (i) =>
+                            i.supplierId && i.actualUnitCost != null && i.actualUnitCost !== "",
+                        )
+                      }
+                      onClick={(e) => {
+                        purchaseRequested.current = true;
+                        e.currentTarget.closest("form").requestSubmit();
+                      }}
+                    >
+                      Save & preview supplier purchases
+                    </button>
+                    <p style={{ fontSize: ".875rem" }}>
+                      Set a supplier and actual unit cost on every line to review purchase bills.
+                    </p>
+                  </div>
+                )}
+              </div>
             )}
 
-            {fromOrder && <ChallanPrivateCosts companyId={companyId}
-              items={deliveredItems.map((item) => ({ ...item, ...orderPrivate[item.id] }))}
-              suppliers={suppliers}
-              onItemsChange={(updated) => setOrderPrivate((previous) => {
-                const next = { ...previous };
-                updated.forEach((item) => { next[item.id] = { ...next[item.id], supplierId: item.supplierId, actualUnitCost: item.actualUnitCost }; });
-                return next;
-              })}
-            />}
-            {fromOrder && has("purchasebills.manage.create") && has("challans.list.view") && <button type="button" style={{ ...formStyles.button, ...formStyles.submit, marginTop: 12 }} disabled={isDisabled || !!savedChallanId || !deliveredItems.length || !deliveredItems.every(i => orderPrivate[i.id]?.supplierId && orderPrivate[i.id]?.actualUnitCost != null && orderPrivate[i.id]?.actualUnitCost !== "")} onClick={e => { purchaseRequested.current = true; e.currentTarget.closest("form").requestSubmit(); }}>Save & preview supplier purchases</button>}
+            {fromOrder && (
+              <ChallanPrivateCosts
+                companyId={companyId}
+                items={deliveredItems.map((item) => ({ ...item, ...orderPrivate[item.id] }))}
+                suppliers={suppliers}
+                onItemsChange={(updated) =>
+                  setOrderPrivate((previous) => {
+                    const next = { ...previous };
+                    updated.forEach((item) => {
+                      next[item.id] = {
+                        ...next[item.id],
+                        supplierId: item.supplierId,
+                        actualUnitCost: item.actualUnitCost,
+                      };
+                    });
+                    return next;
+                  })
+                }
+              />
+            )}
+            {fromOrder && has("purchasebills.manage.create") && has("challans.list.view") && (
+              <button
+                type="button"
+                style={{ ...formStyles.button, ...formStyles.submit, marginTop: 12 }}
+                disabled={
+                  isDisabled ||
+                  !!savedChallanId ||
+                  !deliveredItems.length ||
+                  !deliveredItems.every(
+                    (i) =>
+                      orderPrivate[i.id]?.supplierId &&
+                      orderPrivate[i.id]?.actualUnitCost != null &&
+                      orderPrivate[i.id]?.actualUnitCost !== "",
+                  )
+                }
+                onClick={(e) => {
+                  purchaseRequested.current = true;
+                  e.currentTarget.closest("form").requestSubmit();
+                }}
+              >
+                Save & preview supplier purchases
+              </button>
+            )}
 
-            {savedChallanId && <div role="alert" style={{ marginTop: 12, padding: 12, borderRadius: 8, background: "#fff3e0", color: "#92400e" }}>
-              Challan saved. {purchaseError}
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <button data-admin-close="" type="button" onClick={async () => { setSaving(true); try { await purchasePreview.create(savedChallanId); onClose(); } catch (err) { setPurchaseError(err.response?.data?.error || "Could not create purchase bills."); } finally { setSaving(false); } }}>Retry purchase bills</button>
-                <button data-admin-close="" type="button" onClick={onClose}>Close without purchase bills</button>
+            {savedChallanId && (
+              <div
+                role="alert"
+                style={{
+                  marginTop: 12,
+                  padding: 12,
+                  borderRadius: 8,
+                  background: "#fff3e0",
+                  color: "#92400e",
+                }}
+              >
+                Challan saved. {purchaseError}
+                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                  <button
+                    data-admin-close=""
+                    type="button"
+                    onClick={async () => {
+                      setSaving(true);
+                      try {
+                        await purchasePreview.create(savedChallanId);
+                        onClose();
+                      } catch (err) {
+                        setPurchaseError(
+                          err.response?.data?.error || "Could not create purchase bills.",
+                        );
+                      } finally {
+                        setSaving(false);
+                      }
+                    }}
+                  >
+                    Retry purchase bills
+                  </button>
+                  <button data-admin-close="" type="button" onClick={onClose}>
+                    Close without purchase bills
+                  </button>
+                </div>
               </div>
-            </div>}
+            )}
 
             <DocumentNotesEditor value={notes} onChange={setNotes} />
             {/* entityId=null — files are staged client-side and flushed against
@@ -553,8 +903,21 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
           </div>
 
           <div data-admin-footer="" style={formStyles.footer}>
-            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
-            <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: isDisabled ? 0.6 : 1 }} disabled={isDisabled}>{saving ? "Saving..." : "Save Challan"}</button>
+            <button
+              data-admin-close=""
+              type="button"
+              style={{ ...formStyles.button, ...formStyles.cancel }}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              style={{ ...formStyles.button, ...formStyles.submit, opacity: isDisabled ? 0.6 : 1 }}
+              disabled={isDisabled}
+            >
+              {saving ? "Saving..." : "Save Challan"}
+            </button>
           </div>
         </form>
       </div>
@@ -563,21 +926,155 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
 }
 
 const styles = {
-  row: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.85rem 1rem", marginBottom: "1rem", alignItems: "end" },
-  label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
-  input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", transition: "border-color 0.25s", boxSizing: "border-box" },
-  errorAlert: { backgroundColor: colors.dangerLight, color: colors.danger, padding: "0.65rem 1rem", borderRadius: 8, marginBottom: "1rem", fontWeight: 500, border: `1px solid ${colors.danger}30`, fontSize: "0.85rem" },
-  itemsContainer: { display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: 220, overflowY: "auto", overflowX: "hidden", paddingRight: 4 },
-  itemRow: { display: "flex", gap: "0.4rem", alignItems: "flex-start", padding: "0.5rem", borderRadius: 10, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#fafbfc", minWidth: 0 },
-  itemIndex: { width: 22, paddingTop: "0.55rem", fontWeight: 700, fontSize: "0.82rem", color: colors.textSecondary, textAlign: "center", flexShrink: 0 },
-  removeBtn: { display: "flex", alignItems: "center", justifyContent: "center", padding: "0.4rem", marginTop: "0.3rem", borderRadius: 8, border: `1px solid ${colors.danger}25`, backgroundColor: colors.dangerLight, color: colors.danger, cursor: "pointer", transition: "background-color 0.2s", flexShrink: 0 },
-  addItemBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", marginTop: "0.6rem", padding: "0.4rem 0.9rem", borderRadius: 8, border: "none", backgroundColor: `${colors.teal}14`, color: colors.teal, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", transition: "background-color 0.2s" },
-  soPickerCard: { padding: "0.75rem 0.9rem", marginBottom: "1rem", borderRadius: 10, border: `1px solid ${colors.blue}22`, backgroundColor: "#f5f8ff" },
+  row: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))",
+    gap: "0.85rem 1rem",
+    marginBottom: "1rem",
+    alignItems: "end",
+  },
+  label: {
+    display: "block",
+    marginBottom: "0.35rem",
+    fontWeight: 600,
+    fontSize: "0.85rem",
+    color: colors.textSecondary,
+  },
+  input: {
+    width: "100%",
+    padding: "0.55rem 0.75rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    fontSize: "0.9rem",
+    backgroundColor: colors.inputBg,
+    color: colors.textPrimary,
+    outline: "none",
+    transition: "border-color 0.25s",
+    boxSizing: "border-box",
+  },
+  errorAlert: {
+    backgroundColor: colors.dangerLight,
+    color: colors.danger,
+    padding: "0.65rem 1rem",
+    borderRadius: 8,
+    marginBottom: "1rem",
+    fontWeight: 500,
+    border: `1px solid ${colors.danger}30`,
+    fontSize: "0.85rem",
+  },
+  itemsContainer: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.5rem",
+    maxHeight: 220,
+    overflowY: "auto",
+    overflowX: "hidden",
+    paddingRight: 4,
+  },
+  itemRow: {
+    display: "flex",
+    gap: "0.4rem",
+    alignItems: "flex-start",
+    padding: "0.5rem",
+    borderRadius: 10,
+    border: `1px solid ${colors.cardBorder}`,
+    backgroundColor: "#fafbfc",
+    minWidth: 0,
+  },
+  itemIndex: {
+    width: 22,
+    paddingTop: "0.55rem",
+    fontWeight: 700,
+    fontSize: "0.82rem",
+    color: colors.textSecondary,
+    textAlign: "center",
+    flexShrink: 0,
+  },
+  removeBtn: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "0.4rem",
+    marginTop: "0.3rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.danger}25`,
+    backgroundColor: colors.dangerLight,
+    color: colors.danger,
+    cursor: "pointer",
+    transition: "background-color 0.2s",
+    flexShrink: 0,
+  },
+  addItemBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    marginTop: "0.6rem",
+    padding: "0.4rem 0.9rem",
+    borderRadius: 8,
+    border: "none",
+    backgroundColor: `${colors.teal}14`,
+    color: colors.teal,
+    fontSize: "0.82rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    transition: "background-color 0.2s",
+  },
+  soPickerCard: {
+    padding: "0.75rem 0.9rem",
+    marginBottom: "1rem",
+    borderRadius: 10,
+    border: `1px solid ${colors.blue}22`,
+    backgroundColor: "#f5f8ff",
+  },
   soPickerLabel: { fontWeight: 700, fontSize: "0.9rem", color: colors.blue },
-  soClearBtn: { padding: "0.35rem 0.7rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.textSecondary, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
-  soBanner: { marginTop: "0.6rem", padding: "0.5rem 0.7rem", borderRadius: 8, backgroundColor: "#e8f5e9", border: "1px solid #a5d6a7", color: "#1a2332", fontSize: "0.82rem", lineHeight: 1.4 },
-  soQuickBtn: { padding: "0.3rem 0.65rem", borderRadius: 8, border: `1px solid ${colors.blue}33`, background: `${colors.blue}0d`, color: colors.blue, fontSize: "0.76rem", fontWeight: 600, cursor: "pointer" },
+  soClearBtn: {
+    padding: "0.35rem 0.7rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    background: "#fff",
+    color: colors.textSecondary,
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+  soBanner: {
+    marginTop: "0.6rem",
+    padding: "0.5rem 0.7rem",
+    borderRadius: 8,
+    backgroundColor: "#e8f5e9",
+    border: "1px solid #a5d6a7",
+    color: "#1a2332",
+    fontSize: "0.82rem",
+    lineHeight: 1.4,
+  },
+  soQuickBtn: {
+    padding: "0.3rem 0.65rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.blue}33`,
+    background: `${colors.blue}0d`,
+    color: colors.blue,
+    fontSize: "0.76rem",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
   soTable: { width: "100%", borderCollapse: "collapse", minWidth: 560 },
-  soTh: { padding: "0.45rem 0.6rem", textAlign: "center", fontSize: "0.7rem", fontWeight: 800, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", borderBottom: `2px solid ${colors.cardBorder}`, background: "#f8f9fb", whiteSpace: "nowrap" },
-  soTd: { padding: "0.45rem 0.6rem", fontSize: "0.85rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "top" },
+  soTh: {
+    padding: "0.45rem 0.6rem",
+    textAlign: "center",
+    fontSize: "0.7rem",
+    fontWeight: 800,
+    color: colors.textSecondary,
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+    borderBottom: `2px solid ${colors.cardBorder}`,
+    background: "#f8f9fb",
+    whiteSpace: "nowrap",
+  },
+  soTd: {
+    padding: "0.45rem 0.6rem",
+    fontSize: "0.85rem",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+    verticalAlign: "top",
+  },
 };

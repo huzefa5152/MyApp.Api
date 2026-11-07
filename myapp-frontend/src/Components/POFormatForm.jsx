@@ -115,7 +115,7 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
         setClients(Array.isArray(clientData) ? clientData : []);
 
         const taken = new Set();
-        for (const f of (formatData || [])) {
+        for (const f of formatData || []) {
           if (!f.clientId || f.companyId !== formatCompanyId) continue;
           if (format?.id && f.id === format.id) continue; // editing this one — keep its client selectable
           taken.add(f.clientId);
@@ -128,12 +128,14 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
         }
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [formatCompanyId, format?.id]);
 
   // Visible options: free clients + (when editing) the currently-bound one.
   const availableClients = clients.filter(
-    (c) => !takenClientIds.has(c.id) || c.id === selectedClientId
+    (c) => !takenClientIds.has(c.id) || c.id === selectedClientId,
   );
 
   // Preload the 5 fields when editing — parse them out of RuleSetJson
@@ -243,13 +245,22 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
   // wizard mid-fingerprint. Dismiss via the X or the Cancel button.
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>{isEdit ? "Edit PO Format" : "Add PO Format"}</h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            &times;
+          </button>
         </div>
 
-        <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "72vh", overflowY: "auto" }}>
+        <div
+          data-admin-body=""
+          style={{ ...formStyles.body, maxHeight: "72vh", overflowY: "auto" }}
+        >
           {error && (
             <div ref={errRef} style={styles.errorAlert}>
               <MdWarning size={16} /> {error}
@@ -259,7 +270,10 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
           {!isEdit && existingMatchName && (
             <div style={styles.infoAlert}>
               <MdInfoOutline size={16} />
-              <span>A format already exists for this layout: <strong>{existingMatchName}</strong>. Saving will be blocked — edit the existing one instead.</span>
+              <span>
+                A format already exists for this layout: <strong>{existingMatchName}</strong>.
+                Saving will be blocked — edit the existing one instead.
+              </span>
             </div>
           )}
 
@@ -295,12 +309,14 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
               {!isEdit && clients.length > availableClients.length && (
                 <div style={{ ...styles.hint, marginTop: "0.3rem" }}>
                   {clients.length - availableClients.length} client
-                  {clients.length - availableClients.length !== 1 ? "s are" : " is"} hidden — they already have a PO format in this company.
+                  {clients.length - availableClients.length !== 1 ? "s are" : " is"} hidden — they
+                  already have a PO format in this company.
                 </div>
               )}
               {!isEdit && availableClients.length === 0 && clients.length > 0 && (
                 <div style={{ ...styles.hint, color: colors.warning, marginTop: "0.3rem" }}>
-                  Every client in this company already has a PO format. Edit the existing one instead, or add a new client first.
+                  Every client in this company already has a PO format. Edit the existing one
+                  instead, or add a new client first.
                 </div>
               )}
               {!isEdit && formatCompanyId && clients.length === 0 && (
@@ -336,8 +352,29 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
             />
             <div style={styles.dropZone} onClick={() => fileInputRef.current?.click()}>
               <MdUploadFile size={32} color={colors.textSecondary} />
-              <p style={{ margin: "0.5rem 0 0.25rem", color: colors.textSecondary, fontSize: "0.9rem" }}>
-                {uploading ? "Reading PDF…" : uploaded ? <><MdCheckCircle size={16} color={colors.success} style={{ verticalAlign: "middle" }} /> Sample loaded — fill the 5 fields below</> : isEdit ? "Click to upload a new sample PDF (optional)" : "Click to upload a sample PDF"}
+              <p
+                style={{
+                  margin: "0.5rem 0 0.25rem",
+                  color: colors.textSecondary,
+                  fontSize: "0.9rem",
+                }}
+              >
+                {uploading ? (
+                  "Reading PDF…"
+                ) : uploaded ? (
+                  <>
+                    <MdCheckCircle
+                      size={16}
+                      color={colors.success}
+                      style={{ verticalAlign: "middle" }}
+                    />{" "}
+                    Sample loaded — fill the 5 fields below
+                  </>
+                ) : isEdit ? (
+                  "Click to upload a new sample PDF (optional)"
+                ) : (
+                  "Click to upload a sample PDF"
+                )}
               </p>
               <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>Max 10 MB</span>
             </div>
@@ -350,12 +387,19 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
               <label style={styles.label}>Extracted text (for reference)</label>
               <textarea
                 readOnly
-                style={{ ...styles.input, ...styles.textarea, fontFamily: "monospace", fontSize: "0.78rem", backgroundColor: "#fafbfc" }}
+                style={{
+                  ...styles.input,
+                  ...styles.textarea,
+                  fontFamily: "monospace",
+                  fontSize: "0.78rem",
+                  backgroundColor: "#fafbfc",
+                }}
                 rows={8}
                 value={rawText}
               />
               <div style={styles.hint}>
-                Use the exact strings you see above for the 5 fields below — they must be whole-word matches.
+                Use the exact strings you see above for the 5 fields below — they must be whole-word
+                matches.
               </div>
             </div>
           )}
@@ -363,7 +407,9 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
           {/* The 5 fields */}
           <h6 style={styles.sectionTitle}>Label / header strings</h6>
           <p style={styles.sectionHint}>
-            Enter the exact text that appears on the PDF. Only the Description and Quantity column headers are required — the parser reads each item's description and quantity by column, so Unit and the PO labels are optional.
+            Enter the exact text that appears on the PDF. Only the Description and Quantity column
+            headers are required — the parser reads each item's description and quantity by column,
+            so Unit and the PO labels are optional.
           </p>
 
           <div data-admin-form-row="" style={styles.row}>
@@ -439,8 +485,21 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
 
           {isEdit && (
             <div style={{ marginBottom: "1rem" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: colors.textPrimary, fontSize: "0.9rem", cursor: "pointer" }}>
-                <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  color: colors.textPrimary,
+                  fontSize: "0.9rem",
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={isActive}
+                  onChange={(e) => setIsActive(e.target.checked)}
+                />
                 Active — incoming PDFs matching this layout will auto-parse
               </label>
             </div>
@@ -448,7 +507,14 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
         </div>
 
         <div data-admin-footer="" style={formStyles.footer}>
-          <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+          <button
+            data-admin-close=""
+            type="button"
+            style={{ ...formStyles.button, ...formStyles.cancel }}
+            onClick={onClose}
+          >
+            Cancel
+          </button>
           <button
             type="button"
             style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}
@@ -467,15 +533,85 @@ const styles = {
   // Auto-fit grid — 4-up on desktop, collapses to fewer columns (down to
   // one) as the modal narrows on tablet/phone. Replaces a flex row whose
   // flex:1 children crammed 4 inputs onto one line at 375px.
-  row: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(190px, 100%), 1fr))", gap: "1rem", marginBottom: "1rem" },
-  label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
-  input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", boxSizing: "border-box" },
+  row: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(190px, 100%), 1fr))",
+    gap: "1rem",
+    marginBottom: "1rem",
+  },
+  label: {
+    display: "block",
+    marginBottom: "0.35rem",
+    fontWeight: 600,
+    fontSize: "0.85rem",
+    color: colors.textSecondary,
+  },
+  input: {
+    width: "100%",
+    padding: "0.55rem 0.75rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    fontSize: "0.9rem",
+    backgroundColor: colors.inputBg,
+    color: colors.textPrimary,
+    outline: "none",
+    boxSizing: "border-box",
+  },
   textarea: { fontFamily: "inherit", resize: "vertical" },
-  dropZone: { border: `2px dashed ${colors.inputBorder}`, borderRadius: 10, padding: "1.5rem 1rem", textAlign: "center", cursor: "pointer", backgroundColor: colors.inputBg, transition: "border-color 0.2s, background-color 0.2s" },
-  sectionTitle: { margin: "0.5rem 0 0.25rem", fontSize: "0.95rem", fontWeight: 600, color: colors.textPrimary },
+  dropZone: {
+    border: `2px dashed ${colors.inputBorder}`,
+    borderRadius: 10,
+    padding: "1.5rem 1rem",
+    textAlign: "center",
+    cursor: "pointer",
+    backgroundColor: colors.inputBg,
+    transition: "border-color 0.2s, background-color 0.2s",
+  },
+  sectionTitle: {
+    margin: "0.5rem 0 0.25rem",
+    fontSize: "0.95rem",
+    fontWeight: 600,
+    color: colors.textPrimary,
+  },
   sectionHint: { margin: "0 0 0.75rem", fontSize: "0.82rem", color: colors.textSecondary },
-  hint: { marginTop: "0.25rem", fontSize: "0.78rem", color: colors.textSecondary, fontStyle: "italic" },
-  errorAlert: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.6rem 0.85rem", borderRadius: 8, backgroundColor: colors.dangerLight, color: colors.danger, marginBottom: "1rem", fontSize: "0.85rem", fontWeight: 500 },
-  infoAlert: { display: "flex", alignItems: "flex-start", gap: "0.5rem", padding: "0.6rem 0.85rem", borderRadius: 8, backgroundColor: colors.warningLight, color: "#8a5a00", marginBottom: "1rem", fontSize: "0.85rem" },
-  companyChip: { display: "inline-flex", alignItems: "center", gap: "0.35rem", marginBottom: "1rem", padding: "0.3rem 0.7rem", borderRadius: 6, backgroundColor: colors.primaryLight, color: colors.primary, fontSize: "0.82rem" },
+  hint: {
+    marginTop: "0.25rem",
+    fontSize: "0.78rem",
+    color: colors.textSecondary,
+    fontStyle: "italic",
+  },
+  errorAlert: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    padding: "0.6rem 0.85rem",
+    borderRadius: 8,
+    backgroundColor: colors.dangerLight,
+    color: colors.danger,
+    marginBottom: "1rem",
+    fontSize: "0.85rem",
+    fontWeight: 500,
+  },
+  infoAlert: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: "0.5rem",
+    padding: "0.6rem 0.85rem",
+    borderRadius: 8,
+    backgroundColor: colors.warningLight,
+    color: "#8a5a00",
+    marginBottom: "1rem",
+    fontSize: "0.85rem",
+  },
+  companyChip: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.35rem",
+    marginBottom: "1rem",
+    padding: "0.3rem 0.7rem",
+    borderRadius: 6,
+    backgroundColor: colors.primaryLight,
+    color: colors.primary,
+    fontSize: "0.82rem",
+  },
 };

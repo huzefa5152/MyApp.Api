@@ -1,6 +1,15 @@
 import FreightChargesField from "./FreightChargesField";
 import { useState, useEffect, useMemo, useRef } from "react";
-import { MdAdd, MdDelete, MdCheck, MdInfo, MdLock, MdPersonAdd, MdExpandMore, MdExpandLess } from "react-icons/md";
+import {
+  MdAdd,
+  MdDelete,
+  MdCheck,
+  MdInfo,
+  MdLock,
+  MdPersonAdd,
+  MdExpandMore,
+  MdExpandLess,
+} from "react-icons/md";
 import { createStandaloneInvoice } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
@@ -62,40 +71,170 @@ const colors = {
 //   needsMRP — line carries fixedNotifiedValueOrRetailPrice (3rd-Sched).
 //   needsSRO — line carries SRO Schedule + Item Serial #.
 const SCENARIO_META = {
-  SN001: { buyerKind: "b2b-registered",   needsMRP: false, needsSRO: false, hint: "Wholesale B2B to a registered buyer (NTN required, validated by FBR)." },
-  SN002: { buyerKind: "b2b-unregistered", needsMRP: false, needsSRO: false, hint: "B2B to an unregistered buyer. 4% further tax common at submit time." },
-  SN003: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale of Steel (Melted and Re-Rolled)." },
-  SN004: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale by Ship Breakers." },
-  SN005: { buyerKind: "either",           needsMRP: false, needsSRO: true,  hint: "Reduced rate sale — SRO reference required." },
-  SN006: { buyerKind: "either",           needsMRP: false, needsSRO: true,  hint: "Exempt goods (rate 0%) — SRO reference required." },
-  SN007: { buyerKind: "either",           needsMRP: false, needsSRO: true,  hint: "Zero rated sale — SRO reference required." },
-  SN008: { buyerKind: "either",           needsMRP: true,  needsSRO: false, hint: "3rd Schedule goods — tax backed out of MRP. Enter the printed retail price × qty." },
-  SN009: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Cotton ginners → spinners (Textile Sector)." },
-  SN010: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Telecom services rendered or provided." },
-  SN011: { buyerKind: "b2b-registered",   needsMRP: false, needsSRO: false, hint: "Toll Manufacturing sale by Steel sector (registered buyer only)." },
-  SN012: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale of Petroleum products." },
-  SN013: { buyerKind: "b2b-registered",   needsMRP: false, needsSRO: false, hint: "Electricity supply to retailers (registered buyer)." },
-  SN014: { buyerKind: "b2b-registered",   needsMRP: false, needsSRO: false, hint: "Sale of gas to CNG stations (registered buyer)." },
-  SN015: { buyerKind: "either",           needsMRP: false, needsSRO: true,  hint: "Sale of mobile phones — Ninth Schedule SRO reference required." },
-  SN016: { buyerKind: "b2b-registered",   needsMRP: false, needsSRO: false, hint: "Processing / Conversion of Goods (registered buyer)." },
-  SN017: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale of goods where FED is charged in ST mode." },
-  SN018: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Services rendered where FED is charged in ST mode." },
-  SN019: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Services rendered or provided (16% standard)." },
-  SN020: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale of Electric Vehicles (1%)." },
-  SN021: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale of Cement / Concrete Block." },
-  SN022: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale of Potassium Chlorate." },
-  SN023: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale of CNG." },
-  SN024: { buyerKind: "either",           needsMRP: false, needsSRO: true,  hint: "Goods listed in SRO 297(I)/2023 — SRO reference required." },
-  SN025: { buyerKind: "either",           needsMRP: false, needsSRO: true,  hint: "Drugs at fixed ST rate (Eighth Schedule Table 1, S.No 81)." },
-  SN026: { buyerKind: "walk-in",          needsMRP: false, needsSRO: false, hint: "Retail counter sale to an end consumer at standard rate." },
-  SN027: { buyerKind: "walk-in",          needsMRP: true,  needsSRO: false, hint: "Retail counter sale of 3rd Schedule goods. MRP × qty required." },
-  SN028: { buyerKind: "walk-in",          needsMRP: false, needsSRO: true,  hint: "Retail counter sale at reduced rate. SRO Schedule + Item No required." },
+  SN001: {
+    buyerKind: "b2b-registered",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Wholesale B2B to a registered buyer (NTN required, validated by FBR).",
+  },
+  SN002: {
+    buyerKind: "b2b-unregistered",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "B2B to an unregistered buyer. 4% further tax common at submit time.",
+  },
+  SN003: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Sale of Steel (Melted and Re-Rolled).",
+  },
+  SN004: { buyerKind: "either", needsMRP: false, needsSRO: false, hint: "Sale by Ship Breakers." },
+  SN005: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: true,
+    hint: "Reduced rate sale — SRO reference required.",
+  },
+  SN006: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: true,
+    hint: "Exempt goods (rate 0%) — SRO reference required.",
+  },
+  SN007: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: true,
+    hint: "Zero rated sale — SRO reference required.",
+  },
+  SN008: {
+    buyerKind: "either",
+    needsMRP: true,
+    needsSRO: false,
+    hint: "3rd Schedule goods — tax backed out of MRP. Enter the printed retail price × qty.",
+  },
+  SN009: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Cotton ginners → spinners (Textile Sector).",
+  },
+  SN010: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Telecom services rendered or provided.",
+  },
+  SN011: {
+    buyerKind: "b2b-registered",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Toll Manufacturing sale by Steel sector (registered buyer only).",
+  },
+  SN012: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Sale of Petroleum products.",
+  },
+  SN013: {
+    buyerKind: "b2b-registered",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Electricity supply to retailers (registered buyer).",
+  },
+  SN014: {
+    buyerKind: "b2b-registered",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Sale of gas to CNG stations (registered buyer).",
+  },
+  SN015: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: true,
+    hint: "Sale of mobile phones — Ninth Schedule SRO reference required.",
+  },
+  SN016: {
+    buyerKind: "b2b-registered",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Processing / Conversion of Goods (registered buyer).",
+  },
+  SN017: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Sale of goods where FED is charged in ST mode.",
+  },
+  SN018: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Services rendered where FED is charged in ST mode.",
+  },
+  SN019: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Services rendered or provided (16% standard).",
+  },
+  SN020: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Sale of Electric Vehicles (1%).",
+  },
+  SN021: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Sale of Cement / Concrete Block.",
+  },
+  SN022: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Sale of Potassium Chlorate.",
+  },
+  SN023: { buyerKind: "either", needsMRP: false, needsSRO: false, hint: "Sale of CNG." },
+  SN024: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: true,
+    hint: "Goods listed in SRO 297(I)/2023 — SRO reference required.",
+  },
+  SN025: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: true,
+    hint: "Drugs at fixed ST rate (Eighth Schedule Table 1, S.No 81).",
+  },
+  SN026: {
+    buyerKind: "walk-in",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Retail counter sale to an end consumer at standard rate.",
+  },
+  SN027: {
+    buyerKind: "walk-in",
+    needsMRP: true,
+    needsSRO: false,
+    hint: "Retail counter sale of 3rd Schedule goods. MRP × qty required.",
+  },
+  SN028: {
+    buyerKind: "walk-in",
+    needsMRP: false,
+    needsSRO: true,
+    hint: "Retail counter sale at reduced rate. SRO Schedule + Item No required.",
+  },
 };
 
 const blankRow = () => ({
   localId: Math.random().toString(36).slice(2, 10),
   itemTypeId: "",
-  itemTypeName: "",       // mirrored from the picked ItemType for the read-only Description column
+  itemTypeName: "", // mirrored from the picked ItemType for the read-only Description column
   // Non-Inventory Item id (GL-account shortcut line: Freight / Discount / …).
   // Mutually exclusive with itemTypeId — a line carries at most one.
   nonInventoryItemId: "",
@@ -109,7 +248,7 @@ const blankRow = () => ({
   hsCode: "",
   uom: "",
   fbrUOMId: null,
-  saleType: "",           // overridden by scenario at save time, kept for display only
+  saleType: "", // overridden by scenario at save time, kept for display only
   quantity: "",
   unitPrice: "",
   // Scenario-specific extras
@@ -122,7 +261,14 @@ const blankRow = () => ({
   sroItemSerialNo: "",
 });
 
-export default function StandaloneInvoiceForm({ companyId, company, onClose, onSaved, billsMode = false, defaultDivisionId }) {
+export default function StandaloneInvoiceForm({
+  companyId,
+  company,
+  onClose,
+  onSaved,
+  billsMode = false,
+  defaultDivisionId,
+}) {
   // billsMode: true when this form is mounted from the Bills tab. Hides
   // the FBR-only display columns (HS Code); the scenario UI stays
   // fbrEnabled-gated as usual. Item Type affordances — per-row picker,
@@ -134,7 +280,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // /lookup/items, so operators can pick from previously-entered values
   // or type free-text; picking an Item Type seeds it when blank.
   const { has } = usePermissions();
-  const canCreateClient   = has("clients.manage.create");
+  const canCreateClient = has("clients.manage.create");
   const canCreateItemType = has("itemtypes.manage.create");
   // FBR integration toggle (company-level). When off, this is a plain
   // non-FBR bill: no scenario step, editable GST, no scenario saved.
@@ -276,13 +422,21 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // Per-company Non-Inventory Items (GL-account shortcut lines: Freight,
   // Discount, …). A company with GL off / no items resolves to [] silently.
   useEffect(() => {
-    if (!companyId) { setNonInvItems([]); return; }
-    getNonInventoryItemsByCompany(companyId, true).then(({ data }) => setNonInvItems(data || [])).catch(() => setNonInvItems([]));
+    if (!companyId) {
+      setNonInvItems([]);
+      return;
+    }
+    getNonInventoryItemsByCompany(companyId, true)
+      .then(({ data }) => setNonInvItems(data || []))
+      .catch(() => setNonInvItems([]));
   }, [companyId]);
 
   // GL accounts (income side highlighted) for the per-line Account picker.
   useEffect(() => {
-    if (!companyId) { setAccounts([]); return; }
+    if (!companyId) {
+      setAccounts([]);
+      return;
+    }
     getAccountsFlat(companyId)
       .then(({ data }) => setAccounts((data || []).filter((a) => a.isActive)))
       .catch(() => setAccounts([]));
@@ -330,8 +484,11 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       if (!data || typeof data !== "object" || !Array.isArray(data.lines)) {
         throw new Error("unexpected prefill payload");
       }
-      const lineNotes = data.lines.filter((l) => l.quoteDiscountNote).map((l) => ({ description: l.description, note: l.quoteDiscountNote }));
-      if (data.quoteDiscountReminder || lineNotes.length) setQuoteDiscountInfo({ whole: data.quoteDiscountReminder, lines: lineNotes });
+      const lineNotes = data.lines
+        .filter((l) => l.quoteDiscountNote)
+        .map((l) => ({ description: l.description, note: l.quoteDiscountNote }));
+      if (data.quoteDiscountReminder || lineNotes.length)
+        setQuoteDiscountInfo({ whole: data.quoteDiscountReminder, lines: lineNotes });
       if (data.clientId) setSelectedClientId(String(data.clientId));
       setDivisionId(data.divisionId ? String(data.divisionId) : "");
       // GST only prefills when FBR is off — with FBR on the rate is locked
@@ -362,7 +519,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       // Prefill the customer PO from the order (operator can still edit it).
       setPoNumber(data.customerPoNumber || "");
       setPoDate(data.customerPoDate ? String(data.customerPoDate).slice(0, 10) : "");
-      setSoLoadedMsg(`Loaded ${mapped.length} item${mapped.length !== 1 ? "s" : ""} from Sales Order #${data.salesOrderNumber}`);
+      setSoLoadedMsg(
+        `Loaded ${mapped.length} item${mapped.length !== 1 ? "s" : ""} from Sales Order #${data.salesOrderNumber}`,
+      );
       setError("");
     } catch {
       setSoLoadedMsg("");
@@ -373,11 +532,16 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // Decorate scenarios with local meta. Falls back to a generic record
   // if the backend ever sends a code we don't know — form never crashes.
   const enrichedScenarios = useMemo(
-    () => scenarios.map((s) => ({
-      ...s,
-      meta: SCENARIO_META[s.code]
-        || { buyerKind: "either", needsMRP: false, needsSRO: false, hint: s.description || "" },
-    })),
+    () =>
+      scenarios.map((s) => ({
+        ...s,
+        meta: SCENARIO_META[s.code] || {
+          buyerKind: "either",
+          needsMRP: false,
+          needsSRO: false,
+          hint: s.description || "",
+        },
+      })),
     [scenarios],
   );
 
@@ -435,7 +599,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     if (!chosenScenario) return;
     const k = chosenScenario.meta.buyerKind;
     if (k === "walk-in") {
-      const walkIns = clients.filter((c) => (c.registrationType || "").toLowerCase() !== "registered");
+      const walkIns = clients.filter(
+        (c) => (c.registrationType || "").toLowerCase() !== "registered",
+      );
       if (walkIns.length > 0) setSelectedClientId(String(walkIns[0].id));
       else setSelectedClientId("");
     } else if (k === "b2b-registered" || k === "b2b-unregistered") {
@@ -493,50 +659,69 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       // Clearing the item type also drops any non-inv binding (mutually exclusive)
       // and the auto-filled GL account.
       updateRow(localId, {
-        itemTypeId: "", itemTypeName: "", hsCode: "", uom: "", fbrUOMId: null, saleType: "", nonInventoryItemId: "", accountId: null,
+        itemTypeId: "",
+        itemTypeName: "",
+        hsCode: "",
+        uom: "",
+        fbrUOMId: null,
+        saleType: "",
+        nonInventoryItemId: "",
+        accountId: null,
       });
       return;
     }
-    setRows((prev) => prev.map((r) => {
-      if (r.localId !== localId) return r;
-      return {
-        ...r,
-        itemTypeId: picked.id,
-        itemTypeName: picked.name || "",
-        hsCode: picked.hsCode || "",
-        uom: picked.uom || "",
-        fbrUOMId: picked.fbrUOMId || null,
-        saleType: picked.saleType || "",
-        // Auto-fill the line's GL income account from the item type's overlay.
-        accountId: picked.saleAccountId ?? null,
-        // Picking an item type clears any non-inventory selection.
-        nonInventoryItemId: "",
-        // Bills mode types the description directly — seed it from the
-        // picked type's name only when the operator hasn't typed one yet.
-        description: billsMode && !r.description?.trim() ? picked.name || "" : r.description,
-      };
-    }));
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.localId !== localId) return r;
+        return {
+          ...r,
+          itemTypeId: picked.id,
+          itemTypeName: picked.name || "",
+          hsCode: picked.hsCode || "",
+          uom: picked.uom || "",
+          fbrUOMId: picked.fbrUOMId || null,
+          saleType: picked.saleType || "",
+          // Auto-fill the line's GL income account from the item type's overlay.
+          accountId: picked.saleAccountId ?? null,
+          // Picking an item type clears any non-inventory selection.
+          nonInventoryItemId: "",
+          // Bills mode types the description directly — seed it from the
+          // picked type's name only when the operator hasn't typed one yet.
+          description: billsMode && !r.description?.trim() ? picked.name || "" : r.description,
+        };
+      }),
+    );
   };
 
   // Non-Inventory pick — mutually exclusive with an item type. Clears the
   // item-type binding + its FBR fields, records the non-inv id, and prefills
   // description / UOM / sale price only when those fields are still empty.
   const handleNonInventoryPick = (localId, n) => {
-    if (!n) { updateRow(localId, { nonInventoryItemId: "" }); return; }
-    setRows((prev) => prev.map((r) => {
-      if (r.localId !== localId) return r;
-      const next = {
-        ...r,
-        nonInventoryItemId: n.id,
-        itemTypeId: "", itemTypeName: "", hsCode: "", fbrUOMId: null, saleType: "",
-        // Non-inventory posts to its own mapped account — clear any per-line override.
-        accountId: null,
-      };
-      if (!r.description?.trim()) next.description = n.defaultLineDescription || n.name || "";
-      if (!r.uom?.trim()) next.uom = n.unitName || "";
-      if ((!r.unitPrice || Number(r.unitPrice) === 0) && n.defaultSalePrice != null) next.unitPrice = String(n.defaultSalePrice);
-      return next;
-    }));
+    if (!n) {
+      updateRow(localId, { nonInventoryItemId: "" });
+      return;
+    }
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.localId !== localId) return r;
+        const next = {
+          ...r,
+          nonInventoryItemId: n.id,
+          itemTypeId: "",
+          itemTypeName: "",
+          hsCode: "",
+          fbrUOMId: null,
+          saleType: "",
+          // Non-inventory posts to its own mapped account — clear any per-line override.
+          accountId: null,
+        };
+        if (!r.description?.trim()) next.description = n.defaultLineDescription || n.name || "";
+        if (!r.uom?.trim()) next.uom = n.unitName || "";
+        if ((!r.unitPrice || Number(r.unitPrice) === 0) && n.defaultSalePrice != null)
+          next.unitPrice = String(n.defaultSalePrice);
+        return next;
+      }),
+    );
   };
 
   // Bulk-apply: stamp one Item Type onto every row (or only empty rows).
@@ -544,24 +729,26 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // when every line on the bill is the same FBR category.
   const applyItemTypeToRows = (picked, mode) => {
     if (!picked) return;
-    setRows((prev) => prev.map((r) => {
-      if (mode === "empty" && r.itemTypeId) return r;
-      return {
-        ...r,
-        itemTypeId: picked.id,
-        itemTypeName: picked.name || "",
-        hsCode: picked.hsCode || "",
-        uom: picked.uom || "",
-        fbrUOMId: picked.fbrUOMId || null,
-        saleType: picked.saleType || "",
-        // Auto-fill the line's GL income account from the item type's overlay.
-        accountId: picked.saleAccountId ?? null,
-        // Stamping an item type clears any non-inventory binding.
-        nonInventoryItemId: "",
-        // Same Bills-mode seeding rule as the per-row pick.
-        description: billsMode && !r.description?.trim() ? picked.name || "" : r.description,
-      };
-    }));
+    setRows((prev) =>
+      prev.map((r) => {
+        if (mode === "empty" && r.itemTypeId) return r;
+        return {
+          ...r,
+          itemTypeId: picked.id,
+          itemTypeName: picked.name || "",
+          hsCode: picked.hsCode || "",
+          uom: picked.uom || "",
+          fbrUOMId: picked.fbrUOMId || null,
+          saleType: picked.saleType || "",
+          // Auto-fill the line's GL income account from the item type's overlay.
+          accountId: picked.saleAccountId ?? null,
+          // Stamping an item type clears any non-inventory binding.
+          nonInventoryItemId: "",
+          // Same Bills-mode seeding rule as the per-row pick.
+          description: billsMode && !r.description?.trim() ? picked.name || "" : r.description,
+        };
+      }),
+    );
   };
 
   // Bulk-apply a NON-INVENTORY item (charge) to all / empty rows — mirrors
@@ -569,19 +756,26 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // the per-row one.
   const applyNonInvToRows = (n, mode) => {
     if (!n) return;
-    setRows((prev) => prev.map((r) => {
-      if (mode === "empty" && (r.itemTypeId || r.nonInventoryItemId)) return r;
-      const next = {
-        ...r,
-        nonInventoryItemId: n.id,
-        itemTypeId: "", itemTypeName: "", hsCode: "", fbrUOMId: null, saleType: "",
-        accountId: null,
-      };
-      if (!r.description?.trim()) next.description = n.defaultLineDescription || n.name || "";
-      if (!r.uom?.trim()) next.uom = n.unitName || "";
-      if ((!r.unitPrice || Number(r.unitPrice) === 0) && n.defaultSalePrice != null) next.unitPrice = String(n.defaultSalePrice);
-      return next;
-    }));
+    setRows((prev) =>
+      prev.map((r) => {
+        if (mode === "empty" && (r.itemTypeId || r.nonInventoryItemId)) return r;
+        const next = {
+          ...r,
+          nonInventoryItemId: n.id,
+          itemTypeId: "",
+          itemTypeName: "",
+          hsCode: "",
+          fbrUOMId: null,
+          saleType: "",
+          accountId: null,
+        };
+        if (!r.description?.trim()) next.description = n.defaultLineDescription || n.name || "";
+        if (!r.uom?.trim()) next.uom = n.unitName || "";
+        if ((!r.unitPrice || Number(r.unitPrice) === 0) && n.defaultSalePrice != null)
+          next.unitPrice = String(n.defaultSalePrice);
+        return next;
+      }),
+    );
   };
 
   // Bulk-clear: drop the Item Type binding (and the inherited HS Code /
@@ -592,16 +786,18 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // Unit Price / MRP / SRO refs are preserved — those are line-level
   // inputs, not catalog-derived.
   const clearAllItemTypes = () => {
-    setRows((prev) => prev.map((r) => ({
-      ...r,
-      itemTypeId: "",
-      itemTypeName: "",
-      hsCode: "",
-      uom: "",
-      fbrUOMId: null,
-      saleType: "",
-      accountId: null,
-    })));
+    setRows((prev) =>
+      prev.map((r) => ({
+        ...r,
+        itemTypeId: "",
+        itemTypeName: "",
+        hsCode: "",
+        uom: "",
+        fbrUOMId: null,
+        saleType: "",
+        accountId: null,
+      })),
+    );
   };
 
   // Item types compatible with the chosen scenario. When no scenario is
@@ -614,9 +810,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     // An item type with NO sale type counts as the standard-rate default
     // (utils/saleType.js) -- otherwise the bill\'s own item vanished from
     // this list and the picker rendered blank on edit.
-    return itemTypes.filter(
-      (t) => matchesScenarioSaleType(t, chosenScenario.saleType),
-    );
+    return itemTypes.filter((t) => matchesScenarioSaleType(t, chosenScenario.saleType));
   }, [itemTypes, chosenScenario]);
 
   // Effective sale type for a row — locked to scenario when one's picked.
@@ -625,7 +819,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // Account labels for the per-line Account (GL) column: the resolved company
   // default (named, shown when a line carries no explicit account) + a helper
   // naming a non-inventory line's own mapped sale account.
-  const defaultSaleAccountLabel = defaultAccountPlaceholder(accounts, company?.defaultSalesAccountId);
+  const defaultSaleAccountLabel = defaultAccountPlaceholder(
+    accounts,
+    company?.defaultSalesAccountId,
+  );
   const nonInvSaleAccountLabel = (nonInvId) => {
     const n = nonInvItems.find((x) => String(x.id) === String(nonInvId));
     return n?.saleAccountName ? `→ ${n.saleAccountName}` : "→ Suspense";
@@ -639,7 +836,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     const p = parseFloat(r.unitPrice) || 0;
     return sum + q * p;
   }, 0);
-  const gstAmount = Math.round(subtotal * (parseFloat(gstRate) || 0) / 100 * 100) / 100;
+  const gstAmount = Math.round(((subtotal * (parseFloat(gstRate) || 0)) / 100) * 100) / 100;
   const grandTotal = subtotal + gstAmount;
   const freightResolved = Number(freightCharges || 0);
   const commercialTotal = grandTotal + freightResolved;
@@ -648,7 +845,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // 2dp exactly like the backend (Math.round(x*100)/100). Fixed-amount mode =
   // the typed PKR value. Balance due the buyer pays = grandTotal − WHT.
   const computedWhtAmount = Math.round(grandTotal * (parseFloat(whtRate) || 0)) / 100;
-  const whtResolved = whtMode === "none" ? 0 : (whtMode === "rate" ? computedWhtAmount : (parseFloat(whtAmount) || 0));
+  const whtResolved =
+    whtMode === "none" ? 0 : whtMode === "rate" ? computedWhtAmount : parseFloat(whtAmount) || 0;
   const balanceDue = Math.max(0, commercialTotal - whtResolved);
 
   const rowErrors = (r) => {
@@ -682,7 +880,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
 
     if (!selectedClientId) return setError("Select a buyer first.");
     if (!company || company.startingInvoiceNumber === 0)
-      return setError("Starting bill number not set for this company. Configure it on the Companies page first.");
+      return setError(
+        "Starting bill number not set for this company. Configure it on the Companies page first.",
+      );
     if (fbrEnabled && !chosenScenario) return setError("Pick an FBR scenario first.");
     if (billNumberMode === "custom" && !billNumberOk)
       return setError("Enter a bill number that isn't already in use, or switch back to Auto.");
@@ -707,7 +907,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         invoiceNumber: billNumberPayload(billNumberMode, billNumber),
         // Withholding tax: rate-mode ships the %, fixed-amount mode ships null
         // rate + the typed amount. Backend recomputes/clamps the amount.
-        withholdingTaxRate: whtMode === "rate" ? (parseFloat(whtRate) || 0) : null,
+        withholdingTaxRate: whtMode === "rate" ? parseFloat(whtRate) || 0 : null,
         withholdingTaxAmount: whtResolved,
         freightCharges: Number(freightCharges || 0),
         paymentTerms: paymentTerms || null,
@@ -733,7 +933,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
           // (or an optional Item Type pick seeds it). A non-inv line has no
           // item type name, so fall back to its free-text description. Either
           // way it lands on InvoiceItem.Description.
-          description: (billsMode ? r.description : (r.itemTypeName || r.description))?.trim() || "",
+          description: (billsMode ? r.description : r.itemTypeName || r.description)?.trim() || "",
           quantity: parseFloat(r.quantity),
           uom: r.uom?.trim() || null,
           unitPrice: parseFloat(r.unitPrice),
@@ -757,10 +957,14 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       // the bill is already saved.
       try {
         if (created?.id) await attachmentRef.current?.flush(created.id);
-      } catch { /* attachments are best-effort */ }
+      } catch {
+        /* attachments are best-effort */
+      }
       onSaved();
     } catch (err) {
-      setError(err.response?.data?.message || err.response?.data?.error || "Failed to create bill.");
+      setError(
+        err.response?.data?.message || err.response?.data?.error || "Failed to create bill.",
+      );
     } finally {
       setSaving(false);
     }
@@ -792,17 +996,32 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
-      <div data-admin-dialog="" style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        data-admin-dialog=""
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div data-admin-header="" style={formStyles.header}>
           <h5 style={formStyles.title}>Create Bill (No Challan)</h5>
-          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button data-admin-close="" style={formStyles.closeButton} onClick={onClose}>
+            &times;
+          </button>
         </div>
         <form onSubmit={handleSubmit}>
-          <div data-admin-body="" style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
-            {error && <div ref={errorRef} style={styles.errorAlert}>{error}</div>}
+          <div
+            data-admin-body=""
+            style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}
+          >
+            {error && (
+              <div ref={errorRef} style={styles.errorAlert}>
+                {error}
+              </div>
+            )}
 
             {loading ? (
-              <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>Loading…</div>
+              <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>
+                Loading…
+              </div>
             ) : (
               <>
                 {/* ── Sales-Order prefill (both FBR modes) ─────────────
@@ -813,10 +1032,14 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                     scenario owns it otherwise). Clearing it resets
                     those details. */}
                 <div style={{ marginBottom: "1rem" }}>
-                  <label style={styles.label}>Sales Order <span style={{ fontWeight: 400 }}>(optional — loads buyer &amp; items)</span></label>
+                  <label style={styles.label}>
+                    Sales Order{" "}
+                    <span style={{ fontWeight: 400 }}>(optional — loads buyer &amp; items)</span>
+                  </label>
                   {salesOrderOptions.length === 0 ? (
                     <p style={{ color: colors.textSecondary, fontSize: "0.82rem", margin: 0 }}>
-                      No sales orders{divisionId ? " in this division" : ""} — enter the bill manually below.
+                      No sales orders{divisionId ? " in this division" : ""} — enter the bill
+                      manually below.
                     </p>
                   ) : (
                     <SearchableSelect
@@ -828,20 +1051,58 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       placeholder="— Load from a sales order —"
                     />
                   )}
-                  {soLoadedMsg && <div style={{ fontSize: "0.72rem", color: colors.teal, marginTop: 4, fontWeight: 600 }}>{soLoadedMsg}</div>}
+                  {soLoadedMsg && (
+                    <div
+                      style={{
+                        fontSize: "0.72rem",
+                        color: colors.teal,
+                        marginTop: 4,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {soLoadedMsg}
+                    </div>
+                  )}
                 </div>
                 {quoteDiscountInfo && (
-                  <div role="note" style={{ marginBottom: "1rem", padding: "0.7rem 0.85rem", borderRadius: 10, border: "1px solid #f0c36d", background: "#fff8e6", color: "#5c4400", fontSize: "0.85rem", lineHeight: 1.45 }}>
-                    <div style={{ fontWeight: 700, marginBottom: "0.25rem" }}>Discounts on the source quote</div>
+                  <div
+                    role="note"
+                    style={{
+                      marginBottom: "1rem",
+                      padding: "0.7rem 0.85rem",
+                      borderRadius: 10,
+                      border: "1px solid #f0c36d",
+                      background: "#fff8e6",
+                      color: "#5c4400",
+                      fontSize: "0.85rem",
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, marginBottom: "0.25rem" }}>
+                      Discounts on the source quote
+                    </div>
                     {quoteDiscountInfo.lines.length > 0 && (
                       <div>
                         Already in the prices below:
                         <ul style={{ margin: "0.2rem 0 0", paddingLeft: "1.2rem" }}>
-                          {quoteDiscountInfo.lines.map((l, i) => <li key={i} style={{ overflowWrap: "anywhere" }}><b>{l.description}</b>: {l.note}</li>)}
+                          {quoteDiscountInfo.lines.map((l, i) => (
+                            <li key={i} style={{ overflowWrap: "anywhere" }}>
+                              <b>{l.description}</b>: {l.note}
+                            </li>
+                          ))}
                         </ul>
                       </div>
                     )}
-                    {quoteDiscountInfo.whole && <div style={{ marginTop: quoteDiscountInfo.lines.length ? "0.4rem" : 0, overflowWrap: "anywhere" }}>{quoteDiscountInfo.whole}</div>}
+                    {quoteDiscountInfo.whole && (
+                      <div
+                        style={{
+                          marginTop: quoteDiscountInfo.lines.length ? "0.4rem" : 0,
+                          overflowWrap: "anywhere",
+                        }}
+                      >
+                        {quoteDiscountInfo.whole}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -851,97 +1112,144 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                     it. Auto-collapses again when a card is picked so the
                     flow keeps moving down to Buyer / Bill Details. */}
                 {fbrEnabled && (
-                <div style={{ marginBottom: "1rem" }}>
-                  <button
-                    type="button"
-                    onClick={() => setScenarioPickerOpen((v) => !v)}
-                    style={styles.scenarioCollapseHeader}
-                  >
-                    <span style={styles.stepNum}>1</span>
-                    <span style={styles.scenarioCollapseTitle}>FBR Scenario</span>
-                    {chosenScenario ? (
-                      <span style={styles.scenarioCollapseSummary}>
-                        <span style={styles.scenarioCollapseCode}>{chosenScenario.code}</span>
-                        <span>·</span>
-                        <span>{chosenScenario.saleType}</span>
-                        <span>·</span>
-                        <span>{chosenScenario.defaultRate}% GST</span>
-                        {chosenScenario.meta.buyerKind === "b2b-registered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeBlue }}>Registered</span>}
-                        {chosenScenario.meta.buyerKind === "b2b-unregistered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeOrange }}>Unregistered</span>}
-                        {chosenScenario.meta.buyerKind === "walk-in" && <span style={{ ...styles.scenarioBadge, ...styles.badgePurple }}>Walk-in</span>}
-                      </span>
-                    ) : (
-                      <span style={styles.scenarioCollapseSummaryMuted}>
-                        Pick an FBR scenario to start
-                      </span>
-                    )}
-                    <span style={styles.scenarioCollapseChevron}>
-                      {scenarioPickerOpen ? <MdExpandLess size={20} /> : <MdExpandMore size={20} />}
-                      <span style={styles.scenarioCollapseChevronLabel}>
-                        {scenarioPickerOpen ? "Hide" : "Change"}
-                      </span>
-                    </span>
-                  </button>
-
-                  {scenarioPickerOpen && (
-                    <div style={styles.scenarioCollapseBody}>
-                      <p style={styles.stepHint}>
-                        Each scenario locks the Sale Type, GST rate, buyer type, and any extra fields FBR needs to validate this bill.
-                        Only the scenarios applicable to your company's profile
-                        ({company?.fbrBusinessActivity || "—"} · {company?.fbrSector || "—"}) are listed.
-                      </p>
-                      {enrichedScenarios.length === 0 ? (
-                        <div style={styles.warnAlert}>
-                          <MdInfo size={16} /> No FBR scenarios available. Configure Business Activity
-                          and Sector on the Company before creating a standalone bill.
-                        </div>
+                  <div style={{ marginBottom: "1rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => setScenarioPickerOpen((v) => !v)}
+                      style={styles.scenarioCollapseHeader}
+                    >
+                      <span style={styles.stepNum}>1</span>
+                      <span style={styles.scenarioCollapseTitle}>FBR Scenario</span>
+                      {chosenScenario ? (
+                        <span style={styles.scenarioCollapseSummary}>
+                          <span style={styles.scenarioCollapseCode}>{chosenScenario.code}</span>
+                          <span>·</span>
+                          <span>{chosenScenario.saleType}</span>
+                          <span>·</span>
+                          <span>{chosenScenario.defaultRate}% GST</span>
+                          {chosenScenario.meta.buyerKind === "b2b-registered" && (
+                            <span style={{ ...styles.scenarioBadge, ...styles.badgeBlue }}>
+                              Registered
+                            </span>
+                          )}
+                          {chosenScenario.meta.buyerKind === "b2b-unregistered" && (
+                            <span style={{ ...styles.scenarioBadge, ...styles.badgeOrange }}>
+                              Unregistered
+                            </span>
+                          )}
+                          {chosenScenario.meta.buyerKind === "walk-in" && (
+                            <span style={{ ...styles.scenarioBadge, ...styles.badgePurple }}>
+                              Walk-in
+                            </span>
+                          )}
+                        </span>
                       ) : (
-                        <div style={styles.scenarioGrid}>
-                          {enrichedScenarios.map((s) => {
-                            const active = scenarioCode === s.code;
-                            return (
-                              <button
-                                type="button"
-                                key={s.code}
-                                onClick={() => {
-                                  setScenarioCode(s.code);
-                                  // Auto-collapse on pick — operator made
-                                  // their choice, hide the picker so the
-                                  // form scrolls back into Buyer / Items.
-                                  setScenarioPickerOpen(false);
-                                }}
-                                style={{
-                                  ...styles.scenarioCard,
-                                  borderColor: active ? colors.blue : colors.cardBorder,
-                                  backgroundColor: active ? "#e3f2fd" : "#fff",
-                                }}
-                              >
-                                <div style={styles.scenarioCardHeader}>
-                                  <span style={styles.scenarioCode}>{s.code}</span>
-                                  {active && <MdCheck size={16} color={colors.blue} />}
-                                </div>
-                                <div style={styles.scenarioSaleType}>{s.saleType}</div>
-                                <div style={styles.scenarioRate}>{s.defaultRate}% GST</div>
-                                <div style={styles.scenarioBadges}>
-                                  {s.meta.buyerKind === "b2b-registered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeBlue }}>Registered buyer</span>}
-                                  {s.meta.buyerKind === "b2b-unregistered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeOrange }}>Unregistered buyer</span>}
-                                  {s.meta.buyerKind === "walk-in" && <span style={{ ...styles.scenarioBadge, ...styles.badgePurple }}>Walk-in retail</span>}
-                                  {s.meta.needsMRP && <span style={{ ...styles.scenarioBadge, ...styles.badgeYellow }}>MRP required</span>}
-                                  {s.meta.needsSRO && <span style={{ ...styles.scenarioBadge, ...styles.badgePink }}>SRO required</span>}
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
+                        <span style={styles.scenarioCollapseSummaryMuted}>
+                          Pick an FBR scenario to start
+                        </span>
                       )}
-                      {chosenScenario && (
-                        <div style={styles.scenarioHint}>
-                          <MdInfo size={14} color={colors.blue} /> {chosenScenario.meta.hint}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
+                      <span style={styles.scenarioCollapseChevron}>
+                        {scenarioPickerOpen ? (
+                          <MdExpandLess size={20} />
+                        ) : (
+                          <MdExpandMore size={20} />
+                        )}
+                        <span style={styles.scenarioCollapseChevronLabel}>
+                          {scenarioPickerOpen ? "Hide" : "Change"}
+                        </span>
+                      </span>
+                    </button>
+
+                    {scenarioPickerOpen && (
+                      <div style={styles.scenarioCollapseBody}>
+                        <p style={styles.stepHint}>
+                          Each scenario locks the Sale Type, GST rate, buyer type, and any extra
+                          fields FBR needs to validate this bill. Only the scenarios applicable to
+                          your company's profile ({company?.fbrBusinessActivity || "—"} ·{" "}
+                          {company?.fbrSector || "—"}) are listed.
+                        </p>
+                        {enrichedScenarios.length === 0 ? (
+                          <div style={styles.warnAlert}>
+                            <MdInfo size={16} /> No FBR scenarios available. Configure Business
+                            Activity and Sector on the Company before creating a standalone bill.
+                          </div>
+                        ) : (
+                          <div style={styles.scenarioGrid}>
+                            {enrichedScenarios.map((s) => {
+                              const active = scenarioCode === s.code;
+                              return (
+                                <button
+                                  type="button"
+                                  key={s.code}
+                                  onClick={() => {
+                                    setScenarioCode(s.code);
+                                    // Auto-collapse on pick — operator made
+                                    // their choice, hide the picker so the
+                                    // form scrolls back into Buyer / Items.
+                                    setScenarioPickerOpen(false);
+                                  }}
+                                  style={{
+                                    ...styles.scenarioCard,
+                                    borderColor: active ? colors.blue : colors.cardBorder,
+                                    backgroundColor: active ? "#e3f2fd" : "#fff",
+                                  }}
+                                >
+                                  <div style={styles.scenarioCardHeader}>
+                                    <span style={styles.scenarioCode}>{s.code}</span>
+                                    {active && <MdCheck size={16} color={colors.blue} />}
+                                  </div>
+                                  <div style={styles.scenarioSaleType}>{s.saleType}</div>
+                                  <div style={styles.scenarioRate}>{s.defaultRate}% GST</div>
+                                  <div style={styles.scenarioBadges}>
+                                    {s.meta.buyerKind === "b2b-registered" && (
+                                      <span
+                                        style={{ ...styles.scenarioBadge, ...styles.badgeBlue }}
+                                      >
+                                        Registered buyer
+                                      </span>
+                                    )}
+                                    {s.meta.buyerKind === "b2b-unregistered" && (
+                                      <span
+                                        style={{ ...styles.scenarioBadge, ...styles.badgeOrange }}
+                                      >
+                                        Unregistered buyer
+                                      </span>
+                                    )}
+                                    {s.meta.buyerKind === "walk-in" && (
+                                      <span
+                                        style={{ ...styles.scenarioBadge, ...styles.badgePurple }}
+                                      >
+                                        Walk-in retail
+                                      </span>
+                                    )}
+                                    {s.meta.needsMRP && (
+                                      <span
+                                        style={{ ...styles.scenarioBadge, ...styles.badgeYellow }}
+                                      >
+                                        MRP required
+                                      </span>
+                                    )}
+                                    {s.meta.needsSRO && (
+                                      <span
+                                        style={{ ...styles.scenarioBadge, ...styles.badgePink }}
+                                      >
+                                        SRO required
+                                      </span>
+                                    )}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {chosenScenario && (
+                          <div style={styles.scenarioHint}>
+                            <MdInfo size={14} color={colors.blue} /> {chosenScenario.meta.hint}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {/* ── Step 2: Buyer ───────────────
@@ -949,85 +1257,99 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                     default because the operator must pick a buyer. The
                     summary bar shows the selected buyer name when collapsed
                     so the screen stays tidy on subsequent steps. */}
-                {(chosenScenario || !fbrEnabled) && (() => {
-                  const selectedBuyer = filteredClients.find((c) => String(c.id) === String(selectedClientId));
-                  return (
-                    <div style={{ marginBottom: "1rem" }}>
-                      <button
-                        type="button"
-                        onClick={() => setBuyerOpen((v) => !v)}
-                        style={styles.scenarioCollapseHeader}
-                      >
-                        <span style={styles.stepNum}>2</span>
-                        <span style={styles.scenarioCollapseTitle}>
-                          {buyerKind === "walk-in" ? "Walk-in Buyer" : "Buyer"}
-                        </span>
-                        {selectedBuyer ? (
-                          <span style={styles.scenarioCollapseSummary}>
-                            <span>{selectedBuyer.name}</span>
-                            {(selectedBuyer.ntn || selectedBuyer.cnic) && (
-                              <span style={styles.scenarioCollapseMeta}>
-                                · {selectedBuyer.ntn ? `NTN ${selectedBuyer.ntn}` : `CNIC ${selectedBuyer.cnic}`}
-                              </span>
-                            )}
+                {(chosenScenario || !fbrEnabled) &&
+                  (() => {
+                    const selectedBuyer = filteredClients.find(
+                      (c) => String(c.id) === String(selectedClientId),
+                    );
+                    return (
+                      <div style={{ marginBottom: "1rem" }}>
+                        <button
+                          type="button"
+                          onClick={() => setBuyerOpen((v) => !v)}
+                          style={styles.scenarioCollapseHeader}
+                        >
+                          <span style={styles.stepNum}>2</span>
+                          <span style={styles.scenarioCollapseTitle}>
+                            {buyerKind === "walk-in" ? "Walk-in Buyer" : "Buyer"}
                           </span>
-                        ) : (
-                          <span style={styles.scenarioCollapseSummaryMuted}>
-                            Choose a buyer
+                          {selectedBuyer ? (
+                            <span style={styles.scenarioCollapseSummary}>
+                              <span>{selectedBuyer.name}</span>
+                              {(selectedBuyer.ntn || selectedBuyer.cnic) && (
+                                <span style={styles.scenarioCollapseMeta}>
+                                  ·{" "}
+                                  {selectedBuyer.ntn
+                                    ? `NTN ${selectedBuyer.ntn}`
+                                    : `CNIC ${selectedBuyer.cnic}`}
+                                </span>
+                              )}
+                            </span>
+                          ) : (
+                            <span style={styles.scenarioCollapseSummaryMuted}>Choose a buyer</span>
+                          )}
+                          <span style={styles.scenarioCollapseChevron}>
+                            {buyerOpen ? <MdExpandLess size={20} /> : <MdExpandMore size={20} />}
+                            <span style={styles.scenarioCollapseChevronLabel}>
+                              {buyerOpen ? "Hide" : "Change"}
+                            </span>
                           </span>
-                        )}
-                        <span style={styles.scenarioCollapseChevron}>
-                          {buyerOpen ? <MdExpandLess size={20} /> : <MdExpandMore size={20} />}
-                          <span style={styles.scenarioCollapseChevronLabel}>
-                            {buyerOpen ? "Hide" : "Change"}
-                          </span>
-                        </span>
-                      </button>
+                        </button>
 
-                      {buyerOpen && (
-                        <div style={styles.scenarioCollapseBody}>
-                          <div style={styles.inlineRow}>
-                            {filteredClients.length === 0 ? (
-                              <div style={{ ...styles.warnAlert, flex: 1 }}>
-                                <MdInfo size={16} />
-                                No matching{" "}
-                                {buyerKind === "b2b-registered" ? "Registered"
-                                  : buyerKind === "b2b-unregistered" ? "Unregistered"
-                                  : buyerKind === "walk-in" ? "Unregistered (Walk-in)" : ""}{" "}
-                                clients yet.
-                              </div>
-                            ) : (
-                              <div style={{ flex: 1 }}>
-                                <SearchableSelect
-                                  items={filteredClients.map((cl) => ({ ...cl, _label: `${cl.name} (${cl.registrationType || "—"}${cl.ntn ? ` · NTN ${cl.ntn}` : cl.cnic ? ` · CNIC ${cl.cnic}` : ""})` }))}
-                                  value={selectedClientId}
-                                  onChange={(id) => setSelectedClientId(id ? String(id) : "")}
-                                  labelKey="_label"
-                                  searchKeys={["name", "ntn", "cnic"]}
-                                  placeholder="— Choose a buyer —"
-                                />
-                              </div>
-                            )}
-                            {/* Inline-create. Hidden when caller can't create
+                        {buyerOpen && (
+                          <div style={styles.scenarioCollapseBody}>
+                            <div style={styles.inlineRow}>
+                              {filteredClients.length === 0 ? (
+                                <div style={{ ...styles.warnAlert, flex: 1 }}>
+                                  <MdInfo size={16} />
+                                  No matching{" "}
+                                  {buyerKind === "b2b-registered"
+                                    ? "Registered"
+                                    : buyerKind === "b2b-unregistered"
+                                      ? "Unregistered"
+                                      : buyerKind === "walk-in"
+                                        ? "Unregistered (Walk-in)"
+                                        : ""}{" "}
+                                  clients yet.
+                                </div>
+                              ) : (
+                                <div style={{ flex: 1 }}>
+                                  <SearchableSelect
+                                    items={filteredClients.map((cl) => ({
+                                      ...cl,
+                                      _label: `${cl.name} (${cl.registrationType || "—"}${cl.ntn ? ` · NTN ${cl.ntn}` : cl.cnic ? ` · CNIC ${cl.cnic}` : ""})`,
+                                    }))}
+                                    value={selectedClientId}
+                                    onChange={(id) => setSelectedClientId(id ? String(id) : "")}
+                                    labelKey="_label"
+                                    searchKeys={["name", "ntn", "cnic"]}
+                                    placeholder="— Choose a buyer —"
+                                  />
+                                </div>
+                              )}
+                              {/* Inline-create. Hidden when caller can't create
                                 clients — replaced by an inline hint instead. */}
-                            {canCreateClient ? (
-                              <button
-                                type="button"
-                                style={styles.inlineAddBtn}
-                                onClick={() => setShowAddClient(true)}
-                                title="Create a new buyer without leaving this form"
-                              >
-                                <MdPersonAdd size={14} /> New Buyer
-                              </button>
-                            ) : (
-                              <PermissionLackedHint perm="clients.manage.create" what="add a new buyer" />
-                            )}
+                              {canCreateClient ? (
+                                <button
+                                  type="button"
+                                  style={styles.inlineAddBtn}
+                                  onClick={() => setShowAddClient(true)}
+                                  title="Create a new buyer without leaving this form"
+                                >
+                                  <MdPersonAdd size={14} /> New Buyer
+                                </button>
+                              ) : (
+                                <PermissionLackedHint
+                                  perm="clients.manage.create"
+                                  what="add a new buyer"
+                                />
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
+                        )}
+                      </div>
+                    );
+                  })()}
 
                 {/* ── Step 3: Bill header + items ───────────────
                     The header-fields row (Bill Date / GST / Payment Terms /
@@ -1047,14 +1369,29 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                         <span style={styles.stepNum}>3</span>
                         <span style={styles.scenarioCollapseTitle}>Bill Details</span>
                         <span style={styles.scenarioCollapseSummary}>
-                          <span>{billNumberMode === "custom" ? `#${billNumber || "—"}` : "Auto #"}</span>
+                          <span>
+                            {billNumberMode === "custom" ? `#${billNumber || "—"}` : "Auto #"}
+                          </span>
                           <span>·</span>
                           <span>{invoiceDate || "—"}</span>
                           <span>·</span>
                           <span>{gstRate}% GST</span>
                           <span>·</span>
-                          <span>{documentType === 4 ? "Sale Invoice" : documentType === 9 ? "Debit Note" : documentType === 10 ? "Credit Note" : "—"}</span>
-                          {paymentMode && <><span>·</span><span>{paymentMode}</span></>}
+                          <span>
+                            {documentType === 4
+                              ? "Sale Invoice"
+                              : documentType === 9
+                                ? "Debit Note"
+                                : documentType === 10
+                                  ? "Credit Note"
+                                  : "—"}
+                          </span>
+                          {paymentMode && (
+                            <>
+                              <span>·</span>
+                              <span>{paymentMode}</span>
+                            </>
+                          )}
                         </span>
                         <span style={styles.scenarioCollapseChevron}>
                           {billHeaderOpen ? <MdExpandLess size={20} /> : <MdExpandMore size={20} />}
@@ -1081,25 +1418,64 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                             </div>
                             <div style={{ flex: 1, minWidth: 140 }}>
                               <label style={styles.label}>Bill Date</label>
-                              <input type="date" style={styles.input} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
+                              <input
+                                type="date"
+                                style={styles.input}
+                                value={invoiceDate}
+                                onChange={(e) => setInvoiceDate(e.target.value)}
+                              />
                             </div>
-                            <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={styles.label} style={styles.input} wrapStyle={{ flex: 1, minWidth: 140 }} />
+                            <DivisionSelect
+                              companyId={companyId}
+                              value={divisionId}
+                              onChange={setDivisionId}
+                              mode="select"
+                              label={
+                                <>
+                                  Division <span style={{ fontWeight: 400 }}>(optional)</span>
+                                </>
+                              }
+                              labelStyle={styles.label}
+                              style={styles.input}
+                              wrapStyle={{ flex: 1, minWidth: 140 }}
+                            />
                             <div style={{ flex: 1, minWidth: 100 }}>
                               <label style={{ ...styles.label, whiteSpace: "nowrap" }}>
-                                GST Rate (%) {chosenScenario && <span style={styles.lockedTag} title={`Locked by ${chosenScenario.code}`}><MdLock size={10} /> locked</span>}
+                                GST Rate (%){" "}
+                                {chosenScenario && (
+                                  <span
+                                    style={styles.lockedTag}
+                                    title={`Locked by ${chosenScenario.code}`}
+                                  >
+                                    <MdLock size={10} /> locked
+                                  </span>
+                                )}
                               </label>
                               <input
                                 type="number"
-                                style={{ ...styles.input, backgroundColor: chosenScenario ? "#eef5ff" : undefined, cursor: chosenScenario ? "not-allowed" : "text" }}
+                                style={{
+                                  ...styles.input,
+                                  backgroundColor: chosenScenario ? "#eef5ff" : undefined,
+                                  cursor: chosenScenario ? "not-allowed" : "text",
+                                }}
                                 value={gstRate}
                                 onChange={(e) => setGstRate(e.target.value)}
                                 readOnly={!!chosenScenario}
-                                title={chosenScenario ? `Locked by ${chosenScenario.code}. Switch scenario to change.` : "Set the GST rate for this bill"}
+                                title={
+                                  chosenScenario
+                                    ? `Locked by ${chosenScenario.code}. Switch scenario to change.`
+                                    : "Set the GST rate for this bill"
+                                }
                               />
                             </div>
                             <div style={{ flex: 1, minWidth: 140 }}>
                               <label style={styles.label}>Withholding Tax</label>
-                              <select style={styles.input} value={whtMode} onChange={(e) => setWhtMode(e.target.value)} title="Income tax withheld on top of GST — reduces the balance due, not the invoice total">
+                              <select
+                                style={styles.input}
+                                value={whtMode}
+                                onChange={(e) => setWhtMode(e.target.value)}
+                                title="Income tax withheld on top of GST — reduces the balance due, not the invoice total"
+                              >
                                 <option value="none">None</option>
                                 <option value="rate">Rate %</option>
                                 <option value="amount">Fixed amount</option>
@@ -1109,7 +1485,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               <div style={{ flex: 1, minWidth: 120 }}>
                                 <label style={styles.label}>WHT Rate (%)</label>
                                 <input
-                                  type="number" min={0} step={0.01}
+                                  type="number"
+                                  min={0}
+                                  step={0.01}
                                   style={styles.input}
                                   value={whtRate}
                                   onChange={(e) => setWhtRate(e.target.value)}
@@ -1121,7 +1499,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               <div style={{ flex: 1, minWidth: 120 }}>
                                 <label style={styles.label}>WHT Amount (Rs.)</label>
                                 <input
-                                  type="number" min={0} step={0.01}
+                                  type="number"
+                                  min={0}
+                                  step={0.01}
                                   style={styles.input}
                                   value={whtAmount}
                                   onChange={(e) => setWhtAmount(e.target.value)}
@@ -1131,29 +1511,60 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                             )}
                             <div style={{ flex: 1, minWidth: 140 }}>
                               <label style={styles.label}>Payment Terms</label>
-                              <input type="text" style={styles.input} value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="Optional" />
+                              <input
+                                type="text"
+                                style={styles.input}
+                                value={paymentTerms}
+                                onChange={(e) => setPaymentTerms(e.target.value)}
+                                placeholder="Optional"
+                              />
                             </div>
                             <div style={{ flex: 1, minWidth: 140 }}>
-                              <label style={styles.label}>Customer PO # <span style={styles.optionalTag}>optional</span></label>
-                              <input type="text" style={styles.input} value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="From order, or manual" />
+                              <label style={styles.label}>
+                                Customer PO # <span style={styles.optionalTag}>optional</span>
+                              </label>
+                              <input
+                                type="text"
+                                style={styles.input}
+                                value={poNumber}
+                                onChange={(e) => setPoNumber(e.target.value)}
+                                placeholder="From order, or manual"
+                              />
                             </div>
                             <div style={{ flex: 1, minWidth: 120 }}>
                               <label style={styles.label}>PO Date</label>
-                              <input type="date" style={styles.input} value={poDate} onChange={(e) => setPoDate(e.target.value)} />
+                              <input
+                                type="date"
+                                style={styles.input}
+                                value={poDate}
+                                onChange={(e) => setPoDate(e.target.value)}
+                              />
                             </div>
                             <div style={{ flex: 1, minWidth: 140 }}>
-                              <label style={styles.label}>Document Type <span style={styles.optionalTag}>FBR</span></label>
+                              <label style={styles.label}>
+                                Document Type <span style={styles.optionalTag}>FBR</span>
+                              </label>
                               <input
                                 type="text"
-                                style={{ ...styles.input, backgroundColor: "#eef5ff", cursor: "not-allowed" }}
+                                style={{
+                                  ...styles.input,
+                                  backgroundColor: "#eef5ff",
+                                  cursor: "not-allowed",
+                                }}
                                 value="Sale Invoice"
                                 readOnly
                                 title="This screen creates Sale Invoices only. Credit / Debit Notes will get their own dedicated screens."
                               />
                             </div>
                             <div style={{ flex: 1, minWidth: 140 }}>
-                              <label style={styles.label}>Payment Mode <span style={styles.optionalTag}>FBR</span></label>
-                              <select style={styles.input} value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)}>
+                              <label style={styles.label}>
+                                Payment Mode <span style={styles.optionalTag}>FBR</span>
+                              </label>
+                              <select
+                                style={styles.input}
+                                value={paymentMode}
+                                onChange={(e) => setPaymentMode(e.target.value)}
+                              >
                                 <option value="">— optional —</option>
                                 <option>Cash</option>
                                 <option>Credit</option>
@@ -1170,8 +1581,12 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                     {chosenScenario && (
                       <div style={styles.lockedSaleType}>
                         <MdLock size={14} color={colors.teal} />
-                        <span><b>Sale Type locked:</b> {chosenScenario.saleType}</span>
-                        <span style={styles.lockedSaleTypeHint}>(every line uses this — required by {chosenScenario.code})</span>
+                        <span>
+                          <b>Sale Type locked:</b> {chosenScenario.saleType}
+                        </span>
+                        <span style={styles.lockedSaleTypeHint}>
+                          (every line uses this — required by {chosenScenario.code})
+                        </span>
                       </div>
                     )}
 
@@ -1179,7 +1594,14 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                     <div>
                       <div style={styles.itemsHeaderBar}>
                         <label style={{ ...styles.label, margin: 0 }}>Items ({rows.length})</label>
-                        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "0.5rem",
+                            alignItems: "center",
+                            flexWrap: "wrap",
+                          }}
+                        >
                           {/* 2026-05-13: previously hidden when billsMode
                               was true. Operators asked for the New Item
                               Type shortcut on every bill-creation flow
@@ -1196,7 +1618,11 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               <MdAdd size={14} /> New Item Type
                             </button>
                           ) : (
-                            <PermissionLackedHint inline perm="itemtypes.manage.create" what="add a new item type" />
+                            <PermissionLackedHint
+                              inline
+                              perm="itemtypes.manage.create"
+                              what="add a new item type"
+                            />
                           )}
                           <button type="button" style={styles.addRowBtn} onClick={addRow}>
                             <MdAdd size={14} /> Add Row
@@ -1231,8 +1657,22 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                             <tr style={styles.unifiedThead}>
                               {/* Optional in Bills mode — a type picked at
                                   bill time persists to the Invoices tab. */}
-                              <th style={{ ...styles.unifiedTh, width: showMRP || showSRO ? "22%" : "26%" }}>Item Type *</th>
-                              <th style={{ ...styles.unifiedTh, width: showMRP || showSRO ? "16%" : "20%" }}>Description{billsMode ? " *" : ""}</th>
+                              <th
+                                style={{
+                                  ...styles.unifiedTh,
+                                  width: showMRP || showSRO ? "22%" : "26%",
+                                }}
+                              >
+                                Item Type *
+                              </th>
+                              <th
+                                style={{
+                                  ...styles.unifiedTh,
+                                  width: showMRP || showSRO ? "16%" : "20%",
+                                }}
+                              >
+                                Description{billsMode ? " *" : ""}
+                              </th>
                               <th style={{ ...styles.unifiedTh, width: "7%" }}>Qty *</th>
                               <th style={{ ...styles.unifiedTh, width: "8%" }}>UOM</th>
                               <th style={{ ...styles.unifiedTh, width: "9%" }}>Unit Price *</th>
@@ -1241,7 +1681,12 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                   amount posts to. Shown in both modes when the
                                   company has a Chart of Accounts. */}
                               {glOn && (
-                                <th style={{ ...styles.unifiedTh, width: "14%" }} title="GL income account this line posts to">Account (GL)</th>
+                                <th
+                                  style={{ ...styles.unifiedTh, width: "14%" }}
+                                  title="GL income account this line posts to"
+                                >
+                                  Account (GL)
+                                </th>
                               )}
                               {/* HS Code is an FBR field — only relevant on
                                   the Invoices tab. Bills mode is pre-FBR
@@ -1249,10 +1694,50 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               {!billsMode && (
                                 <th style={{ ...styles.unifiedTh, width: "10%" }}>HS Code</th>
                               )}
-                              {showMRP && <th style={{ ...styles.unifiedTh, width: "9%", backgroundColor: "#fff8e1" }}>MRP / unit *</th>}
-                              {showMRP && <th style={{ ...styles.unifiedTh, width: "9%", backgroundColor: "#fff8e1" }}>MRP × Qty</th>}
-                              {showSRO && <th style={{ ...styles.unifiedTh, width: "10%", backgroundColor: "#fce4ec" }}>SRO Schedule *</th>}
-                              {showSRO && <th style={{ ...styles.unifiedTh, width: "8%", backgroundColor: "#fce4ec" }}>SRO Item No *</th>}
+                              {showMRP && (
+                                <th
+                                  style={{
+                                    ...styles.unifiedTh,
+                                    width: "9%",
+                                    backgroundColor: "#fff8e1",
+                                  }}
+                                >
+                                  MRP / unit *
+                                </th>
+                              )}
+                              {showMRP && (
+                                <th
+                                  style={{
+                                    ...styles.unifiedTh,
+                                    width: "9%",
+                                    backgroundColor: "#fff8e1",
+                                  }}
+                                >
+                                  MRP × Qty
+                                </th>
+                              )}
+                              {showSRO && (
+                                <th
+                                  style={{
+                                    ...styles.unifiedTh,
+                                    width: "10%",
+                                    backgroundColor: "#fce4ec",
+                                  }}
+                                >
+                                  SRO Schedule *
+                                </th>
+                              )}
+                              {showSRO && (
+                                <th
+                                  style={{
+                                    ...styles.unifiedTh,
+                                    width: "8%",
+                                    backgroundColor: "#fce4ec",
+                                  }}
+                                >
+                                  SRO Item No *
+                                </th>
+                              )}
                               <th style={{ ...styles.unifiedTh, width: "4%" }}></th>
                             </tr>
                           </thead>
@@ -1267,12 +1752,20 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       divisionId={divisionId}
                                       items={filteredItemTypes}
                                       value={r.itemTypeId}
-                                      onChange={(id, picked) => handleItemTypePick(r.localId, picked || null)}
+                                      onChange={(id, picked) =>
+                                        handleItemTypePick(r.localId, picked || null)
+                                      }
                                       nonInventoryItems={nonInvItems}
                                       nonInventoryValue={r.nonInventoryItemId || ""}
-                                      onPickNonInventory={(n) => handleNonInventoryPick(r.localId, n)}
+                                      onPickNonInventory={(n) =>
+                                        handleNonInventoryPick(r.localId, n)
+                                      }
                                       placeholder="Required — pick item or non-inventory…"
-                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
+                                      style={{
+                                        ...styles.input,
+                                        padding: "0.3rem 0.5rem",
+                                        fontSize: "0.8rem",
+                                      }}
                                     />
                                   </td>
                                   {/* Description: in Invoices mode it stays locked to the
@@ -1287,27 +1780,53 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                         label="Description"
                                         endpoint="/lookup/items"
                                         value={r.description || ""}
-                                        onChange={(val) => updateRow(r.localId, { description: val })}
-                                        inputStyle={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
+                                        onChange={(val) =>
+                                          updateRow(r.localId, { description: val })
+                                        }
+                                        inputStyle={{
+                                          ...styles.input,
+                                          padding: "0.3rem 0.5rem",
+                                          fontSize: "0.8rem",
+                                        }}
                                         multiline
                                       />
                                     </td>
-                                  ) : (() => {
-                                    // Invoices-mode description is read-only: the item type's
-                                    // name, or (for a non-inv charge line) its free-text description.
-                                    const display = r.itemTypeName || (r.nonInventoryItemId ? r.description : "");
-                                    return (
-                                      <td style={{ ...styles.unifiedTd, color: display ? colors.textPrimary : colors.textSecondary, fontStyle: display ? "normal" : "italic" }}>
-                                        {display || "(pick an item type)"}
-                                      </td>
-                                    );
-                                  })()}
+                                  ) : (
+                                    (() => {
+                                      // Invoices-mode description is read-only: the item type's
+                                      // name, or (for a non-inv charge line) its free-text description.
+                                      const display =
+                                        r.itemTypeName ||
+                                        (r.nonInventoryItemId ? r.description : "");
+                                      return (
+                                        <td
+                                          style={{
+                                            ...styles.unifiedTd,
+                                            color: display
+                                              ? colors.textPrimary
+                                              : colors.textSecondary,
+                                            fontStyle: display ? "normal" : "italic",
+                                          }}
+                                        >
+                                          {display || "(pick an item type)"}
+                                        </td>
+                                      );
+                                    })()
+                                  )}
                                   <td style={styles.unifiedTd}>
                                     <input
-                                      type="number" min={0} step="any"
-                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
+                                      type="number"
+                                      min={0}
+                                      step="any"
+                                      style={{
+                                        ...styles.input,
+                                        padding: "0.3rem 0.5rem",
+                                        fontSize: "0.8rem",
+                                      }}
                                       value={r.quantity}
-                                      onChange={(e) => updateRow(r.localId, { quantity: e.target.value })}
+                                      onChange={(e) =>
+                                        updateRow(r.localId, { quantity: e.target.value })
+                                      }
                                       placeholder="0"
                                     />
                                   </td>
@@ -1326,35 +1845,64 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                         endpoint="/lookup/units"
                                         value={r.uom || ""}
                                         onChange={(val) => updateRow(r.localId, { uom: val })}
-                                        inputStyle={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
+                                        inputStyle={{
+                                          ...styles.input,
+                                          padding: "0.3rem 0.5rem",
+                                          fontSize: "0.8rem",
+                                        }}
                                       />
                                     ) : (
                                       <input
                                         type="text"
                                         readOnly={!!r.itemTypeId}
                                         style={{
-                                          ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem",
-                                          backgroundColor: r.itemTypeId ? "#eef5ff" : colors.inputBg,
+                                          ...styles.input,
+                                          padding: "0.3rem 0.5rem",
+                                          fontSize: "0.8rem",
+                                          backgroundColor: r.itemTypeId
+                                            ? "#eef5ff"
+                                            : colors.inputBg,
                                           cursor: r.itemTypeId ? "not-allowed" : "text",
                                         }}
                                         value={r.uom}
-                                        onChange={(e) => updateRow(r.localId, { uom: e.target.value })}
+                                        onChange={(e) =>
+                                          updateRow(r.localId, { uom: e.target.value })
+                                        }
                                         placeholder="auto from item type"
-                                        title={r.itemTypeId ? "Inherited from the picked item type" : ""}
+                                        title={
+                                          r.itemTypeId ? "Inherited from the picked item type" : ""
+                                        }
                                       />
                                     )}
                                   </td>
                                   <td style={styles.unifiedTd}>
                                     <input
-                                      type="number" min={0} step="any"
-                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
+                                      type="number"
+                                      min={0}
+                                      step="any"
+                                      style={{
+                                        ...styles.input,
+                                        padding: "0.3rem 0.5rem",
+                                        fontSize: "0.8rem",
+                                      }}
                                       value={r.unitPrice}
-                                      onChange={(e) => updateRow(r.localId, { unitPrice: e.target.value })}
+                                      onChange={(e) =>
+                                        updateRow(r.localId, { unitPrice: e.target.value })
+                                      }
                                       placeholder="0.00"
                                     />
                                   </td>
-                                  <td style={{ ...styles.unifiedTd, textAlign: "right", fontWeight: 600, fontSize: "0.82rem" }}>
-                                    {(q * p).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                  <td
+                                    style={{
+                                      ...styles.unifiedTd,
+                                      textAlign: "right",
+                                      fontWeight: 600,
+                                      fontSize: "0.82rem",
+                                    }}
+                                  >
+                                    {(q * p).toLocaleString(undefined, {
+                                      minimumFractionDigits: 2,
+                                    })}
                                   </td>
                                   {glOn && (
                                     <td style={styles.unifiedTd}>
@@ -1364,8 +1912,16 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                         onChange={(v) => updateRow(r.localId, { accountId: v })}
                                         side="income"
                                         disabled={!!r.nonInventoryItemId}
-                                        placeholder={r.nonInventoryItemId ? nonInvSaleAccountLabel(r.nonInventoryItemId) : defaultSaleAccountLabel}
-                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.76rem" }}
+                                        placeholder={
+                                          r.nonInventoryItemId
+                                            ? nonInvSaleAccountLabel(r.nonInventoryItemId)
+                                            : defaultSaleAccountLabel
+                                        }
+                                        style={{
+                                          ...styles.input,
+                                          padding: "0.3rem 0.5rem",
+                                          fontSize: "0.76rem",
+                                        }}
                                       />
                                     </td>
                                   )}
@@ -1387,22 +1943,40 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                   {showMRP && (
                                     <td style={{ ...styles.unifiedTd, backgroundColor: "#fffdf5" }}>
                                       <input
-                                        type="number" min={0} step="any"
-                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
+                                        type="number"
+                                        min={0}
+                                        step="any"
+                                        style={{
+                                          ...styles.input,
+                                          padding: "0.3rem 0.5rem",
+                                          fontSize: "0.8rem",
+                                        }}
                                         value={r.mrp}
-                                        onChange={(e) => updateRow(r.localId, { mrp: e.target.value })}
+                                        onChange={(e) =>
+                                          updateRow(r.localId, { mrp: e.target.value })
+                                        }
                                         placeholder="MRP / unit"
                                         title="Printed retail price PER UNIT. The MRP × Qty total is computed automatically."
                                       />
                                     </td>
                                   )}
                                   {showMRP && (
-                                    <td style={{ ...styles.unifiedTd, backgroundColor: "#fffdf5", textAlign: "right", fontWeight: 600, fontSize: "0.82rem" }}>
+                                    <td
+                                      style={{
+                                        ...styles.unifiedTd,
+                                        backgroundColor: "#fffdf5",
+                                        textAlign: "right",
+                                        fontWeight: 600,
+                                        fontSize: "0.82rem",
+                                      }}
+                                    >
                                       {(() => {
                                         const m = parseFloat(r.mrp) || 0;
                                         const total = m * q;
                                         return total > 0
-                                          ? total.toLocaleString(undefined, { minimumFractionDigits: 2 })
+                                          ? total.toLocaleString(undefined, {
+                                              minimumFractionDigits: 2,
+                                            })
                                           : "—";
                                       })()}
                                     </td>
@@ -1411,9 +1985,15 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                     <td style={{ ...styles.unifiedTd, backgroundColor: "#fff7fa" }}>
                                       <input
                                         type="text"
-                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                                        style={{
+                                          ...styles.input,
+                                          padding: "0.3rem 0.5rem",
+                                          fontSize: "0.78rem",
+                                        }}
                                         value={r.sroScheduleNo}
-                                        onChange={(e) => updateRow(r.localId, { sroScheduleNo: e.target.value })}
+                                        onChange={(e) =>
+                                          updateRow(r.localId, { sroScheduleNo: e.target.value })
+                                        }
                                         placeholder='e.g. "SRO 297(I)/2023"'
                                       />
                                     </td>
@@ -1422,9 +2002,15 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                     <td style={{ ...styles.unifiedTd, backgroundColor: "#fff7fa" }}>
                                       <input
                                         type="text"
-                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                                        style={{
+                                          ...styles.input,
+                                          padding: "0.3rem 0.5rem",
+                                          fontSize: "0.78rem",
+                                        }}
                                         value={r.sroItemSerialNo}
-                                        onChange={(e) => updateRow(r.localId, { sroItemSerialNo: e.target.value })}
+                                        onChange={(e) =>
+                                          updateRow(r.localId, { sroItemSerialNo: e.target.value })
+                                        }
                                         placeholder="serial #"
                                       />
                                     </td>
@@ -1435,7 +2021,11 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       style={styles.removeRowBtn}
                                       onClick={() => removeRow(r.localId)}
                                       disabled={rows.length === 1}
-                                      title={rows.length === 1 ? "At least one row is required" : "Remove this row"}
+                                      title={
+                                        rows.length === 1
+                                          ? "At least one row is required"
+                                          : "Remove this row"
+                                      }
                                     >
                                       <MdDelete size={14} />
                                     </button>
@@ -1449,33 +2039,96 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       <p style={styles.fbrToggleHint}>
                         <b>*</b> required ·
                         {billsMode ? (
-                          <> <b>Item Type</b> is optional — picking one classifies the line (HS Code / UOM / Sale Type ride along) and shows on the Invoices tab</>
+                          <>
+                            {" "}
+                            <b>Item Type</b> is optional — picking one classifies the line (HS Code
+                            / UOM / Sale Type ride along) and shows on the Invoices tab
+                          </>
                         ) : (
-                          <> <b>Description, UOM, HS Code, Sale Type</b> all auto-fill from the picked Item Type</>
+                          <>
+                            {" "}
+                            <b>Description, UOM, HS Code, Sale Type</b> all auto-fill from the
+                            picked Item Type
+                          </>
                         )}
-                        {showMRP && " · enter the per-unit MRP — the MRP × Qty total drives 3rd Schedule tax (backed out of MRP)"}
+                        {showMRP &&
+                          " · enter the per-unit MRP — the MRP × Qty total drives 3rd Schedule tax (backed out of MRP)"}
                         {showSRO && " · SRO Schedule + Item No referenced for reduced-rate items"}
                       </p>
 
-                      {billsMode && <FreightChargesField value={freightCharges} onChange={setFreightCharges} />}
-                        {/* Totals */}
+                      {billsMode && (
+                        <FreightChargesField value={freightCharges} onChange={setFreightCharges} />
+                      )}
+                      {/* Totals */}
                       <div style={styles.totalsBox}>
-                        <div style={styles.totalRow}><span>Subtotal:</span><span>Rs. {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
-                        <div style={styles.totalRow}><span>GST ({gstRate}%):</span><span>Rs. {gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+                        <div style={styles.totalRow}>
+                          <span>Subtotal:</span>
+                          <span>
+                            Rs. {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        <div style={styles.totalRow}>
+                          <span>GST ({gstRate}%):</span>
+                          <span>
+                            Rs. {gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
                         {billsMode && Number(freightCharges) > 0 && (
-                          <div style={styles.totalRow}><span>Freight / cartage:</span><span>Rs. {Number(freightCharges).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                          <div style={styles.totalRow}>
+                            <span>Freight / cartage:</span>
+                            <span>
+                              Rs.{" "}
+                              {Number(freightCharges).toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </span>
+                          </div>
                         )}
-                        <div style={{ ...styles.totalRow, fontWeight: 700, fontSize: "1rem", borderTop: "2px solid #333", paddingTop: "0.5rem" }}>
-                          <span>{billsMode ? "Commercial Total:" : "Grand Total:"}</span><span>Rs. {(billsMode ? commercialTotal : grandTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        <div
+                          style={{
+                            ...styles.totalRow,
+                            fontWeight: 700,
+                            fontSize: "1rem",
+                            borderTop: "2px solid #333",
+                            paddingTop: "0.5rem",
+                          }}
+                        >
+                          <span>{billsMode ? "Commercial Total:" : "Grand Total:"}</span>
+                          <span>
+                            Rs.{" "}
+                            {(billsMode ? commercialTotal : grandTotal).toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                            })}
+                          </span>
                         </div>
                         {whtResolved > 0 && (
                           <>
                             <div style={styles.totalRow}>
-                              <span>Withholding tax{whtMode === "rate" ? ` (${whtRate}%)` : ""}:</span>
-                              <span>Rs. {whtResolved.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                              <span>
+                                Withholding tax{whtMode === "rate" ? ` (${whtRate}%)` : ""}:
+                              </span>
+                              <span>
+                                Rs.{" "}
+                                {whtResolved.toLocaleString(undefined, {
+                                  minimumFractionDigits: 2,
+                                })}
+                              </span>
                             </div>
-                            <div style={{ ...styles.totalRow, fontWeight: 700, fontSize: "1rem", borderTop: "2px solid #333", paddingTop: "0.5rem" }}>
-                              <span>Balance due:</span><span>Rs. {balanceDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                            <div
+                              style={{
+                                ...styles.totalRow,
+                                fontWeight: 700,
+                                fontSize: "1rem",
+                                borderTop: "2px solid #333",
+                                paddingTop: "0.5rem",
+                              }}
+                            >
+                              <span>Balance due:</span>
+                              <span>
+                                Rs.{" "}
+                                {balanceDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </span>
                             </div>
                           </>
                         )}
@@ -1507,16 +2160,39 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                 Some required fields are missing.
               </span>
             ) : null}
-            <button data-admin-close="" type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            <button
+              data-admin-close=""
+              type="button"
+              style={{ ...formStyles.button, ...formStyles.cancel }}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
             <button
               type="submit"
               style={{
-                ...formStyles.button, ...formStyles.submit,
-                opacity: saving || !(chosenScenario || !fbrEnabled) || !selectedClientId || !allRowsValid || !billNumberOk ? 0.6 : 1,
+                ...formStyles.button,
+                ...formStyles.submit,
+                opacity:
+                  saving ||
+                  !(chosenScenario || !fbrEnabled) ||
+                  !selectedClientId ||
+                  !allRowsValid ||
+                  !billNumberOk
+                    ? 0.6
+                    : 1,
               }}
-              disabled={saving || !(chosenScenario || !fbrEnabled) || !selectedClientId || !allRowsValid || !billNumberOk}
+              disabled={
+                saving ||
+                !(chosenScenario || !fbrEnabled) ||
+                !selectedClientId ||
+                !allRowsValid ||
+                !billNumberOk
+              }
             >
-              {saving ? "Creating…" : `Create Bill${chosenScenario ? ` · ${chosenScenario.code}` : ""}`}
+              {saving
+                ? "Creating…"
+                : `Create Bill${chosenScenario ? ` · ${chosenScenario.code}` : ""}`}
             </button>
           </div>
         </form>
@@ -1546,7 +2222,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
           scenarioSaleType={chosenScenario?.saleType}
           showGlMapping
           defaultDivisionId={divisionId || null}
-          onClose={() => { setShowAddItemType(false); setPendingItemTypeRow(null); }}
+          onClose={() => {
+            setShowAddItemType(false);
+            setPendingItemTypeRow(null);
+          }}
           onSaved={onItemTypeSaved}
         />
       )}
@@ -1559,33 +2238,220 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
 // so InvoiceForm (with-challan) can import the same pieces.
 
 const styles = {
-  row: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.85rem 1rem", marginBottom: "1rem", alignItems: "end" },
+  row: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))",
+    gap: "0.85rem 1rem",
+    marginBottom: "1rem",
+    alignItems: "end",
+  },
   inlineRow: { display: "flex", gap: "0.5rem", alignItems: "stretch", flexWrap: "wrap" },
-  label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
-  input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", boxSizing: "border-box" },
-  select: { width: "100%", padding: "0.6rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", cursor: "pointer" },
-  errorAlert: { backgroundColor: colors.dangerLight, color: colors.danger, padding: "0.65rem 1rem", borderRadius: 8, marginBottom: "1rem", fontWeight: 500, border: `1px solid ${colors.danger}30`, fontSize: "0.85rem" },
-  warnAlert: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.65rem 0.85rem", borderRadius: 8, backgroundColor: colors.warnLight, border: `1px solid ${colors.warn}30`, color: colors.warn, fontSize: "0.85rem" },
-  totalsBox: { display: "flex", flexDirection: "column", gap: "0.35rem", alignItems: "flex-end", padding: "1rem", backgroundColor: "#f8f9fb", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, marginTop: "0.5rem" },
-  totalRow: { display: "flex", gap: "2rem", justifyContent: "flex-end", fontSize: "0.9rem", minWidth: 280 },
+  label: {
+    display: "block",
+    marginBottom: "0.35rem",
+    fontWeight: 600,
+    fontSize: "0.85rem",
+    color: colors.textSecondary,
+  },
+  input: {
+    width: "100%",
+    padding: "0.55rem 0.75rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    fontSize: "0.9rem",
+    backgroundColor: colors.inputBg,
+    color: colors.textPrimary,
+    outline: "none",
+    boxSizing: "border-box",
+  },
+  select: {
+    width: "100%",
+    padding: "0.6rem 0.75rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    fontSize: "0.9rem",
+    backgroundColor: colors.inputBg,
+    color: colors.textPrimary,
+    outline: "none",
+    cursor: "pointer",
+  },
+  errorAlert: {
+    backgroundColor: colors.dangerLight,
+    color: colors.danger,
+    padding: "0.65rem 1rem",
+    borderRadius: 8,
+    marginBottom: "1rem",
+    fontWeight: 500,
+    border: `1px solid ${colors.danger}30`,
+    fontSize: "0.85rem",
+  },
+  warnAlert: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    padding: "0.65rem 0.85rem",
+    borderRadius: 8,
+    backgroundColor: colors.warnLight,
+    border: `1px solid ${colors.warn}30`,
+    color: colors.warn,
+    fontSize: "0.85rem",
+  },
+  totalsBox: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.35rem",
+    alignItems: "flex-end",
+    padding: "1rem",
+    backgroundColor: "#f8f9fb",
+    borderRadius: 8,
+    border: `1px solid ${colors.cardBorder}`,
+    marginTop: "0.5rem",
+  },
+  totalRow: {
+    display: "flex",
+    gap: "2rem",
+    justifyContent: "flex-end",
+    fontSize: "0.9rem",
+    minWidth: 280,
+  },
   fbrToggleHint: { margin: "0.3rem 0 0", fontSize: "0.75rem", color: colors.textSecondary },
-  optionalTag: { marginLeft: "0.3rem", padding: "0.05rem 0.35rem", borderRadius: 4, backgroundColor: "#fff3e0", color: "#e65100", fontSize: "0.62rem", fontWeight: 800, letterSpacing: "0.03em", textTransform: "uppercase" },
-  lockedTag: { marginLeft: "0.3rem", padding: "0.05rem 0.35rem", borderRadius: 4, backgroundColor: "#e0f2f1", color: "#00695c", fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", display: "inline-flex", alignItems: "center", gap: 2 },
-  itemsHeaderBar: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.5rem" },
-  addRowBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.35rem 0.75rem", borderRadius: 6, border: "none", backgroundColor: colors.blue, color: "#fff", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
-  inlineAddBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.45rem 0.75rem", borderRadius: 6, border: `1px solid ${colors.blue}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
-  tinyAddBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0.25rem", borderRadius: 6, border: `1px solid ${colors.blue}`, backgroundColor: "#fff", color: colors.blue, cursor: "pointer", flexShrink: 0 },
-  removeRowBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0.3rem", borderRadius: 6, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#fff", color: colors.danger, cursor: "pointer" },
-  unifiedTableWrap: { width: "100%", overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 8 },
+  optionalTag: {
+    marginLeft: "0.3rem",
+    padding: "0.05rem 0.35rem",
+    borderRadius: 4,
+    backgroundColor: "#fff3e0",
+    color: "#e65100",
+    fontSize: "0.62rem",
+    fontWeight: 800,
+    letterSpacing: "0.03em",
+    textTransform: "uppercase",
+  },
+  lockedTag: {
+    marginLeft: "0.3rem",
+    padding: "0.05rem 0.35rem",
+    borderRadius: 4,
+    backgroundColor: "#e0f2f1",
+    color: "#00695c",
+    fontSize: "0.62rem",
+    fontWeight: 700,
+    letterSpacing: "0.03em",
+    textTransform: "uppercase",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 2,
+  },
+  itemsHeaderBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: "0.5rem",
+    marginBottom: "0.5rem",
+  },
+  addRowBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.25rem",
+    padding: "0.35rem 0.75rem",
+    borderRadius: 6,
+    border: "none",
+    backgroundColor: colors.blue,
+    color: "#fff",
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+  inlineAddBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    padding: "0.45rem 0.75rem",
+    borderRadius: 6,
+    border: `1px solid ${colors.blue}`,
+    backgroundColor: "#fff",
+    color: colors.blue,
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+  tinyAddBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "0.25rem",
+    borderRadius: 6,
+    border: `1px solid ${colors.blue}`,
+    backgroundColor: "#fff",
+    color: colors.blue,
+    cursor: "pointer",
+    flexShrink: 0,
+  },
+  removeRowBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "0.3rem",
+    borderRadius: 6,
+    border: `1px solid ${colors.cardBorder}`,
+    backgroundColor: "#fff",
+    color: colors.danger,
+    cursor: "pointer",
+  },
+  unifiedTableWrap: {
+    width: "100%",
+    overflowX: "auto",
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 8,
+  },
   unifiedTable: { width: "100%", borderCollapse: "collapse", minWidth: 1200 },
   unifiedThead: { backgroundColor: "#eff3f8" },
-  unifiedTh: { padding: "0.5rem 0.45rem", textAlign: "left", fontSize: "0.7rem", fontWeight: 800, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", borderBottom: `1px solid ${colors.cardBorder}` },
+  unifiedTh: {
+    padding: "0.5rem 0.45rem",
+    textAlign: "left",
+    fontSize: "0.7rem",
+    fontWeight: 800,
+    color: colors.textSecondary,
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+  },
   unifiedRow: { backgroundColor: "#fff" },
-  unifiedTd: { padding: "0.3rem 0.4rem", fontSize: "0.8rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "middle" },
+  unifiedTd: {
+    padding: "0.3rem 0.4rem",
+    fontSize: "0.8rem",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+    verticalAlign: "middle",
+  },
 
-  stepLabel: { display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.95rem", fontWeight: 700, color: colors.textPrimary, marginBottom: "0.4rem" },
-  stepNum: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", backgroundColor: colors.blue, color: "#fff", fontSize: "0.78rem", fontWeight: 800, flexShrink: 0 },
-  stepHint: { margin: "0 0 0.6rem 30px", fontSize: "0.78rem", color: colors.textSecondary, lineHeight: 1.4 },
+  stepLabel: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    fontSize: "0.95rem",
+    fontWeight: 700,
+    color: colors.textPrimary,
+    marginBottom: "0.4rem",
+  },
+  stepNum: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 22,
+    height: 22,
+    borderRadius: "50%",
+    backgroundColor: colors.blue,
+    color: "#fff",
+    fontSize: "0.78rem",
+    fontWeight: 800,
+    flexShrink: 0,
+  },
+  stepHint: {
+    margin: "0 0 0.6rem 30px",
+    fontSize: "0.78rem",
+    color: colors.textSecondary,
+    lineHeight: 1.4,
+  },
   // Collapsible Step 1 (FBR Scenario picker) — clickable header bar that
   // shows the auto-defaulted scenario summary and toggles the card grid.
   // Operator only opens this when they need to switch scenarios; the rest
@@ -1657,37 +2523,192 @@ const styles = {
     backgroundColor: "#fff",
   },
 
-  scenarioGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "0.6rem", marginTop: "0.25rem" },
-  scenarioCard: { textAlign: "left", padding: "0.7rem 0.85rem", borderRadius: 10, border: "2px solid", cursor: "pointer", display: "flex", flexDirection: "column", gap: "0.3rem", transition: "all 0.15s", backgroundColor: "#fff", fontFamily: "inherit" },
+  scenarioGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+    gap: "0.6rem",
+    marginTop: "0.25rem",
+  },
+  scenarioCard: {
+    textAlign: "left",
+    padding: "0.7rem 0.85rem",
+    borderRadius: 10,
+    border: "2px solid",
+    cursor: "pointer",
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.3rem",
+    transition: "all 0.15s",
+    backgroundColor: "#fff",
+    fontFamily: "inherit",
+  },
   scenarioCardHeader: { display: "flex", justifyContent: "space-between", alignItems: "center" },
-  scenarioCode: { fontWeight: 800, fontSize: "0.95rem", color: colors.blue, fontFamily: "monospace" },
-  scenarioSaleType: { fontSize: "0.82rem", color: colors.textPrimary, fontWeight: 600, lineHeight: 1.25 },
+  scenarioCode: {
+    fontWeight: 800,
+    fontSize: "0.95rem",
+    color: colors.blue,
+    fontFamily: "monospace",
+  },
+  scenarioSaleType: {
+    fontSize: "0.82rem",
+    color: colors.textPrimary,
+    fontWeight: 600,
+    lineHeight: 1.25,
+  },
   scenarioRate: { fontSize: "0.74rem", color: colors.textSecondary },
   scenarioBadges: { display: "flex", flexWrap: "wrap", gap: "0.25rem", marginTop: "0.15rem" },
-  scenarioBadge: { fontSize: "0.65rem", padding: "0.1rem 0.4rem", borderRadius: 4, fontWeight: 700, letterSpacing: "0.02em" },
-  badgeBlue:   { backgroundColor: "#e3f2fd", color: "#0d47a1" },
+  scenarioBadge: {
+    fontSize: "0.65rem",
+    padding: "0.1rem 0.4rem",
+    borderRadius: 4,
+    fontWeight: 700,
+    letterSpacing: "0.02em",
+  },
+  badgeBlue: { backgroundColor: "#e3f2fd", color: "#0d47a1" },
   badgeOrange: { backgroundColor: "#fff3e0", color: "#e65100" },
   badgePurple: { backgroundColor: "#f3e5f5", color: "#6a1b9a" },
   badgeYellow: { backgroundColor: "#fff8e1", color: "#a16e00" },
-  badgePink:   { backgroundColor: "#fce4ec", color: "#ad1457" },
-  scenarioHint: { display: "flex", alignItems: "flex-start", gap: "0.4rem", marginTop: "0.6rem", padding: "0.5rem 0.75rem", borderRadius: 8, backgroundColor: "#e3f2fd", border: "1px solid #90caf9", color: "#0d47a1", fontSize: "0.82rem", lineHeight: 1.4 },
+  badgePink: { backgroundColor: "#fce4ec", color: "#ad1457" },
+  scenarioHint: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: "0.4rem",
+    marginTop: "0.6rem",
+    padding: "0.5rem 0.75rem",
+    borderRadius: 8,
+    backgroundColor: "#e3f2fd",
+    border: "1px solid #90caf9",
+    color: "#0d47a1",
+    fontSize: "0.82rem",
+    lineHeight: 1.4,
+  },
 
-  lockedSaleType: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0.85rem", marginBottom: "0.6rem", borderRadius: 8, backgroundColor: "#e0f2f1", border: "1px solid #80cbc4", color: "#00695c", fontSize: "0.82rem" },
+  lockedSaleType: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: "0.5rem",
+    padding: "0.5rem 0.85rem",
+    marginBottom: "0.6rem",
+    borderRadius: 8,
+    backgroundColor: "#e0f2f1",
+    border: "1px solid #80cbc4",
+    color: "#00695c",
+    fontSize: "0.82rem",
+  },
   lockedSaleTypeHint: { color: "#00695c", opacity: 0.8, fontSize: "0.75rem" },
 
-  permHintBlock: { display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.75rem", borderRadius: 6, backgroundColor: "#fff8e1", border: `1px solid ${colors.warn}30`, color: colors.warn, fontSize: "0.78rem", lineHeight: 1.35, flexWrap: "wrap" },
-  permHintInline: { display: "inline-flex", alignItems: "center", gap: "0.25rem", color: colors.warn, fontSize: "0.72rem", flexWrap: "wrap" },
-  permCode: { fontFamily: "monospace", padding: "0 0.25rem", borderRadius: 3, backgroundColor: "#f5f5f5", fontWeight: 700, fontSize: "0.74rem" },
+  permHintBlock: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.35rem",
+    padding: "0.45rem 0.75rem",
+    borderRadius: 6,
+    backgroundColor: "#fff8e1",
+    border: `1px solid ${colors.warn}30`,
+    color: colors.warn,
+    fontSize: "0.78rem",
+    lineHeight: 1.35,
+    flexWrap: "wrap",
+  },
+  permHintInline: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.25rem",
+    color: colors.warn,
+    fontSize: "0.72rem",
+    flexWrap: "wrap",
+  },
+  permCode: {
+    fontFamily: "monospace",
+    padding: "0 0.25rem",
+    borderRadius: 3,
+    backgroundColor: "#f5f5f5",
+    fontWeight: 700,
+    fontSize: "0.74rem",
+  },
 
   // ── HS code typeahead inside ItemTypeForm ─────────────────────────
-  scenarioPillSmall: { marginLeft: "0.5rem", padding: "0.1rem 0.4rem", borderRadius: 4, backgroundColor: "#e3f2fd", color: "#0d47a1", fontSize: "0.7rem", fontWeight: 800, fontFamily: "monospace" },
-  hsDropdown: { position: "absolute", top: "100%", left: 0, right: 0, marginTop: "0.2rem", maxHeight: 260, overflowY: "auto", backgroundColor: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.08)", zIndex: 1200 },
+  scenarioPillSmall: {
+    marginLeft: "0.5rem",
+    padding: "0.1rem 0.4rem",
+    borderRadius: 4,
+    backgroundColor: "#e3f2fd",
+    color: "#0d47a1",
+    fontSize: "0.7rem",
+    fontWeight: 800,
+    fontFamily: "monospace",
+  },
+  hsDropdown: {
+    position: "absolute",
+    top: "100%",
+    left: 0,
+    right: 0,
+    marginTop: "0.2rem",
+    maxHeight: 260,
+    overflowY: "auto",
+    backgroundColor: "#fff",
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 8,
+    boxShadow: "0 6px 20px rgba(0,0,0,0.08)",
+    zIndex: 1200,
+  },
   hsLoading: { padding: "0.6rem 0.85rem", fontSize: "0.82rem", color: colors.textSecondary },
-  hsOption: { display: "flex", flexDirection: "column", alignItems: "flex-start", width: "100%", padding: "0.5rem 0.75rem", border: "none", borderBottom: `1px solid ${colors.cardBorder}`, backgroundColor: "#fff", textAlign: "left", cursor: "pointer", fontFamily: "inherit" },
-  hsOptionCode: { fontWeight: 700, color: colors.blue, fontFamily: "monospace", fontSize: "0.85rem" },
-  hsOptionDesc: { fontSize: "0.74rem", color: colors.textSecondary, marginTop: 2, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" },
+  hsOption: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    width: "100%",
+    padding: "0.5rem 0.75rem",
+    border: "none",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+    backgroundColor: "#fff",
+    textAlign: "left",
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+  hsOptionCode: {
+    fontWeight: 700,
+    color: colors.blue,
+    fontFamily: "monospace",
+    fontSize: "0.85rem",
+  },
+  hsOptionDesc: {
+    fontSize: "0.74rem",
+    color: colors.textSecondary,
+    marginTop: 2,
+    lineHeight: 1.3,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    maxWidth: "100%",
+  },
 
   // Bulk-apply Item Type toolbar — surfaces above the items table when 2+ rows exist
-  bulkApplyBar: { display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap", padding: "0.55rem 0.85rem", marginBottom: "0.5rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#f8faff" },
-  bulkClearBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.35rem 0.7rem", borderRadius: 6, border: `1px solid ${colors.danger}`, backgroundColor: "#fff", color: colors.danger, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 },
+  bulkApplyBar: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.65rem",
+    flexWrap: "wrap",
+    padding: "0.55rem 0.85rem",
+    marginBottom: "0.5rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.cardBorder}`,
+    backgroundColor: "#f8faff",
+  },
+  bulkClearBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    padding: "0.35rem 0.7rem",
+    borderRadius: 6,
+    border: `1px solid ${colors.danger}`,
+    backgroundColor: "#fff",
+    color: colors.danger,
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    flexShrink: 0,
+  },
 };

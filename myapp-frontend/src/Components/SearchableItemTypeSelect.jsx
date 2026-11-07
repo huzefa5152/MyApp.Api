@@ -34,13 +34,22 @@ import { usePermissions } from "../contexts/PermissionsContext";
  *   divisionId — the document's current division id (or "" / null for none)
  */
 export default function SearchableItemTypeSelect({
-  items, value, onChange, placeholder, style, disabled = false,
-  nonInventoryItems = [], nonInventoryValue = "", onPickNonInventory,
+  items,
+  value,
+  onChange,
+  placeholder,
+  style,
+  disabled = false,
+  nonInventoryItems = [],
+  nonInventoryValue = "",
+  onPickNonInventory,
   divisionId = null,
   // When companyId is set, the dropdown shows a "＋ Create new item type"
   // shortcut that opens the item-type form inline; on save the new type is
   // added to the list, auto-selected, and (optionally) bubbled to the parent.
-  companyId = null, onItemTypeCreated, fbrOn = null,
+  companyId = null,
+  onItemTypeCreated,
+  fbrOn = null,
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -57,11 +66,11 @@ export default function SearchableItemTypeSelect({
   // The inline create shortcut needs a company AND the create permission —
   // never render an action the operator would get a 403 on (house rule).
   const canCreateItemType = has("itemtypes.manage.create");
-  const effectiveCompanyId = (companyId ?? selectedCompany?.id ?? null);
+  const effectiveCompanyId = companyId ?? selectedCompany?.id ?? null;
   const canQuickCreate = !!effectiveCompanyId && canCreateItemType;
   // FBR-off companies get a lean create form (no HS Code / Sale Type). Explicit
   // prop wins; otherwise read the selected company's FBR flag.
-  const effectiveFbrOn = fbrOn != null ? fbrOn : (selectedCompany?.fbrEnabled !== false);
+  const effectiveFbrOn = fbrOn != null ? fbrOn : selectedCompany?.fbrEnabled !== false;
   // triggerRect drives the portaled dropdown's position. We recompute it on
   // every ancestor scroll + viewport resize so the list stays glued to the
   // trigger even when the dashboard layout (and not <body>) is the scroller.
@@ -80,22 +89,25 @@ export default function SearchableItemTypeSelect({
 
   const selected = useMemo(
     () => mergedItems.find((it) => String(it.id) === String(value)),
-    [mergedItems, value]
+    [mergedItems, value],
   );
 
   const handleItemTypeCreated = (saved) => {
-    if (!saved) { setShowCreate(false); return; }
+    if (!saved) {
+      setShowCreate(false);
+      return;
+    }
     setCreatedItems((prev) => [saved, ...prev.filter((p) => p.id !== saved.id)]);
     if (selectedNonInv) onPickNonInventory?.(null);
-    onChange?.(saved.id, saved);          // auto-select the new type
-    onItemTypeCreated?.(saved);           // let the parent add it to its own list
+    onChange?.(saved.id, saved); // auto-select the new type
+    onItemTypeCreated?.(saved); // let the parent add it to its own list
     setShowCreate(false);
   };
 
   // Non-inventory item selection (mutually exclusive with an item type).
   const selectedNonInv = useMemo(
     () => (nonInventoryItems || []).find((n) => String(n.id) === String(nonInventoryValue)),
-    [nonInventoryItems, nonInventoryValue]
+    [nonInventoryItems, nonInventoryValue],
   );
 
   // Sort:
@@ -133,7 +145,8 @@ export default function SearchableItemTypeSelect({
       }
       if (hasHs(a) !== hasHs(b)) return hasHs(a) ? 1 : -1;
       if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
-      if ((b.usageCount || 0) !== (a.usageCount || 0)) return (b.usageCount || 0) - (a.usageCount || 0);
+      if ((b.usageCount || 0) !== (a.usageCount || 0))
+        return (b.usageCount || 0) - (a.usageCount || 0);
       return (a.name || "").localeCompare(b.name || "");
     });
     return arr;
@@ -142,11 +155,12 @@ export default function SearchableItemTypeSelect({
   const filteredItems = useMemo(() => {
     const term = query.trim().toLowerCase();
     if (!term) return sortedItems;
-    return sortedItems.filter((it) =>
-      (it.name || "").toLowerCase().includes(term) ||
-      (it.hsCode || "").toLowerCase().includes(term) ||
-      (it.uom || "").toLowerCase().includes(term) ||
-      (it.fbrDescription || "").toLowerCase().includes(term)
+    return sortedItems.filter(
+      (it) =>
+        (it.name || "").toLowerCase().includes(term) ||
+        (it.hsCode || "").toLowerCase().includes(term) ||
+        (it.uom || "").toLowerCase().includes(term) ||
+        (it.fbrDescription || "").toLowerCase().includes(term),
     );
   }, [sortedItems, query]);
 
@@ -154,8 +168,10 @@ export default function SearchableItemTypeSelect({
   useEffect(() => {
     const onMouseDown = (e) => {
       if (
-        wrapperRef.current && !wrapperRef.current.contains(e.target) &&
-        triggerRef.current && !triggerRef.current.contains(e.target)
+        wrapperRef.current &&
+        !wrapperRef.current.contains(e.target) &&
+        triggerRef.current &&
+        !triggerRef.current.contains(e.target)
       ) {
         setOpen(false);
       }
@@ -213,17 +229,22 @@ export default function SearchableItemTypeSelect({
 
   // Non-inventory items filtered by the same search box (name / code).
   const filteredNonInv = useMemo(() => {
-    const arr = [...(nonInventoryItems || [])].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    const arr = [...(nonInventoryItems || [])].sort((a, b) =>
+      (a.name || "").localeCompare(b.name || ""),
+    );
     const term = query.trim().toLowerCase();
     if (!term) return arr;
-    return arr.filter((n) => (n.name || "").toLowerCase().includes(term) || (n.code || "").toLowerCase().includes(term));
+    return arr.filter(
+      (n) =>
+        (n.name || "").toLowerCase().includes(term) || (n.code || "").toLowerCase().includes(term),
+    );
   }, [nonInventoryItems, query]);
 
   const handleKeyDown = (e) => {
     if (!open) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setHighlightIdx((i) => Math.min((filteredItems.length - 1), i + 1));
+      setHighlightIdx((i) => Math.min(filteredItems.length - 1, i + 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setHighlightIdx((i) => Math.max(0, i - 1));
@@ -265,7 +286,18 @@ export default function SearchableItemTypeSelect({
         {/* 2-line clamp (NOT nowrap+ellipsis) so similar-prefix names like
             "MEKO FABRICS" / "MEKO DENIM" don't collapse to an identical row
             (CLAUDE.md §3 / dashboard incident 2026-05-13). */}
-        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", wordBreak: "break-word", textAlign: "left" }}>
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            overflow: "hidden",
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            wordBreak: "break-word",
+            textAlign: "left",
+          }}
+        >
           {selectedNonInv ? (
             <>
               <span style={styles.niTag}>charge</span>
@@ -273,7 +305,13 @@ export default function SearchableItemTypeSelect({
             </>
           ) : selected ? (
             <>
-              {selected.isFavorite && <MdStar size={12} color="#f59f00" style={{ verticalAlign: "middle", marginRight: 3 }} />}
+              {selected.isFavorite && (
+                <MdStar
+                  size={12}
+                  color="#f59f00"
+                  style={{ verticalAlign: "middle", marginRight: 3 }}
+                />
+              )}
               {selected.name}
               {selected.hsCode && <span style={styles.hsInline}> · {selected.hsCode}</span>}
             </>
@@ -282,138 +320,190 @@ export default function SearchableItemTypeSelect({
           )}
         </span>
         {(selected || selectedNonInv) && (
-          <span onClick={handleClear} style={styles.clearBtn} title="Clear selection">×</span>
+          <span onClick={handleClear} style={styles.clearBtn} title="Clear selection">
+            ×
+          </span>
         )}
         <MdArrowDropDown size={18} style={{ flexShrink: 0 }} />
       </button>
 
-      {open && triggerRect && createPortal(
-        <div
-          ref={wrapperRef}
-          data-admin-popup="" style={styles.dropdown(triggerRect)}
-          onKeyDown={handleKeyDown}
-        >
-          <div style={styles.searchRow}>
-            <MdSearch size={16} style={styles.searchIcon} />
-            <input
-              ref={searchRef}
-              type="text"
-              placeholder="Search by name, HS code…"
-              value={query}
-              onChange={(e) => { setQuery(e.target.value); setHighlightIdx(0); }}
-              onKeyDown={handleKeyDown}
-              style={styles.searchInput}
-            />
-          </div>
-
-          {filteredItems.length === 0 && filteredNonInv.length === 0 && (
-            <div style={styles.empty}>
-              {(items?.length === 0 && nonInventoryItems?.length === 0)
-                ? "No items in catalog yet. Add one on the Item Types page."
-                : `No items match "${query}".`}
+      {open &&
+        triggerRect &&
+        createPortal(
+          <div
+            ref={wrapperRef}
+            data-admin-popup=""
+            style={styles.dropdown(triggerRect)}
+            onKeyDown={handleKeyDown}
+          >
+            <div style={styles.searchRow}>
+              <MdSearch size={16} style={styles.searchIcon} />
+              <input
+                ref={searchRef}
+                type="text"
+                placeholder="Search by name, HS code…"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setHighlightIdx(0);
+                }}
+                onKeyDown={handleKeyDown}
+                style={styles.searchInput}
+              />
             </div>
-          )}
 
-          {/* ── Non-Inventory charges (Freight, Discount, …) — its OWN pane with
+            {filteredItems.length === 0 && filteredNonInv.length === 0 && (
+              <div style={styles.empty}>
+                {items?.length === 0 && nonInventoryItems?.length === 0
+                  ? "No items in catalog yet. Add one on the Item Types page."
+                  : `No items match "${query}".`}
+              </div>
+            )}
+
+            {/* ── Non-Inventory charges (Freight, Discount, …) — its OWN pane with
               a fixed header + independent scroll, so a long inventory list can't
               push it out of view. Mouse-clickable, excluded from arrow-key nav. */}
-          {filteredNonInv.length > 0 && (
-            <div style={styles.niPane}>
-              <div style={styles.paneHeaderNi}>🚚 NON-INVENTORY · CHARGES ({filteredNonInv.length})</div>
-              <div style={styles.niScroll}>
-                {filteredNonInv.map((n) => (
-                  <div
-                    key={`ni-${n.id}`}
-                    onMouseDown={() => handlePickNonInv(n)}
-                    style={{ ...styles.row, backgroundColor: String(n.id) === String(nonInventoryValue) ? "#fff3cd" : "transparent" }}
-                  >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={styles.rowName}><span style={styles.niTag}>charge</span>{n.name}</div>
-                      {(n.code || n.unitName) && (
-                        <div style={styles.rowMeta}>
-                          {n.code && <span style={{ color: "#5f6d7e" }}>{n.code}</span>}
-                          {n.unitName && <span style={{ color: "#5f6d7e" }}> · {n.unitName}</span>}
+            {filteredNonInv.length > 0 && (
+              <div style={styles.niPane}>
+                <div style={styles.paneHeaderNi}>
+                  🚚 NON-INVENTORY · CHARGES ({filteredNonInv.length})
+                </div>
+                <div style={styles.niScroll}>
+                  {filteredNonInv.map((n) => (
+                    <div
+                      key={`ni-${n.id}`}
+                      onMouseDown={() => handlePickNonInv(n)}
+                      style={{
+                        ...styles.row,
+                        backgroundColor:
+                          String(n.id) === String(nonInventoryValue) ? "#fff3cd" : "transparent",
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={styles.rowName}>
+                          <span style={styles.niTag}>charge</span>
+                          {n.name}
                         </div>
-                      )}
+                        {(n.code || n.unitName) && (
+                          <div style={styles.rowMeta}>
+                            {n.code && <span style={{ color: "#5f6d7e" }}>{n.code}</span>}
+                            {n.unitName && (
+                              <span style={{ color: "#5f6d7e" }}> · {n.unitName}</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* ── Inventory items — its OWN pane with a fixed header + independent
+            {/* ── Inventory items — its OWN pane with a fixed header + independent
               scroll, taking the remaining height below the charges pane. */}
-          {(filteredItems.length > 0 || filteredNonInv.length > 0) && (
-            <div style={styles.invPane}>
-              <div style={styles.paneHeaderInv}>📦 INVENTORY ITEMS{filteredItems.length ? ` (${filteredItems.length})` : ""}</div>
-              <div style={styles.invScroll}>
-                {filteredItems.length === 0 ? (
-                  <div style={styles.empty}>No inventory items match &ldquo;{query}&rdquo;.</div>
-                ) : (
-                  <>
-                    {stocked.length > 0 && (
-                      <>
-                        <div style={styles.sectionHeader}>IN STOCK</div>
-                        {stocked.map((it, i) => renderItem(it, i, highlightIdx, setHighlightIdx, handlePick))}
-                      </>
-                    )}
-                    {quick.length > 0 && (
-                      <>
-                        <div style={styles.sectionHeader}>QUICK (no HS code)</div>
-                        {quick.map((it, i) => {
-                          const realIdx = stocked.length + i;
-                          return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
-                        })}
-                      </>
-                    )}
-                    {favorites.length > 0 && (
-                      <>
-                        <div style={styles.sectionHeader}>★ FAVORITES</div>
-                        {favorites.map((it, i) => {
-                          const realIdx = stocked.length + quick.length + i;
-                          return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
-                        })}
-                      </>
-                    )}
-                    {others.length > 0 && (
-                      <>
-                        {(stocked.length > 0 || quick.length > 0 || favorites.length > 0) && <div style={styles.sectionHeader}>OTHER</div>}
-                        {others.map((it, i) => {
-                          const realIdx = stocked.length + quick.length + favorites.length + i;
-                          return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
-                        })}
-                      </>
-                    )}
-                  </>
-                )}
+            {(filteredItems.length > 0 || filteredNonInv.length > 0) && (
+              <div style={styles.invPane}>
+                <div style={styles.paneHeaderInv}>
+                  📦 INVENTORY ITEMS{filteredItems.length ? ` (${filteredItems.length})` : ""}
+                </div>
+                <div style={styles.invScroll}>
+                  {filteredItems.length === 0 ? (
+                    <div style={styles.empty}>No inventory items match &ldquo;{query}&rdquo;.</div>
+                  ) : (
+                    <>
+                      {stocked.length > 0 && (
+                        <>
+                          <div style={styles.sectionHeader}>IN STOCK</div>
+                          {stocked.map((it, i) =>
+                            renderItem(it, i, highlightIdx, setHighlightIdx, handlePick),
+                          )}
+                        </>
+                      )}
+                      {quick.length > 0 && (
+                        <>
+                          <div style={styles.sectionHeader}>QUICK (no HS code)</div>
+                          {quick.map((it, i) => {
+                            const realIdx = stocked.length + i;
+                            return renderItem(
+                              it,
+                              realIdx,
+                              highlightIdx,
+                              setHighlightIdx,
+                              handlePick,
+                            );
+                          })}
+                        </>
+                      )}
+                      {favorites.length > 0 && (
+                        <>
+                          <div style={styles.sectionHeader}>★ FAVORITES</div>
+                          {favorites.map((it, i) => {
+                            const realIdx = stocked.length + quick.length + i;
+                            return renderItem(
+                              it,
+                              realIdx,
+                              highlightIdx,
+                              setHighlightIdx,
+                              handlePick,
+                            );
+                          })}
+                        </>
+                      )}
+                      {others.length > 0 && (
+                        <>
+                          {(stocked.length > 0 || quick.length > 0 || favorites.length > 0) && (
+                            <div style={styles.sectionHeader}>OTHER</div>
+                          )}
+                          {others.map((it, i) => {
+                            const realIdx = stocked.length + quick.length + favorites.length + i;
+                            return renderItem(
+                              it,
+                              realIdx,
+                              highlightIdx,
+                              setHighlightIdx,
+                              handlePick,
+                            );
+                          })}
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Sticky footer: create a new item type without leaving the form. */}
-          {canQuickCreate && (
-            <div style={styles.createRow} onMouseDown={(e) => { e.preventDefault(); setOpen(false); setShowCreate(true); }}>
-              <MdAddCircleOutline size={16} />
-              <span>Create new item type{query.trim() ? ` "${query.trim()}"` : ""}</span>
-            </div>
-          )}
-        </div>,
-        document.body
-      )}
+            {/* Sticky footer: create a new item type without leaving the form. */}
+            {canQuickCreate && (
+              <div
+                style={styles.createRow}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setOpen(false);
+                  setShowCreate(true);
+                }}
+              >
+                <MdAddCircleOutline size={16} />
+                <span>Create new item type{query.trim() ? ` "${query.trim()}"` : ""}</span>
+              </div>
+            )}
+          </div>,
+          document.body,
+        )}
 
       {/* Inline item-type create — portaled to <body> so it escapes this
           picker's deep table-cell nesting and reliably stacks above the form. */}
-      {showCreate && canQuickCreate && createPortal(
-        <ItemTypeForm
-          companyId={effectiveCompanyId}
-          defaultDivisionId={divisionId || null}
-          fbrOn={effectiveFbrOn}
-          onClose={() => setShowCreate(false)}
-          onSaved={handleItemTypeCreated}
-        />,
-        document.body
-      )}
+      {showCreate &&
+        canQuickCreate &&
+        createPortal(
+          <ItemTypeForm
+            companyId={effectiveCompanyId}
+            defaultDivisionId={divisionId || null}
+            fbrOn={effectiveFbrOn}
+            onClose={() => setShowCreate(false)}
+            onSaved={handleItemTypeCreated}
+          />,
+          document.body,
+        )}
     </div>
   );
 }
@@ -432,7 +522,9 @@ function renderItem(it, idx, highlightIdx, setHighlightIdx, handlePick) {
     >
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={styles.rowName}>
-          {it.isFavorite && <MdStar size={12} color="#f59f00" style={{ verticalAlign: "middle", marginRight: 3 }} />}
+          {it.isFavorite && (
+            <MdStar size={12} color="#f59f00" style={{ verticalAlign: "middle", marginRight: 3 }} />
+          )}
           {it.name}
         </div>
         <div style={styles.rowMeta}>
@@ -440,10 +532,14 @@ function renderItem(it, idx, highlightIdx, setHighlightIdx, handlePick) {
           {it.uom && <span style={{ color: "#5f6d7e" }}> {it.uom}</span>}
           {typeof it.availableQty === "number" && (
             <span style={(it.availableQty || 0) > 0 ? styles.stockChipOk : styles.stockChipEmpty}>
-              {(it.availableQty || 0) > 0 ? `${Number(it.availableQty).toLocaleString("en-PK")} in stock` : "out of stock"}
+              {(it.availableQty || 0) > 0
+                ? `${Number(it.availableQty).toLocaleString("en-PK")} in stock`
+                : "out of stock"}
             </span>
           )}
-          {it.usageCount > 0 && <span style={{ color: "#5f6d7e", marginLeft: 4 }}>· used {it.usageCount}×</span>}
+          {it.usageCount > 0 && (
+            <span style={{ color: "#5f6d7e", marginLeft: 4 }}>· used {it.usageCount}×</span>
+          )}
         </div>
       </div>
     </div>
@@ -457,7 +553,7 @@ const styles = {
     gap: "0.25rem",
     width: "100%",
     padding: "0.45rem 0.55rem",
-    minHeight: 44,          // 44px tap target (CLAUDE.md §3 mobile rule)
+    minHeight: 44, // 44px tap target (CLAUDE.md §3 mobile rule)
     border: "1px solid #d0d7e2",
     borderRadius: 6,
     backgroundColor: "#fff",
@@ -476,7 +572,19 @@ const styles = {
     lineHeight: 1,
   },
   hsInline: { color: "#5f6d7e", fontFamily: "monospace", fontSize: "0.75rem", marginLeft: 4 },
-  niTag: { display: "inline-block", fontSize: "0.6rem", fontWeight: 800, color: "#8a5a00", background: "#ffe8a3", padding: "0.05rem 0.3rem", borderRadius: 4, marginRight: 5, verticalAlign: "middle", textTransform: "uppercase", letterSpacing: "0.03em" },
+  niTag: {
+    display: "inline-block",
+    fontSize: "0.6rem",
+    fontWeight: 800,
+    color: "#8a5a00",
+    background: "#ffe8a3",
+    padding: "0.05rem 0.3rem",
+    borderRadius: 4,
+    marginRight: 5,
+    verticalAlign: "middle",
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+  },
   // position: fixed uses viewport coords (no scrollY math). Anchored directly
   // to the trigger's getBoundingClientRect(), and the component re-measures
   // on every ancestor scroll/resize so the list tracks the trigger exactly.
@@ -495,7 +603,9 @@ const styles = {
       bottom: flipAbove ? window.innerHeight - rect.top + 2 : undefined,
       left,
       width,
-      maxHeight: flipAbove ? Math.min(listHeight, rect.top - 10) : Math.min(listHeight, spaceBelow - 10),
+      maxHeight: flipAbove
+        ? Math.min(listHeight, rect.top - 10)
+        : Math.min(listHeight, spaceBelow - 10),
       backgroundColor: "#fff",
       border: "1px solid #d0d7e2",
       borderRadius: 8,
@@ -533,14 +643,24 @@ const styles = {
   // Section-level bars (the two panes). Solid, full-width, clearly separate the
   // charges block from the inventory block.
   paneHeaderNi: {
-    padding: "0.4rem 0.7rem", fontSize: "0.68rem", fontWeight: 800,
-    color: "#8a5a00", backgroundColor: "#fff3cd", letterSpacing: "0.04em",
-    textTransform: "uppercase", borderBottom: "1px solid #ffe8a3",
+    padding: "0.4rem 0.7rem",
+    fontSize: "0.68rem",
+    fontWeight: 800,
+    color: "#8a5a00",
+    backgroundColor: "#fff3cd",
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+    borderBottom: "1px solid #ffe8a3",
   },
   paneHeaderInv: {
-    padding: "0.4rem 0.7rem", fontSize: "0.68rem", fontWeight: 800,
-    color: "#0d47a1", backgroundColor: "#e8f0fe", letterSpacing: "0.04em",
-    textTransform: "uppercase", borderBottom: "1px solid #cfd9ff",
+    padding: "0.4rem 0.7rem",
+    fontSize: "0.68rem",
+    fontWeight: 800,
+    color: "#0d47a1",
+    backgroundColor: "#e8f0fe",
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+    borderBottom: "1px solid #cfd9ff",
   },
   sectionHeader: {
     padding: "0.4rem 0.7rem 0.2rem",
@@ -605,9 +725,16 @@ const styles = {
   },
   empty: { padding: "0.8rem 0.8rem", color: "#5f6d7e", fontSize: "0.82rem" },
   createRow: {
-    flexShrink: 0, display: "flex", alignItems: "center", gap: "0.45rem",
-    padding: "0.55rem 0.75rem", borderTop: "1px solid #e8edf3",
-    backgroundColor: "#f0f7ff", color: "#0d47a1", fontWeight: 700,
-    fontSize: "0.8rem", cursor: "pointer",
+    flexShrink: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: "0.45rem",
+    padding: "0.55rem 0.75rem",
+    borderTop: "1px solid #e8edf3",
+    backgroundColor: "#f0f7ff",
+    color: "#0d47a1",
+    fontWeight: 700,
+    fontSize: "0.8rem",
+    cursor: "pointer",
   },
 };

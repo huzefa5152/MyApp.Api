@@ -1,5 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
-import { MdFileUpload, MdCheckCircle, MdError, MdDelete, MdArrowBack, MdDownload, MdLock } from "react-icons/md";
+import {
+  MdFileUpload,
+  MdCheckCircle,
+  MdError,
+  MdDelete,
+  MdArrowBack,
+  MdDownload,
+  MdLock,
+} from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { getClientsByCompany } from "../api/clientApi";
@@ -102,7 +110,9 @@ export default function ImportChallansPage() {
         setTemplateSheetNames(Array.isArray(data?.excelSheetNames) ? data.excelSheetNames : []);
         setPinnedSheet(data?.excelSheetName || null);
       })
-      .catch(() => { /* leave picker in default state */ });
+      .catch(() => {
+        /* leave picker in default state */
+      });
     getClientsByCompany(targetCompany.id)
       .then(({ data }) => setClients(data || []))
       .catch(() => setClients([]));
@@ -132,10 +142,16 @@ export default function ImportChallansPage() {
         const fromName = parseDcFilename(r.fileName);
         const warnings = [...(r.warnings || [])];
         if (!fromName) {
-          warnings.push("Filename doesn't start with 'DC #' — not recognized as a Delivery Challan file.");
-        } else if (fromName.challanNumber && r.challanNumber && fromName.challanNumber !== r.challanNumber) {
           warnings.push(
-            `Filename says #${fromName.challanNumber} but the file's cell says #${r.challanNumber}. Please confirm.`
+            "Filename doesn't start with 'DC #' — not recognized as a Delivery Challan file.",
+          );
+        } else if (
+          fromName.challanNumber &&
+          r.challanNumber &&
+          fromName.challanNumber !== r.challanNumber
+        ) {
+          warnings.push(
+            `Filename says #${fromName.challanNumber} but the file's cell says #${r.challanNumber}. Please confirm.`,
           );
         }
         return { ...r, warnings };
@@ -156,7 +172,7 @@ export default function ImportChallansPage() {
     if (wrongCo) {
       notify(
         `"${wrongCo.fileName}" is for a different company. Remove it or switch the target company before importing.`,
-        "error"
+        "error",
       );
       return;
     }
@@ -164,17 +180,15 @@ export default function ImportChallansPage() {
     if (dupe) {
       notify(
         `Challan #${dupe.challanNumber} (from "${dupe.fileName}") is already in the system. Change the number or remove this row before importing.`,
-        "warning"
+        "warning",
       );
       return;
     }
-    const invalid = previewRows.find(
-      (r) => !r.challanNumber || !r.clientId || !r.items?.length
-    );
+    const invalid = previewRows.find((r) => !r.challanNumber || !r.clientId || !r.items?.length);
     if (invalid) {
       notify(
         `Row "${invalid.fileName}" is incomplete — fix challan number, client, and at least one item.`,
-        "warning"
+        "warning",
       );
       return;
     }
@@ -201,10 +215,20 @@ export default function ImportChallansPage() {
 
   if (!canImport) {
     return (
-      <div style={{ textAlign: "center", padding: "4rem 1.5rem", background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 14 }}>
+      <div
+        style={{
+          textAlign: "center",
+          padding: "4rem 1.5rem",
+          background: "#fff",
+          border: `1px solid ${colors.cardBorder}`,
+          borderRadius: 14,
+        }}
+      >
         <MdLock style={{ fontSize: "2.5rem", color: colors.textSecondary }} />
         <h3 style={{ margin: "0.75rem 0 0.25rem" }}>Access denied</h3>
-        <p style={{ margin: 0, color: colors.textSecondary, fontSize: "0.9rem" }}>You don&apos;t have permission to import challans.</p>
+        <p style={{ margin: 0, color: colors.textSecondary, fontSize: "0.9rem" }}>
+          You don&apos;t have permission to import challans.
+        </p>
       </div>
     );
   }
@@ -215,8 +239,8 @@ export default function ImportChallansPage() {
         <div>
           <h2 style={styles.title}>Import Historical Challans</h2>
           <p style={styles.subtitle}>
-            Upload old Excel challan files — we'll read them using this company's
-            print template and let you review before importing.
+            Upload old Excel challan files — we'll read them using this company's print template and
+            let you review before importing.
           </p>
         </div>
         {step > 1 && (
@@ -231,9 +255,9 @@ export default function ImportChallansPage() {
       {templateReady === false && step === 1 && targetCompany && (
         <div style={styles.warnBanner}>
           <MdError style={{ flexShrink: 0 }} />
-          <span>No Challan Excel template is configured for{" "}
-            <b>{targetCompany.name}</b>. Please upload one in{" "}
-            <i>Configuration → Print Templates</i> before importing.
+          <span>
+            No Challan Excel template is configured for <b>{targetCompany.name}</b>. Please upload
+            one in <i>Configuration → Print Templates</i> before importing.
           </span>
         </div>
       )}
@@ -357,7 +381,7 @@ function UploadStep({
     if (dcRejected > 0) {
       notify(
         `${dcRejected} file(s) skipped — filename must start with "DC #" (e.g. "DC # 1073 ClientName.xls"). Only Delivery Challan files are accepted.`,
-        "error"
+        "error",
       );
     }
     setFiles((prev) => {
@@ -365,8 +389,7 @@ function UploadStep({
       return [...prev, ...dcOk.filter((f) => !seen.has(f.name + f.size))];
     });
   };
-  const removeFile = (idx) =>
-    setFiles((prev) => prev.filter((_, i) => i !== idx));
+  const removeFile = (idx) => setFiles((prev) => prev.filter((_, i) => i !== idx));
 
   const misnamedCount = files.filter((f) => !parseDcFilename(f.name)).length;
 
@@ -376,37 +399,39 @@ function UploadStep({
       {/* the template dictates where fields live. Picking the wrong one   */}
       {/* means the parser reads garbage. Surfacing this explicitly        */}
       {/* prevents quiet mistakes.                                         */}
-      {companies.length > 1 && (<div style={styles.companyPickerWrap}>
-        <label style={styles.fieldLabel}>Target Company</label>
-        <select
-          value={targetCompany?.id ?? ""}
-          onChange={(e) => {
-            const picked = companies.find((c) => c.id === parseInt(e.target.value));
-            setTargetCompany(picked || null);
-            setFiles([]);   // start over — old files may be wrong-template
-          }}
-          style={{ ...styles.input, maxWidth: "320px" }}
-        >
-          {companies.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.brandName || c.name}
-            </option>
-          ))}
-        </select>
-        <small style={styles.companyPickerHint}>
-          {templateReady === null && "Checking template..."}
-          {templateReady === true && (
-            <span style={{ color: colors.success }}>
-              ✓ Challan template ready — files will be parsed using this company's layout.
-            </span>
-          )}
-          {templateReady === false && (
-            <span style={{ color: colors.danger }}>
-              ✗ No Challan template uploaded for this company yet.
-            </span>
-          )}
-        </small>
-      </div>)}
+      {companies.length > 1 && (
+        <div style={styles.companyPickerWrap}>
+          <label style={styles.fieldLabel}>Target Company</label>
+          <select
+            value={targetCompany?.id ?? ""}
+            onChange={(e) => {
+              const picked = companies.find((c) => c.id === parseInt(e.target.value));
+              setTargetCompany(picked || null);
+              setFiles([]); // start over — old files may be wrong-template
+            }}
+            style={{ ...styles.input, maxWidth: "320px" }}
+          >
+            {companies.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.brandName || c.name}
+              </option>
+            ))}
+          </select>
+          <small style={styles.companyPickerHint}>
+            {templateReady === null && "Checking template..."}
+            {templateReady === true && (
+              <span style={{ color: colors.success }}>
+                ✓ Challan template ready — files will be parsed using this company's layout.
+              </span>
+            )}
+            {templateReady === false && (
+              <span style={{ color: colors.danger }}>
+                ✗ No Challan template uploaded for this company yet.
+              </span>
+            )}
+          </small>
+        </div>
+      )}
 
       {canSheetPin && templateReady === true && (
         <div style={styles.sheetPickerRow}>
@@ -424,7 +449,9 @@ function UploadStep({
               Use template default{pinnedSheet ? ` (${pinnedSheet})` : " (auto-detect)"}
             </option>
             {templateSheetNames.map((name) => (
-              <option key={name} value={name}>{name}</option>
+              <option key={name} value={name}>
+                {name}
+              </option>
             ))}
           </select>
           <small style={styles.sheetPickerHint}>
@@ -443,9 +470,7 @@ function UploadStep({
         onDrop={onDrop}
       >
         <MdFileUpload size={40} color={colors.blue} />
-        <p style={{ margin: "0.6rem 0 0.2rem", fontWeight: 600 }}>
-          Drop Excel files here
-        </p>
+        <p style={{ margin: "0.6rem 0 0.2rem", fontWeight: 600 }}>Drop Excel files here</p>
         <p style={{ margin: 0, fontSize: "0.85rem", color: colors.textSecondary }}>
           Filename should start with <code>DC #</code> • .xls, .xlsx, .xlsm
         </p>
@@ -493,7 +518,13 @@ function UploadStep({
                       </small>
                     )}
                   </div>
-                  <span style={{ color: colors.textSecondary, fontSize: "0.8rem", whiteSpace: "nowrap" }}>
+                  <span
+                    style={{
+                      color: colors.textSecondary,
+                      fontSize: "0.8rem",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                     {(f.size / 1024).toFixed(1)} KB
                   </span>
                   <button style={styles.iconBtn} onClick={() => removeFile(i)}>
@@ -528,14 +559,16 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
         // If the user just edited the challan number on a row that was flagged
         // as a duplicate, optimistically clear the flag. They're signalling
         // they want a different number; commit-time validation will re-check.
-        if ("challanNumber" in patch && r.alreadyExists && patch.challanNumber !== r.challanNumber) {
+        if (
+          "challanNumber" in patch &&
+          r.alreadyExists &&
+          patch.challanNumber !== r.challanNumber
+        ) {
           merged.alreadyExists = false;
-          merged.warnings = (r.warnings || []).filter(
-            (w) => !/is already in the system/i.test(w)
-          );
+          merged.warnings = (r.warnings || []).filter((w) => !/is already in the system/i.test(w));
         }
         return merged;
-      })
+      }),
     );
 
   const updateItem = (rowIdx, itemIdx, patch) =>
@@ -546,17 +579,15 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
               ...r,
               items: r.items.map((it, j) => (j === itemIdx ? { ...it, ...patch } : it)),
             }
-          : r
-      )
+          : r,
+      ),
     );
 
   const removeItem = (rowIdx, itemIdx) =>
     setRows((prev) =>
       prev.map((r, i) =>
-        i === rowIdx
-          ? { ...r, items: r.items.filter((_, j) => j !== itemIdx) }
-          : r
-      )
+        i === rowIdx ? { ...r, items: r.items.filter((_, j) => j !== itemIdx) } : r,
+      ),
     );
 
   const addItem = (rowIdx) =>
@@ -564,16 +595,19 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
       prev.map((r, i) =>
         i === rowIdx
           ? { ...r, items: [...(r.items || []), { description: "", quantity: 0, unit: "" }] }
-          : r
-      )
+          : r,
+      ),
     );
 
-  const removeRow = (idx) =>
-    setRows((prev) => prev.filter((_, i) => i !== idx));
+  const removeRow = (idx) => setRows((prev) => prev.filter((_, i) => i !== idx));
 
   const validCount = useMemo(
-    () => rows.filter((r) => r.challanNumber && r.clientId && r.items?.length && !r.alreadyExists && !r.wrongCompany).length,
-    [rows]
+    () =>
+      rows.filter(
+        (r) =>
+          r.challanNumber && r.clientId && r.items?.length && !r.alreadyExists && !r.wrongCompany,
+      ).length,
+    [rows],
   );
   const duplicateCount = useMemo(() => rows.filter((r) => r.alreadyExists).length, [rows]);
   const wrongCompanyCount = useMemo(() => rows.filter((r) => r.wrongCompany).length, [rows]);
@@ -582,8 +616,11 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
     <div style={styles.card}>
       <div style={styles.reviewHeader}>
         <span>
-          <b>{rows.length}</b> file(s) parsed • <b style={{ color: validCount === rows.length ? colors.success : colors.warning }}>
-            {validCount}</b> ready to import
+          <b>{rows.length}</b> file(s) parsed •{" "}
+          <b style={{ color: validCount === rows.length ? colors.success : colors.warning }}>
+            {validCount}
+          </b>{" "}
+          ready to import
           {duplicateCount > 0 && (
             <span style={{ color: colors.danger, marginLeft: "0.5rem" }}>
               • <b>{duplicateCount}</b> already in system
@@ -602,7 +639,11 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
         const isDup = !!row.alreadyExists;
         const isBlocked = isWrongCo || isDup;
         const isValid = !isBlocked && row.challanNumber && row.clientId && row.items?.length;
-        const borderColor = isBlocked ? colors.danger : (isValid ? colors.cardBorder : colors.warning);
+        const borderColor = isBlocked
+          ? colors.danger
+          : isValid
+            ? colors.cardBorder
+            : colors.warning;
         return (
           <div
             key={rowIdx}
@@ -615,11 +656,23 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
               <div>
                 <span style={styles.fileLabel}>{row.fileName}</span>
                 {isWrongCo ? (
-                  <span style={{ ...styles.rowWarn, background: colors.dangerLight, color: colors.danger }}>
+                  <span
+                    style={{
+                      ...styles.rowWarn,
+                      background: colors.dangerLight,
+                      color: colors.danger,
+                    }}
+                  >
                     Wrong company
                   </span>
                 ) : isDup ? (
-                  <span style={{ ...styles.rowWarn, background: colors.dangerLight, color: colors.danger }}>
+                  <span
+                    style={{
+                      ...styles.rowWarn,
+                      background: colors.dangerLight,
+                      color: colors.danger,
+                    }}
+                  >
                     Already imported
                   </span>
                 ) : !isValid ? (
@@ -632,16 +685,30 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
             </div>
 
             {isWrongCo && (
-              <div style={{ ...styles.warnStrip, background: colors.dangerLight, color: colors.danger, fontWeight: 600 }}>
-                ✗ This Excel file is for a different company. Remove this row, or switch the
-                target company on the upload step, before importing.
+              <div
+                style={{
+                  ...styles.warnStrip,
+                  background: colors.dangerLight,
+                  color: colors.danger,
+                  fontWeight: 600,
+                }}
+              >
+                ✗ This Excel file is for a different company. Remove this row, or switch the target
+                company on the upload step, before importing.
               </div>
             )}
 
             {isDup && !isWrongCo && (
-              <div style={{ ...styles.warnStrip, background: colors.dangerLight, color: colors.danger, fontWeight: 600 }}>
-                ✗ Challan #{row.challanNumber} already exists in the system for this company.
-                Change the number to a different value (or remove this row) to import.
+              <div
+                style={{
+                  ...styles.warnStrip,
+                  background: colors.dangerLight,
+                  color: colors.danger,
+                  fontWeight: 600,
+                }}
+              >
+                ✗ Challan #{row.challanNumber} already exists in the system for this company. Change
+                the number to a different value (or remove this row) to import.
               </div>
             )}
 
@@ -658,14 +725,18 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
                 <input
                   type="number"
                   value={row.challanNumber || ""}
-                  onChange={(e) => updateRow(rowIdx, { challanNumber: parseInt(e.target.value) || 0 })}
+                  onChange={(e) =>
+                    updateRow(rowIdx, { challanNumber: parseInt(e.target.value) || 0 })
+                  }
                   style={styles.input}
                 />
               </Field>
               <Field label="Client">
                 <select
                   value={row.clientId || ""}
-                  onChange={(e) => updateRow(rowIdx, { clientId: parseInt(e.target.value) || null })}
+                  onChange={(e) =>
+                    updateRow(rowIdx, { clientId: parseInt(e.target.value) || null })
+                  }
                   style={styles.input}
                 >
                   <option value="">— pick client —</option>
@@ -676,9 +747,7 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
                   ))}
                 </select>
                 {row.clientNameRaw && !row.clientId && (
-                  <small style={{ color: colors.warning }}>
-                    File said: "{row.clientNameRaw}"
-                  </small>
+                  <small style={{ color: colors.warning }}>File said: "{row.clientNameRaw}"</small>
                 )}
               </Field>
               <Field label="Delivery Date">
@@ -722,7 +791,11 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
               </div>
 
               {/* Desktop / tablet — table */}
-              <div data-admin-table-region="" className="imp-items-table" style={{ overflowX: "auto" }}>
+              <div
+                data-admin-table-region=""
+                className="imp-items-table"
+                style={{ overflowX: "auto" }}
+              >
                 <table style={styles.itemTable}>
                   <thead>
                     <tr>
@@ -739,15 +812,26 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
                           <textarea
                             rows={2}
                             value={it.description}
-                            onChange={(e) => updateItem(rowIdx, itemIdx, { description: e.target.value })}
-                            style={{ ...styles.cellInput, resize: "vertical", minHeight: 38, lineHeight: 1.4 }}
+                            onChange={(e) =>
+                              updateItem(rowIdx, itemIdx, { description: e.target.value })
+                            }
+                            style={{
+                              ...styles.cellInput,
+                              resize: "vertical",
+                              minHeight: 38,
+                              lineHeight: 1.4,
+                            }}
                           />
                         </td>
                         <td>
                           <input
                             type="number"
                             value={it.quantity}
-                            onChange={(e) => updateItem(rowIdx, itemIdx, { quantity: parseInt(e.target.value) || 0 })}
+                            onChange={(e) =>
+                              updateItem(rowIdx, itemIdx, {
+                                quantity: parseInt(e.target.value) || 0,
+                              })
+                            }
                             style={styles.cellInput}
                           />
                         </td>
@@ -759,7 +843,10 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
                           />
                         </td>
                         <td>
-                          <button style={styles.iconBtn} onClick={() => removeItem(rowIdx, itemIdx)}>
+                          <button
+                            style={styles.iconBtn}
+                            onClick={() => removeItem(rowIdx, itemIdx)}
+                          >
                             <MdDelete />
                           </button>
                         </td>
@@ -767,7 +854,14 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
                     ))}
                     {(!row.items || row.items.length === 0) && (
                       <tr>
-                        <td colSpan={4} style={{ textAlign: "center", color: colors.textSecondary, padding: "0.8rem" }}>
+                        <td
+                          colSpan={4}
+                          style={{
+                            textAlign: "center",
+                            color: colors.textSecondary,
+                            padding: "0.8rem",
+                          }}
+                        >
                           No items. Click "+ Add item" to create one.
                         </td>
                       </tr>
@@ -783,9 +877,7 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
                   a horizontally-scrolled table. */}
               <div className="imp-items-cards">
                 {(row.items || []).length === 0 ? (
-                  <div className="imp-items-empty">
-                    No items. Tap "+ Add item" to create one.
-                  </div>
+                  <div className="imp-items-empty">No items. Tap "+ Add item" to create one.</div>
                 ) : (
                   (row.items || []).map((it, itemIdx) => (
                     <div key={itemIdx} className="imp-item-card">
@@ -794,7 +886,9 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
                         <textarea
                           rows={2}
                           value={it.description}
-                          onChange={(e) => updateItem(rowIdx, itemIdx, { description: e.target.value })}
+                          onChange={(e) =>
+                            updateItem(rowIdx, itemIdx, { description: e.target.value })
+                          }
                           className="imp-item-card__input"
                           style={{ resize: "vertical", minHeight: 38, lineHeight: 1.4 }}
                         />
@@ -805,7 +899,11 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
                           <input
                             type="number"
                             value={it.quantity}
-                            onChange={(e) => updateItem(rowIdx, itemIdx, { quantity: parseInt(e.target.value) || 0 })}
+                            onChange={(e) =>
+                              updateItem(rowIdx, itemIdx, {
+                                quantity: parseInt(e.target.value) || 0,
+                              })
+                            }
                             className="imp-item-card__input"
                           />
                         </div>
@@ -835,7 +933,9 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
       })}
 
       <div style={styles.footerBtns}>
-        <button style={styles.secondaryBtn} onClick={onBack}>Back</button>
+        <button style={styles.secondaryBtn} onClick={onBack}>
+          Back
+        </button>
         <button
           style={{ ...styles.primaryBtn, opacity: loading || validCount === 0 ? 0.6 : 1 }}
           disabled={loading || validCount === 0}
@@ -855,7 +955,9 @@ function ResultsStep({ results, onRestart }) {
   return (
     <div style={styles.card}>
       <div style={styles.resultSummary}>
-        <div style={{ ...styles.summaryBox, background: colors.successLight, color: colors.success }}>
+        <div
+          style={{ ...styles.summaryBox, background: colors.successLight, color: colors.success }}
+        >
           <MdCheckCircle size={28} />
           <div>
             <div style={{ fontSize: "1.4rem", fontWeight: 700 }}>{success.length}</div>
@@ -877,16 +979,22 @@ function ResultsStep({ results, onRestart }) {
           {results.map((r, i) => (
             <div key={i} style={styles.resultCard}>
               <div style={styles.resultCardHead}>
-                <span style={{ fontWeight: 600, wordBreak: "break-all", flex: 1 }}>{r.fileName}</span>
+                <span style={{ fontWeight: 600, wordBreak: "break-all", flex: 1 }}>
+                  {r.fileName}
+                </span>
                 {r.success ? (
-                  <span style={{ color: colors.success, fontWeight: 700, whiteSpace: "nowrap" }}>✓ Success</span>
+                  <span style={{ color: colors.success, fontWeight: 700, whiteSpace: "nowrap" }}>
+                    ✓ Success
+                  </span>
                 ) : (
-                  <span style={{ color: colors.danger, fontWeight: 700, whiteSpace: "nowrap" }}>✗ Failed</span>
+                  <span style={{ color: colors.danger, fontWeight: 700, whiteSpace: "nowrap" }}>
+                    ✗ Failed
+                  </span>
                 )}
               </div>
               <div style={{ fontSize: "0.82rem", color: colors.textSecondary }}>
                 Challan #{r.challanNumber || "—"}
-                {(r.error || r.insertedId) ? ` · ${r.error || `ID ${r.insertedId}`}` : ""}
+                {r.error || r.insertedId ? ` · ${r.error || `ID ${r.insertedId}`}` : ""}
               </div>
             </div>
           ))}
@@ -924,7 +1032,9 @@ function ResultsStep({ results, onRestart }) {
         </div>
       )}
       <div style={styles.footerBtns}>
-        <button style={styles.primaryBtn} onClick={onRestart}>Import more</button>
+        <button style={styles.primaryBtn} onClick={onRestart}>
+          Import more
+        </button>
       </div>
     </div>
   );
@@ -965,163 +1075,281 @@ const styles = {
   title: { margin: 0, fontSize: "1.6rem", fontWeight: 700, color: colors.blue },
   subtitle: { margin: "0.3rem 0 0", color: colors.textSecondary, fontSize: "0.9rem" },
   empty: {
-    padding: "3rem", textAlign: "center", color: colors.textSecondary,
-    display: "flex", flexDirection: "column", alignItems: "center", gap: "0.5rem",
+    padding: "3rem",
+    textAlign: "center",
+    color: colors.textSecondary,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: "0.5rem",
   },
   stepper: {
-    display: "flex", alignItems: "center", gap: "0.4rem", margin: "1rem 0 1.2rem",
-    padding: "0.7rem 1rem", background: "#fff", border: `1px solid ${colors.cardBorder}`,
-    borderRadius: "10px", overflowX: "auto",
+    display: "flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    margin: "1rem 0 1.2rem",
+    padding: "0.7rem 1rem",
+    background: "#fff",
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: "10px",
+    overflowX: "auto",
   },
   stepWrap: { display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 },
   stepDot: {
-    width: "28px", height: "28px", borderRadius: "50%",
-    background: colors.inputBg, color: colors.textSecondary,
-    display: "flex", alignItems: "center", justifyContent: "center",
-    fontWeight: 700, fontSize: "0.85rem",
+    width: "28px",
+    height: "28px",
+    borderRadius: "50%",
+    background: colors.inputBg,
+    color: colors.textSecondary,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 700,
+    fontSize: "0.85rem",
     border: `2px solid ${colors.inputBorder}`,
   },
   stepDotActive: { background: colors.blue, color: "#fff", borderColor: colors.blue },
   stepLabel: { fontSize: "0.85rem" },
   stepLine: { height: "2px", width: "2rem" },
   card: {
-    background: "#fff", border: `1px solid ${colors.cardBorder}`,
-    borderRadius: "12px", padding: "1.3rem",
+    background: "#fff",
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: "12px",
+    padding: "1.3rem",
     boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
   },
   companyPickerWrap: {
-    display: "flex", flexDirection: "column", gap: "0.3rem",
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.3rem",
     padding: "0.9rem 1rem",
-    background: colors.inputBg, borderRadius: "10px",
+    background: colors.inputBg,
+    borderRadius: "10px",
     marginBottom: "1rem",
     border: `1px solid ${colors.inputBorder}`,
   },
   companyPickerHint: {
-    fontSize: "0.8rem", color: colors.textSecondary,
+    fontSize: "0.8rem",
+    color: colors.textSecondary,
   },
   sheetPickerRow: {
-    display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap",
+    display: "flex",
+    alignItems: "center",
+    gap: "0.6rem",
+    flexWrap: "wrap",
     padding: "0.65rem 0.85rem",
-    background: "#f5f8fc", borderRadius: 10,
+    background: "#f5f8fc",
+    borderRadius: 10,
     border: `1px solid ${colors.cardBorder}`,
     marginBottom: "1rem",
   },
   sheetPickerLabel: {
-    fontSize: "0.85rem", fontWeight: 600, color: colors.textPrimary,
+    fontSize: "0.85rem",
+    fontWeight: 600,
+    color: colors.textPrimary,
   },
   sheetPickerHint: {
-    fontSize: "0.78rem", color: colors.textSecondary,
+    fontSize: "0.78rem",
+    color: colors.textSecondary,
     marginLeft: "auto",
   },
   dropzone: {
     border: `2px dashed ${colors.inputBorder}`,
-    borderRadius: "10px", padding: "2rem 1rem",
-    textAlign: "center", background: colors.inputBg,
-    display: "flex", flexDirection: "column", alignItems: "center",
+    borderRadius: "10px",
+    padding: "2rem 1rem",
+    textAlign: "center",
+    background: colors.inputBg,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
   },
   filesHeader: {
-    display: "flex", justifyContent: "space-between", alignItems: "center",
-    padding: "0.3rem 0", fontSize: "0.9rem", color: colors.textPrimary,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "0.3rem 0",
+    fontSize: "0.9rem",
+    color: colors.textPrimary,
   },
   fileList: { listStyle: "none", padding: 0, margin: "0.4rem 0 0" },
   fileRow: {
-    display: "flex", gap: "0.6rem", alignItems: "center", justifyContent: "space-between",
-    padding: "0.55rem 0.75rem", borderRadius: "8px",
-    background: colors.inputBg, marginBottom: "0.3rem", fontSize: "0.9rem",
+    display: "flex",
+    gap: "0.6rem",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "0.55rem 0.75rem",
+    borderRadius: "8px",
+    background: colors.inputBg,
+    marginBottom: "0.3rem",
+    fontSize: "0.9rem",
   },
   warnBanner: {
-    background: colors.warningLight, color: "#8a6d00",
-    border: `1px solid ${colors.warning}`, borderRadius: "8px",
-    padding: "0.75rem 1rem", display: "flex", alignItems: "center", gap: "0.5rem",
+    background: colors.warningLight,
+    color: "#8a6d00",
+    border: `1px solid ${colors.warning}`,
+    borderRadius: "8px",
+    padding: "0.75rem 1rem",
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
     marginBottom: "1rem",
   },
   reviewHeader: {
     borderBottom: `1px solid ${colors.cardBorder}`,
-    paddingBottom: "0.7rem", marginBottom: "1rem",
-    fontSize: "0.95rem", color: colors.textPrimary,
+    paddingBottom: "0.7rem",
+    marginBottom: "1rem",
+    fontSize: "0.95rem",
+    color: colors.textPrimary,
   },
   rowCard: {
-    border: `2px solid ${colors.cardBorder}`, borderRadius: "10px",
-    padding: "1rem", marginBottom: "1rem", background: colors.inputBg,
+    border: `2px solid ${colors.cardBorder}`,
+    borderRadius: "10px",
+    padding: "1rem",
+    marginBottom: "1rem",
+    background: colors.inputBg,
   },
   rowHead: {
-    display: "flex", justifyContent: "space-between", alignItems: "center",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: "0.6rem",
   },
   fileLabel: { fontWeight: 600, fontSize: "0.95rem", color: colors.blue, marginRight: "0.6rem" },
   rowWarn: {
-    display: "inline-block", background: colors.warningLight, color: "#8a6d00",
-    padding: "2px 8px", borderRadius: "4px", fontSize: "0.75rem", fontWeight: 600,
+    display: "inline-block",
+    background: colors.warningLight,
+    color: "#8a6d00",
+    padding: "2px 8px",
+    borderRadius: "4px",
+    fontSize: "0.75rem",
+    fontWeight: 600,
   },
   warnStrip: {
-    background: colors.warningLight, color: "#8a6d00",
-    borderRadius: "6px", padding: "0.5rem 0.8rem", marginBottom: "0.7rem",
-    fontSize: "0.85rem", lineHeight: 1.5,
+    background: colors.warningLight,
+    color: "#8a6d00",
+    borderRadius: "6px",
+    padding: "0.5rem 0.8rem",
+    marginBottom: "0.7rem",
+    fontSize: "0.85rem",
+    lineHeight: 1.5,
   },
   fieldsGrid: {
-    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(180px, 100%), 1fr))",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(180px, 100%), 1fr))",
     gap: "0.7rem",
   },
   field: { display: "flex", flexDirection: "column", gap: "0.25rem" },
   fieldLabel: { fontSize: "0.78rem", fontWeight: 600, color: colors.textSecondary },
   input: {
-    padding: "0.45rem 0.6rem", borderRadius: "6px",
-    border: `1px solid ${colors.inputBorder}`, background: "#fff",
-    fontSize: "0.9rem", outline: "none",
+    padding: "0.45rem 0.6rem",
+    borderRadius: "6px",
+    border: `1px solid ${colors.inputBorder}`,
+    background: "#fff",
+    fontSize: "0.9rem",
+    outline: "none",
   },
   itemsHeader: {
-    display: "flex", justifyContent: "space-between", alignItems: "center",
-    marginBottom: "0.4rem", fontSize: "0.9rem",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "0.4rem",
+    fontSize: "0.9rem",
   },
   itemTable: {
-    width: "100%", borderCollapse: "collapse", fontSize: "0.87rem",
+    width: "100%",
+    borderCollapse: "collapse",
+    fontSize: "0.87rem",
   },
   cellInput: {
-    width: "100%", padding: "0.35rem 0.5rem", borderRadius: "4px",
-    border: `1px solid ${colors.inputBorder}`, background: "#fff",
-    fontSize: "0.85rem", outline: "none",
+    width: "100%",
+    padding: "0.35rem 0.5rem",
+    borderRadius: "4px",
+    border: `1px solid ${colors.inputBorder}`,
+    background: "#fff",
+    fontSize: "0.85rem",
+    outline: "none",
   },
   footerBtns: {
-    display: "flex", gap: "0.6rem", justifyContent: "flex-end",
-    marginTop: "1.2rem", paddingTop: "1rem",
-    borderTop: `1px solid ${colors.cardBorder}`, flexWrap: "wrap",
+    display: "flex",
+    gap: "0.6rem",
+    justifyContent: "flex-end",
+    marginTop: "1.2rem",
+    paddingTop: "1rem",
+    borderTop: `1px solid ${colors.cardBorder}`,
+    flexWrap: "wrap",
   },
   primaryBtn: {
-    padding: "0.55rem 1.1rem", border: "none", borderRadius: "8px",
-    background: colors.blue, color: "#fff", fontWeight: 600,
-    cursor: "pointer", fontSize: "0.88rem",
-    display: "inline-flex", alignItems: "center", gap: "0.4rem",
+    padding: "0.55rem 1.1rem",
+    border: "none",
+    borderRadius: "8px",
+    background: colors.blue,
+    color: "#fff",
+    fontWeight: 600,
+    cursor: "pointer",
+    fontSize: "0.88rem",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.4rem",
   },
   secondaryBtn: {
-    padding: "0.5rem 1rem", borderRadius: "8px",
-    border: `1px solid ${colors.inputBorder}`, background: "#fff",
-    color: colors.textPrimary, fontWeight: 600, cursor: "pointer",
-    display: "inline-flex", alignItems: "center", gap: "0.4rem", fontSize: "0.88rem",
+    padding: "0.5rem 1rem",
+    borderRadius: "8px",
+    border: `1px solid ${colors.inputBorder}`,
+    background: "#fff",
+    color: colors.textPrimary,
+    fontWeight: 600,
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    fontSize: "0.88rem",
   },
   linkBtn: {
-    background: "transparent", border: "none", color: colors.blueLight,
-    cursor: "pointer", fontWeight: 600, fontSize: "0.85rem", padding: "0.2rem 0.4rem",
+    background: "transparent",
+    border: "none",
+    color: colors.blueLight,
+    cursor: "pointer",
+    fontWeight: 600,
+    fontSize: "0.85rem",
+    padding: "0.2rem 0.4rem",
   },
   iconBtn: {
-    background: "transparent", border: "none", cursor: "pointer",
-    color: colors.danger, padding: "0.25rem", display: "inline-flex",
+    background: "transparent",
+    border: "none",
+    cursor: "pointer",
+    color: colors.danger,
+    padding: "0.25rem",
+    display: "inline-flex",
   },
   resultSummary: {
-    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))",
-    gap: "0.7rem", marginBottom: "1rem",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))",
+    gap: "0.7rem",
+    marginBottom: "1rem",
   },
   summaryBox: {
-    display: "flex", alignItems: "center", gap: "0.7rem",
-    padding: "0.9rem 1rem", borderRadius: "10px",
+    display: "flex",
+    alignItems: "center",
+    gap: "0.7rem",
+    padding: "0.9rem 1rem",
+    borderRadius: "10px",
     fontWeight: 600,
   },
   resultCard: {
-    border: `1px solid ${colors.cardBorder}`, borderRadius: 10,
-    padding: "0.7rem 0.8rem", background: "#fff",
-    display: "flex", flexDirection: "column", gap: "0.35rem",
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 10,
+    padding: "0.7rem 0.8rem",
+    background: "#fff",
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.35rem",
   },
   resultCardHead: {
-    display: "flex", justifyContent: "space-between", alignItems: "flex-start",
-    gap: "0.6rem", fontSize: "0.9rem", color: colors.textPrimary,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: "0.6rem",
+    fontSize: "0.9rem",
+    color: colors.textPrimary,
   },
 };

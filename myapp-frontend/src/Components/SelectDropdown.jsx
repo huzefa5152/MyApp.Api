@@ -32,11 +32,15 @@ export default function SelectDropdown({
   const prevEndpointRef = useRef(null);
 
   useEffect(() => {
-    if (providedOptions || !endpoint) { setLoading(false); return; }
+    if (providedOptions || !endpoint) {
+      setLoading(false);
+      return;
+    }
     if (prevEndpointRef.current === endpoint) return;
     prevEndpointRef.current = endpoint;
     (async () => {
-      setLoading(true); setError("");
+      setLoading(true);
+      setError("");
       try {
         const response = await httpClient.get(endpoint);
         setFetched(response.data || []);
@@ -56,7 +60,16 @@ export default function SelectDropdown({
   return (
     <div>
       {label && (
-        <label htmlFor={fieldId} style={{ display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: "#5f6d7e" }}>
+        <label
+          htmlFor={fieldId}
+          style={{
+            display: "block",
+            marginBottom: "0.35rem",
+            fontWeight: 600,
+            fontSize: "0.85rem",
+            color: "#5f6d7e",
+          }}
+        >
           {label}
         </label>
       )}
@@ -76,7 +89,9 @@ export default function SelectDropdown({
           else onChange?.(item || null);
         }}
       />
-      {error && <div style={{ color: "#dc3545", fontSize: "0.78rem", marginTop: "0.25rem" }}>{error}</div>}
+      {error && (
+        <div style={{ color: "#dc3545", fontSize: "0.78rem", marginTop: "0.25rem" }}>{error}</div>
+      )}
     </div>
   );
 }
