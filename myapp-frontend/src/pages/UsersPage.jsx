@@ -617,7 +617,7 @@ export default function UsersPage() {
                   The selected role's permissions will be auto-assigned to this user on create.
                 </p>
               )}
-              {editUser && isSeedAdmin && (
+              {isSeedAdmin && (
                 <label
                   style={{
                     display: "flex",

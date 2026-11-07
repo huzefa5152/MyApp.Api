@@ -126,6 +126,9 @@ namespace MyApp.Api.Controllers
             if (string.IsNullOrWhiteSpace(dto.FullName))
                 return BadRequest(new { message = "Full name is required" });
 
+            if (dto.CompanyChangesLocked && CurrentUserId != _seedAdminUserId)
+                return Forbid();
+
             // Audit C-15 (2026-05-13): the legacy free-text Role column is
             // still consumed by some JWT-claim consumers. Restrict the
             // privileged value "Admin" to the seed admin only — anyone
@@ -156,6 +159,7 @@ namespace MyApp.Api.Controllers
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
                 FullName = dto.FullName,
                 Role = desiredRole,
+                CompanyChangesLocked = dto.CompanyChangesLocked,
                 CreatedAt = DateTime.UtcNow,
                 // Ownership: the creator manages this account from now on
                 // (and so does everyone above the creator). Seed-created
