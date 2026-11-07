@@ -216,24 +216,30 @@ namespace MyApp.Api.Controllers
                 foreach (var rid in roleIds)
                     _context.UserRoles.Add(new Models.UserRole
                     {
-                        UserId = user.Id, RoleId = rid,
-                        AssignedAt = DateTime.UtcNow, AssignedByUserId = assignedBy
+                        UserId = user.Id,
+                        RoleId = rid,
+                        AssignedAt = DateTime.UtcNow,
+                        AssignedByUserId = assignedBy
                     });
 
                 foreach (var cid in companyIds)
                     _context.UserCompanies.Add(new Models.UserCompany
                     {
-                        UserId = user.Id, CompanyId = cid,
+                        UserId = user.Id,
+                        CompanyId = cid,
                         RestrictToDivisions = grantByCompany.TryGetValue(cid, out var g) && g.RestrictToDivisions,
-                        AssignedAt = DateTime.UtcNow, AssignedByUserId = assignedBy
+                        AssignedAt = DateTime.UtcNow,
+                        AssignedByUserId = assignedBy
                     });
 
                 foreach (var g in divisionGrants.Where(x => x.RestrictToDivisions))
                     foreach (var did in (g.DivisionIds ?? new List<int>()).Distinct())
                         _context.UserDivisions.Add(new Models.UserDivision
                         {
-                            UserId = user.Id, DivisionId = did,
-                            AssignedAt = DateTime.UtcNow, AssignedByUserId = assignedBy
+                            UserId = user.Id,
+                            DivisionId = did,
+                            AssignedAt = DateTime.UtcNow,
+                            AssignedByUserId = assignedBy
                         });
 
                 await _context.SaveChangesAsync();

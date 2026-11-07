@@ -143,7 +143,12 @@ export default function UsersPage() {
 
   const openEdit = (u) => {
     setEditUser(u);
-    setForm({ username: u.username, fullName: u.fullName, password: "", role: u.role || defaultRoleName() });
+    setForm({
+      username: u.username,
+      fullName: u.fullName,
+      password: "",
+      role: u.role || defaultRoleName(),
+    });
     setMsg(null);
     setShowModal(true);
   };
@@ -171,13 +176,17 @@ export default function UsersPage() {
         // operators with multi-role users should use the Roles modal,
         // which is the explicit multi-select path).
         const matchingRole = availableRoles.find(
-          (r) => r.name?.toLowerCase() === form.role?.toLowerCase());
+          (r) => r.name?.toLowerCase() === form.role?.toLowerCase(),
+        );
         if (matchingRole?.id && canAssignRoles) {
           try {
             const { data: existing } = await getUserRoles(editUser.id);
             const mcpIds = existing.roles.filter(isMcpRole).map((role) => role.id);
             await assignUserRoles(editUser.id, [...new Set([matchingRole.id, ...mcpIds])]);
-            setMsg({ type: "success", text: `User updated and role "${matchingRole.name}" applied.` });
+            setMsg({
+              type: "success",
+              text: `User updated and role "${matchingRole.name}" applied.`,
+            });
           } catch {
             setMsg({
               type: "warn",
@@ -195,7 +204,8 @@ export default function UsersPage() {
         // the operator's own rbac.userroles.assign / tenantaccess.manage.assign,
         // so an operator who lacks a grant simply can't include it.
         const matchingRole = availableRoles.find(
-          (r) => r.name?.toLowerCase() === form.role?.toLowerCase());
+          (r) => r.name?.toLowerCase() === form.role?.toLowerCase(),
+        );
         const payload = { ...form };
         if (matchingRole?.id && canAssignRoles) payload.roleIds = [matchingRole.id];
         if (canAssignTenant && selectedCompanyIds.size > 0)
@@ -205,10 +215,14 @@ export default function UsersPage() {
         const bits = [];
         if (payload.roleIds) bits.push(`role "${matchingRole.name}"`);
         if (payload.companyIds)
-          bits.push(`${payload.companyIds.length} compan${payload.companyIds.length === 1 ? "y" : "ies"}`);
+          bits.push(
+            `${payload.companyIds.length} compan${payload.companyIds.length === 1 ? "y" : "ies"}`,
+          );
         setMsg({
           type: "success",
-          text: bits.length ? `User created with ${bits.join(" and ")}.` : "User created successfully",
+          text: bits.length
+            ? `User created with ${bits.join(" and ")}.`
+            : "User created successfully",
         });
       }
       await fetchUsers();
@@ -239,7 +253,9 @@ export default function UsersPage() {
     try {
       const [rolesRes, userRolesRes] = await Promise.all([getRoles(), getUserRoles(u.id)]);
       setAllRoles(rolesRes.data.filter((role) => !isMcpRole(role)));
-      setAssignedRoleIds(new Set(userRolesRes.data.roles.filter((r) => !isMcpRole(r)).map((r) => r.id)));
+      setAssignedRoleIds(
+        new Set(userRolesRes.data.roles.filter((r) => !isMcpRole(r)).map((r) => r.id)),
+      );
     } catch {
       setRolesMsg({ type: "error", text: "Failed to load roles" });
     } finally {
@@ -285,7 +301,7 @@ export default function UsersPage() {
   const filtered = users.filter(
     (u) =>
       u.username.toLowerCase().includes(search.toLowerCase()) ||
-      u.fullName.toLowerCase().includes(search.toLowerCase())
+      u.fullName.toLowerCase().includes(search.toLowerCase()),
   );
 
   const getInitials = (name) => {
@@ -302,36 +318,36 @@ export default function UsersPage() {
     <div>
       {/* Pinned while the list scrolls (.page-sticky-head). */}
       <div className="page-sticky-head">
-      {/* Page Header */}
-      <div style={styles.header}>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={styles.headerIcon}>
-            <MdPeople style={{ fontSize: "1.5rem", color: "#fff" }} />
+        {/* Page Header */}
+        <div style={styles.header}>
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+            <div style={styles.headerIcon}>
+              <MdPeople style={{ fontSize: "1.5rem", color: "#fff" }} />
+            </div>
+            <div>
+              <h2 style={styles.headerTitle}>User Management</h2>
+              <p style={styles.headerSub}>Manage admin users and their access</p>
+            </div>
           </div>
-          <div>
-            <h2 style={styles.headerTitle}>User Management</h2>
-            <p style={styles.headerSub}>Manage admin users and their access</p>
-          </div>
+          {canCreate && (
+            <button style={styles.addBtn} onClick={openAdd}>
+              <MdAdd style={{ fontSize: "1.2rem" }} />
+              Add User
+            </button>
+          )}
         </div>
-        {canCreate && (
-          <button style={styles.addBtn} onClick={openAdd}>
-            <MdAdd style={{ fontSize: "1.2rem" }} />
-            Add User
-          </button>
-        )}
-      </div>
 
-      {/* Search */}
-      <div style={styles.searchWrap}>
-        <MdSearch style={{ color: colors.textSecondary, fontSize: "1.25rem" }} />
-        <input
-          style={styles.searchInput}
-          type="text"
-          placeholder="Search users..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
+        {/* Search */}
+        <div style={styles.searchWrap}>
+          <MdSearch style={{ color: colors.textSecondary, fontSize: "1.25rem" }} />
+          <input
+            style={styles.searchInput}
+            type="text"
+            placeholder="Search users..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
       </div>
 
       {/* Users List */}
@@ -352,15 +368,21 @@ export default function UsersPage() {
                   {u.avatarPath ? (
                     <img src={u.avatarPath} alt={u.fullName} style={styles.avatar} />
                   ) : (
-                    <div style={styles.avatarFallback}>
-                      {getInitials(u.fullName)}
-                    </div>
+                    <div style={styles.avatarFallback}>{getInitials(u.fullName)}</div>
                   )}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, color: colors.textPrimary, fontSize: "0.95rem" }}>
+                    <div
+                      style={{ fontWeight: 600, color: colors.textPrimary, fontSize: "0.95rem" }}
+                    >
                       {u.fullName}
                     </div>
-                    <div style={{ color: colors.textSecondary, fontSize: "0.84rem", overflowWrap: "anywhere" }}>
+                    <div
+                      style={{
+                        color: colors.textSecondary,
+                        fontSize: "0.84rem",
+                        overflowWrap: "anywhere",
+                      }}
+                    >
                       @{u.username}
                     </div>
                     {/* Under the name, not beside it: role names are typed by
@@ -373,8 +395,11 @@ export default function UsersPage() {
                     Joined {new Date(u.createdAt).toLocaleDateString()}
                   </span>
                   {canAdministerMcp && (
-                    <button style={{ ...styles.rolesBtn, minHeight: 44 }}
-                      onClick={() => navigate(`/profile?tab=mcp-catalog&userId=${u.id}`)} title={`MCP access for ${u.fullName}`}>
+                    <button
+                      style={{ ...styles.rolesBtn, minHeight: 44 }}
+                      onClick={() => navigate(`/profile?tab=mcp-catalog&userId=${u.id}`)}
+                      title={`MCP access for ${u.fullName}`}
+                    >
                       <MdSmartToy aria-hidden style={{ fontSize: "1rem" }} />
                       <span>MCP access</span>
                     </button>
@@ -382,19 +407,31 @@ export default function UsersPage() {
                   {u.id !== seedAdminUserId && (canAssignRoles || canUpdate || canDelete) && (
                     <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                       {canAssignRoles && (
-                        <button style={styles.rolesBtn} onClick={() => openRolesModal(u)} title="Manage roles">
+                        <button
+                          style={styles.rolesBtn}
+                          onClick={() => openRolesModal(u)}
+                          title="Manage roles"
+                        >
                           <MdAdminPanelSettings style={{ fontSize: "1rem" }} />
                           <span>Roles</span>
                         </button>
                       )}
                       {canUpdate && (
-                        <button style={styles.editBtn} onClick={() => openEdit(u)} title="Edit user">
+                        <button
+                          style={styles.editBtn}
+                          onClick={() => openEdit(u)}
+                          title="Edit user"
+                        >
                           <MdEdit style={{ fontSize: "1rem" }} />
                           <span>Edit</span>
                         </button>
                       )}
                       {canDelete && (
-                        <button style={styles.deleteBtn} onClick={() => setDeleteConfirm(u)} title="Delete user">
+                        <button
+                          style={styles.deleteBtn}
+                          onClick={() => setDeleteConfirm(u)}
+                          title="Delete user"
+                        >
                           <MdDelete style={{ fontSize: "1rem" }} />
                           <span>Delete</span>
                         </button>
@@ -420,9 +457,7 @@ export default function UsersPage() {
         <div style={styles.overlay}>
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
-              <h3 style={formStyles.title}>
-                {editUser ? "Edit User" : "Add New User"}
-              </h3>
+              <h3 style={formStyles.title}>{editUser ? "Edit User" : "Add New User"}</h3>
               <button style={styles.modalClose} onClick={closeModal}>
                 <MdClose style={{ fontSize: "1.25rem" }} />
               </button>
@@ -430,13 +465,7 @@ export default function UsersPage() {
 
             <div style={styles.modalBody}>
               {msg && (
-                <div
-                  style={
-                    msg.type === "success"
-                      ? styles.successMsg
-                      : styles.errorMsg
-                  }
-                >
+                <div style={msg.type === "success" ? styles.successMsg : styles.errorMsg}>
                   {msg.text}
                 </div>
               )}
@@ -490,12 +519,11 @@ export default function UsersPage() {
                 value={form.role}
                 onChange={(e) => setForm({ ...form, role: e.target.value })}
               >
-                {availableRoles.length === 0 && (
-                  <option value="Admin">Admin</option>
-                )}
+                {availableRoles.length === 0 && <option value="Admin">Admin</option>}
                 {availableRoles.map((r) => (
                   <option key={r.id} value={r.name}>
-                    {r.name}{r.isSystemRole ? " (system)" : ""}
+                    {r.name}
+                    {r.isSystemRole ? " (system)" : ""}
                   </option>
                 ))}
               </select>
@@ -516,18 +544,27 @@ export default function UsersPage() {
                   </label>
                   <div
                     style={{
-                      display: "flex", flexDirection: "column", gap: "0.4rem",
-                      maxHeight: 180, overflowY: "auto",
-                      border: `1px solid ${colors.inputBorder}`, borderRadius: 8,
-                      padding: "0.5rem 0.65rem", background: colors.inputBg,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.4rem",
+                      maxHeight: 180,
+                      overflowY: "auto",
+                      border: `1px solid ${colors.inputBorder}`,
+                      borderRadius: 8,
+                      padding: "0.5rem 0.65rem",
+                      background: colors.inputBg,
                     }}
                   >
                     {companies.map((c) => (
                       <label
                         key={c.id}
                         style={{
-                          display: "flex", alignItems: "center", gap: "0.55rem",
-                          cursor: "pointer", fontSize: "0.88rem", color: colors.textPrimary,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.55rem",
+                          cursor: "pointer",
+                          fontSize: "0.88rem",
+                          color: colors.textPrimary,
                         }}
                       >
                         <input
@@ -553,11 +590,7 @@ export default function UsersPage() {
               <button style={styles.cancelBtn} onClick={closeModal}>
                 Cancel
               </button>
-              <button
-                style={styles.saveBtn}
-                onClick={handleSave}
-                disabled={saving}
-              >
+              <button style={styles.saveBtn} onClick={handleSave} disabled={saving}>
                 <MdSave style={{ fontSize: "1.1rem" }} />
                 {saving ? "Saving..." : editUser ? "Update" : "Create"}
               </button>
@@ -572,9 +605,7 @@ export default function UsersPage() {
         <div style={styles.overlay}>
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
-              <h3 style={formStyles.title}>
-                Manage roles — {rolesModalUser.fullName}
-              </h3>
+              <h3 style={formStyles.title}>Manage roles — {rolesModalUser.fullName}</h3>
               <button style={styles.modalClose} onClick={closeRolesModal}>
                 <MdClose style={{ fontSize: "1.25rem" }} />
               </button>
@@ -587,9 +618,11 @@ export default function UsersPage() {
                 </div>
               )}
 
-              <p style={{ margin: "0 0 0.75rem", color: colors.textSecondary, fontSize: "0.85rem" }}>
-                Select the roles this user should have. Their permissions are the union
-                of everything granted by their assigned roles.
+              <p
+                style={{ margin: "0 0 0.75rem", color: colors.textSecondary, fontSize: "0.85rem" }}
+              >
+                Select the roles this user should have. Their permissions are the union of
+                everything granted by their assigned roles.
               </p>
 
               {rolesLoading ? (
@@ -598,7 +631,8 @@ export default function UsersPage() {
                 </p>
               ) : allRoles.length === 0 ? (
                 <p style={{ padding: "1.5rem", textAlign: "center", color: colors.textSecondary }}>
-                  No roles defined yet. Go to <strong>Roles &amp; Permissions</strong> to create one.
+                  No roles defined yet. Go to <strong>Roles &amp; Permissions</strong> to create
+                  one.
                 </p>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
@@ -626,8 +660,21 @@ export default function UsersPage() {
                           style={{ accentColor: colors.blue, marginTop: 3 }}
                         />
                         <div style={{ flex: 1 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                            <span style={{ fontWeight: 600, color: colors.textPrimary, fontSize: "0.92rem" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontWeight: 600,
+                                color: colors.textPrimary,
+                                fontSize: "0.92rem",
+                              }}
+                            >
                               {role.name}
                             </span>
                             {role.isSystemRole && (
@@ -647,13 +694,25 @@ export default function UsersPage() {
                                 System
                               </span>
                             )}
-                            <span style={{ marginLeft: "auto", fontSize: "0.78rem", color: colors.textSecondary }}>
+                            <span
+                              style={{
+                                marginLeft: "auto",
+                                fontSize: "0.78rem",
+                                color: colors.textSecondary,
+                              }}
+                            >
                               {role.permissionKeys.length} permission
                               {role.permissionKeys.length !== 1 ? "s" : ""}
                             </span>
                           </div>
                           {role.description && (
-                            <p style={{ margin: "0.25rem 0 0", color: colors.textSecondary, fontSize: "0.82rem" }}>
+                            <p
+                              style={{
+                                margin: "0.25rem 0 0",
+                                color: colors.textSecondary,
+                                fontSize: "0.82rem",
+                              }}
+                            >
                               {role.description}
                             </p>
                           )}
@@ -669,7 +728,11 @@ export default function UsersPage() {
               <button style={styles.cancelBtn} onClick={closeRolesModal} disabled={rolesSaving}>
                 Cancel
               </button>
-              <button style={styles.saveBtn} onClick={handleSaveRoles} disabled={rolesSaving || rolesLoading}>
+              <button
+                style={styles.saveBtn}
+                onClick={handleSaveRoles}
+                disabled={rolesSaving || rolesLoading}
+              >
                 <MdSave style={{ fontSize: "1.1rem" }} />
                 {rolesSaving ? "Saving..." : "Save roles"}
               </button>
@@ -685,18 +748,13 @@ export default function UsersPage() {
         <div style={styles.overlay}>
           <div style={styles.deleteModal} onClick={(e) => e.stopPropagation()}>
             <MdDelete style={{ fontSize: "2.5rem", color: colors.danger }} />
-            <h3 style={{ margin: "0.75rem 0 0.5rem", color: colors.textPrimary }}>
-              Delete User?
-            </h3>
+            <h3 style={{ margin: "0.75rem 0 0.5rem", color: colors.textPrimary }}>Delete User?</h3>
             <p style={{ margin: 0, color: colors.textSecondary, fontSize: "0.9rem" }}>
-              Are you sure you want to delete <strong>{deleteConfirm.fullName}</strong>?
-              This action cannot be undone.
+              Are you sure you want to delete <strong>{deleteConfirm.fullName}</strong>? This action
+              cannot be undone.
             </p>
             <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.5rem" }}>
-              <button
-                style={styles.cancelBtn}
-                onClick={() => setDeleteConfirm(null)}
-              >
+              <button style={styles.cancelBtn} onClick={() => setDeleteConfirm(null)}>
                 Cancel
               </button>
               <button
