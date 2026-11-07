@@ -98,7 +98,11 @@ namespace MyApp.Api.Services.Implementations
 
             AddLine(lines, sales.Id, debit: isCreditNote ? net : 0m, credit: isCreditNote ? 0m : net, label);
 
-            AddLine(lines, sales.Id,
+            // Freight billed to the customer recovers what the company pays its
+            // transporter, so it is credited to the Freight / Cartage expense
+            // account and nets that expense off. Revenue stays the goods alone.
+            var freight = invoice.FreightCharges != 0m ? await ResolveFreightAsync(invoice.CompanyId, accounts) : sales;
+            AddLine(lines, freight.Id,
                 debit: isCreditNote ? invoice.FreightCharges : 0m,
                 credit: isCreditNote ? 0m : invoice.FreightCharges,
                 $"{label} — Freight / cartage charges");
@@ -719,6 +723,18 @@ namespace MyApp.Api.Services.Implementations
             _logger.LogWarning("Company {CompanyId} has no income account — posting sales to Suspense.", companyId);
             return await SuspenseAsync(companyId, accounts);
         }
+
+        /// <summary>Freight recovered on a sales bill: the seeded Freight / Cartage
+        /// expense account, then any expense account named for freight or
+        /// cartage, then Sales — a chart without one keeps the earlier
+        /// posting rather than pooling on Suspense.</summary>
+        private async Task<Account> ResolveFreightAsync(int companyId, List<Account> accounts) =>
+            accounts.FirstOrDefault(a => a.ExternalRef == "seed:exp_freight")
+            ?? accounts.Where(a => a.AccountType == AccountType.Expense &&
+                   (a.Name.Contains("freight", StringComparison.OrdinalIgnoreCase) ||
+                    a.Name.Contains("cartage", StringComparison.OrdinalIgnoreCase)))
+                .OrderBy(a => a.Id).FirstOrDefault()
+            ?? await ResolveSalesAsync(companyId, accounts);
 
         /// <summary>Cost: the Inventory control account when the company tracks
         /// stock (a purchase adds to the asset, it is not yet an expense), else

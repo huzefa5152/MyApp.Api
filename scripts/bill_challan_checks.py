@@ -126,8 +126,11 @@ def run(http, check, base, token, company_id, client_id, item_type_id=None, stoc
     check(suite, "bill keeps one balanced journal entry", len(entries) == 1 and entries[0]["totalDebit"] == entries[0]["totalCredit"], str(entries))
     if entries:
         sales = next((r for r in chart if r.get("name") == "Sales"), None)
-        check(suite, "journal revenue equals subtotal plus freight", sales is not None and
-              sum(r["credit"] - r["debit"] for r in entries[0]["lines"] if r["accountId"] == sales["id"]) == 8930)
+        freight = next((r for r in chart if r.get("name") == "Freight / Cartage"), None)
+        check(suite, "journal revenue equals subtotal", sales is not None and
+              sum(r["credit"] - r["debit"] for r in entries[0]["lines"] if r["accountId"] == sales["id"]) == 8880)
+        check(suite, "freight credits the Freight / Cartage expense", freight is not None and
+              sum(r["credit"] - r["debit"] for r in entries[0]["lines"] if r["accountId"] == freight["id"]) == 50)
     snap = options()
     st, value = call("PUT", path, payload(snap, []))
     expect("cannot remove final item", st, value, 400)
