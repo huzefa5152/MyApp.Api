@@ -323,7 +323,7 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p style={{ textAlign: "center", padding: "0 16px" }}>
+          <p className="ht-mcp-link">
             <Link to="/mcp-guide">Connect ChatGPT, Claude or a coding agent — MCP setup guide</Link>
           </p>
           <div className="ht-form-footer">

@@ -63,7 +63,7 @@
   overflow: hidden;
   background: radial-gradient(
     120% 100% at 80% 0%,
-    #0b1a31 0%,
+    var(--lg-ink-glow, #0b1a31) 0%,
     var(--lg-ink-1) 55%,
     var(--lg-ink-0) 100%
   );
@@ -154,7 +154,7 @@
 
 .ht-brand-eyebrow {
   font-family: var(--lg-font-mono);
-  font-size: 0.68rem;
+  font-size: var(--k-fs-2xs);
   font-weight: 600;
   letter-spacing: 0.26em;
   text-transform: uppercase;
@@ -195,7 +195,7 @@
   align-items: center;
   gap: 0.7rem;
   color: rgba(234, 242, 255, 0.78);
-  font-size: 0.85rem;
+  font-size: var(--k-fs-sm);
   line-height: 1.45;
 }
 
@@ -265,7 +265,7 @@
 
 .ht-form-eyebrow {
   font-family: var(--lg-font-mono);
-  font-size: 0.66rem;
+  font-size: var(--k-fs-2xs);
   font-weight: 600;
   letter-spacing: 0.22em;
   text-transform: uppercase;
@@ -275,7 +275,7 @@
 
 .ht-form-header h2 {
   font-family: var(--lg-font-display);
-  font-size: 1.65rem;
+  font-size: var(--k-fs-2xl);
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--lg-ink-text);
@@ -284,7 +284,7 @@
 
 .ht-form-sub {
   color: var(--lg-mute);
-  font-size: 0.88rem;
+  font-size: var(--k-fs-base);
   margin: 0;
 }
 
@@ -295,11 +295,11 @@
   gap: 0.6rem;
   padding: 0.75rem 0.95rem;
   margin-bottom: 1.1rem;
-  background: #fff8eb;
-  border: 1px solid #f5d9a8;
+  background: var(--lg-warn-bg, #fff8eb);
+  border: 1px solid var(--lg-warn-line, #f5d9a8);
   border-radius: 12px;
-  color: #8a5800;
-  font-size: 0.85rem;
+  color: var(--lg-warn-ink, #8a5800);
+  font-size: var(--k-fs-sm);
   line-height: 1.45;
   animation: ht-slide-up 0.4s var(--lg-ease) both;
 }
@@ -338,13 +338,13 @@
   display: flex;
   align-items: flex-start;
   gap: 0.6rem;
-  background: #fef2f2;
-  border: 1px solid #fbc5c5;
+  background: var(--lg-error-bg, #fef2f2);
+  border: 1px solid var(--lg-error-line, #fbc5c5);
   border-radius: 12px;
   padding: 0.75rem 0.95rem;
-  font-size: 0.85rem;
+  font-size: var(--k-fs-sm);
   line-height: 1.45;
-  color: #b91c1c;
+  color: var(--lg-error-ink, #b91c1c);
   margin-bottom: 1.1rem;
   animation: ht-shake 0.5s ease-in-out;
 }
@@ -362,7 +362,7 @@
 .ht-field-label {
   display: block;
   font-family: var(--lg-font-mono);
-  font-size: 0.68rem;
+  font-size: var(--k-fs-2xs);
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -379,7 +379,7 @@
   left: 14px;
   top: 50%;
   transform: translateY(-50%);
-  color: #93a1b8;
+  color: var(--lg-icon, #6b7a90);
   pointer-events: none;
   transition: color 0.25s ease;
   z-index: 2;
@@ -392,9 +392,9 @@
   border: 1.5px solid var(--lg-line-light);
   border-radius: 12px;
   font-family: var(--lg-font-body);
-  font-size: 0.93rem;
+  font-size: var(--k-fs-md); /* 16px: iOS zooms below this on focus */
   color: var(--lg-ink-text);
-  background: #f8fafd;
+  background: var(--lg-input-bg, #f8fafd);
   transition:
     border-color 0.25s ease,
     box-shadow 0.25s ease,
@@ -413,7 +413,7 @@
 }
 
 .ht-form-control::placeholder {
-  color: #9fadc4;
+  color: var(--lg-placeholder, #6b7a90);
 }
 
 .ht-form-control:disabled {
@@ -440,7 +440,7 @@
   border: none;
   border-radius: 9px;
   box-shadow: none;
-  color: #93a1b8;
+  color: var(--lg-icon, #6b7a90);
   cursor: pointer;
   padding: 0;
   line-height: 1;
@@ -476,7 +476,7 @@
   border-radius: 12px;
   color: #fff;
   font-family: var(--lg-font-body);
-  font-size: 0.95rem;
+  font-size: var(--k-fs-md);
   font-weight: 700;
   letter-spacing: 0.02em;
   cursor: pointer;
@@ -551,7 +551,7 @@
   align-items: center;
   gap: 0.4rem;
   color: var(--lg-mute);
-  font-size: 0.82rem;
+  font-size: var(--k-fs-sm);
   font-weight: 500;
   text-decoration: none;
   transition: color 0.2s ease;
@@ -571,10 +571,10 @@
 
 .ht-form-fineprint {
   font-family: var(--lg-font-mono);
-  font-size: 0.64rem;
+  font-size: var(--k-fs-2xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #9aa8bf;
+  color: var(--lg-mute);
   margin: 0;
   text-align: center;
   animation: ht-fade-in 1s var(--lg-ease) both;
@@ -614,12 +614,12 @@
   }
 
   .ht-brand-eyebrow {
-    font-size: 0.56rem;
+    font-size: var(--k-fs-2xs);
     margin-bottom: 0.3rem;
   }
 
   .ht-brand-title {
-    font-size: 1.15rem;
+    font-size: var(--k-fs-lg);
     margin-bottom: 0;
     line-height: 1.2;
   }
@@ -646,7 +646,7 @@
   }
 
   .ht-form-header h2 {
-    font-size: 1.45rem;
+    font-size: var(--k-fs-xl);
   }
 
   .ht-brand-panel {
@@ -664,4 +664,24 @@
   .ht-form-fineprint {
     animation: none !important;
   }
+}
+
+/* Secondary link under the form (MCP setup guide). */
+.ht-mcp-link {
+  margin: 0;
+  padding: 0 16px;
+  text-align: center;
+  font-size: var(--k-fs-sm);
+  line-height: 1.5;
+}
+.ht-mcp-link a {
+  color: var(--lg-mute);
+  text-decoration: underline;
+  text-decoration-color: var(--lg-line-light);
+  text-underline-offset: 3px;
+}
+.ht-mcp-link a:hover,
+.ht-mcp-link a:focus-visible {
+  color: var(--lg-blue);
+  text-decoration-color: currentColor;
 }
