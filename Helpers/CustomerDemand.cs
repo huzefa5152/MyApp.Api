@@ -67,6 +67,7 @@ namespace MyApp.Api.Helpers
         private readonly Dictionary<string, DemandTrail> _trails = new();
         private readonly Dictionary<(DemandKind, int), DemandTrail> _trailOf = new();
         private int _companyId;
+        private DateTime? _documentsFrom;
 
         public CustomerDemand(AppDbContext db) => _db = db;
 
@@ -95,6 +96,8 @@ namespace MyApp.Api.Helpers
         public async Task LoadAsync(int companyId)
         {
             _companyId = companyId;
+            _documentsFrom = await _db.Companies.AsNoTracking().Where(c => c.Id == companyId)
+                .Select(c => c.PurchaseDocumentsFrom).FirstOrDefaultAsync();
             var orders = await _db.SalesOrderItems.AsNoTracking()
                 .Where(i => i.SalesOrder.CompanyId == companyId)
                 .Select(i => new
@@ -309,6 +312,8 @@ namespace MyApp.Api.Helpers
             foreach (var t in _trails.Values)
             {
                 if (t.Left <= 0.0001m) continue;
+                // Documents before the company's start date count as settled.
+                if (_documentsFrom is DateTime from && t.Members.All(m => m.Doc.Date is DateTime d && d.Date < from.Date)) continue;
                 var planned = t.Planned;
                 if (q.SupplierId != null && !q.AllSuppliers && planned != null && planned.SupplierId != q.SupplierId) continue;
                 if (forKind != null && !t.Members.Any(m => m.Kind == forKind && m.Doc.Id == q.ForId)) continue;

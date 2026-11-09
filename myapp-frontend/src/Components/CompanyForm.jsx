@@ -47,6 +47,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         // control on new sales + purchase bills. Empty string / null = no
         // default (operator turns WHT on per-bill).
         defaultWithholdingTaxRate: "",
+        purchaseDocumentsFrom: "",
         startingChallanNumber: 0,
         currentChallanNumber: 0,
         startingInvoiceNumber: 0,
@@ -129,6 +130,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 cnic: freshCompany.cnic || "",
                 strn: freshCompany.strn || "",
                 defaultWithholdingTaxRate: freshCompany.defaultWithholdingTaxRate ?? "",
+                purchaseDocumentsFrom: (freshCompany.purchaseDocumentsFrom || "").slice(0, 10),
                 startingChallanNumber: freshCompany.startingChallanNumber || 0,
                 currentChallanNumber: freshCompany.currentChallanNumber || 0,
                 startingInvoiceNumber: freshCompany.startingInvoiceNumber || 0,
@@ -235,6 +237,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                     form.defaultWithholdingTaxRate === "" || form.defaultWithholdingTaxRate == null
                         ? null
                         : Number(form.defaultWithholdingTaxRate),
+                purchaseDocumentsFrom: form.purchaseDocumentsFrom || null,
             };
 
             let savedCompany;
@@ -359,6 +362,23 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                         placeholder="e.g. 0.5"
                                     />
                                 </div>
+                                {company && (
+                                    <div data-admin-field="" style={formGroup}>
+                                        <label style={label}>
+                                            Buy for customer documents from
+                                            <span style={{ fontWeight: 400, color: "#5f6d7e", fontSize: "0.72rem", marginLeft: "0.4rem" }}>
+                                                the purchase picker offers orders, challans and bills from this date — leave blank for all
+                                            </span>
+                                        </label>
+                                        <input
+                                            type="date"
+                                            name="purchaseDocumentsFrom"
+                                            value={form.purchaseDocumentsFrom}
+                                            onChange={handleChange}
+                                            style={input}
+                                        />
+                                    </div>
+                                )}
                                 <div data-admin-field="" style={formGroup}>
                                     <label style={label}>Logo</label>
                                     <input type="file" accept="image/*" onChange={(e) => setLogoFile(e.target.files[0])} style={{ ...input, padding: "0.4rem" }} />

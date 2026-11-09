@@ -87,6 +87,7 @@ namespace MyApp.Api.Services.Implementations
             DefaultPurchaseAccountId = c.DefaultPurchaseAccountId,
             InventoryTrackingEnabled = c.InventoryTrackingEnabled,
             DefaultWithholdingTaxRate = c.DefaultWithholdingTaxRate,
+            PurchaseDocumentsFrom = c.PurchaseDocumentsFrom,
             StockGuardHardBlock = c.StockGuardHardBlock,
             InventoryFlowVersion = c.InventoryFlowVersion,
             StartingPurchaseBillNumber = c.StartingPurchaseBillNumber,
@@ -283,6 +284,7 @@ namespace MyApp.Api.Services.Implementations
             // sales-side starting numbers).
             company.InventoryTrackingEnabled = dto.InventoryTrackingEnabled;
             company.DefaultWithholdingTaxRate = dto.DefaultWithholdingTaxRate;
+            company.PurchaseDocumentsFrom = dto.PurchaseDocumentsFrom?.Date;
             company.StockGuardHardBlock = dto.StockGuardHardBlock;
             var hasPurchaseBills = await _context.PurchaseBills.AnyAsync(p => p.CompanyId == id);
             if (!hasPurchaseBills)

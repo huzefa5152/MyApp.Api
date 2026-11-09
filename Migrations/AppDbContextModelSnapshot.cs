@@ -944,6 +944,9 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("Phone")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("PurchaseDocumentsFrom")
+                        .HasColumnType("datetime2");
+
                     b.Property<bool>("RequireSalesOrderForBilling")
                         .HasColumnType("bit");
 
