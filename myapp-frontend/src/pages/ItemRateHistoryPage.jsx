@@ -289,7 +289,7 @@ export default function ItemRateHistoryPage() {
                             {r.itemTypeName && (
                               <div
                                 className="k-muted"
-                                style={{ fontSize: "0.72rem", marginTop: 2 }}
+                                style={{ fontSize: "var(--k-fs-2xs)", marginTop: 2 }}
                               >
                                 {r.itemTypeName}
                               </div>
@@ -298,7 +298,7 @@ export default function ItemRateHistoryPage() {
                           <td className="k-num" style={styles.top}>
                             {r.quantity}
                             {r.uom ? (
-                              <span className="k-muted" style={{ fontSize: "0.75rem" }}>
+                              <span className="k-muted" style={{ fontSize: "var(--k-fs-xs)" }}>
                                 {" "}
                                 {r.uom}
                               </span>

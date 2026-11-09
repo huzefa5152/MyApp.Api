@@ -17,7 +17,7 @@ const colors = {
   warnBg: "var(--k-warn-bg-2)",
   warnFg: "#bf360c",
   skipBg: "var(--k-slate-bg)",
-  skipFg: "#546e7a",
+  skipFg: "var(--k-slate-ink, #546e7a)",
 };
 
 /**
@@ -128,7 +128,7 @@ export default function BulkFbrResultsDialog({ open, action, items, onClose }) {
               {sortedItems.map((it, idx) => (
                 <tr
                   key={(it.invoiceId ?? idx) + "-" + idx}
-                  style={{ backgroundColor: idx % 2 === 0 ? "#fff" : "#fafbfd" }}
+                  style={{ backgroundColor: idx % 2 === 0 ? "var(--k-surface)" : "#fafbfd" }}
                 >
                   <td
                     style={{
@@ -148,7 +148,7 @@ export default function BulkFbrResultsDialog({ open, action, items, onClose }) {
                       <span
                         style={{
                           fontFamily: "monospace",
-                          fontSize: "0.78rem",
+                          fontSize: "var(--k-fs-xs)",
                           color: "var(--k-muted)",
                           wordBreak: "break-all",
                         }}
@@ -158,14 +158,14 @@ export default function BulkFbrResultsDialog({ open, action, items, onClose }) {
                     ) : it.message ? (
                       <span
                         style={{
-                          fontSize: "0.82rem",
+                          fontSize: "var(--k-fs-sm)",
                           color: it.status === "failed" ? colors.failFg : "var(--k-ink)",
                         }}
                       >
                         {it.message}
                       </span>
                     ) : (
-                      <span style={{ color: "var(--k-muted)", fontSize: "0.82rem" }}>—</span>
+                      <span style={{ color: "var(--k-muted)", fontSize: "var(--k-fs-sm)" }}>—</span>
                     )}
                   </td>
                 </tr>
@@ -196,10 +196,10 @@ function Pill({ color, bg, icon, children }) {
         alignItems: "center",
         gap: "0.3rem",
         padding: "0.25rem 0.65rem",
-        borderRadius: 999,
+        borderRadius: "var(--k-r-pill)",
         backgroundColor: bg,
         color,
-        fontSize: "0.78rem",
+        fontSize: "var(--k-fs-xs)",
         fontWeight: 700,
       }}
     >
@@ -244,10 +244,10 @@ function StatusBadge({ status }) {
         alignItems: "center",
         gap: "0.3rem",
         padding: "0.2rem 0.55rem",
-        borderRadius: 6,
+        borderRadius: "var(--k-r-sm)",
         backgroundColor: cfg.bg,
         color: cfg.fg,
-        fontSize: "0.74rem",
+        fontSize: "var(--k-fs-xs)",
         fontWeight: 700,
         textTransform: "uppercase",
         letterSpacing: "0.04em",
@@ -286,7 +286,7 @@ const styles = {
     letterSpacing: "0.04em",
   },
   summaryValue: {
-    fontSize: "calc(var(--k-font) + 0.1rem)",
+    fontSize: "var(--k-fs-md)",
     fontWeight: 800,
     color: "var(--k-ink)",
   },

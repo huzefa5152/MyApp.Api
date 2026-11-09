@@ -404,7 +404,7 @@ export default function PurchaseDebitNotesPage() {
                   <span
                     style={{
                       ...styles.vVal,
-                      fontSize: "1.15rem",
+                      fontSize: "var(--k-fs-lg)",
                       fontWeight: 700,
                       color: "var(--k-blue)",
                     }}
@@ -449,16 +449,16 @@ const styles = {
   divTag: {
     marginLeft: 6,
     padding: "0.1rem 0.4rem",
-    borderRadius: 4,
+    borderRadius: "var(--k-r-xs)",
     background: "var(--k-surface-3)",
     color: "var(--k-blue)",
-    fontSize: "0.68rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
   },
   cardList: { display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: 8 },
   card: { ...cardStyles.card, padding: "0.85rem 0.95rem" },
-  cardNum: { fontWeight: 700, fontSize: "0.95rem", color: "var(--k-blue)" },
-  cardDate: { fontSize: "0.78rem", color: "var(--k-muted)" },
+  cardNum: { fontWeight: 700, fontSize: "var(--k-fs-md)", color: "var(--k-blue)" },
+  cardDate: { fontSize: "var(--k-fs-xs)", color: "var(--k-muted)" },
   cardActions: {
     display: "flex",
     flexWrap: "wrap",
@@ -478,6 +478,11 @@ const styles = {
   totalCardLabel: { fontWeight: 700, color: "var(--k-muted)" },
   totalCardValue: { fontWeight: 800, color: "var(--k-blue)" },
   vRow: { display: "flex", justifyContent: "space-between", padding: "0.3rem 0", gap: 12 },
-  vLbl: { color: "var(--k-muted)", fontSize: "0.85rem" },
-  vVal: { color: "var(--k-ink)", fontSize: "0.9rem", fontWeight: 500, textAlign: "right" },
+  vLbl: { color: "var(--k-muted)", fontSize: "var(--k-fs-base)" },
+  vVal: {
+    color: "var(--k-ink)",
+    fontSize: "var(--k-fs-base)",
+    fontWeight: 500,
+    textAlign: "right",
+  },
 };

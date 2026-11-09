@@ -87,7 +87,7 @@
 }
 .rw-crumb {
   display: block;
-  font-size: 10.5px;
+  font-size: var(--k-fs-2xs);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -96,7 +96,7 @@
 }
 .rw-title {
   margin: 0 0 1px;
-  font-size: 17px;
+  font-size: var(--k-fs-lg);
   font-weight: 800;
   color: var(--k-ink);
   line-height: 1.2;
@@ -215,8 +215,8 @@
 .rw-colpick__count {
   min-width: 1.6em;
   padding: 0 6px;
-  border-radius: 999px;
-  font-size: 11px;
+  border-radius: var(--k-r-pill);
+  font-size: var(--k-fs-2xs);
   font-weight: 700;
   background: var(--k-surface-3);
   color: var(--k-blue);
@@ -306,7 +306,7 @@
   width: 18px;
   height: 18px;
   flex-shrink: 0;
-  border-radius: 5px;
+  border-radius: var(--k-r-xs);
   border: 1.5px solid var(--k-faint);
   background: var(--k-surface);
   color: #fff;
@@ -384,7 +384,7 @@
   align-self: flex-start;
   padding: 4px 11px;
   margin-bottom: 8px;
-  border-radius: 999px;
+  border-radius: var(--k-r-pill);
   font-size: var(--k-font-sm);
   font-weight: 700;
 }
@@ -427,7 +427,7 @@
   color: var(--k-muted);
 }
 .rw-kpi__value {
-  font-size: 16px;
+  font-size: var(--k-fs-md);
   font-weight: 800;
   color: var(--k-ink);
   font-variant-numeric: tabular-nums;
@@ -447,7 +447,7 @@
   color: var(--k-danger);
 }
 .rw-kpi__sub {
-  font-size: 11px;
+  font-size: var(--k-fs-2xs);
   color: var(--k-muted);
 }
 
@@ -472,7 +472,7 @@
   margin-bottom: 2px;
 }
 .rw-statement__name {
-  font-size: 14px;
+  font-size: var(--k-fs-base);
   font-weight: 800;
   color: var(--k-ink);
   line-height: 1.3;
@@ -492,7 +492,7 @@
   background: var(--k-surface-2);
 }
 .rw-statement__amount {
-  font-size: 20px;
+  font-size: var(--k-fs-xl);
   font-weight: 800;
   color: var(--k-blue);
   font-variant-numeric: tabular-nums;
@@ -645,8 +645,8 @@
 .rw-status {
   display: inline-block;
   padding: 1px 8px;
-  border-radius: 999px;
-  font-size: 11px;
+  border-radius: var(--k-r-pill);
+  font-size: var(--k-fs-2xs);
   font-weight: 700;
   white-space: nowrap;
   background: var(--k-surface-2);
@@ -696,7 +696,7 @@
 }
 .rw-stmt tr.rw-stmt--total td {
   font-weight: 800;
-  font-size: 14px;
+  font-size: var(--k-fs-base);
   border-top: 2px solid var(--k-blue);
   background: var(--k-th-bg);
 }
@@ -709,12 +709,12 @@
 }
 .rw-stmt-code {
   font-family: ui-monospace, Consolas, monospace;
-  font-size: 11px;
+  font-size: var(--k-fs-2xs);
   color: var(--k-muted);
 }
 .rw-stmt-pct {
   margin-left: 6px;
-  font-size: 11px;
+  font-size: var(--k-fs-2xs);
   opacity: 0.85;
 }
 
@@ -737,7 +737,7 @@
   gap: 8px;
 }
 .rw-card__lead {
-  font-size: calc(var(--k-font) + 0.05rem);
+  font-size: var(--k-fs-md);
   font-weight: 700;
   color: var(--k-ink);
   line-height: 1.3;
@@ -758,7 +758,7 @@
   background: var(--k-surface-2);
 }
 .rw-card__amount strong {
-  font-size: 16px;
+  font-size: var(--k-fs-md);
   font-weight: 800;
   color: var(--k-blue);
   font-variant-numeric: tabular-nums;
@@ -817,7 +817,7 @@
   color: var(--k-ink);
 }
 .rw-panel__head strong {
-  font-size: 14px;
+  font-size: var(--k-fs-base);
   font-weight: 800;
   color: var(--k-blue);
   font-variant-numeric: tabular-nums;
@@ -835,7 +835,7 @@
   min-width: 0;
 }
 .rw-bucket strong {
-  font-size: 15px;
+  font-size: var(--k-fs-md);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -954,7 +954,7 @@
     gap: 8px;
   }
   .rw-title {
-    font-size: 16px;
+    font-size: var(--k-fs-md);
   }
   .rw-head__actions {
     margin-left: 0;
@@ -984,7 +984,7 @@
     padding: 7px 10px;
   }
   .rw-kpi__value {
-    font-size: 15px;
+    font-size: var(--k-fs-md);
   }
   .rw-btn__label--wide {
     display: none;
@@ -1016,7 +1016,7 @@
 /* Invoice Sales Detail: its own register, tightened to the shared rhythm. */
 .rw h2.rw-period {
   margin: 0 2px 4px !important;
-  font-size: 14px !important;
+  font-size: var(--k-fs-base) !important;
   font-weight: 700 !important;
   color: var(--k-ink);
 }

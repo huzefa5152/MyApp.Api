@@ -224,7 +224,10 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
         <form onSubmit={handleSubmit}>
           <div data-admin-body="" style={formStyles.body}>
             {challan.invoiceId && (
-              <p role="status" style={{ background: "#eff6ff", padding: 12, borderRadius: 8 }}>
+              <p
+                role="status"
+                style={{ background: "#eff6ff", padding: 12, borderRadius: "var(--k-radius)" }}
+              >
                 Saving changes updates bill #{challan.invoiceNumber || challan.invoiceId}, its
                 totals and linked order delivery figures. Consultant review will be required before
                 FBR validation. New items start without a rate: open the bill to price them. To
@@ -521,13 +524,13 @@ const styles = {
   },
   lockedHint: {
     fontWeight: 400,
-    fontSize: "0.72rem",
+    fontSize: "var(--k-fs-2xs)",
     color: "var(--k-purple)",
     marginLeft: 4,
   },
   labelHint: {
     fontWeight: 400,
-    fontSize: "0.72rem",
+    fontSize: "var(--k-fs-2xs)",
     color: "var(--k-muted)",
     marginLeft: 4,
   },

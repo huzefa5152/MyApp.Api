@@ -24,7 +24,7 @@ const MODES = {
     blurb: "The bill under-states the quantity (e.g. billed 1, delivered 6.5). Bill the balance.",
     doc: "Supplementary bill",
     tint: "#0e7c6b",
-    soft: "#d6eee8",
+    soft: "var(--k-teal-bg-2, #d6eee8)",
   },
   credit: {
     key: "credit",
@@ -342,7 +342,7 @@ export default function CorrectionWizard({ invoice, onClose, onCreated }) {
                       ["Bill", `#${invoice?.invoiceNumber}`],
                       invoice?.fbrInvoiceNumber && [
                         "FBR IRN",
-                        <span style={{ fontFamily: "monospace", fontSize: "0.82rem" }}>
+                        <span style={{ fontFamily: "monospace", fontSize: "var(--k-fs-sm)" }}>
                           {invoice.fbrInvoiceNumber}
                         </span>,
                       ],
@@ -356,7 +356,7 @@ export default function CorrectionWizard({ invoice, onClose, onCreated }) {
                             <span
                               style={{
                                 display: "block",
-                                fontSize: "0.76rem",
+                                fontSize: "var(--k-fs-xs)",
                                 fontWeight: 700,
                                 color: hoursSinceFiling <= 72 ? "#0e7c6b" : "#b3261e",
                               }}
@@ -578,7 +578,7 @@ const s = {
   // Sits on the themed modal header (gradient in Classic, light in Workspace),
   // so it follows the header's title colour at reduced emphasis.
   eyebrow: {
-    fontSize: 11,
+    fontSize: "var(--k-fs-2xs)",
     letterSpacing: ".12em",
     textTransform: "uppercase",
     color: "var(--ui-modal-title-color, #ffffff)",
@@ -619,7 +619,7 @@ const s = {
   optTitle: {
     display: "block",
     fontWeight: 700,
-    fontSize: "calc(var(--k-font) + 0.05rem)",
+    fontSize: "var(--k-fs-md)",
     color: "var(--k-ink)",
   },
   optBlurb: {
@@ -628,7 +628,13 @@ const s = {
     color: "var(--k-muted)",
     marginTop: 3,
   },
-  chip: { flex: "0 0 auto", fontSize: 12, fontWeight: 700, padding: "5px 11px", borderRadius: 99 },
+  chip: {
+    flex: "0 0 auto",
+    fontSize: "var(--k-fs-xs)",
+    fontWeight: 700,
+    padding: "5px 11px",
+    borderRadius: "var(--k-r-pill)",
+  },
   qty: { width: 96, textAlign: "right", fontVariantNumeric: "tabular-nums" },
   footRow: {
     display: "flex",

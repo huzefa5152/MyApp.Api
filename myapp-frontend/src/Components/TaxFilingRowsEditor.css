@@ -13,7 +13,7 @@
 @media (pointer: coarse) {
   /* Below 16px iOS zooms the page when the field takes focus. */
   #tax-filing-dialog input[type="number"] {
-    font-size: 16px !important;
+    font-size: var(--k-fs-md) !important;
   }
 }
 #tax-filing-dialog .tf-field-error {
@@ -28,7 +28,7 @@
   min-height: var(--k-btn-h);
   padding: 0 14px;
   border: 1px solid var(--k-line-strong);
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   background: var(--k-surface);
   color: #174579;
   cursor: pointer;
@@ -61,7 +61,7 @@
   min-width: 0;
 }
 .tf-header h2 {
-  font-size: 20px;
+  font-size: var(--k-fs-xl);
   margin: 0 0 8px;
 }
 .tf-header p {
@@ -69,7 +69,7 @@
   max-width: 760px;
   color: rgba(255, 255, 255, 0.92);
   line-height: 1.5;
-  font-size: 0.875rem;
+  font-size: var(--k-fs-base);
   margin-top: 8px;
 }
 .tf-body {
@@ -88,16 +88,16 @@
   padding: 14px;
   background: linear-gradient(135deg, rgba(13, 71, 161, 0.06), rgba(0, 137, 123, 0.07));
   border: 1px solid var(--k-line);
-  border-radius: 12px;
+  border-radius: var(--k-card-radius);
 }
 .tf-summary > div {
-  font-size: 0.875rem;
+  font-size: var(--k-fs-base);
   font-weight: 600;
 }
 .tf-summary strong {
   font-variant-numeric: tabular-nums;
   display: block;
-  font-size: 20px;
+  font-size: var(--k-fs-xl);
   margin-top: 6px;
   overflow-wrap: anywhere;
 }
@@ -111,7 +111,7 @@
   padding: 12px;
   background: var(--k-surface-2);
   border: 1px solid var(--k-line);
-  border-radius: 10px;
+  border-radius: var(--k-radius);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -121,12 +121,12 @@
 .tf-toolbar span,
 .tf-footer span {
   color: var(--k-muted);
-  font-size: 14px;
+  font-size: var(--k-fs-base);
 }
 .tf-row {
   border: 1px solid var(--k-line);
   box-shadow: 0 1px 3px rgba(16, 32, 64, 0.04);
-  border-radius: 12px;
+  border-radius: var(--k-card-radius);
   padding: 16px;
   margin-bottom: 14px;
   background: var(--k-surface);
@@ -153,7 +153,7 @@
 }
 .tf-select span {
   color: var(--k-muted);
-  font-size: 14px;
+  font-size: var(--k-fs-base);
 }
 .tf-source-preview {
   margin: 0 0 14px;
@@ -162,7 +162,7 @@
 .tf-source-preview span {
   display: block;
   margin-top: 4px;
-  font-size: 14px;
+  font-size: var(--k-fs-base);
   color: var(--k-muted);
 }
 .tf-grouping-help {
@@ -176,7 +176,7 @@
 }
 .tf-fields label {
   display: block;
-  font-size: 0.85rem;
+  font-size: var(--k-fs-base);
   font-weight: 600;
   color: var(--k-muted);
   margin-bottom: 6px;
@@ -190,8 +190,8 @@
   min-height: var(--k-h);
   padding: 0 var(--k-input-pad-x);
   border: 1px solid var(--k-line-strong);
-  border-radius: 8px;
-  font-size: 16px;
+  border-radius: var(--k-radius);
+  font-size: var(--k-fs-md);
   color: var(--k-ink);
   background: var(--k-surface-2);
 }
@@ -205,15 +205,15 @@
   min-height: var(--k-h);
   padding: 0 var(--k-input-pad-x);
   border: 1px solid var(--k-line-strong);
-  border-radius: 8px;
-  font-size: 16px;
+  border-radius: var(--k-radius);
+  font-size: var(--k-fs-md);
   background: var(--k-surface-2);
   color: var(--k-ink);
 }
 .tf-fields small {
   display: block;
   color: var(--k-muted);
-  font-size: 13px;
+  font-size: var(--k-fs-sm);
   line-height: 1.5;
   font-weight: 400;
   margin-top: 6px;
@@ -244,7 +244,7 @@
 .tf-error,
 .tf-warning {
   padding: 14px;
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   margin-bottom: 14px;
   line-height: 1.5;
   white-space: pre-line;
@@ -294,7 +294,7 @@
   gap: 8px 14px;
   padding-bottom: 16px;
   color: var(--k-muted);
-  font-size: 0.875rem;
+  font-size: var(--k-fs-base);
 }
 .tf-document-context strong {
   color: var(--k-ink);
@@ -308,8 +308,8 @@
   padding: 16px;
   background: var(--k-info-bg);
   border: 1px solid var(--k-focus);
-  border-radius: 10px;
-  font-size: 0.875rem;
+  border-radius: var(--k-radius);
+  font-size: var(--k-fs-base);
   overflow-wrap: anywhere;
 }
 .invoice-document-context > strong {
@@ -317,7 +317,7 @@
   color: var(--k-blue);
 }
 .invoice-document h3 {
-  font-size: 1rem;
+  font-size: var(--k-fs-md);
   margin: 24px 0 12px;
 }
 .invoice-document-line {
@@ -329,7 +329,7 @@
   gap: 12px;
   padding: 14px;
   border-bottom: 1px solid var(--k-line);
-  font-size: 0.85rem;
+  font-size: var(--k-fs-base);
 }
 .invoice-document-line > * {
   min-width: 0;
@@ -348,7 +348,7 @@
   max-width: 380px;
   padding: 16px;
   border: 1px solid var(--k-line);
-  border-radius: 10px;
+  border-radius: var(--k-radius);
   background: var(--k-surface-2);
 }
 .invoice-document-totals > div {
@@ -361,7 +361,7 @@
 .invoice-document-totals > div:last-child {
   border-top: 1px solid var(--k-line-strong);
   color: var(--k-blue);
-  font-size: 1.1rem;
+  font-size: var(--k-fs-lg);
 }
 @media (max-width: 759px) {
   .invoice-document-line.invoice-document-head {
@@ -371,7 +371,7 @@
     display: block;
     margin-bottom: 12px;
     border: 1px solid var(--k-line);
-    border-radius: 10px;
+    border-radius: var(--k-radius);
   }
   .invoice-document-line > * {
     display: flex;
@@ -392,20 +392,20 @@
   padding: 14px;
   margin-bottom: 16px;
   border: 1px dashed #9fb6d1;
-  border-radius: 12px;
+  border-radius: var(--k-card-radius);
   background: #f4f8fd;
   display: grid;
   gap: 10px;
 }
 .tf-bulk h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--k-fs-md);
   color: #174579;
 }
 .tf-bulk p {
   margin: 0;
   color: var(--k-muted);
-  font-size: 0.9rem;
+  font-size: var(--k-fs-base);
 }
 .tf-bulk button {
   justify-self: start;
@@ -417,12 +417,12 @@
 .tf-bill-line span {
   display: block;
   margin-top: 4px;
-  font-size: 14px;
+  font-size: var(--k-fs-base);
   color: var(--k-muted);
 }
 .tf-bulk label {
   display: block;
-  font-size: 0.85rem;
+  font-size: var(--k-fs-base);
   font-weight: 600;
   color: var(--k-muted);
   margin-bottom: 6px;
@@ -434,15 +434,15 @@
   min-height: var(--k-h);
   padding: 0 var(--k-input-pad-x);
   border: 1px solid var(--k-line-strong);
-  border-radius: 8px;
-  font-size: 16px;
+  border-radius: var(--k-radius);
+  font-size: var(--k-fs-md);
   color: var(--k-ink);
   background: var(--k-surface);
 }
 .tf-bulk small {
   display: block;
   color: var(--k-muted);
-  font-size: 13px;
+  font-size: var(--k-fs-sm);
   line-height: 1.5;
   margin-top: 6px;
   overflow-wrap: anywhere;
@@ -505,7 +505,7 @@
   background: #174579;
   color: #fff;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   font-weight: 600;
   padding: 0 16px;
 }

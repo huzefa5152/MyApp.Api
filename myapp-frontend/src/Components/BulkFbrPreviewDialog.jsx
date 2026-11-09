@@ -356,7 +356,9 @@ function PayloadPanel({ payload, itemCount, originalLineCount, fmtNum, fmtQty })
       <div style={s.itemsHeader}>
         Items in FBR payload ({itemCount})
         {originalLineCount !== itemCount && (
-          <span style={{ color: "var(--k-success)", marginLeft: "0.4rem", fontSize: "0.78rem" }}>
+          <span
+            style={{ color: "var(--k-success)", marginLeft: "0.4rem", fontSize: "var(--k-fs-xs)" }}
+          >
             (grouped from {originalLineCount} bill line{originalLineCount === 1 ? "" : "s"})
           </span>
         )}
@@ -529,8 +531,8 @@ const s = {
     alignItems: "center",
     gap: "0.25rem",
     padding: "0.15rem 0.5rem",
-    borderRadius: 999,
-    fontSize: "0.72rem",
+    borderRadius: "var(--k-r-pill)",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
     whiteSpace: "nowrap",
   },
@@ -560,7 +562,7 @@ const s = {
     background: "var(--k-surface-2)",
   },
   partyLabel: {
-    fontSize: "0.7rem",
+    fontSize: "var(--k-fs-2xs)",
     textTransform: "uppercase",
     letterSpacing: "0.04em",
     color: "var(--k-muted)",
@@ -584,7 +586,7 @@ const s = {
   // minWidth keeps the 8 columns legible; TableWrap scrolls on phones.
   table: { minWidth: "680px" },
   idxCol: { width: 34 },
-  metaSub: { fontSize: "0.72rem", color: "var(--k-muted)", marginTop: 2 },
+  metaSub: { fontSize: "var(--k-fs-2xs)", color: "var(--k-muted)", marginTop: 2 },
   muted: { color: "var(--k-faint)" },
   rawJson: {
     margin: "0.5rem 0 0",
@@ -592,8 +594,8 @@ const s = {
     background: "#0a1628",
     color: "var(--k-success-bg)",
     border: "1px solid #1a2332",
-    borderRadius: 6,
-    fontSize: "0.75rem",
+    borderRadius: "var(--k-r-sm)",
+    fontSize: "var(--k-fs-xs)",
     lineHeight: 1.4,
     maxHeight: 280,
     overflow: "auto",

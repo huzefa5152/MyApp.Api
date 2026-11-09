@@ -121,7 +121,7 @@
 @media (max-width: 599.98px) {
   .dash-hero {
     padding: 0.85rem 0.95rem !important;
-    border-radius: 14px !important;
+    border-radius: var(--k-card-radius) !important;
     gap: 0.6rem !important;
     flex-direction: column !important;
     align-items: stretch !important;
@@ -131,11 +131,11 @@
     width: 100%;
   }
   .dash-hero__heading {
-    font-size: 1.1rem !important;
+    font-size: var(--k-fs-lg) !important;
     white-space: normal;
   }
   .dash-hero__subtitle {
-    font-size: 0.78rem !important;
+    font-size: var(--k-fs-xs) !important;
     white-space: normal;
   }
   .dash-hero__pickers {
@@ -149,7 +149,7 @@
     max-width: none !important;
     min-width: 0 !important;
     padding: 0.55rem 0.7rem !important;
-    font-size: 0.82rem !important;
+    font-size: var(--k-fs-sm) !important;
     width: 100%;
   }
 }
@@ -177,20 +177,20 @@
     gap: 0.35rem !important;
   }
   .dash-kpi-card__label {
-    font-size: 0.66rem !important;
+    font-size: var(--k-fs-2xs) !important;
     gap: 0.4rem !important;
   }
   .dash-kpi-card__icon {
     width: 20px !important;
     height: 20px !important;
-    border-radius: 6px !important;
+    border-radius: var(--k-r-sm) !important;
   }
   .dash-kpi-card__value {
-    font-size: 1.05rem !important;
+    font-size: var(--k-fs-md) !important;
     word-break: break-all;
   }
   .dash-kpi-card__delta {
-    font-size: 0.7rem !important;
+    font-size: var(--k-fs-2xs) !important;
   }
   .dash-kpi-card__delta-suffix {
     display: none;
@@ -215,12 +215,12 @@
     gap: 0.5rem !important;
   }
   .dash-section-card__header h2 {
-    font-size: 0.88rem !important;
+    font-size: var(--k-fs-base) !important;
   }
   .dash-section-card__header-icon {
     width: 26px !important;
     height: 26px !important;
-    border-radius: 8px !important;
+    border-radius: var(--k-radius) !important;
   }
   .dash-section-card__body {
     padding: 0.7rem 0.85rem !important;
@@ -228,7 +228,7 @@
   }
   .dash-section-card__open {
     padding: 0.2rem 0.45rem !important;
-    font-size: 0.7rem !important;
+    font-size: var(--k-fs-2xs) !important;
   }
   .dash-section-card__open-label {
     display: none;
@@ -245,10 +245,10 @@
     min-width: 0 !important;
   }
   .dash-stat-label {
-    font-size: 0.62rem !important;
+    font-size: var(--k-fs-2xs) !important;
   }
   .dash-stat-value {
-    font-size: 0.82rem !important;
+    font-size: var(--k-fs-sm) !important;
     overflow-wrap: anywhere;
     word-break: break-word;
   }
@@ -265,7 +265,7 @@
     gap: 0.15rem 0.4rem !important;
     padding: 0.4rem 0.5rem !important;
     background: var(--k-surface-2);
-    border-radius: 8px;
+    border-radius: var(--k-radius);
   }
   .dash-recent-row__number {
     grid-row: 1;
@@ -278,7 +278,7 @@
   .dash-recent-row__date {
     grid-row: 2;
     grid-column: 1 / span 2;
-    font-size: 0.7rem !important;
+    font-size: var(--k-fs-2xs) !important;
   }
   .dash-recent-row__amount {
     grid-row: 2;
@@ -293,14 +293,14 @@
     flex-wrap: wrap;
     padding: 0.35rem 0.4rem;
     background: var(--k-surface-2);
-    border-radius: 8px;
+    border-radius: var(--k-radius);
   }
   .dash-mov-row__name {
     flex: 1 1 60% !important;
-    font-size: 0.82rem;
+    font-size: var(--k-fs-sm);
   }
   .dash-mov-row__qty {
-    font-size: 0.85rem;
+    font-size: var(--k-fs-base);
   }
 }
 
@@ -314,7 +314,7 @@
     padding: 0.55rem 0.5rem !important;
   }
   .dash-funnel-card__value {
-    font-size: 1.1rem !important;
+    font-size: var(--k-fs-lg) !important;
   }
 }
 
@@ -336,13 +336,13 @@
     padding: 0.4rem 0.45rem !important;
   }
   .dash-cp-row__name {
-    font-size: 0.78rem !important;
+    font-size: var(--k-fs-xs) !important;
   }
   .dash-cp-row__pct {
     width: 38px !important;
-    font-size: 0.7rem !important;
+    font-size: var(--k-fs-2xs) !important;
   }
   .dash-cp-row__value {
-    font-size: 0.78rem !important;
+    font-size: var(--k-fs-xs) !important;
   }
 }

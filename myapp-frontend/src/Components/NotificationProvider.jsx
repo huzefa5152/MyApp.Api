@@ -59,11 +59,11 @@ export default function NotificationProvider({ children }) {
             maxWidth: "min(480px, calc(100vw - 40px))",
             // Size tokens: Classic = these fallbacks; Workspace = ui/shared-components.css.
             padding: "var(--sc-toast-pad, 12px 16px)",
-            borderRadius: 8,
+            borderRadius: "var(--k-radius)",
             border: `1px solid ${s.border}`,
             background: s.bg,
             color: s.text,
-            fontSize: "var(--sc-toast-font, 0.88rem)",
+            fontSize: "var(--sc-toast-font, var(--k-fs-base))",
             fontWeight: 500,
             boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
             display: "flex",
@@ -73,7 +73,9 @@ export default function NotificationProvider({ children }) {
             animation: "dlToastIn 320ms cubic-bezier(0.34, 1.4, 0.64, 1) both",
           }}
         >
-          <span style={{ fontWeight: 700, fontSize: "1.1rem", lineHeight: 1 }}>{s.icon}</span>
+          <span style={{ fontWeight: 700, fontSize: "var(--k-fs-lg)", lineHeight: 1 }}>
+            {s.icon}
+          </span>
           <span style={{ flex: 1 }}>{toast.message}</span>
           <button
             data-admin-close=""
@@ -82,7 +84,7 @@ export default function NotificationProvider({ children }) {
               background: "none",
               border: "none",
               color: s.text,
-              fontSize: "1.1rem",
+              fontSize: "var(--k-fs-lg)",
               cursor: "pointer",
               padding: "0 4px",
               lineHeight: 1,

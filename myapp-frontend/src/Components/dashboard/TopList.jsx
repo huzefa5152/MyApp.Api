@@ -79,7 +79,7 @@ export default function TopList({
                   style={{
                     fontFamily: '"IBM Plex Mono", ui-monospace, monospace',
                     color: "var(--k-faint)",
-                    fontSize: "0.72rem",
+                    fontSize: "var(--k-fs-2xs)",
                     marginRight: "0.45rem",
                   }}
                 >
@@ -104,7 +104,7 @@ export default function TopList({
             <div
               style={{
                 height: 5,
-                borderRadius: 99,
+                borderRadius: "var(--k-r-pill)",
                 backgroundColor: "var(--k-surface-3)",
                 overflow: "hidden",
               }}
@@ -114,12 +114,14 @@ export default function TopList({
                   height: "100%",
                   width: `${widthPct}%`,
                   background: `linear-gradient(90deg, ${accent} 0%, color-mix(in srgb, ${accent} 60%, transparent) 100%)`,
-                  borderRadius: 99,
+                  borderRadius: "var(--k-r-pill)",
                 }}
               />
             </div>
             {secondary(it) && (
-              <span style={{ fontSize: "0.73rem", color: "var(--k-muted)" }}>{secondary(it)}</span>
+              <span style={{ fontSize: "var(--k-fs-xs)", color: "var(--k-muted)" }}>
+                {secondary(it)}
+              </span>
             )}
           </div>
         );

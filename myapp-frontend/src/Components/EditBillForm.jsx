@@ -1812,7 +1812,7 @@ function CommercialBillEditor({
                       alignItems: "flex-start",
                       padding: "0.8rem 1rem",
                       marginBottom: "0.85rem",
-                      borderRadius: 8,
+                      borderRadius: "var(--k-radius)",
                       background: "var(--k-warn-bg-3)",
                       border: "1px solid #ffcc80",
                       borderLeft: "4px solid #e65100",
@@ -1822,7 +1822,13 @@ function CommercialBillEditor({
                       size={20}
                       style={{ color: "var(--k-warn)", flexShrink: 0, marginTop: 2 }}
                     />
-                    <div style={{ fontSize: "0.85rem", color: "var(--k-ink)", lineHeight: 1.55 }}>
+                    <div
+                      style={{
+                        fontSize: "var(--k-fs-base)",
+                        color: "var(--k-ink)",
+                        lineHeight: 1.55,
+                      }}
+                    >
                       <strong style={{ color: "var(--k-warn)" }}>
                         Bill changed since this invoice was adjusted — re-adjustment needed.
                       </strong>
@@ -1973,7 +1979,7 @@ function CommercialBillEditor({
                           style={{
                             fontWeight: 400,
                             color: "var(--k-muted)",
-                            fontSize: "0.7rem",
+                            fontSize: "var(--k-fs-2xs)",
                           }}
                         >
                           filters items below
@@ -2005,7 +2011,7 @@ function CommercialBillEditor({
                       {chosenScenario && (
                         <div
                           style={{
-                            fontSize: "0.7rem",
+                            fontSize: "var(--k-fs-2xs)",
                             color: "var(--k-muted)",
                             marginTop: "0.25rem",
                           }}
@@ -2053,7 +2059,7 @@ function CommercialBillEditor({
                           style={{
                             fontWeight: 400,
                             color: "var(--k-muted)",
-                            fontSize: "0.7rem",
+                            fontSize: "var(--k-fs-2xs)",
                             marginLeft: "0.4rem",
                           }}
                         >
@@ -2163,13 +2169,25 @@ function CommercialBillEditor({
                 </div>
 
                 {!billsMode && originalLinesOnly && (
-                  <div style={{ fontSize: "0.82rem", color: "var(--k-muted)", marginBottom: 12 }}>
+                  <div
+                    style={{
+                      fontSize: "var(--k-fs-sm)",
+                      color: "var(--k-muted)",
+                      marginBottom: 12,
+                    }}
+                  >
                     The tax invoice prints your original bill lines, one row per line. Item types
                     and codes you set here are what is filed.
                   </div>
                 )}
                 {!billsMode && !originalLinesOnly && (
-                  <div style={{ fontSize: "0.82rem", color: "var(--k-muted)", marginBottom: 12 }}>
+                  <div
+                    style={{
+                      fontSize: "var(--k-fs-sm)",
+                      color: "var(--k-muted)",
+                      marginBottom: 12,
+                    }}
+                  >
                     Consultant groups use the item type’s tax unit. Bill and challan units stay
                     unchanged.
                     {invoice.groupTaxInvoiceByItemType
@@ -2498,7 +2516,7 @@ function CommercialBillEditor({
                             <div style={styles.mkv}>
                               <span style={styles.mlabel}>HS Code</span>
                               <span
-                                style={{ fontFamily: "monospace", fontSize: "0.82rem" }}
+                                style={{ fontFamily: "monospace", fontSize: "var(--k-fs-sm)" }}
                                 title="Comes from Item Type"
                               >
                                 {item.hsCode || <span style={styles.muted}>—</span>}
@@ -2507,7 +2525,10 @@ function CommercialBillEditor({
                           )}
                           <div style={styles.mkv}>
                             <span style={styles.mlabel}>Sale Type</span>
-                            <span style={{ fontSize: "0.75rem" }} title="Comes from Item Type">
+                            <span
+                              style={{ fontSize: "var(--k-fs-xs)" }}
+                              title="Comes from Item Type"
+                            >
                               {item.saleType || <span style={styles.muted}>—</span>}
                             </span>
                           </div>
@@ -2735,7 +2756,7 @@ function CommercialBillEditor({
                                     style={{
                                       ...styles.td,
                                       ...styles.readOnlyCell,
-                                      fontSize: "0.72rem",
+                                      fontSize: "var(--k-fs-2xs)",
                                     }}
                                     title="Comes from Item Type"
                                   >
@@ -2983,7 +3004,7 @@ function CommercialBillEditor({
                                   style={{
                                     ...styles.td,
                                     ...styles.readOnlyCell,
-                                    fontSize: "0.72rem",
+                                    fontSize: "var(--k-fs-2xs)",
                                   }}
                                   title="Comes from Item Type"
                                 >
@@ -3009,7 +3030,7 @@ function CommercialBillEditor({
                   >
                     <div
                       style={{
-                        fontSize: "0.78rem",
+                        fontSize: "var(--k-fs-xs)",
                         color: "var(--k-muted)",
                         marginBottom: "0.4rem",
                         fontWeight: 600,
@@ -3049,7 +3070,7 @@ function CommercialBillEditor({
                     <div
                       style={{
                         ...styles.totalsRow,
-                        fontSize: "0.74rem",
+                        fontSize: "var(--k-fs-xs)",
                         color: "var(--k-muted)",
                       }}
                     >
@@ -3081,7 +3102,7 @@ function CommercialBillEditor({
                       <span style={{ fontWeight: 700 }}>Difference:</span>
                       <strong
                         style={{
-                          fontSize: "1rem",
+                          fontSize: "var(--k-fs-md)",
                           color: totalsMatch ? "var(--k-success)" : "var(--k-danger-ink)",
                         }}
                       >
@@ -3159,7 +3180,7 @@ function CommercialBillEditor({
                     }}
                   >
                     <span style={{ fontWeight: 700 }}>Grand Total:</span>
-                    <strong style={{ fontSize: "1.1rem", color: "var(--k-blue)" }}>
+                    <strong style={{ fontSize: "var(--k-fs-lg)", color: "var(--k-blue)" }}>
                       Rs.{" "}
                       {(
                         grandTotal + (billsMode ? Number(freightCharges || 0) : 0)
@@ -3259,7 +3280,7 @@ function CommercialBillEditor({
                   >
                     <div
                       style={{
-                        fontSize: "0.78rem",
+                        fontSize: "var(--k-fs-xs)",
                         color: "var(--k-danger)",
                         marginBottom: "0.4rem",
                         fontWeight: 700,
@@ -3280,7 +3301,7 @@ function CommercialBillEditor({
                     ))}
                     <div
                       style={{
-                        fontSize: "0.74rem",
+                        fontSize: "var(--k-fs-xs)",
                         color: "var(--k-muted)",
                         marginTop: "0.35rem",
                       }}
@@ -3340,7 +3361,9 @@ function CommercialBillEditor({
                 <span
                   style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}
                 >
-                  <span style={{ fontSize: "0.78rem", color: "var(--k-warn)", fontWeight: 600 }}>
+                  <span
+                    style={{ fontSize: "var(--k-fs-xs)", color: "var(--k-warn)", fontWeight: 600 }}
+                  >
                     Remove FBR classification &amp; revert stock?
                   </span>
                   <button
@@ -3627,11 +3650,17 @@ function TaxClaimPanel({
             }}
           >
             <MdInventory2 size={16} color={"var(--k-teal)"} />
-            <strong style={{ fontSize: "0.88rem", color: "var(--k-ink)" }}>
+            <strong style={{ fontSize: "var(--k-fs-base)", color: "var(--k-ink)" }}>
               Tax Claim Snapshot
             </strong>
             {loading && (
-              <span style={{ fontSize: "0.72rem", color: "var(--k-muted)", fontStyle: "italic" }}>
+              <span
+                style={{
+                  fontSize: "var(--k-fs-2xs)",
+                  color: "var(--k-muted)",
+                  fontStyle: "italic",
+                }}
+              >
                 updating…
               </span>
             )}
@@ -3712,7 +3741,13 @@ function TaxClaimPanel({
                 <option value="all-time">All Time</option>
               </select>
             </div>
-            <div style={{ fontSize: "0.78rem", color: "var(--k-muted)", marginTop: "0.4rem" }}>
+            <div
+              style={{
+                fontSize: "var(--k-fs-xs)",
+                color: "var(--k-muted)",
+                marginTop: "var(--k-fs-2xs)",
+              }}
+            >
               Per-sale match at weighted-avg cost · §8A {cfg?.agingMonths ?? 6}-month aging · §8B{" "}
               {cfg?.section8BCapPercent ?? 90}% cap · IRIS reconciliation gate · informational only
               — operator can save freely.
@@ -3825,7 +3860,7 @@ function TaxClaimPanel({
                         display: "inline-flex",
                         alignItems: "center",
                         gap: "0.25rem",
-                        fontSize: "0.74rem",
+                        fontSize: "var(--k-fs-xs)",
                         fontWeight: 700,
                         color:
                           sc.kind === "good"
@@ -4381,7 +4416,7 @@ const styles = {
   mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
   mcard: {
     border: `1px solid var(--k-line)`,
-    borderRadius: 12,
+    borderRadius: "var(--k-card-radius)",
     padding: "0.7rem 0.75rem",
     background: "var(--k-surface)",
   },
@@ -4390,17 +4425,17 @@ const styles = {
     flex: "0 0 auto",
     width: 24,
     height: 24,
-    borderRadius: 7,
+    borderRadius: "var(--k-r-sm)",
     background: "#f0f3f8",
     color: "var(--k-muted)",
     display: "grid",
     placeItems: "center",
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 700,
   },
   mlabel: {
     display: "block",
-    fontSize: "0.68rem",
+    fontSize: "var(--k-fs-2xs)",
     textTransform: "uppercase",
     letterSpacing: "0.03em",
     color: "var(--k-muted)",
@@ -4426,24 +4461,24 @@ const styles = {
     marginTop: "0.55rem",
     paddingTop: "0.45rem",
     borderTop: `1px dashed var(--k-line)`,
-    fontSize: "0.85rem",
+    fontSize: "var(--k-fs-base)",
     color: "var(--k-muted)",
   },
   errorAlert: {
     padding: "0.7rem 1rem",
     backgroundColor: "var(--k-danger-bg)",
     color: "var(--k-danger)",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     marginBottom: "1rem",
-    fontSize: "0.85rem",
+    fontSize: "var(--k-fs-base)",
   },
   warnNote: {
     padding: "0.7rem 1rem",
     backgroundColor: colors.warnBg,
     color: colors.warn,
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     marginTop: "1rem",
-    fontSize: "0.82rem",
+    fontSize: "var(--k-fs-sm)",
     border: `1px solid ${colors.warnBorder}`,
   },
   infoBox: {
@@ -4453,15 +4488,15 @@ const styles = {
     padding: "0.65rem 0.85rem",
     backgroundColor: colors.infoBg,
     color: "var(--k-ink)",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     marginBottom: "1rem",
-    fontSize: "0.82rem",
+    fontSize: "var(--k-fs-sm)",
     border: `1px solid ${colors.infoBorder}`,
   },
   row: { display: "flex", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap" },
   label: {
     display: "block",
-    fontSize: "var(--ui-label-size, 0.82rem)",
+    fontSize: "var(--ui-label-size, var(--k-fs-sm))",
     fontWeight: 600,
     color: "var(--k-ink)",
     marginBottom: "var(--ui-label-gap, 0.3rem)",
@@ -4471,13 +4506,13 @@ const styles = {
     padding: "var(--ui-input-pad, 0.55rem 0.75rem)",
     minHeight: "var(--ui-control-h, 0px)",
     border: `1px solid var(--k-line-strong)`,
-    borderRadius: 6,
-    fontSize: "var(--ui-input-size, 0.85rem)",
+    borderRadius: "var(--k-r-sm)",
+    fontSize: "var(--ui-input-size, var(--k-fs-base))",
     backgroundColor: `var(--ui-input-bg, var(--k-input-bg))`,
   },
   sectionHeading: {
     margin: "1rem 0 0.5rem",
-    fontSize: "0.95rem",
+    fontSize: "var(--k-fs-md)",
     fontWeight: 700,
     color: "var(--k-ink)",
   },
@@ -4498,10 +4533,10 @@ const styles = {
     gap: "0.3rem",
     padding: "0.35rem 0.7rem",
     border: `1px solid var(--k-blue)`,
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     backgroundColor: "var(--k-surface)",
     color: "var(--k-blue)",
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 600,
     cursor: "pointer",
     fontFamily: "inherit",
@@ -4510,7 +4545,7 @@ const styles = {
   // ── Tax Claim Panel styles ────────────────────────────────────────
   taxPanelCard: {
     border: `1px solid var(--k-line)`,
-    borderRadius: 12,
+    borderRadius: "var(--k-card-radius)",
     background: "#fbfdff",
     padding: "0.85rem 1rem",
     margin: "0.5rem 0 1rem",
@@ -4531,11 +4566,11 @@ const styles = {
     padding: "0.5rem 0.75rem",
     background: "var(--k-surface)",
     border: `1px solid var(--k-line)`,
-    borderRadius: 10,
+    borderRadius: "var(--k-radius)",
     marginBottom: "0.85rem",
   },
   taxPanelHeadlineLabel: {
-    fontSize: "0.7rem",
+    fontSize: "var(--k-fs-2xs)",
     color: "var(--k-muted)",
     textTransform: "uppercase",
     letterSpacing: "0.04em",
@@ -4544,7 +4579,7 @@ const styles = {
   },
   taxPanelHeadlineValue: {
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-    fontSize: "1rem",
+    fontSize: "var(--k-fs-md)",
     fontWeight: 800,
     color: "var(--k-ink)",
   },
@@ -4556,7 +4591,7 @@ const styles = {
   taxRowCard: {
     border: "1px solid",
     borderLeftWidth: 3,
-    borderRadius: 10,
+    borderRadius: "var(--k-radius)",
     padding: "0.6rem 0.75rem",
     background: "var(--k-surface)",
     display: "flex",
@@ -4576,13 +4611,13 @@ const styles = {
   },
   taxRowHs: {
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-    fontSize: "0.85rem",
+    fontSize: "var(--k-fs-base)",
     fontWeight: 700,
     color: "var(--k-blue)",
     flexShrink: 0,
   },
   taxRowName: {
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     color: "var(--k-ink)",
     fontWeight: 600,
     overflow: "hidden",
@@ -4598,7 +4633,7 @@ const styles = {
     gap: "0.5rem",
   },
   taxStatLabel: {
-    fontSize: "0.66rem",
+    fontSize: "var(--k-fs-2xs)",
     color: "var(--k-muted)",
     textTransform: "uppercase",
     letterSpacing: "0.05em",
@@ -4607,25 +4642,25 @@ const styles = {
   },
   taxStatQty: {
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-    fontSize: "0.85rem",
+    fontSize: "var(--k-fs-base)",
     fontWeight: 700,
     color: "var(--k-ink)",
   },
   taxStatUnit: {
     fontFamily: "inherit",
-    fontSize: "0.66rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 500,
     color: "var(--k-muted)",
     marginLeft: 2,
   },
   taxStatValue: {
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     color: "var(--k-muted)",
     marginTop: 1,
   },
   taxStatExtra: {
-    fontSize: "0.7rem",
+    fontSize: "var(--k-fs-2xs)",
     color: "var(--k-success)",
     fontWeight: 600,
     marginTop: 1,
@@ -4635,8 +4670,8 @@ const styles = {
     gap: "0.4rem",
     padding: "0.4rem 0.55rem",
     background: "var(--k-surface-2)",
-    borderRadius: 6,
-    fontSize: "0.74rem",
+    borderRadius: "var(--k-r-sm)",
+    fontSize: "var(--k-fs-xs)",
     color: "var(--k-ink)",
     lineHeight: 1.4,
   },
@@ -4650,7 +4685,7 @@ const styles = {
     background: "linear-gradient(135deg, #e3f2fd 0%, #f0f7ff 70%, #fbfdff 100%)",
     border: "1px solid #90caf9",
     borderLeft: "3px solid #0d47a1",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     display: "flex",
     flexDirection: "column",
     gap: "0.45rem",
@@ -4662,20 +4697,20 @@ const styles = {
     flexWrap: "wrap",
   },
   taxRowOptimizationTitle: {
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 700,
     color: "var(--k-blue)",
     flex: 1,
     minWidth: 0,
   },
   taxRowOptimizationDelta: {
-    fontSize: "0.74rem",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 700,
     color: "var(--k-success-strong)",
     background: "var(--k-success-bg)",
     border: "1px solid #a5d6a7",
     padding: "0.15rem 0.45rem",
-    borderRadius: 999,
+    borderRadius: "var(--k-r-pill)",
   },
   taxRowOptimizationGrid: {
     display: "grid",
@@ -4683,7 +4718,7 @@ const styles = {
     gap: "0.5rem",
   },
   taxRowOptimizationLabel: {
-    fontSize: "0.68rem",
+    fontSize: "var(--k-fs-2xs)",
     color: "var(--k-muted)",
     fontWeight: 600,
     textTransform: "uppercase",
@@ -4691,20 +4726,20 @@ const styles = {
     marginBottom: "0.1rem",
   },
   taxRowOptimizationValue: {
-    fontSize: "0.95rem",
+    fontSize: "var(--k-fs-md)",
     fontWeight: 800,
     color: "var(--k-blue)",
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
   },
   taxRowOptimizationValueMuted: {
-    fontSize: "0.88rem",
+    fontSize: "var(--k-fs-base)",
     fontWeight: 600,
     color: "var(--k-muted)",
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
     textDecoration: "line-through",
   },
   taxRowOptimizationValueHighlight: {
-    fontSize: "0.95rem",
+    fontSize: "var(--k-fs-md)",
     fontWeight: 800,
     color: "var(--k-success-strong)",
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
@@ -4713,12 +4748,12 @@ const styles = {
   // to the original bill amount. Sits between the grid and rationale.
   // Lives on a white card to stand apart from the gradient background.
   taxRowOptimizationSubtotalProof: {
-    fontSize: "0.74rem",
+    fontSize: "var(--k-fs-xs)",
     color: "var(--k-ink)",
     lineHeight: 1.55,
     background: "var(--k-surface)",
     border: "1px solid #cfe3f6",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     padding: "0.4rem 0.55rem",
     display: "flex",
     flexWrap: "wrap",
@@ -4729,35 +4764,35 @@ const styles = {
     display: "inline-flex",
     alignItems: "center",
     gap: "0.25rem",
-    fontSize: "0.68rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
     color: "var(--k-success-strong)",
     background: "var(--k-success-bg)",
     border: "1px solid #a5d6a7",
     padding: "0.15rem 0.45rem",
-    borderRadius: 999,
+    borderRadius: "var(--k-r-pill)",
     whiteSpace: "nowrap",
   },
   taxRowOptimizationDriftBadge: {
     display: "inline-flex",
     alignItems: "center",
     gap: "0.25rem",
-    fontSize: "0.68rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
     color: "var(--k-warn-ink)",
     background: "var(--k-warn-bg-3)",
     border: "1px solid #ffcc80",
     padding: "0.15rem 0.45rem",
-    borderRadius: 999,
+    borderRadius: "var(--k-r-pill)",
     whiteSpace: "nowrap",
   },
   taxRowOptimizationRationale: {
-    fontSize: "0.74rem",
+    fontSize: "var(--k-fs-xs)",
     color: "var(--k-ink)",
     lineHeight: 1.45,
     background: "var(--k-surface)",
     border: "1px dashed #b3d4f0",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     padding: "0.4rem 0.55rem",
   },
   taxRowOptimizationWarning: {
@@ -4766,8 +4801,8 @@ const styles = {
     padding: "0.4rem 0.55rem",
     background: "var(--k-warn-bg-3)",
     border: "1px solid #ffcc80",
-    borderRadius: 6,
-    fontSize: "0.72rem",
+    borderRadius: "var(--k-r-sm)",
+    fontSize: "var(--k-fs-2xs)",
     color: "var(--k-warn-ink)",
     lineHeight: 1.45,
   },
@@ -4780,8 +4815,8 @@ const styles = {
     alignItems: "flex-start",
     gap: "0.4rem",
     padding: "0.4rem 0.55rem",
-    borderRadius: 6,
-    fontSize: "0.72rem",
+    borderRadius: "var(--k-r-sm)",
+    fontSize: "var(--k-fs-2xs)",
     lineHeight: 1.45,
   },
   taxRowOptimizationRiskLow: {
@@ -4814,8 +4849,8 @@ const styles = {
     background: "var(--k-success-strong)",
     color: "#fff",
     border: "1px solid #1b5e20",
-    borderRadius: 6,
-    fontSize: "0.74rem",
+    borderRadius: "var(--k-r-sm)",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 700,
     cursor: "pointer",
   },
@@ -4827,8 +4862,8 @@ const styles = {
     background: "var(--k-surface)",
     color: "var(--k-blue)",
     border: "1px solid #90caf9",
-    borderRadius: 6,
-    fontSize: "0.72rem",
+    borderRadius: "var(--k-r-sm)",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 600,
     cursor: "pointer",
   },
@@ -4840,13 +4875,13 @@ const styles = {
     background: "transparent",
     color: "var(--k-blue)",
     border: "1px dashed #90caf9",
-    borderRadius: 6,
-    fontSize: "0.72rem",
+    borderRadius: "var(--k-r-sm)",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 600,
     cursor: "pointer",
   },
   taxRowOptimizationStaleHint: {
-    fontSize: "0.7rem",
+    fontSize: "var(--k-fs-2xs)",
     color: "var(--k-warn-ink)",
     fontStyle: "italic",
   },
@@ -4854,22 +4889,22 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: "0.35rem",
-    fontSize: "0.72rem",
+    fontSize: "var(--k-fs-2xs)",
     color: "var(--k-success-strong)",
     background: "var(--k-success-bg)",
     border: "1px solid #a5d6a7",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     padding: "0.35rem 0.55rem",
   },
   taxRowOptimizationApplyWarn: {
     display: "flex",
     alignItems: "flex-start",
     gap: "0.4rem",
-    fontSize: "0.72rem",
+    fontSize: "var(--k-fs-2xs)",
     color: "var(--k-warn-ink)",
     background: "var(--k-warn-bg-3)",
     border: "1px solid #ffcc80",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     padding: "0.4rem 0.55rem",
     lineHeight: 1.45,
   },
@@ -4891,8 +4926,8 @@ const styles = {
     padding: "0.3rem 0.45rem",
     background: "var(--k-surface)",
     border: "1px solid #e0eef8",
-    borderRadius: 5,
-    fontSize: "0.72rem",
+    borderRadius: "var(--k-r-xs)",
+    fontSize: "var(--k-fs-2xs)",
   },
   taxRowOptimizationDistLabel: {
     fontWeight: 700,
@@ -4908,23 +4943,23 @@ const styles = {
     color: "var(--k-ink)",
   },
   taxRowOptimizationDistBadgeOk: {
-    fontSize: "0.66rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
     color: "var(--k-success-strong)",
     background: "var(--k-success-bg)",
     border: "1px solid #a5d6a7",
     padding: "0.1rem 0.4rem",
-    borderRadius: 999,
+    borderRadius: "var(--k-r-pill)",
     whiteSpace: "nowrap",
   },
   taxRowOptimizationDistBadgeWarn: {
-    fontSize: "0.66rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
     color: "var(--k-warn-ink)",
     background: "var(--k-warn-bg-3)",
     border: "1px solid #ffcc80",
     padding: "0.1rem 0.4rem",
-    borderRadius: 999,
+    borderRadius: "var(--k-r-pill)",
     whiteSpace: "nowrap",
   },
   // ── Why-this-price disclosure ─────────────────────────────────────
@@ -4934,14 +4969,14 @@ const styles = {
   taxRowOptimizationWhy: {
     background: "var(--k-surface)",
     border: "1px solid #cfe3f6",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     padding: "0.55rem 0.7rem",
     display: "flex",
     flexDirection: "column",
     gap: "0.45rem",
   },
   taxRowOptimizationWhyHeader: {
-    fontSize: "0.74rem",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 700,
     color: "var(--k-blue)",
     textTransform: "uppercase",
@@ -4953,25 +4988,25 @@ const styles = {
     gap: "0.55rem",
   },
   taxRowOptimizationWhyValue: {
-    fontSize: "0.86rem",
+    fontSize: "var(--k-fs-base)",
     fontWeight: 700,
     color: "var(--k-blue)",
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
   },
   taxRowOptimizationWhyValueMuted: {
-    fontSize: "0.86rem",
+    fontSize: "var(--k-fs-base)",
     fontWeight: 700,
     color: "var(--k-muted)",
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
   },
   taxRowOptimizationWhyHint: {
-    fontSize: "0.68rem",
+    fontSize: "var(--k-fs-2xs)",
     color: "var(--k-muted)",
     lineHeight: 1.4,
     marginTop: "0.15rem",
   },
   taxRowOptimizationWhySubheader: {
-    fontSize: "0.72rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
     color: "var(--k-ink)",
     marginTop: "0.2rem",
@@ -4989,8 +5024,8 @@ const styles = {
     padding: "0.35rem 0.5rem",
     background: "#f5fbff",
     border: "1px solid #e0eef8",
-    borderRadius: 5,
-    fontSize: "0.72rem",
+    borderRadius: "var(--k-r-xs)",
+    fontSize: "var(--k-fs-2xs)",
   },
   taxRowOptimizationRefBillNum: {
     fontWeight: 700,
@@ -5010,9 +5045,9 @@ const styles = {
     background: "var(--k-surface)",
     color: "var(--k-ink)",
     border: `1px solid var(--k-line-strong)`,
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     padding: "0.3rem 0.55rem",
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 600,
     cursor: "pointer",
     outline: "none",
@@ -5022,8 +5057,8 @@ const styles = {
     display: "inline-block",
     marginLeft: "0.35rem",
     padding: "0 0.35rem",
-    borderRadius: 99,
-    fontSize: "0.62rem",
+    borderRadius: "var(--k-r-pill)",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
     color: "var(--k-warn-ink)",
     backgroundColor: "var(--k-warn-bg-3)",
@@ -5036,13 +5071,13 @@ const styles = {
     padding: "0.3rem 0.4rem",
     background: "var(--k-success-bg)",
     border: "1px solid #a5d6a7",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
   },
   taxRowSubMeta: {
     display: "flex",
     flexWrap: "wrap",
     gap: "0.5rem",
-    fontSize: "0.7rem",
+    fontSize: "var(--k-fs-2xs)",
     color: "var(--k-muted)",
   },
   taxRowAging: {
@@ -5071,8 +5106,8 @@ const styles = {
     background: "var(--k-warn-bg-3)",
     color: "var(--k-warn-ink)",
     border: "1px solid #ffcc80",
-    borderRadius: 8,
-    fontSize: "0.74rem",
+    borderRadius: "var(--k-radius)",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 600,
     cursor: "pointer",
     fontFamily: "inherit",
@@ -5101,15 +5136,15 @@ const styles = {
     alignItems: "center",
     gap: "0.4rem",
     flexWrap: "wrap",
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     color: "var(--k-ink)",
   },
   taxCollapsedWarnPill: {
     display: "inline-flex",
     alignItems: "center",
     padding: "0.1rem 0.45rem",
-    borderRadius: 99,
-    fontSize: "0.7rem",
+    borderRadius: "var(--k-r-pill)",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
     color: "var(--k-warn-ink)",
     backgroundColor: "var(--k-warn-bg-3)",
@@ -5120,7 +5155,7 @@ const styles = {
     padding: "0.6rem 0.75rem",
     background: "var(--k-warn-bg-2)",
     border: "1px solid #ffe082",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     display: "flex",
     flexDirection: "column",
     gap: "0.35rem",
@@ -5128,14 +5163,14 @@ const styles = {
   taxWarningRow: {
     display: "flex",
     gap: "0.35rem",
-    fontSize: "0.75rem",
+    fontSize: "var(--k-fs-xs)",
     color: "#5d4037",
     lineHeight: 1.4,
   },
   taxComplianceFooter: {
     marginTop: "0.65rem",
     padding: "0.4rem 0",
-    fontSize: "0.7rem",
+    fontSize: "var(--k-fs-2xs)",
     color: "var(--k-muted)",
     fontStyle: "italic",
     borderTop: `1px dashed var(--k-line)`,
@@ -5145,14 +5180,14 @@ const styles = {
     width: "100%",
     overflowX: "auto",
     border: `1px solid var(--k-line)`,
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
   },
   table: { width: "100%", borderCollapse: "collapse", minWidth: 1100, tableLayout: "fixed" },
   thead: { backgroundColor: "var(--k-surface-2)" },
   th: {
     padding: "0.6rem 0.5rem",
     textAlign: "left",
-    fontSize: "0.75rem",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 700,
     color: "var(--k-muted)",
     textTransform: "uppercase",
@@ -5161,7 +5196,7 @@ const styles = {
   },
   td: {
     padding: "0.4rem 0.5rem",
-    fontSize: "0.82rem",
+    fontSize: "var(--k-fs-sm)",
     borderBottom: `1px solid var(--k-line)`,
     verticalAlign: "middle",
   },
@@ -5169,8 +5204,8 @@ const styles = {
     width: "100%",
     padding: "0.35rem 0.5rem",
     border: `1px solid var(--k-line-strong)`,
-    borderRadius: 4,
-    fontSize: "0.8rem",
+    borderRadius: "var(--k-r-xs)",
+    fontSize: "var(--k-fs-sm)",
     backgroundColor: "var(--k-surface)",
   },
   narrowPermissionBanner: {
@@ -5180,16 +5215,16 @@ const styles = {
     padding: "0.65rem 0.85rem",
     backgroundColor: colors.warnBg,
     color: "var(--k-ink)",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     marginBottom: "1rem",
-    fontSize: "0.82rem",
+    fontSize: "var(--k-fs-sm)",
     border: `1px solid ${colors.warnBorder}`,
     lineHeight: 1.4,
   },
   readOnlyCell: {
     backgroundColor: "var(--k-surface-2)",
     color: "var(--k-ink)",
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
@@ -5201,14 +5236,14 @@ const styles = {
   },
   readOnlyText: {
     padding: "0.35rem 0.5rem",
-    fontSize: "0.8rem",
+    fontSize: "var(--k-fs-sm)",
     color: "var(--k-ink)",
     fontWeight: 600,
   },
   muted: { color: "#9ca3af", fontStyle: "italic" },
   gridHint: {
     margin: "0.5rem 0 0.6rem",
-    fontSize: "0.75rem",
+    fontSize: "var(--k-fs-xs)",
     color: "var(--k-muted)",
     lineHeight: 1.4,
   },
@@ -5219,17 +5254,17 @@ const styles = {
     flexWrap: "wrap",
     padding: "0.55rem 0.85rem",
     marginBottom: "0.65rem",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     border: `1px solid var(--k-line)`,
     backgroundColor: "var(--k-surface-2)",
   },
-  bulkApplyLabel: { fontSize: "0.82rem", color: "var(--k-ink)", fontWeight: 500 },
+  bulkApplyLabel: { fontSize: "var(--k-fs-sm)", color: "var(--k-ink)", fontWeight: 500 },
   // Grouped ⇄ Individual lines segmented toggle.
   viewToggle: {
     display: "inline-flex",
     flexWrap: "wrap",
     maxWidth: "100%",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     border: `1px solid var(--k-line-strong)`,
     overflow: "hidden",
     backgroundColor: "var(--k-surface)",
@@ -5237,7 +5272,7 @@ const styles = {
   viewToggleBtn: {
     minHeight: "var(--ui-btn-h, 44px)",
     padding: "0.35rem 0.7rem",
-    fontSize: "0.76rem",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 600,
     color: "var(--k-muted)",
     backgroundColor: "var(--k-surface)",
@@ -5245,12 +5280,12 @@ const styles = {
     cursor: "pointer",
     whiteSpace: "normal",
   },
-  viewToggleBtnActive: { backgroundColor: "var(--k-blue)", color: "#fff" },
+  viewToggleBtnActive: { backgroundColor: "var(--k-accent-solid, var(--k-blue))", color: "#fff" },
   // Grouped table affordances.
   groupedRow: { backgroundColor: "#fbfcfe" },
   groupMeta: {
     marginTop: 2,
-    fontSize: "0.68rem",
+    fontSize: "var(--k-fs-2xs)",
     color: "var(--k-muted)",
     fontStyle: "italic",
   },
@@ -5258,7 +5293,7 @@ const styles = {
   // about user-supplied names, which collapse into look-alikes when truncated.
   priceMeta: {
     marginTop: 2,
-    fontSize: "0.68rem",
+    fontSize: "var(--k-fs-2xs)",
     color: "var(--k-muted)",
     fontStyle: "italic",
     whiteSpace: "nowrap",
@@ -5273,7 +5308,7 @@ const styles = {
   // auto-fit + min() so the controls stack on a phone with no media query
   adjustWrap: { display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "0.6rem" },
   adjustLabel: {
-    fontSize: "0.72rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 600,
     color: "var(--k-muted)",
     alignSelf: "center",
@@ -5281,48 +5316,48 @@ const styles = {
   segmented: {
     display: "inline-flex",
     border: `1px solid var(--k-line-strong)`,
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     overflow: "hidden",
   },
   segBtn: {
     padding: "0.4rem 0.7rem",
-    fontSize: "0.75rem",
+    fontSize: "var(--k-fs-xs)",
     border: "none",
     background: "var(--k-surface)",
     color: "var(--k-muted)",
     cursor: "pointer",
     minHeight: "var(--ui-control-h, 36px)",
   },
-  segBtnOn: { background: "var(--k-blue)", color: "#fff", fontWeight: 600 },
+  segBtnOn: { background: "var(--k-accent-solid, var(--k-blue))", color: "#fff", fontWeight: 600 },
   exactBox: {
     flex: "1 1 min(320px, 100%)",
     background: "var(--k-surface)",
     border: `1px solid var(--k-line)`,
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     padding: "0.5rem 0.6rem",
   },
   exactLabel: {
     display: "block",
-    fontSize: "0.72rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 600,
     color: "var(--k-ink)",
     marginBottom: "0.3rem",
   },
-  exactDerived: { marginTop: "0.35rem", fontSize: "0.74rem", color: "var(--k-ink)" },
+  exactDerived: { marginTop: "0.35rem", fontSize: "var(--k-fs-xs)", color: "var(--k-ink)" },
   clearExactBtn: {
     padding: "0.35rem 0.6rem",
-    fontSize: "0.72rem",
-    borderRadius: 4,
+    fontSize: "var(--k-fs-2xs)",
+    borderRadius: "var(--k-r-xs)",
     minHeight: "var(--ui-control-h, 36px)",
     border: `1px solid var(--k-line-strong)`,
     background: "var(--k-surface)",
     color: "var(--k-muted)",
     cursor: "pointer",
   },
-  requiredHint: { marginTop: 2, fontSize: "0.66rem", color: colors.warn, fontWeight: 700 },
+  requiredHint: { marginTop: 2, fontSize: "var(--k-fs-2xs)", color: colors.warn, fontWeight: 700 },
   stockHint: {
     marginTop: 2,
-    fontSize: "0.66rem",
+    fontSize: "var(--k-fs-2xs)",
     color: "var(--k-danger)",
     fontWeight: 700,
     lineHeight: 1.3,
@@ -5331,14 +5366,14 @@ const styles = {
     marginTop: "1rem",
     padding: "0.75rem 1rem",
     backgroundColor: "var(--k-surface-2)",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     maxWidth: 360,
     marginLeft: "auto",
   },
   totalsRow: {
     display: "flex",
     justifyContent: "space-between",
-    fontSize: "0.88rem",
+    fontSize: "var(--k-fs-base)",
     color: "var(--k-ink)",
     padding: "0.2rem 0",
   },

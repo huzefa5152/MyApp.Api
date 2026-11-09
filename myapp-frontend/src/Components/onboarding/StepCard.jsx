@@ -97,7 +97,7 @@ const st = {
     display: "grid",
     placeItems: "center",
     borderRadius: "50%",
-    background: "var(--k-blue)",
+    background: "var(--k-accent-solid, var(--k-blue))",
     color: "#fff",
     fontWeight: 800,
     fontSize: "var(--k-font)",
@@ -105,7 +105,7 @@ const st = {
   badgeDone: { background: "var(--k-teal)" },
   badgeWaiting: { background: "var(--k-slate-line)" },
   titles: { display: "flex", flexDirection: "column", gap: 2, flex: 1, minWidth: 0 },
-  title: { fontSize: "calc(var(--k-font) + 0.1rem)", fontWeight: 800, color: "var(--k-ink)" },
+  title: { fontSize: "var(--k-fs-md)", fontWeight: 800, color: "var(--k-ink)" },
   summary: {
     fontSize: "var(--k-font-sm)",
     color: "var(--k-muted)",

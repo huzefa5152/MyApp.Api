@@ -22,7 +22,7 @@ const button = {
   minHeight: "var(--k-btn-h)",
   padding: "0.5rem 0.8rem",
   border: "1px solid #ccd6e2",
-  borderRadius: 6,
+  borderRadius: "var(--k-r-sm)",
   background: "var(--k-surface)",
   color: "#183c68",
   cursor: "pointer",
@@ -282,7 +282,7 @@ export default function BillChallansEditor({
               key={c.id}
               style={{
                 border: "1px solid #d8e1eb",
-                borderRadius: 8,
+                borderRadius: "var(--k-radius)",
                 padding: 12,
                 marginBottom: 12,
                 background: selected.has(c.id) ? "#f5f9ff" : "white",
@@ -522,7 +522,11 @@ export default function BillChallansEditor({
           </button>
           <button
             type="submit"
-            style={{ ...button, background: "var(--k-blue)", color: "white" }}
+            style={{
+              ...button,
+              background: "var(--k-accent-solid, var(--k-blue))",
+              color: "white",
+            }}
             disabled={
               !snapshot || loading || saving || !changed || !validRates || !hasItems || !!emptied
             }

@@ -832,11 +832,11 @@ export default function TemplateEditorPage() {
             right: 20,
             zIndex: 9999,
             padding: "0.75rem 1.25rem",
-            borderRadius: 10,
+            borderRadius: "var(--k-radius)",
             background: toast.type === "error" ? "var(--k-danger)" : "var(--k-success-alt)",
             color: "#fff",
             fontWeight: 600,
-            fontSize: "0.9rem",
+            fontSize: "var(--k-fs-base)",
             boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
           }}
           role="status"
@@ -912,7 +912,7 @@ export default function TemplateEditorPage() {
           <div style={{ minWidth: 0 }}>
             <h2
               className="k-header__title"
-              style={{ fontSize: isMobile ? "1rem" : "calc(var(--k-title) * 0.87)" }}
+              style={{ fontSize: isMobile ? "var(--k-fs-md)" : "calc(var(--k-title) * 0.87)" }}
             >
               {isDraft ? `New ${typeLabel}` : "Edit Template"}
             </h2>
@@ -1170,7 +1170,7 @@ export default function TemplateEditorPage() {
             </select>
           </label>
         )}
-        <span style={{ fontSize: "0.75rem", color: "var(--k-muted)" }}>
+        <span style={{ fontSize: "var(--k-fs-xs)", color: "var(--k-muted)" }}>
           Duplicate a template to keep signed and unsigned versions. “No signature” leaves the stamp
           blank.
         </span>
@@ -1310,7 +1310,7 @@ const styles = {
   // control so it's obvious what each one selects.
   fieldGroup: { display: "flex", flexDirection: "column", gap: "0.18rem" },
   fieldLabel: {
-    fontSize: "0.64rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
     textTransform: "uppercase",
     letterSpacing: "0.05em",

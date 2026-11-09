@@ -338,7 +338,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                               }
                             }}
                             placeholder="— optional —"
-                            style={{ padding: "0.4rem 0.55rem", fontSize: "0.82rem" }}
+                            style={{ padding: "0.4rem 0.55rem", fontSize: "var(--k-fs-sm)" }}
                           />
                         </div>
                         <CopyLineButton
@@ -427,7 +427,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                                 }
                               }}
                               placeholder="— optional —"
-                              style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                              style={{ padding: "0.3rem 0.5rem", fontSize: "var(--k-fs-xs)" }}
                             />
                           </td>
                           <td style={td}>
@@ -530,7 +530,7 @@ const cellInput = {
   padding: "0.3rem 0.5rem",
   fontSize: "var(--k-font-sm)",
   border: "1px solid var(--k-line-strong)",
-  borderRadius: 6,
+  borderRadius: "var(--k-r-sm)",
   backgroundColor: "var(--k-input-bg)",
   color: "var(--k-ink)",
   outline: "none",
@@ -554,7 +554,7 @@ const mStyles = {
   head: { display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.5rem" },
   label: {
     display: "block",
-    fontSize: "0.68rem",
+    fontSize: "var(--k-fs-2xs)",
     textTransform: "uppercase",
     letterSpacing: "0.03em",
     color: "var(--k-muted)",

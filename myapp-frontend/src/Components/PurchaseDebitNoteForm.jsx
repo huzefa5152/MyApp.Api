@@ -408,7 +408,7 @@ export default function PurchaseDebitNoteForm({
                 style={{
                   marginTop: "0.75rem",
                   padding: "0.75rem",
-                  borderRadius: 10,
+                  borderRadius: "var(--k-radius)",
                   border: `1px solid var(--k-line)`,
                   backgroundColor: "var(--k-input-bg)",
                 }}
@@ -428,7 +428,7 @@ export default function PurchaseDebitNoteForm({
                     style={{
                       ...formStyles.button,
                       padding: "0.3rem 0.65rem",
-                      fontSize: "0.8rem",
+                      fontSize: "var(--k-fs-sm)",
                       display: "inline-flex",
                       alignItems: "center",
                       gap: "0.25rem",
@@ -452,7 +452,13 @@ export default function PurchaseDebitNoteForm({
                   className="purchase-debit-lines"
                   style={{ overflowX: "auto" }}
                 >
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+                  <table
+                    style={{
+                      width: "100%",
+                      borderCollapse: "collapse",
+                      fontSize: "var(--k-fs-sm)",
+                    }}
+                  >
                     <thead>
                       <tr style={{ backgroundColor: "var(--k-surface-2)" }}>
                         <th style={th}>
@@ -485,7 +491,7 @@ export default function PurchaseDebitNoteForm({
                                 value={it.itemTypeId || ""}
                                 onChange={(newId, picked) => pickItemType(idx, newId, picked)}
                                 placeholder="— optional —"
-                                style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                                style={{ padding: "0.3rem 0.5rem", fontSize: "var(--k-fs-xs)" }}
                               />
                             </td>
                             <td data-label="Description" style={td}>
@@ -539,7 +545,7 @@ export default function PurchaseDebitNoteForm({
                                   onChange={(v) => updateItem(idx, "accountId", v)}
                                   side="expense"
                                   placeholder={defaultPurchaseAccountLabel}
-                                  style={{ ...cellInput, fontSize: "0.76rem" }}
+                                  style={{ ...cellInput, fontSize: "var(--k-fs-xs)" }}
                                 />
                               </td>
                             )}
@@ -580,7 +586,7 @@ export default function PurchaseDebitNoteForm({
                 style={{
                   marginTop: "1rem",
                   padding: "0.75rem 1rem",
-                  borderRadius: 10,
+                  borderRadius: "var(--k-radius)",
                   border: `1px solid var(--k-line)`,
                   backgroundColor: "var(--k-surface-2)",
                   display: "grid",
@@ -599,11 +605,13 @@ export default function PurchaseDebitNoteForm({
                 <strong>
                   Rs. {gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </strong>
-                <span style={{ color: "var(--k-ink)", fontWeight: 700, fontSize: "1rem" }}>
+                <span
+                  style={{ color: "var(--k-ink)", fontWeight: 700, fontSize: "var(--k-fs-md)" }}
+                >
                   Grand Total:
                 </span>
                 <span></span>
-                <strong style={{ fontSize: "1.05rem", color: "var(--k-blue)" }}>
+                <strong style={{ fontSize: "var(--k-fs-md)", color: "var(--k-blue)" }}>
                   Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </strong>
               </div>
@@ -638,7 +646,7 @@ const th = {
   textAlign: "left",
   padding: "0.45rem 0.55rem",
   borderBottom: "1px solid var(--k-line)",
-  fontSize: "0.74rem",
+  fontSize: "var(--k-fs-xs)",
   fontWeight: 700,
   color: "var(--k-muted)",
   textTransform: "uppercase",
@@ -648,9 +656,9 @@ const td = { padding: "0.4rem 0.45rem", borderBottom: "1px solid #f3f5f9", verti
 const cellInput = {
   width: "100%",
   padding: "0.3rem 0.5rem",
-  fontSize: "0.8rem",
+  fontSize: "var(--k-fs-sm)",
   border: "1px solid var(--k-line-strong)",
-  borderRadius: 6,
+  borderRadius: "var(--k-r-sm)",
   backgroundColor: "var(--k-surface-2)",
   color: "var(--k-ink)",
   outline: "none",

@@ -161,7 +161,7 @@ export default function ChallanModal({ challan, onClose }) {
                   marginTop: 6,
                   padding: 10,
                   border: "1px solid var(--k-line)",
-                  borderRadius: 8,
+                  borderRadius: "var(--k-radius)",
                 }}
               >
                 <RichText text={challan.notes} />
@@ -215,7 +215,7 @@ const styles = {
   },
   infoLabel: {
     display: "block",
-    fontSize: "0.72rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 600,
     color: "var(--k-muted)",
     textTransform: "uppercase",

@@ -481,7 +481,13 @@ function UploadStep({
             <span>
               {files.length} file(s) selected
               {misnamedCount > 0 && (
-                <span style={{ color: colors.warning, marginLeft: "0.6rem", fontSize: "0.85rem" }}>
+                <span
+                  style={{
+                    color: colors.warning,
+                    marginLeft: "0.6rem",
+                    fontSize: "var(--k-fs-base)",
+                  }}
+                >
                   ({misnamedCount} don't start with "DC #")
                 </span>
               )}
@@ -496,7 +502,9 @@ function UploadStep({
               return (
                 <li key={i} style={styles.fileRow}>
                   <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-                    <span style={{ fontSize: "0.9rem", wordBreak: "break-all" }}>{f.name}</span>
+                    <span style={{ fontSize: "var(--k-fs-base)", wordBreak: "break-all" }}>
+                      {f.name}
+                    </span>
                     {parsed ? (
                       <small style={{ color: "var(--k-muted)" }}>
                         Challan #{parsed.challanNumber}
@@ -510,7 +518,7 @@ function UploadStep({
                   <span
                     style={{
                       color: "var(--k-muted)",
-                      fontSize: "0.8rem",
+                      fontSize: "var(--k-fs-sm)",
                       whiteSpace: "nowrap",
                     }}
                   >
@@ -997,7 +1005,11 @@ const styles = {
     fontSize: "var(--k-font-sm)",
     border: "2px solid var(--k-line-strong)",
   },
-  stepDotActive: { background: "var(--k-blue)", color: "#fff", borderColor: "var(--k-blue)" },
+  stepDotActive: {
+    background: "var(--k-accent-solid, var(--k-blue))",
+    color: "#fff",
+    borderColor: "var(--k-accent-solid, var(--k-blue))",
+  },
   stepLabel: { fontSize: "var(--k-font-sm)" },
   stepLine: { height: "2px", width: "2rem" },
   companyPickerWrap: {
@@ -1098,16 +1110,16 @@ const styles = {
   rowWarn: {
     display: "inline-block",
     background: colors.warningLight,
-    color: "#8a6d00",
+    color: "var(--k-warn-ink-4, #8a6d00)",
     padding: "2px 8px",
-    borderRadius: "4px",
-    fontSize: "0.75rem",
+    borderRadius: "var(--k-r-xs)",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 600,
   },
   warnStrip: {
     background: colors.warningLight,
-    color: "#8a6d00",
-    borderRadius: "6px",
+    color: "var(--k-warn-ink-4, #8a6d00)",
+    borderRadius: "var(--k-r-sm)",
     padding: "0.5rem 0.8rem",
     marginBottom: "0.7rem",
     fontSize: "var(--k-font-sm)",

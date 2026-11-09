@@ -140,7 +140,7 @@ export default function DocumentCopyPicker({
       data-open={open}
       style={{
         border: "1px solid var(--k-line-strong)",
-        borderRadius: 10,
+        borderRadius: "var(--k-radius)",
         padding: 12,
         marginBottom: 16,
       }}
@@ -269,7 +269,13 @@ export default function DocumentCopyPicker({
                   >
                     <MdChevronLeft size={18} />
                   </button>
-                  <span style={{ fontSize: 12.5, color: "var(--k-muted)", whiteSpace: "nowrap" }}>
+                  <span
+                    style={{
+                      fontSize: "var(--k-fs-xs)",
+                      color: "var(--k-muted)",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                     Page {page} of {pages}
                   </span>
                   <button
@@ -371,7 +377,12 @@ export default function DocumentCopyPicker({
                 }}
               >
                 <p
-                  style={{ margin: 0, fontSize: 12.5, color: "var(--k-muted)", flex: "1 1 260px" }}
+                  style={{
+                    margin: 0,
+                    fontSize: "var(--k-fs-xs)",
+                    color: "var(--k-muted)",
+                    flex: "1 1 260px",
+                  }}
                 >
                   Items remain editable. Numbers, dates, payment/FBR status and order/delivery links
                   are not copied.
@@ -418,11 +429,11 @@ const toggle = {
   minHeight: 36,
   padding: "6px 12px",
   border: "1px solid var(--k-line-strong)",
-  borderRadius: 8,
+  borderRadius: "var(--k-radius)",
   background: "var(--k-surface)",
   color: "var(--k-blue)",
   fontWeight: 600,
-  fontSize: 13,
+  fontSize: "var(--k-fs-sm)",
   cursor: "pointer",
 };
 const pager = {
@@ -432,7 +443,7 @@ const pager = {
   height: 32,
   padding: 0,
   border: "1px solid var(--k-line-strong)",
-  borderRadius: 8,
+  borderRadius: "var(--k-radius)",
   background: "var(--k-surface)",
   color: "var(--k-blue)",
   cursor: "pointer",
@@ -443,26 +454,32 @@ const linkBtn = {
   background: "none",
   color: "var(--k-blue)",
   fontWeight: 600,
-  fontSize: 13,
+  fontSize: "var(--k-fs-sm)",
   cursor: "pointer",
 };
 const primary = {
   minHeight: 36,
   padding: "7px 16px",
   border: "none",
-  borderRadius: 8,
+  borderRadius: "var(--k-radius)",
   background: "var(--k-primary-bg)",
   color: "#fff",
   fontWeight: 600,
-  fontSize: 13,
+  fontSize: "var(--k-fs-sm)",
   cursor: "pointer",
 };
-const check = { display: "flex", alignItems: "center", gap: 10, minHeight: 36, fontSize: 13 };
+const check = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  minHeight: 36,
+  fontSize: "var(--k-fs-sm)",
+};
 const lines = {
   maxHeight: 240,
   overflowY: "auto",
   border: "1px solid var(--k-line)",
-  borderRadius: 8,
+  borderRadius: "var(--k-radius)",
   background: "var(--k-surface)",
 };
 const srOnly = {
@@ -480,9 +497,9 @@ const countBadge = {
   height: 20,
   padding: "0 6px",
   marginLeft: 6,
-  borderRadius: 999,
+  borderRadius: "var(--k-r-pill)",
   background: "rgba(255,255,255,0.25)",
-  fontSize: 11.5,
+  fontSize: "var(--k-fs-2xs)",
 };
 const empty = {
   display: "flex",
@@ -490,9 +507,9 @@ const empty = {
   alignItems: "flex-start",
   padding: "12px 14px",
   border: "1px dashed var(--k-line-strong)",
-  borderRadius: 8,
+  borderRadius: "var(--k-radius)",
   background: "var(--k-surface-2)",
-  fontSize: 13,
+  fontSize: "var(--k-fs-sm)",
   color: "var(--k-muted)",
   lineHeight: 1.45,
 };

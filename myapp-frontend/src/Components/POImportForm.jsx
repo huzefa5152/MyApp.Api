@@ -648,7 +648,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                     >
                       {selectedFile ? selectedFile.name : "Choose the customer document"}
                     </p>
-                    <span style={{ fontSize: "0.78rem", color: "var(--k-muted)" }}>
+                    <span style={{ fontSize: "var(--k-fs-xs)", color: "var(--k-muted)" }}>
                       XLSX, PDF, PNG, JPG or WEBP · max 10 MB
                     </span>
                   </div>
@@ -1060,7 +1060,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                             inputStyle={{
                               ...styles.input,
                               padding: "0.5rem 0.6rem",
-                              fontSize: "0.9rem",
+                              fontSize: "var(--k-fs-base)",
                             }}
                             multiline
                           />
@@ -1082,7 +1082,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                               style={{
                                 ...styles.input,
                                 padding: "0.5rem 0.55rem",
-                                fontSize: "0.9rem",
+                                fontSize: "var(--k-fs-base)",
                                 textAlign: "right",
                               }}
                             />
@@ -1099,7 +1099,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                               inputStyle={{
                                 ...styles.input,
                                 padding: "0.5rem 0.55rem",
-                                fontSize: "0.9rem",
+                                fontSize: "var(--k-fs-base)",
                               }}
                             />
                           </div>
@@ -1115,7 +1115,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                                 style={{
                                   ...styles.input,
                                   padding: "0.5rem 0.55rem",
-                                  fontSize: "0.9rem",
+                                  fontSize: "var(--k-fs-base)",
                                   textAlign: "right",
                                 }}
                               />
@@ -1142,7 +1142,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                         <span
                           style={{
                             flex: 0.5,
-                            fontSize: "0.8rem",
+                            fontSize: "var(--k-fs-sm)",
                             color: "var(--k-muted)",
                             paddingTop: 6,
                           }}
@@ -1160,7 +1160,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                             inputStyle={{
                               ...styles.input,
                               padding: "0.35rem 0.5rem",
-                              fontSize: "0.85rem",
+                              fontSize: "var(--k-fs-base)",
                             }}
                             multiline
                           />
@@ -1174,7 +1174,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                             style={{
                               ...styles.input,
                               padding: "0.35rem 0.5rem",
-                              fontSize: "0.85rem",
+                              fontSize: "var(--k-fs-base)",
                               textAlign: "right",
                             }}
                           />
@@ -1190,7 +1190,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                             inputStyle={{
                               ...styles.input,
                               padding: "0.35rem 0.5rem",
-                              fontSize: "0.85rem",
+                              fontSize: "var(--k-fs-base)",
                             }}
                           />
                         </div>
@@ -1205,7 +1205,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                               style={{
                                 ...styles.input,
                                 padding: "0.35rem 0.5rem",
-                                fontSize: "0.85rem",
+                                fontSize: "var(--k-fs-base)",
                                 textAlign: "right",
                               }}
                             />
@@ -1255,8 +1255,8 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                       marginTop: "0.5rem",
                       padding: "0.75rem",
                       backgroundColor: "var(--k-surface-3)",
-                      borderRadius: 6,
-                      fontSize: "0.75rem",
+                      borderRadius: "var(--k-r-sm)",
+                      fontSize: "var(--k-fs-xs)",
                       maxHeight: 200,
                       overflowY: "auto",
                       whiteSpace: "pre-wrap",
@@ -1370,17 +1370,17 @@ const styles = {
     flex: "0 0 auto",
     width: 24,
     height: 24,
-    borderRadius: 7,
+    borderRadius: "var(--k-r-sm)",
     background: "var(--k-surface-3)",
     color: "var(--k-muted)",
     display: "grid",
     placeItems: "center",
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 700,
   },
   mLabel: {
     display: "block",
-    fontSize: "0.68rem",
+    fontSize: "var(--k-fs-2xs)",
     textTransform: "uppercase",
     letterSpacing: "0.03em",
     color: "var(--k-muted)",
@@ -1429,7 +1429,7 @@ const styles = {
     padding: "0.4rem 0.5rem",
     backgroundColor: "var(--k-th-bg)",
     border: "1px solid var(--k-line)",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     fontSize: "var(--k-th-font)",
     fontWeight: 700,
     color: "var(--k-muted)",
@@ -1441,7 +1441,7 @@ const styles = {
     gap: "0.5rem",
     alignItems: "flex-start",
     padding: "0.5rem",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     border: "1px solid var(--k-line)",
     backgroundColor: "var(--k-surface-2)",
   },

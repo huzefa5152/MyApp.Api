@@ -337,7 +337,7 @@ export default function StockEntryForm({
                 </fieldset>
                 {!compact && (
                   <>
-                    <h3 style={{ fontSize: 16 }}>Recent stock entries</h3>
+                    <h3 style={{ fontSize: "var(--k-fs-md)" }}>Recent stock entries</h3>
                     <div style={{ display: "grid", gap: 10 }}>
                       {!entries.length && <p>No stock entries yet.</p>}
                       {entries.map((e) => (
@@ -345,7 +345,7 @@ export default function StockEntryForm({
                           key={e.id}
                           style={{
                             border: "1px solid var(--k-line)",
-                            borderRadius: 10,
+                            borderRadius: "var(--k-radius)",
                             padding: 12,
                             overflowWrap: "anywhere",
                           }}

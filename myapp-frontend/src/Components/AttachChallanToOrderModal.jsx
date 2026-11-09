@@ -499,8 +499,8 @@ function normalizeChallanLines(lines) {
 }
 
 const s = {
-  sub: { fontSize: "var(--k-font)", color: "var(--k-muted)", marginBottom: "1rem" },
-  hint: { fontSize: "0.75rem", color: "var(--k-muted)", fontStyle: "italic" },
+  sub: { fontSize: "var(--k-font)", color: "var(--k-muted)", marginBottom: "var(--k-fs-md)" },
+  hint: { fontSize: "var(--k-fs-xs)", color: "var(--k-muted)", fontStyle: "italic" },
   optLines: { display: "flex", flexDirection: "column", gap: "0.2rem" },
   optLine: {
     display: "flex",
@@ -517,7 +517,7 @@ const s = {
     minWidth: 0,
   },
   optQty: { fontWeight: 700, color: "var(--k-ink)", flexShrink: 0, whiteSpace: "nowrap" },
-  optEmpty: { color: "var(--k-muted)", fontStyle: "italic", fontSize: "0.78rem" },
+  optEmpty: { color: "var(--k-muted)", fontStyle: "italic", fontSize: "var(--k-fs-xs)" },
   gridTitle: {
     fontSize: "var(--k-font)",
     fontWeight: 700,
@@ -531,7 +531,7 @@ const s = {
     color: "var(--k-ink)",
     whiteSpace: "pre-wrap",
   },
-  unit: { fontSize: "0.74rem", color: "var(--k-muted)", marginTop: "0.1rem" },
+  unit: { fontSize: "var(--k-fs-xs)", color: "var(--k-muted)", marginTop: "var(--k-fs-2xs)" },
   mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
   mcard: {
     border: "1px solid var(--k-line)",
@@ -541,7 +541,7 @@ const s = {
   },
   mlabel: {
     display: "block",
-    fontSize: "0.72rem",
+    fontSize: "var(--k-fs-2xs)",
     textTransform: "uppercase",
     letterSpacing: "0.03em",
     color: "var(--k-muted)",
@@ -563,7 +563,7 @@ const s = {
     gap: "0.75rem",
     fontSize: "var(--k-font-sm)",
     padding: "0.3rem 0.5rem",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     background: "var(--k-surface-2)",
   },
   pDesc: {

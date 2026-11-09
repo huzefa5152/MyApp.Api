@@ -531,9 +531,7 @@ export default function FbrPurchaseImportPage() {
                 style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}
               >
                 <MdCheckCircle size={20} color="var(--k-success)" />
-                <strong
-                  style={{ fontSize: "calc(var(--k-font) + 0.1rem)", color: "var(--k-success)" }}
-                >
+                <strong style={{ fontSize: "var(--k-fs-md)", color: "var(--k-success)" }}>
                   Import committed
                 </strong>
                 <span
@@ -708,7 +706,7 @@ export default function FbrPurchaseImportPage() {
               }}
             >
               <div style={{ minWidth: 0, overflowWrap: "anywhere" }}>
-                <strong style={{ fontSize: "calc(var(--k-font) + 0.1rem)", color: "var(--k-ink)" }}>
+                <strong style={{ fontSize: "var(--k-fs-md)", color: "var(--k-ink)" }}>
                   {summary.fileName}
                 </strong>
                 <span
@@ -853,7 +851,7 @@ export default function FbrPurchaseImportPage() {
                   <strong
                     style={{
                       color: "var(--k-ink)",
-                      fontSize: "calc(var(--k-font) + 0.05rem)",
+                      fontSize: "var(--k-fs-md)",
                       overflowWrap: "anywhere",
                     }}
                   >
@@ -888,7 +886,7 @@ export default function FbrPurchaseImportPage() {
                   >
                     Rs. {formatPkr(inv.totalGrossValue)}
                   </span>
-                  <span style={{ fontSize: "0.78rem", color: "var(--k-muted)" }}>
+                  <span style={{ fontSize: "var(--k-fs-xs)", color: "var(--k-muted)" }}>
                     {inv.lines.length} line{inv.lines.length !== 1 ? "s" : ""}
                   </span>
                   <span style={{ fontSize: "var(--k-font)", color: "var(--k-blue)" }}>
@@ -909,7 +907,7 @@ export default function FbrPurchaseImportPage() {
                       display: "flex",
                       flexWrap: "wrap",
                       gap: "0.85rem",
-                      fontSize: "0.78rem",
+                      fontSize: "var(--k-fs-xs)",
                       color: "var(--k-muted)",
                       marginBottom: "0.55rem",
                     }}
@@ -1118,8 +1116,8 @@ const styles = {
     alignItems: "center",
     gap: "0.3rem",
     padding: "0.25rem 0.6rem",
-    borderRadius: 999,
-    fontSize: "0.78rem",
+    borderRadius: "var(--k-r-pill)",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 600,
   },
   chipSmall: {
@@ -1127,8 +1125,8 @@ const styles = {
     alignItems: "center",
     gap: "0.25rem",
     padding: "0.1rem 0.45rem",
-    borderRadius: 999,
-    fontSize: "0.72rem",
+    borderRadius: "var(--k-r-pill)",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 600,
     whiteSpace: "nowrap",
   },

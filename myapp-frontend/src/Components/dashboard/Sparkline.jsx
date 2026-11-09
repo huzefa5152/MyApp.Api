@@ -6,14 +6,26 @@
 // the line proportions correct at every breakpoint without media
 // queries.
 
-export default function Sparkline({ data, color = "#0d47a1", height = 36, showFill = true }) {
+export default function Sparkline({
+  data,
+  color = "var(--k-chart-1)",
+  height = 36,
+  showFill = true,
+}) {
   const points = Array.isArray(data) && data.length > 0 ? data : [];
   if (points.length < 2) {
     // One or zero data points — render an empty baseline so the card
     // height stays consistent with sibling cards.
     return (
       <svg width="100%" height={height} viewBox={`0 0 100 ${height}`} preserveAspectRatio="none">
-        <line x1="0" y1={height / 2} x2="100" y2={height / 2} stroke="#e0e0e0" strokeWidth="1" />
+        <line
+          x1="0"
+          y1={height / 2}
+          x2="100"
+          y2={height / 2}
+          stroke="var(--k-line)"
+          strokeWidth="1"
+        />
       </svg>
     );
   }

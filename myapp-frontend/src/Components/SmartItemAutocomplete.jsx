@@ -314,7 +314,11 @@ const styles = {
     };
   },
   // Section header keeps its blue tint (same as the ComboBox's toned group rows).
-  sectionHeader: { color: "var(--k-blue, #0d47a1)", backgroundColor: "#eff6ff", borderRadius: 4 },
+  sectionHeader: {
+    color: "var(--k-blue, #0d47a1)",
+    backgroundColor: "#eff6ff",
+    borderRadius: "var(--k-r-xs)",
+  },
   itemName: {
     fontWeight: 600,
     color: "var(--k-ink, #1a2332)",

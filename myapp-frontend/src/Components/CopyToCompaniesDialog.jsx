@@ -230,7 +230,7 @@ const styles = {
     gap: "0.6rem",
     minHeight: "var(--k-h)",
     padding: "0.4rem 0.75rem",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     border: "1px solid var(--k-line)",
     cursor: "pointer",
     fontSize: "var(--k-font)",

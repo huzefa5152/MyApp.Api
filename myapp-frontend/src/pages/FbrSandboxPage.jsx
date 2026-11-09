@@ -364,7 +364,11 @@ export default function FbrSandboxPage() {
                             )}
                           </td>
                           <td
-                            style={{ fontSize: "0.74rem", maxWidth: 300, wordBreak: "break-all" }}
+                            style={{
+                              fontSize: "var(--k-fs-xs)",
+                              maxWidth: 300,
+                              wordBreak: "break-all",
+                            }}
                           >
                             {b.fbrIRN ? (
                               <code style={styles.irn}>{b.fbrIRN}</code>
@@ -467,34 +471,34 @@ const styles = {
     padding: "0.25rem 0.6rem",
     backgroundColor: colors.warnBg,
     color: colors.warn,
-    borderRadius: 4,
-    fontSize: "0.75rem",
+    borderRadius: "var(--k-r-xs)",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 700,
   },
   successBadge: {
     padding: "0.15rem 0.5rem",
     backgroundColor: colors.successBg,
     color: colors.success,
-    borderRadius: 4,
-    fontSize: "0.72rem",
+    borderRadius: "var(--k-r-xs)",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
   },
   warnBadge: {
     padding: "0.15rem 0.5rem",
     backgroundColor: colors.warnBg,
     color: colors.warn,
-    borderRadius: 4,
-    fontSize: "0.72rem",
+    borderRadius: "var(--k-r-xs)",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
   },
   failBadge: {
     padding: "0.15rem 0.5rem",
     backgroundColor: "var(--k-danger-bg)",
     color: "var(--k-danger)",
-    borderRadius: 4,
-    fontSize: "0.72rem",
+    borderRadius: "var(--k-r-xs)",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
   },
-  irn: { fontFamily: "monospace", fontSize: "0.72rem", color: colors.success },
+  irn: { fontFamily: "monospace", fontSize: "var(--k-fs-2xs)", color: colors.success },
   muted: { color: "var(--k-muted)", fontStyle: "italic", fontSize: "var(--k-td-font)" },
 };

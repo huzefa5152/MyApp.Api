@@ -1,10 +1,10 @@
 .challan-private-costs {
   margin-top: 12px;
   border: 1px solid var(--k-line);
-  border-radius: 10px;
+  border-radius: var(--k-radius);
   background: var(--k-surface);
   color: var(--k-ink);
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
 }
 .challan-private-heading {
   display: flex;
@@ -17,12 +17,12 @@
   border-radius: 10px 10px 0 0;
 }
 .challan-private-heading strong {
-  font-size: 13px;
+  font-size: var(--k-fs-sm);
   color: var(--k-blue);
 }
 .challan-private-heading p {
   margin: 3px 0 0;
-  font-size: 11px;
+  font-size: var(--k-fs-2xs);
   color: var(--k-muted);
 }
 .challan-private-bulk {
@@ -33,7 +33,7 @@
   flex: 0 1 420px;
 }
 .challan-private-bulk > span {
-  font-size: 11px;
+  font-size: var(--k-fs-2xs);
   color: var(--k-muted);
 }
 .challan-private-bulk > div {
@@ -43,9 +43,9 @@
 .challan-private-bulk > button {
   min-height: var(--k-btn-h);
   padding: 6px 9px;
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   border: 1px solid var(--k-line-strong);
-  border-radius: 7px;
+  border-radius: var(--k-r-sm);
   background: white;
   color: var(--k-teal-ink);
   cursor: pointer;
@@ -67,7 +67,7 @@
 }
 .challan-private-columns {
   color: var(--k-muted);
-  font-size: 11px;
+  font-size: var(--k-fs-2xs);
   font-weight: 600;
   border-top: 1px solid var(--k-line);
 }
@@ -139,7 +139,7 @@
   }
   .challan-private-mobile-label {
     display: block;
-    font-size: 11px;
+    font-size: var(--k-fs-2xs);
     font-weight: 600;
     color: var(--k-muted);
     margin-bottom: 3px;
@@ -178,12 +178,12 @@
 .challan-private-auto {
   margin: 4px 0 0;
   color: var(--k-blue);
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
 }
 .challan-private-locked {
   display: block;
   margin-top: 2px;
   color: #92400e;
-  font-size: 11px;
+  font-size: var(--k-fs-2xs);
   overflow-wrap: anywhere;
 }

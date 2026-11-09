@@ -140,7 +140,7 @@ export default function PaymentHistoryDialog({ mode, companyId, doc, onClose }) 
                             style={{
                               marginLeft: 6,
                               color: "var(--k-danger)",
-                              fontSize: "0.7rem",
+                              fontSize: "var(--k-fs-2xs)",
                               fontWeight: 700,
                             }}
                           >
@@ -152,7 +152,7 @@ export default function PaymentHistoryDialog({ mode, companyId, doc, onClose }) 
                             style={{
                               marginLeft: 6,
                               color: "var(--k-warn-ink-3)",
-                              fontSize: "0.7rem",
+                              fontSize: "var(--k-fs-2xs)",
                               fontWeight: 700,
                             }}
                           >

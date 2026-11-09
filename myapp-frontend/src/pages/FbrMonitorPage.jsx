@@ -489,7 +489,7 @@ function RowsList({ rows, loading, onClickRow }) {
                 width: 180,
                 flexShrink: 0,
                 whiteSpace: "nowrap",
-                fontSize: "0.78rem",
+                fontSize: "var(--k-fs-xs)",
                 color: "var(--k-muted)",
                 fontFamily: "ui-monospace, monospace",
               }}
@@ -556,7 +556,7 @@ function RowsList({ rows, loading, onClickRow }) {
               style={{
                 width: 80,
                 textAlign: "right",
-                fontSize: "0.78rem",
+                fontSize: "var(--k-fs-xs)",
                 color: "var(--k-muted)",
               }}
             >
@@ -581,10 +581,10 @@ function Drawer({ row, onClose }) {
       >
         <header className="fbr-mon-drawer-header" style={S.drawerHeader}>
           <div>
-            <h2 style={{ margin: 0, fontSize: "1.1rem", color: "var(--k-ink)" }}>
+            <h2 style={{ margin: 0, fontSize: "var(--k-fs-lg)", color: "var(--k-ink)" }}>
               FBR call detail
             </h2>
-            <div style={{ fontSize: "0.8rem", color: "var(--k-muted)" }}>
+            <div style={{ fontSize: "var(--k-fs-sm)", color: "var(--k-muted)" }}>
               {fmtDate(row.timestamp)} · {row.action} · invoice{" "}
               {row.invoiceNumber != null ? `#${row.invoiceNumber}` : "—"}
             </div>
@@ -684,10 +684,10 @@ const S = {
     display: "inline-flex",
     alignItems: "center",
     padding: "0.15rem 0.5rem",
-    borderRadius: 999,
+    borderRadius: "var(--k-r-pill)",
     background: "var(--k-danger-bg)",
     color: "var(--k-danger)",
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
   },
   list: {
     overflow: "hidden",
@@ -732,8 +732,8 @@ const S = {
     alignItems: "center",
     gap: "0.25rem",
     padding: "0.12rem 0.55rem",
-    borderRadius: 999,
-    fontSize: "0.72rem",
+    borderRadius: "var(--k-r-pill)",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
     whiteSpace: "nowrap",
   },
@@ -765,10 +765,10 @@ const S = {
   pre: {
     background: "var(--k-surface-2)",
     border: "1px solid var(--k-line)",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     padding: "0.6rem 0.75rem",
     margin: "0.35rem 0 0",
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     lineHeight: 1.4,
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
     whiteSpace: "pre-wrap",
@@ -778,10 +778,10 @@ const S = {
   },
   code: {
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     background: "var(--k-surface-2)",
     padding: "1px 5px",
-    borderRadius: 4,
+    borderRadius: "var(--k-r-xs)",
     border: "1px solid var(--k-line)",
     wordBreak: "break-all",
   },

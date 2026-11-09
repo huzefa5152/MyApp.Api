@@ -45,12 +45,12 @@ const TYPE_COLOR = {
 
 const codeChip = {
   padding: "0.05rem 0.35rem",
-  backgroundColor: "#eef2ff",
+  backgroundColor: "var(--k-tint, #eef2ff)",
   color: "var(--k-blue)",
   fontFamily: "monospace",
   fontWeight: 700,
-  fontSize: "0.7rem",
-  borderRadius: 3,
+  fontSize: "var(--k-fs-2xs)",
+  borderRadius: "var(--k-r-xs)",
   flexShrink: 0,
 };
 
@@ -146,7 +146,7 @@ export default function AccountSelect({
                 maxWidth: "45%",
                 overflowWrap: "anywhere",
                 color: "#94a3b8",
-                fontSize: "0.74rem",
+                fontSize: "var(--k-fs-xs)",
               }}
             >
               {a.accountGroupName}

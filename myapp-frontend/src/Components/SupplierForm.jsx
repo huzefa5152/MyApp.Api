@@ -458,7 +458,7 @@ const pickerStyles = {
     fontWeight: 600,
     minHeight: "var(--k-btn-h)",
     padding: "0 0.9rem",
-    borderRadius: 999,
+    borderRadius: "var(--k-r-pill)",
     cursor: "pointer",
     transition: "background 0.15s, color 0.15s, border-color 0.15s",
     boxShadow: "none",

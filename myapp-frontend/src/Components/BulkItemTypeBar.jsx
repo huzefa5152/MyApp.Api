@@ -157,7 +157,7 @@ export default function BulkItemTypeBar({
           onPickNonInventory={(n) => handlePickNonInv(n)}
           onChange={(newId, picked) => handlePick(newId, picked)}
           placeholder={mode === "all" ? "— pick to apply to all —" : "— pick to fill empty rows —"}
-          style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+          style={{ padding: "0.3rem 0.5rem", fontSize: "var(--k-fs-xs)" }}
         />
       </div>
       <button
@@ -181,16 +181,16 @@ const styles = {
     flexWrap: "wrap",
     padding: "0.55rem 0.85rem",
     marginBottom: "0.6rem",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     border: `1px solid var(--k-line)`,
     backgroundColor: "var(--k-surface-2)",
   },
-  label: { fontSize: "0.82rem", color: "var(--k-ink)", fontWeight: 600 },
+  label: { fontSize: "var(--k-fs-sm)", color: "var(--k-ink)", fontWeight: 600 },
   modeSel: {
     padding: "0.35rem 0.5rem",
-    fontSize: "0.8rem",
+    fontSize: "var(--k-fs-sm)",
     maxWidth: 170,
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     border: `1px solid var(--k-line-strong)`,
     backgroundColor: "var(--k-surface)",
     color: "var(--k-ink)",
@@ -200,11 +200,11 @@ const styles = {
     alignItems: "center",
     gap: "0.3rem",
     padding: "0.35rem 0.7rem",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     border: `1px solid var(--k-danger)`,
     backgroundColor: "var(--k-surface)",
     color: "var(--k-danger)",
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 600,
     cursor: "pointer",
     whiteSpace: "nowrap",

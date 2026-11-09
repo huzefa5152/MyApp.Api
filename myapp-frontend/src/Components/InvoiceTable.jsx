@@ -234,7 +234,7 @@ export default function InvoiceTable({
                 fontSize: 10,
                 fontWeight: 700,
                 lineHeight: 1.2,
-                color: i.documentType === 10 ? "#5e35b1" : "var(--k-teal-ink)",
+                color: i.documentType === 10 ? "var(--k-purple-4, #5e35b1)" : "var(--k-teal-ink)",
               }}
               title={
                 i.originalInvoiceNumber
@@ -257,7 +257,7 @@ export default function InvoiceTable({
                 fontWeight: 700,
                 lineHeight: 1.2,
                 padding: "2px 6px",
-                borderRadius: 6,
+                borderRadius: "var(--k-r-sm)",
                 background: "#f9dedc",
                 color: "var(--k-danger)",
                 border: "1px solid #f2b8b5",
@@ -282,9 +282,9 @@ export default function InvoiceTable({
                 fontWeight: 700,
                 lineHeight: 1.2,
                 padding: "2px 6px",
-                borderRadius: 6,
+                borderRadius: "var(--k-r-sm)",
                 background: "var(--k-purple-bg)",
-                color: "#5e35b1",
+                color: "var(--k-purple-4, #5e35b1)",
                 border: "1px solid #b39ddb",
               }}
               title={`A Credit Note (#${i.reversedByCreditNoteNumber}) has been created against this invoice — it reverses this sale.`}
@@ -303,7 +303,7 @@ export default function InvoiceTable({
                 fontWeight: 700,
                 lineHeight: 1.2,
                 padding: "2px 6px",
-                borderRadius: 6,
+                borderRadius: "var(--k-r-sm)",
                 background: "var(--k-teal-bg)",
                 color: "var(--k-teal-ink)",
                 border: "1px solid #80cbc4",
@@ -582,7 +582,7 @@ export default function InvoiceTable({
             style={{
               ...btn.neutral,
               backgroundColor: "var(--k-warn-bg-2)",
-              color: "#8a6d00",
+              color: "var(--k-warn-ink-4, #8a6d00)",
               border: "1px solid #ffe082",
             }}
             onClick={() => onFbrReset?.(inv)}
@@ -701,7 +701,7 @@ export default function InvoiceTable({
               style={{
                 ...btn.neutral,
                 backgroundColor: inv.isFbrExcluded ? "var(--k-success-bg)" : "var(--k-slate-bg)",
-                color: inv.isFbrExcluded ? "var(--k-success)" : "#546e7a",
+                color: inv.isFbrExcluded ? "var(--k-success)" : "var(--k-slate-ink, #546e7a)",
                 border: `1px solid ${inv.isFbrExcluded ? "var(--k-success-line)" : "var(--k-slate-line)"}`,
               }}
               onClick={() => onToggleFbrExcluded?.(inv)}
@@ -820,10 +820,22 @@ const btn = {
   edit: { ...baseBtn, backgroundColor: "var(--k-warn-bg)", color: "var(--k-warn)" },
   delete: { ...baseBtn, backgroundColor: "var(--k-danger-bg)", color: "var(--k-danger)" },
   void: { ...baseBtn, backgroundColor: "var(--k-warn-bg-2)", color: "var(--k-warn-ink-3)" },
-  reverse: { ...baseBtn, backgroundColor: "var(--k-purple-bg)", color: "#5e35b1" },
+  reverse: {
+    ...baseBtn,
+    backgroundColor: "var(--k-purple-bg)",
+    color: "var(--k-purple-4, #5e35b1)",
+  },
   fbrValidate: { ...baseBtn, backgroundColor: "var(--k-info-bg)", color: "var(--k-blue)" },
   fbrSubmit: { ...baseBtn, backgroundColor: "#e8eaf6", color: "#1a237e" },
-  neutral: { ...baseBtn, backgroundColor: "var(--k-surface-3)", color: "#546e7a" },
+  neutral: {
+    ...baseBtn,
+    backgroundColor: "var(--k-surface-3)",
+    color: "var(--k-slate-ink, #546e7a)",
+  },
   handoverMark: { ...baseBtn, backgroundColor: "var(--k-success-bg)", color: "var(--k-success)" },
-  handoverRevert: { ...baseBtn, backgroundColor: "var(--k-warn-bg-2)", color: "#8a6d00" },
+  handoverRevert: {
+    ...baseBtn,
+    backgroundColor: "var(--k-warn-bg-2)",
+    color: "var(--k-warn-ink-4, #8a6d00)",
+  },
 };

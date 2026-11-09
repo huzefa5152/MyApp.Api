@@ -9,12 +9,12 @@
 .commercial-grid > article {
   padding: 14px;
   border: 1px solid var(--border-color, var(--k-line-strong));
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   overflow-wrap: anywhere;
 }
 .commercial-metrics strong {
   display: block;
-  font-size: 1.15rem;
+  font-size: var(--k-fs-lg);
   margin-top: 8px;
 }
 .commercial-choice {
@@ -89,7 +89,7 @@
   background: #fffbeb;
   color: #78350f;
   padding: 12px;
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   margin: 8px 0;
 }
 .commercial-feedback p {
@@ -97,13 +97,13 @@
 }
 .commercial-field-error {
   display: block;
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   color: #9a3412;
   margin-top: 4px;
 }
 
 .commercial-dialog p {
-  font-size: 13px;
+  font-size: var(--k-fs-sm);
   line-height: 1.45;
   margin: 8px 0;
 }
@@ -113,10 +113,10 @@
 }
 .commercial-dialog .commercial-metrics > div {
   padding: 10px 12px;
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
 }
 .commercial-dialog .commercial-metrics strong {
-  font-size: 1rem;
+  font-size: var(--k-fs-md);
   margin-top: 4px;
 }
 .purchase-review-heading {
@@ -127,13 +127,13 @@
   margin-bottom: 12px;
 }
 .purchase-review-heading h3 {
-  font-size: 17px;
+  font-size: var(--k-fs-lg);
   margin: 0;
 }
 .purchase-review-heading > label {
   display: grid;
   gap: 4px;
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   flex-shrink: 0;
 }
 .purchase-review input {
@@ -142,9 +142,9 @@
   width: 100%;
   min-height: var(--k-btn-h);
   border: 1px solid var(--k-line-strong);
-  border-radius: 6px;
+  border-radius: var(--k-r-sm);
   padding: 8px 10px;
-  font-size: 13px;
+  font-size: var(--k-fs-sm);
   background: var(--k-surface);
 }
 .purchase-review-summary {
@@ -154,8 +154,8 @@
   gap: 8px;
   padding: 12px;
   background: var(--k-surface-3);
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: var(--k-radius);
+  font-size: var(--k-fs-sm);
   margin: 10px 0;
 }
 .supplier-review-head,
@@ -167,18 +167,18 @@
   padding: 10px 12px;
 }
 .supplier-review-head {
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   color: var(--k-muted);
   padding-bottom: 6px;
 }
 .supplier-review-list {
   border: 1px solid var(--k-line-strong);
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   overflow: hidden;
 }
 .supplier-review-row {
   border-bottom: 1px solid var(--k-line);
-  font-size: 13px;
+  font-size: var(--k-fs-sm);
 }
 .supplier-review-row:last-child {
   border-bottom: 0;
@@ -198,7 +198,7 @@
 .supplier-review-identity small,
 .purchase-review-lines small {
   display: block;
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   color: var(--k-muted);
   margin-top: 3px;
 }
@@ -211,9 +211,9 @@
 }
 .purchase-review-lines {
   border: 1px solid var(--k-line-strong);
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   margin-top: 12px;
-  font-size: 13px;
+  font-size: var(--k-fs-sm);
 }
 .purchase-review-lines summary {
   padding: 12px;
@@ -253,7 +253,7 @@
   }
   .supplier-review-mobile-label {
     display: block;
-    font-size: 12px;
+    font-size: var(--k-fs-xs);
     color: var(--k-muted);
     margin-bottom: 4px;
   }
@@ -271,7 +271,7 @@
   display: block;
   margin-top: 4px;
   color: var(--k-muted);
-  font-size: 11px;
+  font-size: var(--k-fs-2xs);
 }
 .commercial-choice--qty {
   flex-wrap: wrap;
@@ -293,7 +293,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   color: var(--k-muted);
   flex: 0 0 140px;
 }
@@ -303,7 +303,7 @@
   box-sizing: border-box;
   padding: 6px 8px;
   border: 1px solid var(--k-line-strong);
-  border-radius: 6px;
+  border-radius: var(--k-r-sm);
   text-align: right;
 }
 .commercial-qty input[aria-invalid="true"] {
@@ -315,7 +315,7 @@
   }
 }
 .commercial-purchases h3 {
-  font-size: 14px;
+  font-size: var(--k-fs-base);
   margin: 4px 0 8px;
 }
 .commercial-purchases ul {
@@ -323,7 +323,7 @@
   margin: 0 0 8px;
   padding: 0;
   border: 1px solid var(--k-line-strong);
-  border-radius: 8px;
+  border-radius: var(--k-radius);
 }
 .commercial-purchases li {
   display: flex;
@@ -332,7 +332,7 @@
   gap: 8px 12px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--k-line);
-  font-size: 13px;
+  font-size: var(--k-fs-sm);
 }
 .commercial-purchases li:last-child {
   border-bottom: 0;
@@ -345,7 +345,7 @@
 .commercial-purchases li small {
   display: block;
   color: var(--k-muted);
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   margin-top: 2px;
 }
 .commercial-purchases li > span {

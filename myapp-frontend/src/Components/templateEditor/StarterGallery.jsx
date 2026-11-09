@@ -478,7 +478,7 @@ const s = {
     border: "none",
     borderTop: "1px solid var(--k-line)",
     borderRadius: 0,
-    background: "var(--k-blue)",
+    background: "var(--k-accent-solid, var(--k-blue))",
     color: "#fff",
     minHeight: "var(--k-h)",
     padding: "0 0.55rem",

@@ -19,7 +19,7 @@ export default function AllCompaniesOption({ checked, onChange }) {
       </label>
       {checked && (
         <div role="note" style={warn}>
-          <MdWarning aria-hidden style={{ fontSize: "1.2rem", flexShrink: 0 }} />
+          <MdWarning aria-hidden style={{ fontSize: "var(--k-fs-xl)", flexShrink: 0 }} />
           <span>
             An AI with this reach can read every tenant's data. Keep it read-only unless you need
             more, keep the lifetime short, and watch the activity log.
@@ -46,7 +46,7 @@ const box = {
 const on = { borderColor: "var(--k-warn-ink)", background: "var(--k-warn-bg-4)" };
 const help = {
   display: "block",
-  fontSize: "0.76rem",
+  fontSize: "var(--k-fs-xs)",
   fontWeight: 400,
   color: "var(--k-muted)",
   marginTop: 2,

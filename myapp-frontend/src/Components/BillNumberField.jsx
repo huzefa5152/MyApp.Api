@@ -220,9 +220,9 @@ export default function BillNumberField({
     minHeight: "var(--ui-btn-h, 44px)",
     padding: "var(--ui-input-pad, 0.5rem 0.75rem)",
     border: `1px solid ${active ? "var(--k-blue)" : "var(--k-line-strong)"}`,
-    backgroundColor: active ? "var(--k-blue)" : "#fff",
+    backgroundColor: active ? "var(--k-blue)" : "var(--k-surface)",
     color: active ? "#fff" : "var(--k-muted)",
-    fontSize: "var(--ui-btn-size, 0.82rem)",
+    fontSize: "var(--ui-btn-size, var(--k-fs-sm))",
     fontWeight: 700,
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.6 : 1,
@@ -232,9 +232,9 @@ export default function BillNumberField({
     width: "100%",
     padding: "var(--ui-input-pad, 0.55rem 0.75rem)",
     minHeight: "var(--ui-control-h, 0px)",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     border: `1px solid var(--k-line-strong)`,
-    fontSize: "var(--ui-input-size, 0.9rem)",
+    fontSize: "var(--ui-input-size, var(--k-fs-base))",
     backgroundColor: `var(--ui-input-bg, var(--k-input-bg))`,
     color: "var(--k-ink)",
     outline: "none",
@@ -248,7 +248,7 @@ export default function BillNumberField({
           display: "block",
           marginBottom: "var(--ui-label-gap, 0.35rem)",
           fontWeight: 600,
-          fontSize: "var(--ui-label-size, 0.85rem)",
+          fontSize: "var(--ui-label-size, var(--k-fs-base))",
           color: "var(--k-muted)",
         }}
       >
@@ -257,7 +257,12 @@ export default function BillNumberField({
 
       {isEdit ? null : (
         <div
-          style={{ display: "flex", borderRadius: 8, overflow: "hidden", marginBottom: "0.4rem" }}
+          style={{
+            display: "flex",
+            borderRadius: "var(--k-radius)",
+            overflow: "hidden",
+            marginBottom: "0.4rem",
+          }}
         >
           <button
             type="button"
@@ -288,7 +293,13 @@ export default function BillNumberField({
             value={currentNumber == null ? "—" : String(currentNumber)}
             style={{ ...inputStyle, backgroundColor: "var(--k-surface-3)", cursor: "not-allowed" }}
           />
-          <div style={{ fontSize: "0.72rem", color: "var(--k-muted)", marginTop: "0.25rem" }}>
+          <div
+            style={{
+              fontSize: "var(--k-fs-2xs)",
+              color: "var(--k-muted)",
+              marginTop: "var(--k-fs-2xs)",
+            }}
+          >
             {lockedReason}
           </div>
         </>
@@ -323,7 +334,7 @@ export default function BillNumberField({
                 padding: 0,
                 boxShadow: "none",
                 flexShrink: 0,
-                borderRadius: 8,
+                borderRadius: "var(--k-radius)",
                 border: `1px solid var(--k-line-strong)`,
                 backgroundColor: "var(--k-surface)",
                 color: "var(--k-muted)",
@@ -333,7 +344,13 @@ export default function BillNumberField({
               <MdRefresh size={18} />
             </button>
           </div>
-          <div style={{ fontSize: "0.72rem", color: "var(--k-muted)", marginTop: "0.25rem" }}>
+          <div
+            style={{
+              fontSize: "var(--k-fs-2xs)",
+              color: "var(--k-muted)",
+              marginTop: "var(--k-fs-2xs)",
+            }}
+          >
             {loadError
               ? loadError
               : startingMissing
@@ -367,7 +384,7 @@ export default function BillNumberField({
           />
           <div
             style={{
-              fontSize: "0.72rem",
+              fontSize: "var(--k-fs-2xs)",
               marginTop: "0.25rem",
               display: "flex",
               alignItems: "center",
@@ -405,7 +422,13 @@ export default function BillNumberField({
             )}
           </div>
           {!isEdit && (
-            <div style={{ fontSize: "0.72rem", color: "var(--k-muted)", marginTop: "0.25rem" }}>
+            <div
+              style={{
+                fontSize: "var(--k-fs-2xs)",
+                color: "var(--k-muted)",
+                marginTop: "var(--k-fs-2xs)",
+              }}
+            >
               Custom reserves this number. Auto continues its sequence and skips numbers already
               used.
             </div>

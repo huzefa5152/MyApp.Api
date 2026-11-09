@@ -34,7 +34,7 @@ const base = {
   margin: 0,
   verticalAlign: "middle",
   flexShrink: 0,
-  borderRadius: 8,
+  borderRadius: "var(--k-radius)",
   cursor: "pointer",
   boxShadow: "none",
   border: `1px solid color-mix(in srgb, var(--k-teal) 25%, transparent)`,

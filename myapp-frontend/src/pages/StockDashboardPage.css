@@ -1,6 +1,6 @@
 .inventory-page {
   color: var(--k-ink);
-  font-size: 13px;
+  font-size: var(--k-fs-sm);
   min-width: 0;
 }
 .inventory-heading {
@@ -19,12 +19,12 @@
 }
 .inventory-heading h2 {
   margin: 0 0 4px;
-  font-size: 22px;
+  font-size: var(--k-fs-2xl);
 }
 .inventory-heading p {
   margin: 0;
   color: var(--k-muted);
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
 }
 .inventory-company {
   max-width: 260px;
@@ -38,7 +38,7 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   border: 1px solid var(--k-line);
-  border-radius: 12px;
+  border-radius: var(--k-card-radius);
   background: var(--k-surface);
   margin-bottom: 20px;
   padding: 18px 0;
@@ -52,12 +52,12 @@
   border: 0;
 }
 .inventory-summary span {
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   color: var(--k-muted);
 }
 .inventory-summary strong {
   display: block;
-  font-size: 21px;
+  font-size: var(--k-fs-xl);
   margin: 6px 0;
   color: var(--k-ink);
   overflow-wrap: anywhere;
@@ -65,12 +65,12 @@
 }
 .inventory-summary small {
   display: block;
-  font-size: 11px;
+  font-size: var(--k-fs-2xs);
   color: var(--k-muted);
 }
 .inventory-summary .inventory-tracking {
   color: #00796b;
-  font-size: 16px;
+  font-size: var(--k-fs-md);
   margin: 10px 0;
 }
 .inventory-summary .inventory-attention {
@@ -79,7 +79,7 @@
 .inventory-panel {
   background: var(--k-surface);
   border: 1px solid var(--k-line);
-  border-radius: 12px;
+  border-radius: var(--k-card-radius);
   min-width: 0;
 }
 .inventory-tabs {
@@ -97,7 +97,7 @@
   background: transparent;
   color: var(--k-muted);
   padding: 10px 2px;
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   font-weight: 600;
   box-shadow: none;
 }
@@ -125,7 +125,7 @@
   max-width: 290px;
   background: var(--k-surface-2);
   border: 1px solid var(--k-line-strong);
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   padding-left: 10px;
   color: var(--k-muted);
 }
@@ -135,7 +135,7 @@
   border: 0;
   background: transparent;
   padding: 9px 10px;
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   color: var(--k-ink);
 }
 .inventory-page .inventory-search button {
@@ -162,12 +162,12 @@
   gap: 6px;
   min-height: 38px;
   border: 1px solid var(--k-line-strong);
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   background: var(--k-surface);
   color: var(--k-ink);
   padding: 7px 12px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   font-weight: 600;
   box-shadow: none;
 }
@@ -223,7 +223,7 @@
   top: 44px;
   padding: 6px;
   border: 1px solid var(--k-line);
-  border-radius: 10px;
+  border-radius: var(--k-radius);
   background: var(--k-surface);
   width: 215px;
   box-shadow: 0 8px 24px #1f385126;
@@ -237,7 +237,7 @@
   text-align: left;
 }
 .inventory-caption {
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   color: var(--k-muted);
 }
 .inventory-history-note {
@@ -247,8 +247,8 @@
 .inventory-warning,
 .inventory-error {
   padding: 10px 14px;
-  border-radius: 8px;
-  font-size: 12px;
+  border-radius: var(--k-radius);
+  font-size: var(--k-fs-xs);
 }
 .inventory-warning {
   color: #865015;
@@ -279,21 +279,21 @@
 }
 /* The original dense sizing, for the Classic layout it was written for. */
 html:not([data-ui-layout="workspace"]) .inventory-page .stock-table table {
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
 }
 html:not([data-ui-layout="workspace"]) .inventory-page .stock-table :is(th, td) {
   padding-inline: 12px;
 }
 html:not([data-ui-layout="workspace"]) .inventory-page .stock-table th {
-  font-size: 11px;
+  font-size: var(--k-fs-2xs);
   letter-spacing: 0.3px;
 }
 html:not([data-ui-layout="workspace"]) .inventory-page .stock-table td {
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
 }
 .inventory-page .stock-table td > small {
   display: block;
-  font-size: 11px;
+  font-size: var(--k-fs-2xs);
   color: var(--k-muted);
   margin-top: 4px;
 }
@@ -308,13 +308,13 @@ html:not([data-ui-layout="workspace"]) .inventory-page .stock-table td {
   padding: 0 12px 12px;
 }
 .inventory-page .stock-card__name {
-  font-size: 13px;
+  font-size: var(--k-fs-sm);
 }
 .inventory-page .stock-card__onhand-value {
-  font-size: 18px;
+  font-size: var(--k-fs-lg);
 }
 .inventory-page .stock-card__hs {
-  font-size: 11px;
+  font-size: var(--k-fs-2xs);
 }
 .inventory-entry-columns,
 .inventory-entry-row {
@@ -327,7 +327,7 @@ html:not([data-ui-layout="workspace"]) .inventory-page .stock-table td {
   padding: 14px 18px;
 }
 .inventory-entry-columns {
-  font-size: 11px;
+  font-size: var(--k-fs-2xs);
   text-transform: uppercase;
   color: var(--k-muted);
   background: var(--k-surface-2);
@@ -335,7 +335,7 @@ html:not([data-ui-layout="workspace"]) .inventory-page .stock-table td {
 }
 .inventory-entry-row {
   border-bottom: 1px solid var(--k-row-line);
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   overflow-wrap: anywhere;
 }
 .inventory-entry-row > div {
@@ -346,7 +346,7 @@ html:not([data-ui-layout="workspace"]) .inventory-page .stock-table td {
 }
 .inventory-entry-row small {
   display: block;
-  font-size: 11px;
+  font-size: var(--k-fs-2xs);
   color: var(--k-muted);
   margin-top: 4px;
 }
@@ -359,8 +359,8 @@ html:not([data-ui-layout="workspace"]) .inventory-page .stock-table td {
   color: #176c51;
   border: 1px solid #d9eee4;
   padding: 3px 7px;
-  border-radius: 20px;
-  font-size: 11px;
+  border-radius: var(--k-r-xl);
+  font-size: var(--k-fs-2xs);
 }
 .inventory-badge.is-reversed {
   background: var(--k-surface-3);
@@ -376,7 +376,7 @@ html:not([data-ui-layout="workspace"]) .inventory-page .stock-table td {
   color: #a83939;
   padding: 0;
   min-height: 38px;
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   box-shadow: none;
 }
 .inventory-page .inventory-reverse:hover {
@@ -393,23 +393,23 @@ html:not([data-ui-layout="workspace"]) .inventory-page .stock-table td {
   padding: 14px 18px;
   gap: 12px;
   flex-wrap: wrap;
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   color: var(--k-muted);
 }
 .inventory-modal {
-  font-size: 13px;
+  font-size: var(--k-fs-sm);
 }
 .inventory-modal-subtitle {
   display: block;
-  font-size: 11px;
+  font-size: var(--k-fs-2xs);
   color: #e1f2f4;
   margin-top: 5px;
 }
 .inventory-modal label {
-  font-size: 12px !important;
+  font-size: var(--k-fs-xs) !important;
 }
 .inventory-modal :is(input, select, textarea) {
-  font-size: 13px !important;
+  font-size: var(--k-fs-sm) !important;
   min-height: 42px;
 }
 .inventory-modal [data-admin-body] > fieldset > div {
@@ -418,13 +418,13 @@ html:not([data-ui-layout="workspace"]) .inventory-page .stock-table td {
 .inventory-modal .purchase-category-selected {
   border: 1px solid #dce8ee;
   background: linear-gradient(110deg, #f2f7ff, #f0faf7);
-  border-radius: 9px;
+  border-radius: var(--k-radius);
   padding: 14px;
-  font-size: 13px;
+  font-size: var(--k-fs-sm);
 }
 .inventory-modal .purchase-category-selected small {
   display: block;
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   color: var(--k-muted);
   margin-top: 6px;
 }
@@ -438,7 +438,7 @@ html:not([data-ui-layout="workspace"]) .inventory-page .stock-table td {
     margin: 0 12px 12px;
     padding: 14px;
     border: 1px solid var(--k-line);
-    border-radius: 10px;
+    border-radius: var(--k-radius);
   }
   .inventory-entry-id {
     grid-column: 1 / -1;
@@ -453,7 +453,7 @@ html:not([data-ui-layout="workspace"]) .inventory-page .stock-table td {
   .inventory-mobile-label {
     display: block;
     color: var(--k-muted);
-    font-size: 11px;
+    font-size: var(--k-fs-2xs);
     margin-bottom: 5px;
   }
   .inventory-entry-row > div:last-child {
@@ -490,7 +490,7 @@ html:not([data-ui-layout="workspace"]) .inventory-page .stock-table td {
     border-bottom: 1px solid var(--k-line);
   }
   .inventory-summary strong {
-    font-size: 18px;
+    font-size: var(--k-fs-lg);
   }
   .inventory-tabs {
     display: grid;
@@ -547,7 +547,7 @@ html:not([data-ui-layout="workspace"]) .inventory-page .stock-table td {
   color: var(--k-ink);
   padding: 0;
   text-align: left;
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   font-weight: 600;
   box-shadow: none;
   white-space: normal !important;
@@ -674,7 +674,7 @@ html:not([data-ui-layout="workspace"]) .inventory-page .stock-table td {
   }
   .inventory-page .inventory-summary strong {
     margin: 3px 0;
-    font-size: 17px;
+    font-size: var(--k-fs-lg);
   }
   .inventory-page .inventory-summary .inventory-tracking {
     margin: 3px 0;

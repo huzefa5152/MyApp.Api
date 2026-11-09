@@ -479,7 +479,7 @@ function Dashboard({
             points={trend}
             bars={[
               { key: "revenue", label: "Revenue", color: "var(--k-blue)" },
-              { key: "costOfSales", label: "Cost of sales", color: "#90a4c8" },
+              { key: "costOfSales", label: "Cost of sales", color: "var(--k-chart-muted)" },
             ]}
             line={{ key: "grossProfit", label: "Gross profit", color: "var(--k-teal)" }}
             ariaLabel="Monthly revenue, cost of sales and gross profit"

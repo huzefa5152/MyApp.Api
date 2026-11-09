@@ -21,7 +21,7 @@ export default function FreightChargesField({ value, onChange, disabled = false 
           }}
         />
       </label>
-      <p style={{ color: "var(--k-muted)", fontSize: "0.8rem", margin: "6px 0" }}>
+      <p style={{ color: "var(--k-muted)", fontSize: "var(--k-fs-sm)", margin: "6px 0" }}>
         Added to the commercial bill and amount owed. Sales tax stays unchanged.
       </p>
     </div>

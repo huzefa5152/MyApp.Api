@@ -10,7 +10,7 @@ export const statusTones = {
   success: { bg: "var(--k-success-bg)", color: "var(--k-success)", border: "#2e7d3230" },
   danger: { bg: "var(--k-danger-bg-2)", color: "var(--k-danger-ink)", border: "#c6282830" },
   warning: { bg: "var(--k-warn-bg-2)", color: "var(--k-warn-ink-3)", border: "#b26a0030" },
-  neutral: { bg: "var(--k-slate-bg)", color: "#546e7a", border: "#b0bec530" },
+  neutral: { bg: "var(--k-slate-bg)", color: "var(--k-slate-ink, #546e7a)", border: "#b0bec530" },
   setup: { bg: "#fce4ec", color: "#880e4f", border: "#880e4f30" },
   duplicate: { bg: "var(--k-purple-bg)", color: "var(--k-purple)", border: "#4527a040" },
   submitted: { bg: "var(--k-success-bg)", color: "var(--k-success-strong)", border: "#1b5e2030" },
@@ -57,10 +57,10 @@ export default function StatusBadge({ tone, status, children, style, title }) {
         gap: 4,
         // Size tokens: Classic falls back to the original values; Workspace sets them
         // in ui/shared-components.css.
-        fontSize: "var(--sc-badge-font, 0.72rem)",
+        fontSize: "var(--sc-badge-font, var(--k-fs-2xs))",
         fontWeight: 700,
         padding: "var(--sc-badge-pad, 0.2rem 0.6rem)",
-        borderRadius: 20,
+        borderRadius: "var(--k-r-xl)",
         whiteSpace: "nowrap",
         textTransform: "uppercase",
         letterSpacing: "0.03em",

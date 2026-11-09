@@ -450,7 +450,7 @@ export default function WithholdingTaxReceiptsPage() {
                 <span
                   style={{
                     ...styles.vVal,
-                    fontSize: "1.2rem",
+                    fontSize: "var(--k-fs-xl)",
                     fontWeight: 700,
                     color: "var(--k-blue)",
                     fontVariantNumeric: "tabular-nums",
@@ -537,7 +537,7 @@ const styles = {
   cardList: { display: "flex", flexDirection: "column", gap: "var(--k-gap)", marginTop: 8 },
   // marginTop: 0 — the flex gap spaces the cards, not the kit's ".k-card + .k-card" rule.
   card: { padding: "var(--k-card-pad)", marginTop: 0 },
-  cardNum: { fontWeight: 700, fontSize: "calc(var(--k-font) + 0.05rem)", color: "var(--k-blue)" },
+  cardNum: { fontWeight: 700, fontSize: "var(--k-fs-md)", color: "var(--k-blue)" },
   cardDate: { fontSize: "var(--k-font-sm)", color: "var(--k-muted)" },
   cardActions: {
     display: "flex",
@@ -553,13 +553,13 @@ const styles = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    background: "#f0f7ff",
+    background: "var(--k-tint, #f0f7ff)",
   },
   totalCardLabel: { fontWeight: 700, color: "var(--k-muted)" },
   totalCardValue: { fontWeight: 800, color: "var(--k-blue)", fontVariantNumeric: "tabular-nums" },
   vRow: { display: "flex", justifyContent: "space-between", gap: 12, padding: "0.4rem 0" },
   vLbl: {
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 600,
     color: "var(--k-muted)",
     textTransform: "uppercase",

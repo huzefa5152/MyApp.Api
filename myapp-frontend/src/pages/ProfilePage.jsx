@@ -712,7 +712,7 @@ const styles = {
     padding: "6px 10px",
   },
   avatarOverlayLabel: {
-    fontSize: "0.65rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 600,
     letterSpacing: "0.03em",
     textTransform: "uppercase",
@@ -736,7 +736,7 @@ const styles = {
   },
   profileName: {
     margin: 0,
-    fontSize: "1.35rem",
+    fontSize: "var(--k-fs-xl)",
     fontWeight: 700,
     color: "var(--k-ink)",
     overflowWrap: "anywhere",
@@ -744,7 +744,7 @@ const styles = {
   profileUsername: {
     margin: "0.2rem 0 0",
     color: "var(--k-muted)",
-    fontSize: "0.9rem",
+    fontSize: "var(--k-fs-base)",
     overflowWrap: "anywhere",
   },
   roleBadge: {
@@ -752,10 +752,10 @@ const styles = {
     alignItems: "center",
     marginTop: "0.5rem",
     padding: "0.25rem 0.75rem",
-    borderRadius: 20,
+    borderRadius: "var(--k-r-xl)",
     background: `linear-gradient(135deg, color-mix(in srgb, var(--k-blue) 9%, transparent), color-mix(in srgb, var(--k-teal) 9%, transparent))`,
     color: "var(--k-blue)",
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 600,
   },
   avatarActions: {
@@ -769,7 +769,7 @@ const styles = {
   avatarHint: {
     textAlign: "center",
     color: "var(--k-muted)",
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     margin: 0,
     padding: "0.6rem 1.5rem 1.25rem",
   },

@@ -580,8 +580,13 @@ const st = {
   },
   card: { marginTop: 0 },
   cardTop: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 },
-  qNum: { fontWeight: 800, fontSize: "calc(var(--k-font) + 0.1rem)", color: "var(--k-blue)" },
-  badge: { fontSize: "0.72rem", fontWeight: 700, padding: "0.15rem 0.6rem", borderRadius: 20 },
+  qNum: { fontWeight: 800, fontSize: "var(--k-fs-md)", color: "var(--k-blue)" },
+  badge: {
+    fontSize: "var(--k-fs-2xs)",
+    fontWeight: 700,
+    padding: "0.15rem 0.6rem",
+    borderRadius: "var(--k-r-xl)",
+  },
   client: {
     marginTop: "0.5rem",
     fontWeight: 600,
@@ -602,10 +607,10 @@ const st = {
   total: {
     marginTop: "0.5rem",
     fontWeight: 800,
-    fontSize: "calc(var(--k-font) + 0.2rem)",
+    fontSize: "var(--k-fs-md)",
     color: "var(--k-ink)",
   },
-  subMeta: { marginTop: "0.1rem", fontSize: "0.74rem", color: "var(--k-muted)" },
+  subMeta: { marginTop: "0.1rem", fontSize: "var(--k-fs-xs)", color: "var(--k-muted)" },
   converted: {
     marginTop: "0.3rem",
     fontSize: "var(--k-font-sm)",

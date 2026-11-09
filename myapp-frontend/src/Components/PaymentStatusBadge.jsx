@@ -30,7 +30,7 @@ const MAP = {
   },
   Unpaid: {
     bg: "var(--k-slate-bg)",
-    color: "#546e7a",
+    color: "var(--k-slate-ink, #546e7a)",
     border: "var(--k-slate-line)",
     label: "Unpaid",
     Icon: MdRadioButtonUnchecked,
@@ -71,11 +71,11 @@ export default function PaymentStatusBadge({
         gap: 6,
         // Size tokens: Classic = these fallbacks; Workspace = ui/shared-components.css.
         padding: "var(--sc-pay-pad, 0.35rem 0.7rem)",
-        borderRadius: 8,
+        borderRadius: "var(--k-radius)",
         background: s.bg,
         color: s.color,
         border: `1px solid ${s.border}`,
-        fontSize: "var(--sc-pay-font, 0.78rem)",
+        fontSize: "var(--sc-pay-font, var(--k-fs-xs))",
         fontWeight: 700,
         whiteSpace: "nowrap",
       }}

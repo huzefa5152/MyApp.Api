@@ -391,7 +391,7 @@ const styles = {
   hsInline: {
     color: "var(--k-muted, #5f6d7e)",
     fontFamily: "monospace",
-    fontSize: "0.75rem",
+    fontSize: "var(--k-fs-xs)",
     marginLeft: 4,
   },
   // position: fixed (from .k-combo__pop) uses viewport coords (no scrollY math).

@@ -35,7 +35,7 @@ export default class ErrorBoundary extends React.Component {
           <div
             style={{
               background: "#fff",
-              borderRadius: 16,
+              borderRadius: "var(--k-r-xl)",
               padding: "48px 40px",
               maxWidth: 480,
               width: "90%",
@@ -61,7 +61,7 @@ export default class ErrorBoundary extends React.Component {
             <h2
               style={{
                 margin: "0 0 8px",
-                fontSize: "var(--k-title, 1.5rem)",
+                fontSize: "var(--k-title, var(--k-fs-2xl))",
                 color: "var(--k-ink, #1a2332)",
               }}
             >
@@ -71,7 +71,7 @@ export default class ErrorBoundary extends React.Component {
               style={{
                 margin: "0 0 24px",
                 color: "var(--k-muted, #5f6d7e)",
-                fontSize: "0.95rem",
+                fontSize: "var(--k-fs-md)",
                 lineHeight: 1.5,
               }}
             >

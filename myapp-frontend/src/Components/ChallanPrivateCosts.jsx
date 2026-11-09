@@ -14,9 +14,9 @@ const field = {
   minHeight: "var(--k-btn-h)",
   boxSizing: "border-box",
   border: "1px solid var(--k-line-strong)",
-  borderRadius: 7,
+  borderRadius: "var(--k-r-sm)",
   padding: "6px 9px",
-  fontSize: 12,
+  fontSize: "var(--k-fs-xs)",
   background: "var(--k-surface)",
 };
 

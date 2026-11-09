@@ -2,13 +2,14 @@
 
 export const REGISTRATION_TYPES = ["Registered", "FTN", "Unregistered", "CNIC"];
 
+// Every pair keeps white initials at 4.5:1 or better at its lighter end.
 const AVATAR_GRADIENTS = [
   "linear-gradient(135deg, #0d47a1, #1976d2)",
-  "linear-gradient(135deg, #00695c, #00897b)",
-  "linear-gradient(135deg, #0a3680, #00897b)",
-  "linear-gradient(135deg, #1565c0, #26a69a)",
+  "linear-gradient(135deg, #00695c, #00796b)",
+  "linear-gradient(135deg, #0a3680, #00796b)",
+  "linear-gradient(135deg, #1565c0, #0e7490)",
   "linear-gradient(135deg, #283593, #3949ab)",
-  "linear-gradient(135deg, #00796b, #4db6ac)",
+  "linear-gradient(135deg, #004d40, #00796b)",
 ];
 
 export function initials(name) {

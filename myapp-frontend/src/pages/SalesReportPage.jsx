@@ -516,7 +516,7 @@ export default function SalesReportPage() {
             key={key}
             style={{
               fontFamily: "monospace",
-              fontSize: "0.75rem",
+              fontSize: "var(--k-fs-xs)",
               wordBreak: "break-all",
               maxWidth: 150,
             }}
@@ -532,7 +532,10 @@ export default function SalesReportPage() {
         );
       case "hs":
         return (
-          <td key={key} style={{ fontFamily: "monospace", fontSize: "0.75rem", maxWidth: 160 }}>
+          <td
+            key={key}
+            style={{ fontFamily: "monospace", fontSize: "var(--k-fs-xs)", maxWidth: 160 }}
+          >
             <div style={clamp2}>{hsCodes}</div>
           </td>
         );
@@ -908,7 +911,7 @@ export default function SalesReportPage() {
                           {open ? <MdExpandMore size={18} /> : <MdChevronRight size={18} />}
                           {inv.documentNumber}
                         </span>
-                        <span style={{ fontSize: "0.76rem", color: "var(--k-muted)" }}>
+                        <span style={{ fontSize: "var(--k-fs-xs)", color: "var(--k-muted)" }}>
                           {new Date(inv.documentDate).toLocaleDateString()}
                         </span>
                       </button>
@@ -931,7 +934,7 @@ export default function SalesReportPage() {
                       )}
                       <div
                         style={{
-                          fontSize: "0.86rem",
+                          fontSize: "var(--k-fs-base)",
                           fontWeight: 600,
                           color: "var(--k-ink)",
                           ...clamp2,
@@ -942,7 +945,7 @@ export default function SalesReportPage() {
                       <div
                         style={{
                           fontFamily: "monospace",
-                          fontSize: "0.72rem",
+                          fontSize: "var(--k-fs-2xs)",
                           color: "var(--k-muted)",
                           ...clamp2,
                         }}
@@ -987,13 +990,15 @@ export default function SalesReportPage() {
                         >
                           {inv.lines.map((l, idx) => (
                             <div key={idx} style={srLine}>
-                              <div style={{ fontSize: "0.82rem", fontWeight: 600, ...clamp2 }}>
+                              <div
+                                style={{ fontSize: "var(--k-fs-sm)", fontWeight: 600, ...clamp2 }}
+                              >
                                 {l.sr}. {l.product}
                               </div>
                               <div
                                 style={{
                                   fontFamily: "monospace",
-                                  fontSize: "0.7rem",
+                                  fontSize: "var(--k-fs-2xs)",
                                   color: "var(--k-muted)",
                                 }}
                               >
@@ -1195,7 +1200,7 @@ export default function SalesReportPage() {
                 style={{
                   height: 8,
                   background: "var(--k-surface-3)",
-                  borderRadius: 999,
+                  borderRadius: "var(--k-r-pill)",
                   overflow: "hidden",
                 }}
               >
@@ -1212,7 +1217,7 @@ export default function SalesReportPage() {
                 {bulk.done} of {bulk.total} invoice(s)
               </div>
               {bulk.mode === "merged" && (
-                <div style={{ marginTop: 12, fontSize: "0.78rem", color: "var(--k-muted)" }}>
+                <div style={{ marginTop: 12, fontSize: "var(--k-fs-xs)", color: "var(--k-muted)" }}>
                   Your browser's print dialog opens when this finishes — pick{" "}
                   <strong>Save as PDF</strong> as the destination to keep a file.
                 </div>
@@ -1252,7 +1257,7 @@ const clamp2 = {
 const nowrap = { whiteSpace: "nowrap" };
 // Page-specific tints (expanded invoice band, grand-total band, PDF glyph).
 const bandBg = "#f0f7ff";
-const totalBg = "#eef4ff";
+const totalBg = "var(--k-total-bg, #eef4ff)";
 const pdfRed = "var(--k-danger-ink-2)";
 const totalBand = { background: totalBg, borderTop: "2px solid var(--k-blue)" };
 
@@ -1307,16 +1312,21 @@ const srMeta = {
 };
 const srLbl = {
   display: "block",
-  fontSize: "0.6rem",
+  fontSize: "var(--k-fs-2xs)",
   fontWeight: 700,
   textTransform: "uppercase",
   letterSpacing: "0.05em",
   color: "var(--k-muted)",
 };
-const srVal = { display: "block", fontSize: "0.84rem", fontWeight: 600, color: "var(--k-ink)" };
+const srVal = {
+  display: "block",
+  fontSize: "var(--k-fs-sm)",
+  fontWeight: 600,
+  color: "var(--k-ink)",
+};
 const srLine = {
   background: "var(--k-surface-2)",
-  borderRadius: 8,
+  borderRadius: "var(--k-radius)",
   padding: "0.5rem 0.6rem",
   display: "flex",
   flexDirection: "column",
@@ -1326,7 +1336,7 @@ const srLineMeta = {
   display: "flex",
   flexWrap: "wrap",
   gap: "0.3rem 0.7rem",
-  fontSize: "0.78rem",
+  fontSize: "var(--k-fs-xs)",
   color: "var(--k-muted)",
   marginTop: 2,
 };
@@ -1343,7 +1353,7 @@ const segWrap = {
 const segBtn = (active) => ({
   border: "none",
   borderRadius: 0,
-  background: active ? "var(--k-blue)" : "transparent",
+  background: active ? "var(--k-accent-solid, var(--k-blue))" : "transparent",
   color: active ? "#fff" : "var(--k-muted)",
   padding: "0 0.85rem",
   fontSize: "var(--k-font-sm)",

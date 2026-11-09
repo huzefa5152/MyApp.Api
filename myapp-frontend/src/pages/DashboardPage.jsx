@@ -428,7 +428,7 @@ function CommandCentre({ data, has, periodLabel }) {
   });
   const trendBars = [
     sales && { key: "sales", label: "Sales", color: accents.sales },
-    purchases && { key: "purchases", label: "Purchases", color: "#4db6ac" },
+    purchases && { key: "purchases", label: "Purchases", color: "var(--k-chart-2)" },
   ].filter(Boolean);
 
   return (
@@ -946,7 +946,12 @@ function FbrSection({ data }) {
           color="var(--k-warn-2)"
           icon={MdHourglassEmpty}
         />
-        <Funnel label="Validated" value={data.validated} color="#0277bd" icon={MdCheckCircle} />
+        <Funnel
+          label="Validated"
+          value={data.validated}
+          color="var(--k-chart-7)"
+          icon={MdCheckCircle}
+        />
         <Funnel
           label="Submitted"
           value={data.submitted}
@@ -958,7 +963,11 @@ function FbrSection({ data }) {
 
       {data.excluded > 0 && (
         <div
-          style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)", paddingLeft: "0.25rem" }}
+          style={{
+            fontSize: "var(--k-font-sm)",
+            color: "var(--k-muted)",
+            paddingLeft: "var(--k-fs-2xs)",
+          }}
         >
           <strong>{data.excluded}</strong> bill{data.excluded !== 1 ? "s" : ""} excluded from bulk
           submit (operator marked as skip).
@@ -1032,7 +1041,7 @@ function InventorySection({ data, canOpen = false }) {
                 <span
                   style={{
                     ...styles.miniChip,
-                    color: m.direction === "In" ? "#15803d" : "var(--k-danger)",
+                    color: m.direction === "In" ? "var(--k-chart-good)" : "var(--k-danger)",
                     backgroundColor:
                       m.direction === "In"
                         ? "rgba(21,128,61,0.10)"
@@ -1106,7 +1115,7 @@ function Funnel({ label, value, color, icon }) {
       </div>
       <div
         style={{
-          fontSize: "0.64rem",
+          fontSize: "var(--k-fs-2xs)",
           color: "var(--k-muted)",
           textTransform: "uppercase",
           letterSpacing: "0.1em",
@@ -1140,7 +1149,7 @@ function ReconChip({ label, value, color }) {
         alignItems: "center",
         gap: "0.45rem",
         padding: "0.3rem 0.75rem",
-        borderRadius: 999,
+        borderRadius: "var(--k-r-pill)",
         border: `1px solid color-mix(in srgb, ${color} 25%, transparent)`,
         backgroundColor: `color-mix(in srgb, ${color} 5%, transparent)`,
       }}
@@ -1174,7 +1183,12 @@ function RecentList({ rows }) {
         >
           <span
             className="dash-recent-row__number"
-            style={{ ...styles.listMeta, fontFamily: MONO, fontSize: "0.75rem", flexShrink: 0 }}
+            style={{
+              ...styles.listMeta,
+              fontFamily: MONO,
+              fontSize: "var(--k-fs-xs)",
+              flexShrink: 0,
+            }}
           >
             #{r.number}
           </span>
@@ -1226,7 +1240,7 @@ const styles = {
   },
   statLabel: {
     fontFamily: MONO,
-    fontSize: "0.62rem",
+    fontSize: "var(--k-fs-2xs)",
     color: "var(--k-muted)",
     textTransform: "uppercase",
     letterSpacing: "0.12em",
@@ -1240,7 +1254,7 @@ const styles = {
   },
   subHeading: {
     fontFamily: MONO,
-    fontSize: "0.66rem",
+    fontSize: "var(--k-fs-2xs)",
     color: "var(--k-faint)",
     fontWeight: 600,
     textTransform: "uppercase",
@@ -1273,8 +1287,8 @@ const styles = {
     display: "inline-flex",
     alignItems: "center",
     padding: "0.12rem 0.5rem",
-    borderRadius: 999,
-    fontSize: "0.7rem",
+    borderRadius: "var(--k-r-pill)",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
     flexShrink: 0,
   },
@@ -1311,7 +1325,7 @@ const styles = {
   },
   listMeta: {
     color: "var(--k-muted)",
-    fontSize: "0.73rem",
+    fontSize: "var(--k-fs-xs)",
   },
   headerLink: {
     display: "inline-flex",

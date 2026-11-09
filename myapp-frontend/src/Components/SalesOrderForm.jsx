@@ -281,7 +281,12 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
             />
             {isEdit && (
               <div
-                style={{ background: "#eff6ff", padding: 12, borderRadius: 8, marginBottom: 12 }}
+                style={{
+                  background: "#eff6ff",
+                  padding: 12,
+                  borderRadius: "var(--k-radius)",
+                  marginBottom: 12,
+                }}
               >
                 <p>
                   Changing ordered quantities changes the remaining commitment; it does not rewrite
@@ -358,7 +363,9 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
                 placeholder="— not linked —"
               />
               {quoteLoadedMsg && (
-                <div style={{ fontSize: "0.72rem", color: "var(--k-teal)", fontWeight: 600 }}>
+                <div
+                  style={{ fontSize: "var(--k-fs-2xs)", color: "var(--k-teal)", fontWeight: 600 }}
+                >
                   {quoteLoadedMsg}
                 </div>
               )}

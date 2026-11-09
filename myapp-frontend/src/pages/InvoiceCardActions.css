@@ -9,7 +9,7 @@
   flex: 1 1 auto;
   justify-content: center;
   padding: 8px !important;
-  font-size: 0.78rem !important;
+  font-size: var(--k-fs-xs) !important;
   line-height: 1.25;
   white-space: normal !important;
   box-shadow: none;

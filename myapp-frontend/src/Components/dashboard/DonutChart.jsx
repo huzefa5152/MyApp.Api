@@ -18,16 +18,16 @@ import { useMemo } from "react";
 // Same palette is used across donut + list rows so the eye can
 // track segment ↔ row easily.
 const COLORS = [
-  "#0d47a1", // deep blue
-  "#00897b", // teal
-  "#6a1b9a", // purple
-  "#e65100", // amber
-  "#2e7d32", // green
-  "#c62828", // red
-  "#0277bd", // light blue
-  "#5d4037", // brown
+  "var(--k-chart-1)", // deep blue
+  "var(--k-chart-2)", // teal
+  "var(--k-chart-3)", // purple
+  "var(--k-chart-4)", // amber
+  "var(--k-chart-5)", // green
+  "var(--k-chart-6)", // red
+  "var(--k-chart-7)", // light blue
+  "var(--k-chart-8)", // brown
 ];
-const OTHERS_COLOR = "#9e9e9e";
+const OTHERS_COLOR = "var(--k-chart-other)";
 
 export const DONUT_PALETTE = COLORS;
 export const DONUT_OTHERS_COLOR = OTHERS_COLOR;
@@ -103,7 +103,7 @@ export default function DonutChart({
             cy="50"
             r="38"
             fill="none"
-            stroke="#eef2f7"
+            stroke="var(--k-chart-track)"
             strokeWidth="14"
             style={{ stroke: "var(--k-surface-3, #eef2f7)" }}
           />
@@ -112,7 +112,7 @@ export default function DonutChart({
             y="48"
             textAnchor="middle"
             fontSize="9"
-            fill="#5f6d7e"
+            fill="var(--k-muted)"
             style={{ fill: "var(--k-muted, #5f6d7e)" }}
           >
             No data
@@ -122,7 +122,7 @@ export default function DonutChart({
             y="58"
             textAnchor="middle"
             fontSize="6"
-            fill="#9aa3ad"
+            fill="var(--k-faint)"
             style={{ fill: "var(--k-faint, #9aa3ad)" }}
           >
             in this period
@@ -178,7 +178,7 @@ export default function DonutChart({
               d={d}
               fill={color}
               fillOpacity={isHighlighted ? 1 : 0.92}
-              stroke={isHighlighted ? "#1a2332" : "#fff"}
+              stroke={isHighlighted ? "var(--k-ink)" : "var(--k-surface)"}
               strokeWidth={isHighlighted ? 0.6 : 0.4}
               style={{
                 stroke: isHighlighted ? "var(--k-ink, #1a2332)" : "var(--k-surface, #fff)",
@@ -203,7 +203,7 @@ export default function DonutChart({
           textAnchor="middle"
           fontSize={Math.min(9, 44 / (String(formatValue(total)).length * 0.6))}
           fontWeight="800"
-          fill="#1a2332"
+          fill="var(--k-ink)"
           style={{
             fill: "var(--k-ink, #1a2332)",
             fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
@@ -216,7 +216,7 @@ export default function DonutChart({
           y={cy + 8}
           textAnchor="middle"
           fontSize="4.5"
-          fill="#5f6d7e"
+          fill="var(--k-muted)"
           style={{
             fill: "var(--k-muted, #5f6d7e)",
             textTransform: "uppercase",

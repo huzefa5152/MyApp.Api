@@ -14,7 +14,7 @@
   .purchase-debit-lines tr {
     display: block;
     border: 1px solid var(--k-line-strong);
-    border-radius: 10px;
+    border-radius: var(--k-radius);
     margin-top: 10px;
     padding: 8px;
     background: white;
@@ -31,7 +31,7 @@
   }
   .purchase-debit-lines td::before {
     content: attr(data-label);
-    font-size: 12px;
+    font-size: var(--k-fs-xs);
     font-weight: 600;
     color: var(--k-muted);
   }
@@ -43,7 +43,7 @@
   .purchase-debit-lines textarea,
   .purchase-debit-lines select {
     min-height: var(--k-btn-h);
-    font-size: 14px !important;
+    font-size: var(--k-fs-base) !important;
   }
   .purchase-debit-lines button {
     min-height: var(--k-btn-h);

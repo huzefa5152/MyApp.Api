@@ -106,11 +106,11 @@ export default function KpiCard({
   if (deltaPct != null && deltaPct !== 0 && deltaPct !== Infinity) {
     const positive = deltaPct > 0;
     const good = higherIsBetter ? positive : !positive;
-    deltaColor = good ? "#15803d" : "var(--k-danger-ink)";
+    deltaColor = good ? "var(--k-chart-good)" : "var(--k-danger-ink)";
     deltaBg = good ? "rgba(21, 128, 61, 0.10)" : "rgba(198, 40, 40, 0.09)";
     deltaIcon = positive ? MdTrendingUp : MdTrendingDown;
   } else if (deltaPct === Infinity) {
-    deltaColor = "#15803d";
+    deltaColor = "var(--k-chart-good)";
     deltaBg = "rgba(21, 128, 61, 0.10)";
     deltaIcon = MdTrendingUp;
   }
@@ -156,7 +156,7 @@ export default function KpiCard({
           alignItems: "center",
           gap: "0.55rem",
           color: "var(--k-muted)",
-          fontSize: "0.7rem",
+          fontSize: "var(--k-fs-2xs)",
           fontWeight: 600,
           letterSpacing: "0.12em",
           textTransform: "uppercase",
@@ -172,7 +172,7 @@ export default function KpiCard({
               justifyContent: "center",
               width: 26,
               height: 26,
-              borderRadius: 8,
+              borderRadius: "var(--k-radius)",
               background: `color-mix(in srgb, ${accent} 8%, transparent)`,
               border: `1px solid color-mix(in srgb, ${accent} 18%, transparent)`,
               color: accent,
@@ -223,9 +223,9 @@ export default function KpiCard({
             alignSelf: "flex-start",
             color: deltaColor,
             backgroundColor: deltaBg,
-            borderRadius: 999,
+            borderRadius: "var(--k-r-pill)",
             padding: "0.14rem 0.55rem 0.14rem 0.4rem",
-            fontSize: "0.74rem",
+            fontSize: "var(--k-fs-xs)",
             fontWeight: 700,
           }}
         >

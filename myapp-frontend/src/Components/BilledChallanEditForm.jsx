@@ -154,7 +154,7 @@ export default function BilledChallanEditForm({ challan, onClose, onSaved, onOpe
                 padding: 12,
                 background: "var(--k-danger-bg)",
                 color: "var(--k-danger)",
-                borderRadius: 8,
+                borderRadius: "var(--k-radius)",
               }}
             >
               {error}
@@ -249,7 +249,7 @@ export default function BilledChallanEditForm({ challan, onClose, onSaved, onOpe
                     background: "var(--k-input-bg)",
                     padding: 14,
                     marginTop: 16,
-                    borderRadius: 10,
+                    borderRadius: "var(--k-radius)",
                     border: `1px solid var(--k-line)`,
                   }}
                 >

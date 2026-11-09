@@ -74,7 +74,7 @@ export default function PrintTemplateSelect({ picker, style }) {
         <MdPrint size={15} color="var(--k-muted)" aria-hidden="true" />
         <span
           style={{
-            fontSize: "0.85rem",
+            fontSize: "var(--k-fs-base)",
             color: "var(--k-muted)",
             maxWidth: 240,
             overflow: "hidden",

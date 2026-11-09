@@ -67,7 +67,7 @@ const s = {
     maxWidth: 380,
     width: "100%",
     padding: "12px 16px",
-    borderRadius: 12,
+    borderRadius: "var(--k-card-radius)",
     background: "#fff",
     border: "1px solid #dce5ef",
     boxShadow: "0 10px 30px rgba(10, 22, 40, 0.12)",
@@ -82,6 +82,6 @@ const s = {
     borderTopColor: "var(--k-blue)",
     animation: "rnSpin 800ms linear infinite",
   },
-  title: { fontWeight: 700, fontSize: "0.9rem", color: "var(--k-ink)" },
-  text: { fontSize: "0.8rem", color: "var(--k-muted)", lineHeight: 1.45 },
+  title: { fontWeight: 700, fontSize: "var(--k-fs-base)", color: "var(--k-ink)" },
+  text: { fontSize: "var(--k-fs-sm)", color: "var(--k-muted)", lineHeight: 1.45 },
 };

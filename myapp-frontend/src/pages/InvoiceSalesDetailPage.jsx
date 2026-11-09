@@ -403,7 +403,7 @@ function Field({ label, children }) {
         gap: 3,
         minWidth: 0,
         color: "var(--k-muted)",
-        fontSize: "0.64rem",
+        fontSize: "var(--k-fs-2xs)",
         fontWeight: 700,
         textTransform: "uppercase",
         letterSpacing: "0.05em",

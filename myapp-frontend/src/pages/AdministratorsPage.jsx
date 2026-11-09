@@ -333,7 +333,7 @@ export default function AdministratorsPage() {
                                       ...styles.avatar,
                                       width: 34,
                                       height: 34,
-                                      fontSize: "0.8rem",
+                                      fontSize: "var(--k-fs-sm)",
                                     }}
                                   >
                                     {initials(u.fullName)}
@@ -675,7 +675,7 @@ const styles = {
     background: `linear-gradient(135deg, var(--k-blue), var(--k-teal))`,
     color: "#fff",
     fontWeight: 700,
-    fontSize: "0.9rem",
+    fontSize: "var(--k-fs-base)",
   },
   name: {
     fontWeight: 600,
@@ -699,17 +699,17 @@ const styles = {
     alignItems: "center",
     gap: "0.3rem",
     padding: "0.2rem 0.55rem",
-    borderRadius: 999,
+    borderRadius: "var(--k-r-pill)",
     background: "#eef3fb",
     color: "var(--k-blue)",
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 600,
     whiteSpace: "nowrap",
   },
   cardBody: { borderTop: "1px solid var(--k-line)", padding: "0.5rem 1rem 1rem" },
   section: { padding: "0.75rem 0" },
   sectionTitle: {
-    fontSize: "0.72rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
     letterSpacing: "0.05em",
     textTransform: "uppercase",
@@ -722,7 +722,7 @@ const styles = {
     alignItems: "center",
     gap: "0.3rem",
     padding: "0.25rem 0.6rem",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     background: "var(--k-surface-3)",
     border: "1px solid var(--k-line)",
     fontSize: "var(--k-font-sm)",
@@ -744,7 +744,7 @@ const styles = {
     background: "var(--k-surface-2)",
   },
   iconLabel: { display: "inline-flex", alignItems: "center", gap: "0.4rem" },
-  hint: { color: "var(--k-muted)", fontSize: "var(--k-font-sm)", marginTop: "0.35rem" },
+  hint: { color: "var(--k-muted)", fontSize: "var(--k-font-sm)", marginTop: "var(--k-fs-2xs)" },
   checkRow: {
     display: "flex",
     alignItems: "center",

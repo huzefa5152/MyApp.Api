@@ -395,7 +395,7 @@ const s = {
   },
   field: { display: "flex", flexDirection: "column", gap: "0.3rem", minWidth: 0 },
   label: {
-    fontSize: "0.72rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
     color: "var(--k-muted)",
     textTransform: "uppercase",
@@ -431,7 +431,7 @@ const s = {
     color: "var(--k-muted)",
     flexShrink: 0,
   },
-  optionIconActive: { background: "var(--k-blue)", color: "#fff" },
+  optionIconActive: { background: "var(--k-accent-solid, var(--k-blue))", color: "#fff" },
   optionTitle: { fontSize: "var(--k-font)", fontWeight: 700, color: "var(--k-ink)" },
   optionHint: {
     fontSize: "var(--k-font-sm)",

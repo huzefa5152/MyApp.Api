@@ -609,9 +609,9 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 style={{
                   marginBottom: "1rem",
                   padding: "0.85rem",
-                  borderRadius: 10,
+                  borderRadius: "var(--k-radius)",
                   border: "1px solid #0d47a155",
-                  backgroundColor: "#e8f0fe",
+                  backgroundColor: "var(--k-tint, #e8f0fe)",
                 }}
               >
                 <div data-admin-field="" style={formGroup}>
@@ -628,7 +628,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                   />
                   <span
                     style={{
-                      fontSize: "0.76rem",
+                      fontSize: "var(--k-fs-xs)",
                       color: "var(--k-muted)",
                       marginTop: "0.3rem",
                       display: "block",
@@ -649,7 +649,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
               <div
                 style={{
                   padding: "0.75rem",
-                  borderRadius: 10,
+                  borderRadius: "var(--k-radius)",
                   border: "1px solid #0d47a130",
                   backgroundColor: "var(--k-info-bg)",
                 }}
@@ -658,7 +658,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                   style={{
                     margin: "0 0 0.6rem",
                     fontWeight: 700,
-                    fontSize: "0.88rem",
+                    fontSize: "var(--k-fs-base)",
                     color: "var(--k-blue)",
                   }}
                 >
@@ -748,7 +748,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                   <label style={label}>
                     FBR Bearer Token{" "}
                     {company?.hasFbrToken && (
-                      <span style={{ color: "var(--k-success-alt)", fontSize: "0.75rem" }}>
+                      <span style={{ color: "var(--k-success-alt)", fontSize: "var(--k-fs-xs)" }}>
                         (set)
                       </span>
                     )}
@@ -778,7 +778,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                   <h6
                     style={{
                       margin: "0 0 0.5rem",
-                      fontSize: "0.82rem",
+                      fontSize: "var(--k-fs-sm)",
                       fontWeight: 700,
                       color: "var(--k-muted)",
                       letterSpacing: "0.03em",
@@ -788,7 +788,11 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                     Default values for new bills
                   </h6>
                   <p
-                    style={{ margin: "0 0 0.75rem", fontSize: "0.76rem", color: "var(--k-muted)" }}
+                    style={{
+                      margin: "0 0 0.75rem",
+                      fontSize: "var(--k-fs-xs)",
+                      color: "var(--k-muted)",
+                    }}
                   >
                     Used when creating a bill if the line/header didn't specify. Leave blank to use
                     the built-in fallback.
@@ -1054,7 +1058,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
               <div
                 style={{
                   padding: "0.75rem",
-                  borderRadius: 10,
+                  borderRadius: "var(--k-radius)",
                   border: "1px solid #00695c30",
                   backgroundColor: "var(--k-teal-bg)",
                 }}
@@ -1063,7 +1067,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                   style={{
                     margin: "0 0 0.6rem",
                     fontWeight: 700,
-                    fontSize: "0.85rem",
+                    fontSize: "var(--k-fs-base)",
                     color: "var(--k-teal-ink)",
                   }}
                 >
@@ -1076,7 +1080,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                     alignItems: "flex-start",
                     gap: "0.5rem",
                     padding: "0.5rem",
-                    borderRadius: 8,
+                    borderRadius: "var(--k-radius)",
                     backgroundColor: "var(--k-surface)",
                     border: "1px solid #b2dfdb",
                     cursor: "pointer",
@@ -1090,7 +1094,9 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                     onChange={handleChange}
                     style={{ marginTop: "0.15rem", flexShrink: 0 }}
                   />
-                  <span style={{ fontSize: "0.84rem", color: "var(--k-ink)", lineHeight: 1.35 }}>
+                  <span
+                    style={{ fontSize: "var(--k-fs-sm)", color: "var(--k-ink)", lineHeight: 1.35 }}
+                  >
                     <strong style={{ display: "block" }}>Enable inventory tracking</strong>
                     <span style={hintText}>
                       Stock IN moves on Purchase Bill save, Stock OUT moves on FBR submission.
@@ -1117,7 +1123,9 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                     onChange={handleChange}
                     style={{ marginTop: "0.15rem", flexShrink: 0 }}
                   />
-                  <span style={{ fontSize: "0.84rem", color: "var(--k-ink)", lineHeight: 1.35 }}>
+                  <span
+                    style={{ fontSize: "var(--k-fs-sm)", color: "var(--k-ink)", lineHeight: 1.35 }}
+                  >
                     <strong style={{ display: "block" }}>
                       Refuse saves that take stock below zero
                     </strong>
@@ -1161,15 +1169,15 @@ export default function CompanyForm({ company, onClose, onSaved }) {
 }
 
 // ── Small shared inline styles ──────────────────────────────
-const hintText = { fontWeight: 400, color: "var(--k-muted)", fontSize: "0.72rem" };
+const hintText = { fontWeight: 400, color: "var(--k-muted)", fontSize: "var(--k-fs-2xs)" };
 const lockHint = {
-  fontSize: "0.75rem",
+  fontSize: "var(--k-fs-xs)",
   color: "var(--k-muted)",
   fontWeight: 400,
   marginLeft: "0.5rem",
 };
 const currentHint = {
-  fontSize: "0.78rem",
+  fontSize: "var(--k-fs-xs)",
   color: "var(--k-muted)",
   marginTop: "0.2rem",
   display: "block",
@@ -1178,10 +1186,10 @@ const lockedInput = { backgroundColor: "#f0f0f0", color: "#999", cursor: "not-al
 const infoNote = {
   margin: "0.25rem 0 0.75rem",
   padding: "0.55rem 0.7rem",
-  borderRadius: 8,
+  borderRadius: "var(--k-radius)",
   backgroundColor: "var(--k-surface-3)",
   border: "1px solid var(--k-line)",
-  fontSize: "0.76rem",
+  fontSize: "var(--k-fs-xs)",
   color: "var(--k-muted)",
   lineHeight: 1.4,
 };
@@ -1267,11 +1275,11 @@ const chipStyles = {
     minHeight: "1.8rem",
     padding: "0.3rem",
     border: "1px solid var(--k-line-strong)",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     backgroundColor: "var(--k-surface-2)",
   },
   empty: {
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     color: "#9ca3af",
     fontStyle: "italic",
     padding: "0.15rem 0.3rem",
@@ -1281,10 +1289,10 @@ const chipStyles = {
     alignItems: "center",
     gap: "0.3rem",
     padding: "0.2rem 0.55rem",
-    backgroundColor: "var(--k-blue)",
+    backgroundColor: "var(--k-accent-solid, var(--k-blue))",
     color: "#fff",
-    borderRadius: 14,
-    fontSize: "0.74rem",
+    borderRadius: "var(--k-card-radius)",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 600,
   },
   x: {
@@ -1292,7 +1300,7 @@ const chipStyles = {
     color: "#fff",
     border: "none",
     cursor: "pointer",
-    fontSize: "1rem",
+    fontSize: "var(--k-fs-md)",
     lineHeight: 1,
     padding: 0,
     marginLeft: "0.15rem",

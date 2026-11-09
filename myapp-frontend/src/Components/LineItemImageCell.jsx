@@ -57,7 +57,7 @@ export default function LineItemImageCell({
           height: 48,
           padding: 0,
           border: "1px dashed #d0d7e2",
-          borderRadius: 7,
+          borderRadius: "var(--k-r-sm)",
           background: "var(--k-surface-2)",
           display: "grid",
           placeItems: "center",
@@ -88,7 +88,7 @@ export default function LineItemImageCell({
             boxShadow: "none",
             background: "white",
             border: "1px solid #e8edf3",
-            borderRadius: 6,
+            borderRadius: "var(--k-r-sm)",
             fontSize: 11,
           }}
         >

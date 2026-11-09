@@ -711,7 +711,7 @@ const cardActions = {
 };
 const irnText = {
   fontFamily: "monospace",
-  fontSize: "0.74rem",
+  fontSize: "var(--k-fs-xs)",
   fontWeight: 400,
   color: "var(--k-muted)",
   wordBreak: "break-all",
@@ -721,5 +721,9 @@ const pickerSearchBar = {
   borderBottom: "1px solid var(--k-line)",
   flexShrink: 0,
 };
-const pickerHint = { fontSize: "var(--k-font-sm)", color: "var(--k-muted)", marginTop: "0.5rem" };
+const pickerHint = {
+  fontSize: "var(--k-font-sm)",
+  color: "var(--k-muted)",
+  marginTop: "var(--k-fs-2xs)",
+};
 const pickerTableWrap = { overflow: "auto", flex: "1 1 auto", minHeight: 0 };

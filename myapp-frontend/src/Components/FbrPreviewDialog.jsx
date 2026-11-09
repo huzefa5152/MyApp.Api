@@ -340,7 +340,7 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
 
 const s = {
   partyLabel: {
-    fontSize: "0.7rem",
+    fontSize: "var(--k-fs-2xs)",
     textTransform: "uppercase",
     letterSpacing: "0.04em",
     color: "var(--k-muted)",
@@ -348,7 +348,7 @@ const s = {
     marginBottom: 4,
   },
   partyName: {
-    fontSize: "calc(var(--k-font) + 0.05rem)",
+    fontSize: "var(--k-fs-md)",
     fontWeight: 700,
     color: "var(--k-ink)",
     overflowWrap: "anywhere",
@@ -368,7 +368,7 @@ const s = {
   // standard wide-table-on-mobile pattern.
   table: { minWidth: "720px" },
   idxCol: { width: 36 },
-  metaSub: { fontSize: "0.75rem", color: "var(--k-muted)", marginTop: 2 },
+  metaSub: { fontSize: "var(--k-fs-xs)", color: "var(--k-muted)", marginTop: 2 },
   muted: { color: "var(--k-faint)" },
   rawJson: {
     margin: "0.5rem 0 0",
@@ -376,8 +376,8 @@ const s = {
     background: "#0a1628",
     color: "var(--k-success-bg)",
     border: "1px solid #1a2332",
-    borderRadius: 8,
-    fontSize: "0.78rem",
+    borderRadius: "var(--k-radius)",
+    fontSize: "var(--k-fs-xs)",
     lineHeight: 1.45,
     maxHeight: 360,
     overflow: "auto",
@@ -386,8 +386,8 @@ const s = {
   codeInline: {
     background: "rgba(13,71,161,0.08)",
     padding: "0.05rem 0.35rem",
-    borderRadius: 4,
-    fontSize: "0.78rem",
+    borderRadius: "var(--k-r-xs)",
+    fontSize: "var(--k-fs-xs)",
     fontFamily: "monospace",
     // FBR URL is a single unbreakable token — without `wordBreak`
     // it overflows the parent on phones and ends up clipped by the

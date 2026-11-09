@@ -61,7 +61,7 @@ export default function CompanyList({ companies, onEdit, fetchCompanies }) {
                 <img
                   src={c.logoPath}
                   alt="Company Logo"
-                  style={{ height: "36px", borderRadius: 4, objectFit: "contain" }}
+                  style={{ height: "36px", borderRadius: "var(--k-r-xs)", objectFit: "contain" }}
                 />
                 <span
                   style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)", fontWeight: 500 }}
@@ -98,7 +98,7 @@ const styles = {
   body: { flex: 1, display: "flex", flexDirection: "column", gap: "0.75rem" },
   name: {
     margin: 0,
-    fontSize: "calc(var(--k-font) + 0.22rem)",
+    fontSize: "var(--k-fs-md)",
     fontWeight: 800,
     lineHeight: 1.3,
     letterSpacing: "-0.01em",
@@ -115,10 +115,10 @@ const styles = {
     gap: "0.3rem",
     width: "fit-content",
     padding: "0.15rem 0.55rem",
-    borderRadius: 12,
+    borderRadius: "var(--k-card-radius)",
     backgroundColor: "var(--k-teal-bg)",
     color: "var(--k-teal-ink)",
-    fontSize: "0.72rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
   },
   logo: {
@@ -128,7 +128,7 @@ const styles = {
     width: "fit-content",
     padding: "0.4rem 0.6rem",
     backgroundColor: "var(--k-surface-2)",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     border: "1px solid var(--k-line)",
   },
   actions: {

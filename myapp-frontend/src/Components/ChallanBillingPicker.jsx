@@ -5,7 +5,7 @@ const button = {
   minHeight: "var(--k-btn-h)",
   padding: "0.5rem 0.75rem",
   border: "1px solid var(--k-line-strong)",
-  borderRadius: 8,
+  borderRadius: "var(--k-radius)",
   background: "var(--k-surface)",
   color: "var(--k-blue)",
 };
@@ -65,7 +65,7 @@ export default function ChallanBillingPicker({ challans, selectedIds, onChange }
             style={{
               ...button,
               flex: 1,
-              background: tab === id ? "var(--k-info-bg)" : "#fff",
+              background: tab === id ? "var(--k-info-bg)" : "var(--k-surface)",
               fontWeight: tab === id ? 700 : 400,
             }}
           >
@@ -84,7 +84,7 @@ export default function ChallanBillingPicker({ challans, selectedIds, onChange }
             minWidth: 0,
             minHeight: "var(--k-btn-h)",
             border: "1px solid var(--k-line-strong)",
-            borderRadius: 8,
+            borderRadius: "var(--k-radius)",
             padding: "0.5rem",
           }}
         />
@@ -96,7 +96,7 @@ export default function ChallanBillingPicker({ challans, selectedIds, onChange }
       </div>
       <div id="billable-challan-panel" role="tabpanel">
         {tab === "withoutPo" && (
-          <p style={{ fontSize: "0.85rem", color: "var(--k-muted)" }}>
+          <p style={{ fontSize: "var(--k-fs-base)", color: "var(--k-muted)" }}>
             Bill one or more challans without a PO, or enter one PO number and date above to apply
             to every selected challan.
           </p>
@@ -111,7 +111,7 @@ export default function ChallanBillingPicker({ challans, selectedIds, onChange }
               marginBottom: 10,
               border: "1px solid var(--k-line)",
               padding: 10,
-              borderRadius: 10,
+              borderRadius: "var(--k-radius)",
             }}
           >
             {tab === "withPo" && (
@@ -154,8 +154,10 @@ export default function ChallanBillingPicker({ challans, selectedIds, onChange }
                     gap: 8,
                     padding: 8,
                     border: "1px solid var(--k-line-strong)",
-                    borderRadius: 8,
-                    background: selectedIds.includes(c.id) ? "var(--k-info-bg)" : "#fff",
+                    borderRadius: "var(--k-radius)",
+                    background: selectedIds.includes(c.id)
+                      ? "var(--k-info-bg)"
+                      : "var(--k-surface)",
                     cursor: "pointer",
                   }}
                 >
@@ -184,7 +186,7 @@ export default function ChallanBillingPicker({ challans, selectedIds, onChange }
         {selected.length ? `: ${selected.map((c) => `#${c.challanNumber}`).join(", ")}` : ""}.
       </p>
       {selectedGroups.length > 1 && (
-        <p style={{ color: "#8a5300", fontSize: "0.85rem" }}>
+        <p style={{ color: "#8a5300", fontSize: "var(--k-fs-base)" }}>
           Selected challans have different PO details. For a bill against one PO, use “Select this
           PO” or enter the common PO number and date above.
         </p>

@@ -1,6 +1,6 @@
 .document-lines-page {
   color: var(--k-ink);
-  font-size: 13px;
+  font-size: var(--k-fs-sm);
 }
 .document-lines-heading {
   display: flex;
@@ -10,13 +10,13 @@
 }
 .document-lines-heading h2 {
   margin: 0;
-  font-size: 22px;
+  font-size: var(--k-fs-2xl);
   font-weight: 700;
 }
 .document-lines-heading p {
   margin: 3px 0 0;
   color: var(--k-muted);
-  font-size: 13px;
+  font-size: var(--k-fs-sm);
 }
 .document-lines-icon {
   display: grid;
@@ -24,7 +24,7 @@
   width: 42px;
   height: 42px;
   flex-shrink: 0;
-  border-radius: 12px;
+  border-radius: var(--k-card-radius);
   color: white;
   background: var(--k-primary-bg);
 }
@@ -38,7 +38,7 @@
 }
 .document-lines-filters > label {
   flex: 1 1 145px;
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   font-weight: 600;
   color: var(--k-muted);
   line-height: 1.8;
@@ -49,7 +49,7 @@
 }
 .document-lines-label {
   display: block;
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   font-weight: 600;
   color: var(--k-muted);
   line-height: 1.8;
@@ -59,7 +59,7 @@
   padding: 0 12px;
   border: 1px solid var(--k-line);
   background: var(--k-surface);
-  border-radius: 9px;
+  border-radius: var(--k-radius);
 }
 .document-lines-columns summary {
   cursor: pointer;
@@ -68,7 +68,7 @@
 }
 .document-lines-columns summary span {
   margin-left: 6px;
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   color: var(--k-muted);
   font-weight: 400;
 }
@@ -84,7 +84,7 @@
   gap: 7px;
   min-height: var(--k-btn-h);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
 }
 .document-lines-column-grid input {
   accent-color: var(--k-teal);
@@ -95,7 +95,7 @@
 .document-lines-results {
   border: 1px solid var(--k-line);
   background: var(--k-surface);
-  border-radius: 12px;
+  border-radius: var(--k-card-radius);
   overflow: hidden;
 }
 .document-lines-toolbar {
@@ -119,7 +119,7 @@
   max-height: 65vh;
 }
 .document-lines-table table {
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
 }
 .document-lines-table th {
   position: sticky;

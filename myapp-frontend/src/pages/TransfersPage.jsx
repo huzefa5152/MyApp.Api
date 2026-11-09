@@ -723,7 +723,7 @@ function TransferForm({ companyId, editTransfer = null, onClose, onSaved }) {
 const sameHint = {
   marginTop: "-0.25rem",
   marginBottom: "0.75rem",
-  fontSize: "0.78rem",
+  fontSize: "var(--k-fs-xs)",
   color: "var(--k-danger)",
   fontWeight: 600,
 };
@@ -733,7 +733,7 @@ const st = {
     display: "flex",
     alignItems: "center",
     gap: 6,
-    fontSize: "0.8rem",
+    fontSize: "var(--k-fs-sm)",
     color: "var(--k-muted)",
     flexWrap: "wrap",
   },
@@ -755,20 +755,20 @@ const st = {
   cardBody: { padding: "0.95rem 1.05rem", flex: 1, minWidth: 0 },
 
   cardTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6 },
-  ref: { fontWeight: 800, fontSize: "0.92rem", letterSpacing: "0.3px" },
+  ref: { fontWeight: 800, fontSize: "var(--k-fs-base)", letterSpacing: "var(--k-fs-2xs)" },
 
   amount: {
-    fontSize: "1.5rem",
+    fontSize: "var(--k-fs-2xl)",
     fontWeight: 800,
     marginTop: 6,
     lineHeight: 1.1,
     wordBreak: "break-word",
   },
-  rs: { fontSize: "0.85rem", fontWeight: 700, opacity: 0.7 },
+  rs: { fontSize: "var(--k-fs-base)", fontWeight: 700, opacity: 0.7 },
 
   accountsRow: { display: "flex", alignItems: "center", gap: 6, marginTop: 8, flexWrap: "wrap" },
   accountName: {
-    fontSize: "0.88rem",
+    fontSize: "var(--k-fs-base)",
     color: "var(--k-ink)",
     fontWeight: 700,
     overflow: "hidden",
@@ -783,7 +783,7 @@ const st = {
     display: "inline-flex",
     alignItems: "center",
     gap: 4,
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     color: "var(--k-muted)",
   },
 
@@ -791,7 +791,7 @@ const st = {
     display: "flex",
     gap: 5,
     marginTop: 8,
-    fontSize: "0.8rem",
+    fontSize: "var(--k-fs-sm)",
     color: "var(--k-muted)",
     lineHeight: 1.4,
   },
@@ -826,11 +826,11 @@ const st = {
   },
   vLabel: {
     flex: "0 0 130px",
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 700,
     textTransform: "uppercase",
     letterSpacing: "0.03em",
     color: "var(--k-muted)",
   },
-  vValue: { flex: 1, fontSize: "0.9rem", color: "var(--k-ink)", wordBreak: "break-word" },
+  vValue: { flex: 1, fontSize: "var(--k-fs-base)", color: "var(--k-ink)", wordBreak: "break-word" },
 };

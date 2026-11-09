@@ -689,7 +689,7 @@ export default function LineItemsEditor({
         <div style={s.bulkApplyBar}>
           <span
             style={{
-              fontSize: "var(--sc-cell-font, 0.82rem)",
+              fontSize: "var(--sc-cell-font, var(--k-fs-sm))",
               color: "var(--k-ink)",
               fontWeight: 500,
             }}
@@ -704,7 +704,7 @@ export default function LineItemsEditor({
               width: "auto",
               minHeight: "var(--sc-cell-h, 0px)",
               padding: "var(--sc-select-pad, 0.3rem 0.5rem)",
-              fontSize: "var(--sc-cell-font, 0.8rem)",
+              fontSize: "var(--sc-cell-font, var(--k-fs-sm))",
               maxWidth: 160,
             }}
           >
@@ -721,7 +721,7 @@ export default function LineItemsEditor({
               style={{
                 minHeight: "var(--sc-cell-h, 0px)",
                 padding: "var(--sc-cell-pad, 0.3rem 0.5rem)",
-                fontSize: "var(--sc-cell-font, 0.78rem)",
+                fontSize: "var(--sc-cell-font, var(--k-fs-xs))",
               }}
             />
           </div>
@@ -774,7 +774,7 @@ export default function LineItemsEditor({
                       style={{
                         minHeight: "var(--sc-cell-h, 0px)",
                         padding: "var(--sc-cell-pad, 0.4rem 0.55rem)",
-                        fontSize: "var(--sc-cell-font, 0.82rem)",
+                        fontSize: "var(--sc-cell-font, var(--k-fs-sm))",
                       }}
                     />
                   </div>
@@ -785,7 +785,7 @@ export default function LineItemsEditor({
                   endpoint="/lookup/items"
                   value={item.description}
                   onChange={(v) => handleDescChange(idx, v)}
-                  inputStyle={{ ...s.cellInput, fontSize: "var(--sc-cell-font, 0.95rem)" }}
+                  inputStyle={{ ...s.cellInput, fontSize: "var(--sc-cell-font, var(--k-fs-md))" }}
                   inputRef={(el) => {
                     descRefs.current[idx] = el;
                   }}
@@ -934,7 +934,7 @@ export default function LineItemsEditor({
                             style={{
                               minHeight: "var(--sc-cell-h, 0px)",
                               padding: "var(--sc-cell-pad, 0.3rem 0.5rem)",
-                              fontSize: "var(--sc-cell-font, 0.78rem)",
+                              fontSize: "var(--sc-cell-font, var(--k-fs-xs))",
                             }}
                           />
                         </td>
@@ -1088,16 +1088,16 @@ const s = {
     display: "block",
     marginBottom: "0.35rem",
     fontWeight: 600,
-    fontSize: "var(--ui-label-size, 0.85rem)",
+    fontSize: "var(--ui-label-size, var(--k-fs-base))",
     color: "var(--k-muted)",
   },
-  hintText: { fontWeight: 400, fontSize: "0.72rem", color: "var(--k-muted)" },
+  hintText: { fontWeight: 400, fontSize: "var(--k-fs-2xs)", color: "var(--k-muted)" },
   input: {
     width: "100%",
     padding: "0.55rem 0.75rem",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     border: `1px solid var(--k-line-strong)`,
-    fontSize: "0.9rem",
+    fontSize: "var(--k-fs-base)",
     backgroundColor: "var(--k-input-bg)",
     color: "var(--k-ink)",
     outline: "none",
@@ -1109,7 +1109,7 @@ const s = {
     alignItems: "center",
     gap: "0.3rem",
     padding: "var(--sc-small-btn-pad, 0.4rem 0.7rem)",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     border: `1px solid var(--k-line-strong)`,
     backgroundColor: "var(--k-surface)",
     color: "var(--k-muted)",
@@ -1124,7 +1124,7 @@ const s = {
     alignItems: "center",
     gap: "0.3rem",
     padding: "var(--sc-small-btn-pad, 0.4rem 0.7rem)",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     border: `1px solid var(--k-teal)`,
     backgroundColor: "var(--k-surface)",
     color: "var(--k-teal)",
@@ -1135,19 +1135,23 @@ const s = {
   },
   pastePanel: {
     border: `1px solid var(--k-line)`,
-    borderRadius: 10,
+    borderRadius: "var(--k-radius)",
     padding: "var(--sc-box-pad, 0.7rem)",
     marginBottom: "0.6rem",
     background: "var(--k-surface-2)",
   },
-  pasteHintRow: { fontSize: "0.75rem", color: "var(--k-muted)", marginBottom: "0.4rem" },
+  pasteHintRow: {
+    fontSize: "var(--k-fs-xs)",
+    color: "var(--k-muted)",
+    marginBottom: "var(--k-fs-2xs)",
+  },
   pasteArea: {
     width: "100%",
     boxSizing: "border-box",
     padding: "0.5rem 0.6rem",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     border: `1px solid var(--k-line-strong)`,
-    fontSize: "var(--sc-cell-font, 0.85rem)",
+    fontSize: "var(--sc-cell-font, var(--k-fs-base))",
     fontFamily: "inherit",
     marginBottom: "0.5rem",
     resize: "vertical",
@@ -1155,22 +1159,22 @@ const s = {
   pasteCancel: {
     minHeight: "var(--sc-cell-h, 0px)",
     padding: "var(--sc-small-btn-pad, 0.4rem 0.9rem)",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     border: `1px solid var(--k-line-strong)`,
     background: "var(--k-surface)",
     color: "var(--k-muted)",
-    fontSize: "0.8rem",
+    fontSize: "var(--k-fs-sm)",
     fontWeight: 600,
     cursor: "pointer",
   },
   pasteApply: {
     minHeight: "var(--sc-cell-h, 0px)",
     padding: "var(--sc-small-btn-pad, 0.4rem 0.9rem)",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     border: "none",
     background: "var(--k-teal)",
     color: "#fff",
-    fontSize: "0.8rem",
+    fontSize: "var(--k-fs-sm)",
     fontWeight: 700,
     cursor: "pointer",
   },
@@ -1181,7 +1185,7 @@ const s = {
     flexWrap: "wrap",
     padding: "var(--sc-box-pad, 0.55rem 0.85rem)",
     marginBottom: "0.5rem",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     border: `1px solid var(--k-line)`,
     backgroundColor: "var(--k-surface-2)",
   },
@@ -1191,7 +1195,7 @@ const s = {
     alignItems: "center",
     gap: "0.3rem",
     padding: "var(--sc-small-btn-pad, 0.35rem 0.7rem)",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     border: `1px solid var(--k-danger)`,
     backgroundColor: "var(--k-surface)",
     color: "var(--k-danger)",
@@ -1206,12 +1210,12 @@ const s = {
     overflowY: "auto",
     overflowX: "auto",
     border: `1px solid var(--k-line)`,
-    borderRadius: 10,
+    borderRadius: "var(--k-radius)",
   },
   table: { width: "100%", borderCollapse: "collapse" },
   th: {
     textAlign: "left",
-    fontSize: "var(--k-th-font, 0.7rem)",
+    fontSize: "var(--k-th-font, var(--k-fs-2xs))",
     textTransform: "uppercase",
     letterSpacing: "0.02em",
     fontWeight: 700,
@@ -1233,22 +1237,27 @@ const s = {
     width: "100%",
     minHeight: "var(--sc-cell-h, 0px)",
     padding: "var(--sc-cell-pad, 0.5rem 0.55rem)",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     border: `1px solid var(--k-line-strong)`,
-    fontSize: "var(--sc-cell-font, 0.88rem)",
+    fontSize: "var(--sc-cell-font, var(--k-fs-base))",
     backgroundColor: "var(--k-input-bg)",
     color: "var(--k-ink)",
     outline: "none",
     boxSizing: "border-box",
   },
-  hint: { fontSize: "0.7rem", color: "var(--k-teal)", marginTop: 2, fontWeight: 600 },
-  lockHint: { fontSize: "0.7rem", color: "var(--k-muted)", marginTop: 2, fontStyle: "italic" },
+  hint: { fontSize: "var(--k-fs-2xs)", color: "var(--k-teal)", marginTop: 2, fontWeight: 600 },
+  lockHint: {
+    fontSize: "var(--k-fs-2xs)",
+    color: "var(--k-muted)",
+    marginTop: 2,
+    fontStyle: "italic",
+  },
   rowActions: { display: "flex", gap: 6, justifyContent: "center", alignItems: "center" },
   del: {
     display: "grid",
     placeItems: "center",
     padding: "0.4rem",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     border: "1px solid rgba(220, 53, 69, 0.15)",
     backgroundColor: "var(--k-danger-bg)",
     color: "var(--k-danger)",
@@ -1268,15 +1277,15 @@ const s = {
     alignItems: "center",
     gap: "0.3rem",
     padding: "var(--sc-small-btn-pad, 0.4rem 0.9rem)",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     border: "none",
     backgroundColor: "rgba(0, 137, 123, 0.08)",
     color: "var(--k-teal)",
-    fontSize: "var(--sc-cell-font, 0.82rem)",
+    fontSize: "var(--sc-cell-font, var(--k-fs-sm))",
     fontWeight: 600,
     cursor: "pointer",
   },
-  enterHint: { fontSize: "0.72rem", color: "var(--k-muted)" },
+  enterHint: { fontSize: "var(--k-fs-2xs)", color: "var(--k-muted)" },
   // Line discount (Quote).
   discStrip: {
     display: "flex",
@@ -1285,7 +1294,7 @@ const s = {
     flexWrap: "wrap",
     marginTop: "0.5rem",
     padding: "0.5rem 0.6rem",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     background: "#f3faf9",
     border: "1px dashed rgba(0, 137, 123, 0.33)",
   },
@@ -1293,7 +1302,7 @@ const s = {
     display: "inline-flex",
     alignItems: "center",
     gap: "0.3rem",
-    fontSize: "0.74rem",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 700,
     color: "var(--k-teal)",
     textTransform: "uppercase",
@@ -1303,14 +1312,14 @@ const s = {
   discValueWrap: { flex: "0 1 130px", minWidth: 110 },
   discReasonWrap: { flex: "1 1 220px", minWidth: 0 },
   discAmount: {
-    fontSize: "0.85rem",
+    fontSize: "var(--k-fs-base)",
     fontWeight: 700,
     color: "var(--k-teal)",
     whiteSpace: "nowrap",
     marginLeft: "auto",
   },
   discError: {
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 600,
     color: "var(--k-danger)",
     whiteSpace: "nowrap",
@@ -1323,7 +1332,7 @@ const s = {
     boxShadow: "none",
     width: 32,
     height: 32,
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     border: `1px solid var(--k-line-strong)`,
     background: "var(--k-surface)",
     color: "var(--k-muted)",
@@ -1337,7 +1346,7 @@ const s = {
     boxShadow: "none",
     width: 32,
     height: 32,
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     border: "1px solid rgba(0, 137, 123, 0.25)",
     background: "var(--k-surface)",
     color: "var(--k-teal)",
@@ -1351,23 +1360,23 @@ const s = {
     gap: "0.35rem",
     marginTop: "0.5rem",
     padding: "0.4rem 0.8rem",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     border: "1px dashed rgba(0, 137, 123, 0.5)",
     background: "var(--k-surface)",
     color: "var(--k-teal)",
-    fontSize: "0.82rem",
+    fontSize: "var(--k-fs-sm)",
     fontWeight: 600,
     cursor: "pointer",
   },
   afterDisc: {
-    fontSize: "0.7rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 600,
     color: "var(--k-teal)",
     marginTop: 3,
     textAlign: "right",
   },
   grossStruck: {
-    fontSize: "0.72rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 500,
     color: "var(--k-muted)",
     textDecoration: "line-through",
@@ -1375,9 +1384,9 @@ const s = {
   inputError: { borderColor: "var(--k-danger)", background: "var(--k-danger-bg)" },
   kbd: {
     fontFamily: "monospace",
-    fontSize: "0.7rem",
+    fontSize: "var(--k-fs-2xs)",
     padding: "0.05rem 0.35rem",
-    borderRadius: 4,
+    borderRadius: "var(--k-r-xs)",
     border: `1px solid var(--k-line-strong)`,
     background: "var(--k-surface)",
     color: "var(--k-ink)",
@@ -1386,7 +1395,7 @@ const s = {
   mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
   mcard: {
     border: `1px solid var(--k-line)`,
-    borderRadius: 12,
+    borderRadius: "var(--k-card-radius)",
     padding: "0.7rem 0.75rem",
     background: "var(--k-surface)",
   },
@@ -1395,12 +1404,12 @@ const s = {
     flex: "0 0 auto",
     width: 24,
     height: 24,
-    borderRadius: 7,
+    borderRadius: "var(--k-r-sm)",
     background: "#f0f3f8",
     color: "var(--k-muted)",
     display: "grid",
     placeItems: "center",
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 700,
   },
   m3col: {
@@ -1412,7 +1421,7 @@ const s = {
   m2col: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginTop: "0.5rem" },
   mlabel: {
     display: "block",
-    fontSize: "0.68rem",
+    fontSize: "var(--k-fs-2xs)",
     textTransform: "uppercase",
     letterSpacing: "0.03em",
     color: "var(--k-muted)",
@@ -1426,7 +1435,7 @@ const s = {
     marginTop: "0.55rem",
     paddingTop: "0.45rem",
     borderTop: `1px dashed var(--k-line)`,
-    fontSize: "0.85rem",
+    fontSize: "var(--k-fs-base)",
     color: "var(--k-muted)",
   },
 };

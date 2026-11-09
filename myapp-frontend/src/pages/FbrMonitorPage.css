@@ -15,15 +15,15 @@
     flex-direction: column !important;
     align-items: stretch !important;
     padding: 0.85rem 0.95rem !important;
-    border-radius: 14px !important;
+    border-radius: var(--k-card-radius) !important;
     gap: 0.55rem !important;
     margin-bottom: 0.55rem !important;
   }
   .fbr-mon-hero__title {
-    font-size: 1.1rem !important;
+    font-size: var(--k-fs-lg) !important;
   }
   .fbr-mon-hero__sub {
-    font-size: 0.78rem !important;
+    font-size: var(--k-fs-xs) !important;
   }
   .fbr-mon-hero__pickers {
     flex-direction: column !important;
@@ -47,14 +47,14 @@
   }
   .fbr-mon-tile {
     padding: 0.55rem 0.7rem 0.6rem !important;
-    border-radius: 10px !important;
+    border-radius: var(--k-radius) !important;
   }
   .fbr-mon-tile__label {
-    font-size: 0.62rem !important;
+    font-size: var(--k-fs-2xs) !important;
     letter-spacing: 0.03em !important;
   }
   .fbr-mon-tile__value {
-    font-size: 1.1rem !important;
+    font-size: var(--k-fs-lg) !important;
   }
 }
 
@@ -69,7 +69,7 @@
   .fbr-mon-error-bar {
     padding: 0.45rem 0.7rem !important;
     gap: 0.3rem !important;
-    font-size: 0.75rem !important;
+    font-size: var(--k-fs-xs) !important;
   }
 }
 
@@ -127,19 +127,19 @@
 
   .fbr-mon-row__ts {
     grid-area: ts;
-    font-size: 0.72rem !important;
+    font-size: var(--k-fs-2xs) !important;
   }
   .fbr-mon-row__status {
     grid-area: status;
   }
   .fbr-mon-row__action {
     grid-area: action;
-    font-size: 0.78rem !important;
+    font-size: var(--k-fs-xs) !important;
   }
   .fbr-mon-row__bill {
     grid-area: bill;
     text-align: right;
-    font-size: 0.78rem !important;
+    font-size: var(--k-fs-xs) !important;
   }
   .fbr-mon-row__http {
     /* No grid area — fold into ts cell as a small badge. We hide
@@ -149,7 +149,7 @@
   }
   .fbr-mon-row__err {
     grid-area: err;
-    font-size: 0.78rem !important;
+    font-size: var(--k-fs-xs) !important;
     white-space: normal !important;
     text-overflow: clip !important;
     overflow: visible !important;
@@ -159,7 +159,7 @@
   }
   .fbr-mon-row__duration {
     grid-area: duration;
-    font-size: 0.72rem !important;
+    font-size: var(--k-fs-2xs) !important;
     text-align: right !important;
   }
 }
@@ -191,7 +191,7 @@
     padding: 0.7rem 0.85rem !important;
   }
   .fbr-mon-drawer-header h2 {
-    font-size: 1rem !important;
+    font-size: var(--k-fs-md) !important;
   }
   .fbr-mon-drawer-body {
     padding: 0.7rem 0.85rem 1.2rem !important;
@@ -204,12 +204,12 @@
   }
   .fbr-mon-kv > span:first-child {
     width: auto !important;
-    font-size: 0.7rem !important;
+    font-size: var(--k-fs-2xs) !important;
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
   .fbr-mon-pre {
-    font-size: 0.72rem !important;
+    font-size: var(--k-fs-2xs) !important;
     max-height: 220px !important;
   }
 }
@@ -218,6 +218,6 @@
 @media (max-width: 599.98px) {
   .fbr-mon-placeholder {
     padding: 1rem !important;
-    font-size: 0.85rem !important;
+    font-size: var(--k-fs-base) !important;
   }
 }

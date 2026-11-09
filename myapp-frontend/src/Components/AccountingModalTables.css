@@ -19,7 +19,7 @@
   .accounting-modal-cards tbody tr {
     display: block;
     border: 1px solid var(--k-line-strong);
-    border-radius: 10px;
+    border-radius: var(--k-radius);
     padding: 8px;
     margin-bottom: 10px;
   }
@@ -38,7 +38,7 @@
   .accounting-modal-cards td::before {
     content: attr(data-label);
     color: var(--k-muted);
-    font-size: 12px;
+    font-size: var(--k-fs-xs);
     font-weight: 600;
   }
   .accounting-modal-cards td > * {

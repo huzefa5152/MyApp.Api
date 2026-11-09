@@ -22,7 +22,7 @@ import {
 
 // Note-kind accent (Credit = purple, Debit = teal) for the Generate button.
 const colors = {
-  purple: "#5e35b1",
+  purple: "var(--k-purple-4, #5e35b1)",
   teal: "var(--k-teal-ink)",
 };
 
@@ -296,7 +296,7 @@ export default function CreditDebitNotePage() {
                   </div>
                   <div
                     style={{
-                      fontSize: "0.72rem",
+                      fontSize: "var(--k-fs-2xs)",
                       color: "var(--k-muted)",
                       marginTop: 4,
                       wordBreak: "break-all",

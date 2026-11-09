@@ -621,7 +621,7 @@ const st = {
     gap: 10,
     marginTop: "var(--k-gap)",
     padding: "0.8rem 1rem",
-    fontSize: "calc(var(--k-font) + 0.1rem)",
+    fontSize: "var(--k-fs-md)",
     fontWeight: 700,
     color: "var(--k-ink)",
   },

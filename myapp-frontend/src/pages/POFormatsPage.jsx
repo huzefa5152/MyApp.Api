@@ -191,7 +191,7 @@ function CompanyPOFormats({ company }) {
                     <tr key={f.id}>
                       <td>
                         <div style={{ fontWeight: 600 }}>{f.name}</div>
-                        <div className="k-muted" style={{ fontSize: "0.75rem" }}>
+                        <div className="k-muted" style={{ fontSize: "var(--k-fs-xs)" }}>
                           v{f.currentVersion}
                         </div>
                       </td>
@@ -314,8 +314,8 @@ const styles = {
   chip: {
     display: "inline-block",
     padding: "0.2rem 0.6rem",
-    borderRadius: 12,
-    fontSize: "0.78rem",
+    borderRadius: "var(--k-card-radius)",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 600,
     backgroundColor: colors.primaryLight,
     color: colors.primary,

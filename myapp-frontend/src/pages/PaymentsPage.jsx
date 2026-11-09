@@ -605,7 +605,7 @@ function PaymentViewDialog({ p, companyId, accent, docNoun, onClose }) {
                   marginTop: 5,
                   padding: 10,
                   border: "1px solid var(--k-line)",
-                  borderRadius: 8,
+                  borderRadius: "var(--k-radius)",
                 }}
               >
                 <RichText text={p.notes} />
@@ -681,18 +681,22 @@ const st = {
   cardBody: { padding: "var(--k-card-pad)", flex: 1, minWidth: 0 },
 
   cardTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6 },
-  ref: { fontWeight: 800, fontSize: "calc(var(--k-font) + 0.02rem)", letterSpacing: "0.3px" },
+  ref: {
+    fontWeight: 800,
+    fontSize: "var(--k-font)",
+    letterSpacing: "var(--k-fs-2xs)",
+  },
   badges: { display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" },
 
   amount: {
-    fontSize: "calc(var(--k-stat-value) + 0.15rem)",
+    fontSize: "var(--k-fs-xl)",
     fontWeight: 800,
     marginTop: 6,
     lineHeight: 1.1,
     wordBreak: "break-word",
     fontVariantNumeric: "tabular-nums",
   },
-  rs: { fontSize: "0.85rem", fontWeight: 700, opacity: 0.7 },
+  rs: { fontSize: "var(--k-fs-base)", fontWeight: 700, opacity: 0.7 },
 
   contactRow: { display: "flex", alignItems: "center", gap: 5, marginTop: 8 },
   contact: {
@@ -754,7 +758,7 @@ const st = {
     fontSize: "var(--k-font-sm)",
     fontWeight: 700,
   },
-  allocToggleHint: { fontSize: "0.72rem", color: "var(--k-muted)" },
+  allocToggleHint: { fontSize: "var(--k-fs-2xs)", color: "var(--k-muted)" },
   allocList: { marginTop: 4, display: "flex", flexDirection: "column", gap: 1 },
   allocRow: {
     display: "flex",
@@ -762,7 +766,7 @@ const st = {
     alignItems: "center",
     gap: 10,
     padding: "0.4rem 0.5rem",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     background: "var(--k-surface-2)",
     fontSize: "var(--k-font-sm)",
   },
@@ -796,7 +800,7 @@ const st = {
 
 const vd = {
   amount: {
-    fontSize: "1.5rem",
+    fontSize: "var(--k-fs-2xl)",
     fontWeight: 800,
     marginBottom: "0.75rem",
     fontVariantNumeric: "tabular-nums",
@@ -817,7 +821,7 @@ const vd = {
     gap: 12,
     padding: "0.25rem 0.5rem",
     background: "var(--k-surface-2)",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     marginBottom: 4,
     fontSize: "var(--k-font-sm)",
     fontVariantNumeric: "tabular-nums",

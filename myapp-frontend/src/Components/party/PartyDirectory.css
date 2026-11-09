@@ -102,7 +102,7 @@
   padding: 0 0.8rem;
   margin: 0;
   border: 1px solid var(--k-line);
-  border-radius: 999px;
+  border-radius: var(--k-r-pill);
   background: var(--k-surface-3);
   color: var(--k-muted);
   font-size: var(--k-font-sm);
@@ -130,9 +130,9 @@
 .pd-chip__count {
   min-width: 1.4em;
   padding: 0 0.35em;
-  border-radius: 999px;
+  border-radius: var(--k-r-pill);
   background: color-mix(in srgb, var(--k-blue) 8%, transparent);
-  font-size: 0.9em;
+  font-size: var(--k-fs-2xs);
   text-align: center;
 }
 .pd-chip[aria-pressed="true"] .pd-chip__count {
@@ -211,7 +211,7 @@
 }
 .pd-card__name {
   margin: 0;
-  font-size: calc(var(--k-font) + 0.1rem);
+  font-size: var(--k-fs-md);
   font-weight: 800;
   line-height: 1.3;
   letter-spacing: -0.01em;
@@ -237,8 +237,8 @@
   display: inline-flex;
   align-items: center;
   padding: 0.2rem 0.55rem;
-  border-radius: 999px;
-  font-size: 0.68rem;
+  border-radius: var(--k-r-pill);
+  font-size: var(--k-fs-2xs);
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -286,7 +286,7 @@
   word-break: break-all;
 }
 .pd-id small {
-  font-size: 0.62rem;
+  font-size: var(--k-fs-2xs);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -429,10 +429,10 @@
   gap: 0.25rem;
   margin-top: 0.3rem;
   padding: 0.12rem 0.5rem;
-  border-radius: 999px;
+  border-radius: var(--k-r-pill);
   background: color-mix(in srgb, var(--k-blue) 11%, var(--k-surface));
   color: var(--k-blue);
-  font-size: 0.7rem;
+  font-size: var(--k-fs-2xs);
   font-weight: 700;
 }
 .pd-companies {
@@ -443,10 +443,10 @@
 .pd-company {
   max-width: 100%;
   padding: 0.12rem 0.5rem;
-  border-radius: 999px;
+  border-radius: var(--k-r-pill);
   background: color-mix(in srgb, var(--k-blue) 7%, var(--k-surface));
   color: var(--k-blue);
-  font-size: 0.7rem;
+  font-size: var(--k-fs-2xs);
   font-weight: 600;
   overflow-wrap: anywhere;
 }
@@ -485,7 +485,7 @@
 }
 .pf-head__title {
   margin: 0;
-  font-size: calc(var(--k-font) + 0.22rem);
+  font-size: var(--k-fs-md);
   font-weight: 800;
   color: #fff;
   letter-spacing: -0.01em;
@@ -513,7 +513,7 @@
   border-radius: var(--k-radius);
   background: rgba(255, 255, 255, 0.16);
   color: #fff;
-  font-size: 1.35rem;
+  font-size: var(--k-fs-xl);
   line-height: 1;
   box-shadow: none;
   cursor: pointer;

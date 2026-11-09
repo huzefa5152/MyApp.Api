@@ -267,7 +267,7 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
 }
 
 const s = {
-  sub: { fontSize: "var(--k-font)", color: "var(--k-muted)", marginBottom: "1rem" },
+  sub: { fontSize: "var(--k-font)", color: "var(--k-muted)", marginBottom: "var(--k-fs-md)" },
   grid: { gap: "var(--k-gap)", marginBottom: "1rem" },
   col: { width: 100 },
   desc: {
@@ -276,7 +276,7 @@ const s = {
     color: "var(--k-ink)",
     whiteSpace: "pre-wrap",
   },
-  unit: { fontSize: "0.75rem", color: "var(--k-muted)" },
+  unit: { fontSize: "var(--k-fs-xs)", color: "var(--k-muted)" },
   mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
   mcard: {
     border: "1px solid var(--k-line)",
@@ -293,7 +293,7 @@ const s = {
     fontSize: "var(--k-font)",
   },
   mlabel: {
-    fontSize: "0.66rem",
+    fontSize: "var(--k-fs-2xs)",
     textTransform: "uppercase",
     letterSpacing: "0.03em",
     color: "var(--k-muted)",

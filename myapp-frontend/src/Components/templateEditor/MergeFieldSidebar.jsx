@@ -76,7 +76,7 @@ export default function MergeFieldSidebar({ fields, onInsert, hint, stamps = [] 
                 <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
                   <span
                     style={{
-                      fontSize: "0.74rem",
+                      fontSize: "var(--k-fs-xs)",
                       fontWeight: 600,
                       color: "var(--k-ink)",
                       overflow: "hidden",
@@ -105,7 +105,7 @@ export default function MergeFieldSidebar({ fields, onInsert, hint, stamps = [] 
 const fieldStyles = {
   cat: {
     padding: "0.4rem 0.6rem 0.15rem",
-    fontSize: "0.68rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
     textTransform: "uppercase",
     letterSpacing: "0.5px",
@@ -121,16 +121,16 @@ const fieldStyles = {
     background: "transparent",
     cursor: "pointer",
     textAlign: "left",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     transition: "background 0.15s",
   },
   code: {
-    fontSize: "0.7rem",
+    fontSize: "var(--k-fs-2xs)",
     fontFamily: "monospace",
     fontWeight: 600,
   },
   label: {
-    fontSize: "0.72rem",
+    fontSize: "var(--k-fs-2xs)",
   },
   stampBtn: {
     display: "flex",
@@ -142,7 +142,7 @@ const fieldStyles = {
     background: "transparent",
     cursor: "pointer",
     textAlign: "left",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     transition: "background 0.15s",
   },
   stampThumb: {
@@ -151,7 +151,7 @@ const fieldStyles = {
     objectFit: "contain",
     flexShrink: 0,
     border: `1px solid var(--k-line)`,
-    borderRadius: 4,
+    borderRadius: "var(--k-r-xs)",
     background: "var(--k-surface)",
   },
 };
@@ -177,7 +177,7 @@ const styles = {
   },
   hint: {
     padding: "0.5rem 0.7rem",
-    fontSize: "0.72rem",
+    fontSize: "var(--k-fs-2xs)",
     color: "var(--k-muted)",
     background: "#e8f4fd",
     borderBottom: `1px solid var(--k-line)`,

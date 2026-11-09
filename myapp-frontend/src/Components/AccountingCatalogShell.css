@@ -1,13 +1,13 @@
 /* Accounting report specifics. The shared look lives in reports/ReportWorkspace.css. */
 .report-filter-status {
-  font-size: 11px;
+  font-size: var(--k-fs-2xs);
   color: var(--k-muted);
   align-self: center;
   white-space: nowrap;
 }
 .report-date-hint {
   margin: 6px 0 0;
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   color: #9a6700;
 }
 .customer-ledger .ledger-overview {

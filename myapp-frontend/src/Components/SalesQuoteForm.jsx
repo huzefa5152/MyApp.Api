@@ -633,7 +633,7 @@ const s = {
     marginTop: 4,
     paddingTop: 8,
     fontWeight: 800,
-    fontSize: "calc(var(--k-font) + 0.1rem)",
+    fontSize: "var(--k-fs-md)",
     color: "var(--k-blue)",
   },
 };

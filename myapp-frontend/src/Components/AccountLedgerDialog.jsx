@@ -259,10 +259,10 @@ export default function AccountLedgerDialog({ account, onClose }) {
 const st = {
   codeChip: {
     fontFamily: "monospace",
-    fontSize: "0.72rem",
+    fontSize: "var(--k-fs-2xs)",
     background: "rgba(255,255,255,0.22)",
     padding: "1px 6px",
-    borderRadius: 4,
+    borderRadius: "var(--k-r-xs)",
   },
   filterRow: {
     display: "flex",
@@ -280,18 +280,18 @@ const st = {
     marginBottom: "0.9rem",
   },
   summaryValue: {
-    fontSize: "calc(var(--k-font) + 0.1rem)",
+    fontSize: "var(--k-fs-md)",
     fontWeight: 800,
     color: "var(--k-ink)",
     fontVariantNumeric: "tabular-nums",
   },
   ref: {
     fontFamily: "monospace",
-    fontSize: "0.74rem",
+    fontSize: "var(--k-fs-xs)",
     color: "var(--k-blue)",
-    background: "#eef2ff",
+    background: "var(--k-tint, #eef2ff)",
     padding: "1px 5px",
-    borderRadius: 4,
+    borderRadius: "var(--k-r-xs)",
     whiteSpace: "nowrap",
   },
   card: {
@@ -317,7 +317,7 @@ const st = {
     fontVariantNumeric: "tabular-nums",
   },
   cardSource: {
-    fontSize: "0.68rem",
+    fontSize: "var(--k-fs-2xs)",
     textTransform: "uppercase",
     letterSpacing: "0.04em",
     color: "var(--k-muted)",

@@ -937,7 +937,7 @@ export default function StandaloneInvoiceForm({
                       marginBottom: "1rem",
                       padding: "0.75rem",
                       border: `1px solid var(--k-line)`,
-                      borderRadius: 10,
+                      borderRadius: "var(--k-radius)",
                       background: "var(--k-surface-2)",
                     }}
                   >
@@ -1044,11 +1044,11 @@ export default function StandaloneInvoiceForm({
                     style={{
                       marginBottom: "1rem",
                       padding: "0.7rem 0.85rem",
-                      borderRadius: 10,
+                      borderRadius: "var(--k-radius)",
                       border: "1px solid #f0c36d",
                       background: "#fff8e6",
                       color: "#5c4400",
-                      fontSize: "0.85rem",
+                      fontSize: "var(--k-fs-base)",
                       lineHeight: 1.45,
                     }}
                   >
@@ -1159,7 +1159,7 @@ export default function StandaloneInvoiceForm({
                                 style={{
                                   ...styles.scenarioCard,
                                   borderColor: active ? "var(--k-blue)" : "var(--k-line)",
-                                  backgroundColor: active ? "var(--k-info-bg)" : "#fff",
+                                  backgroundColor: active ? "var(--k-info-bg)" : "var(--k-surface)",
                                 }}
                               >
                                 <div style={styles.scenarioCardHeader}>
@@ -1550,7 +1550,7 @@ export default function StandaloneInvoiceForm({
                         <div style={styles.bulkApplyBar}>
                           <span
                             style={{
-                              fontSize: "0.82rem",
+                              fontSize: "var(--k-fs-sm)",
                               color: "var(--k-ink)",
                               fontWeight: 500,
                             }}
@@ -1563,7 +1563,7 @@ export default function StandaloneInvoiceForm({
                             style={{
                               ...styles.input,
                               padding: "0.3rem 0.5rem",
-                              fontSize: "0.8rem",
+                              fontSize: "var(--k-fs-sm)",
                               maxWidth: 180,
                             }}
                           >
@@ -1580,7 +1580,7 @@ export default function StandaloneInvoiceForm({
                                   ? "— pick to apply to all —"
                                   : "— pick to fill empty rows —"
                               }
-                              style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+                              style={{ padding: "0.3rem 0.5rem", fontSize: "var(--k-fs-xs)" }}
                             />
                           </div>
                           <button
@@ -1616,7 +1616,7 @@ export default function StandaloneInvoiceForm({
                                       style={{
                                         ...styles.input,
                                         padding: "0.45rem 0.55rem",
-                                        fontSize: "0.85rem",
+                                        fontSize: "var(--k-fs-base)",
                                       }}
                                     />
                                   </div>
@@ -1657,13 +1657,13 @@ export default function StandaloneInvoiceForm({
                                       inputStyle={{
                                         ...styles.input,
                                         padding: "0.5rem 0.6rem",
-                                        fontSize: "0.9rem",
+                                        fontSize: "var(--k-fs-base)",
                                       }}
                                     />
                                   ) : (
                                     <div
                                       style={{
-                                        fontSize: "0.9rem",
+                                        fontSize: "var(--k-fs-base)",
                                         color: r.itemTypeName ? "var(--k-ink)" : "var(--k-muted)",
                                         fontStyle: r.itemTypeName ? "normal" : "italic",
                                       }}
@@ -1682,7 +1682,7 @@ export default function StandaloneInvoiceForm({
                                       style={{
                                         ...styles.input,
                                         padding: "0.5rem 0.55rem",
-                                        fontSize: "0.9rem",
+                                        fontSize: "var(--k-fs-base)",
                                         textAlign: "right",
                                       }}
                                       value={r.quantity}
@@ -1704,7 +1704,7 @@ export default function StandaloneInvoiceForm({
                                         inputStyle={{
                                           ...styles.input,
                                           padding: "0.5rem 0.55rem",
-                                          fontSize: "0.9rem",
+                                          fontSize: "var(--k-fs-base)",
                                         }}
                                       />
                                     ) : (
@@ -1714,7 +1714,7 @@ export default function StandaloneInvoiceForm({
                                         style={{
                                           ...styles.input,
                                           padding: "0.5rem 0.55rem",
-                                          fontSize: "0.9rem",
+                                          fontSize: "var(--k-fs-base)",
                                           backgroundColor: r.itemTypeId
                                             ? "#eef5ff"
                                             : "var(--k-input-bg)",
@@ -1743,7 +1743,7 @@ export default function StandaloneInvoiceForm({
                                         style={{
                                           ...styles.input,
                                           padding: "0.5rem 0.55rem",
-                                          fontSize: "0.9rem",
+                                          fontSize: "var(--k-fs-base)",
                                           textAlign: "right",
                                         }}
                                         value={r.unitPrice}
@@ -1761,7 +1761,7 @@ export default function StandaloneInvoiceForm({
                                     <span
                                       style={{
                                         fontFamily: "monospace",
-                                        fontSize: "0.82rem",
+                                        fontSize: "var(--k-fs-sm)",
                                         color: r.hsCode ? "var(--k-ink)" : "var(--k-muted)",
                                         fontStyle: r.hsCode ? "normal" : "italic",
                                       }}
@@ -1782,7 +1782,7 @@ export default function StandaloneInvoiceForm({
                                         style={{
                                           ...styles.input,
                                           padding: "0.5rem 0.55rem",
-                                          fontSize: "0.9rem",
+                                          fontSize: "var(--k-fs-base)",
                                           textAlign: "right",
                                         }}
                                         value={r.mrp}
@@ -1799,7 +1799,7 @@ export default function StandaloneInvoiceForm({
                                         style={{
                                           padding: "0.5rem 0",
                                           fontWeight: 600,
-                                          fontSize: "0.9rem",
+                                          fontSize: "var(--k-fs-base)",
                                           textAlign: "right",
                                         }}
                                       >
@@ -1821,7 +1821,7 @@ export default function StandaloneInvoiceForm({
                                         style={{
                                           ...styles.input,
                                           padding: "0.5rem 0.55rem",
-                                          fontSize: "0.85rem",
+                                          fontSize: "var(--k-fs-base)",
                                         }}
                                         value={r.sroScheduleNo}
                                         onChange={(e) =>
@@ -1837,7 +1837,7 @@ export default function StandaloneInvoiceForm({
                                         style={{
                                           ...styles.input,
                                           padding: "0.5rem 0.55rem",
-                                          fontSize: "0.85rem",
+                                          fontSize: "var(--k-fs-base)",
                                         }}
                                         value={r.sroItemSerialNo}
                                         onChange={(e) =>
@@ -1859,7 +1859,7 @@ export default function StandaloneInvoiceForm({
                                       style={{
                                         ...styles.input,
                                         padding: "0.5rem 0.55rem",
-                                        fontSize: "0.9rem",
+                                        fontSize: "var(--k-fs-base)",
                                         textAlign: "right",
                                         fontWeight: 700,
                                         maxWidth: 150,
@@ -1980,7 +1980,7 @@ export default function StandaloneInvoiceForm({
                                         style={{
                                           ...styles.input,
                                           padding: "0.3rem 0.5rem",
-                                          fontSize: "0.8rem",
+                                          fontSize: "var(--k-fs-sm)",
                                         }}
                                       />
                                     </td>
@@ -2003,7 +2003,7 @@ export default function StandaloneInvoiceForm({
                                           inputStyle={{
                                             ...styles.input,
                                             padding: "0.3rem 0.5rem",
-                                            fontSize: "0.8rem",
+                                            fontSize: "var(--k-fs-sm)",
                                           }}
                                         />
                                       </td>
@@ -2026,7 +2026,7 @@ export default function StandaloneInvoiceForm({
                                         style={{
                                           ...styles.input,
                                           padding: "0.3rem 0.5rem",
-                                          fontSize: "0.8rem",
+                                          fontSize: "var(--k-fs-sm)",
                                         }}
                                         value={r.quantity}
                                         onChange={(e) =>
@@ -2054,7 +2054,7 @@ export default function StandaloneInvoiceForm({
                                           inputStyle={{
                                             ...styles.input,
                                             padding: "0.3rem 0.5rem",
-                                            fontSize: "0.8rem",
+                                            fontSize: "var(--k-fs-sm)",
                                           }}
                                         />
                                       ) : (
@@ -2064,7 +2064,7 @@ export default function StandaloneInvoiceForm({
                                           style={{
                                             ...styles.input,
                                             padding: "0.3rem 0.5rem",
-                                            fontSize: "0.8rem",
+                                            fontSize: "var(--k-fs-sm)",
                                             backgroundColor: r.itemTypeId
                                               ? "#eef5ff"
                                               : "var(--k-input-bg)",
@@ -2089,7 +2089,7 @@ export default function StandaloneInvoiceForm({
                                           label="Unit price"
                                           value={shownRate(r)}
                                           style={{
-                                            fontSize: "0.8rem",
+                                            fontSize: "var(--k-fs-sm)",
                                             minHeight: 32,
                                             padding: "0.3rem 0.5rem",
                                           }}
@@ -2102,7 +2102,7 @@ export default function StandaloneInvoiceForm({
                                           style={{
                                             ...styles.input,
                                             padding: "0.3rem 0.5rem",
-                                            fontSize: "0.8rem",
+                                            fontSize: "var(--k-fs-sm)",
                                           }}
                                           value={r.unitPrice}
                                           onChange={(e) =>
@@ -2123,7 +2123,7 @@ export default function StandaloneInvoiceForm({
                                           style={{
                                             ...styles.input,
                                             padding: "0.3rem 0.5rem",
-                                            fontSize: "0.8rem",
+                                            fontSize: "var(--k-fs-sm)",
                                             textAlign: "right",
                                             fontWeight: 600,
                                           }}
@@ -2139,7 +2139,7 @@ export default function StandaloneInvoiceForm({
                                           label="Line total"
                                           value={shownTotal(r)}
                                           style={{
-                                            fontSize: "0.8rem",
+                                            fontSize: "var(--k-fs-sm)",
                                             minHeight: 32,
                                             padding: "0.3rem 0.5rem",
                                             fontWeight: 600,
@@ -2153,7 +2153,7 @@ export default function StandaloneInvoiceForm({
                                           ...styles.unifiedTd,
                                           backgroundColor: "#f4f6fa",
                                           fontFamily: "monospace",
-                                          fontSize: "0.78rem",
+                                          fontSize: "var(--k-fs-xs)",
                                           color: r.hsCode ? "var(--k-ink)" : "var(--k-muted)",
                                           fontStyle: r.hsCode ? "normal" : "italic",
                                         }}
@@ -2173,7 +2173,7 @@ export default function StandaloneInvoiceForm({
                                           style={{
                                             ...styles.input,
                                             padding: "0.3rem 0.5rem",
-                                            fontSize: "0.8rem",
+                                            fontSize: "var(--k-fs-sm)",
                                           }}
                                           value={r.mrp}
                                           onChange={(e) =>
@@ -2191,7 +2191,7 @@ export default function StandaloneInvoiceForm({
                                           backgroundColor: "#fffdf5",
                                           textAlign: "right",
                                           fontWeight: 600,
-                                          fontSize: "0.82rem",
+                                          fontSize: "var(--k-fs-sm)",
                                         }}
                                       >
                                         {(() => {
@@ -2214,7 +2214,7 @@ export default function StandaloneInvoiceForm({
                                           style={{
                                             ...styles.input,
                                             padding: "0.3rem 0.5rem",
-                                            fontSize: "0.78rem",
+                                            fontSize: "var(--k-fs-xs)",
                                           }}
                                           value={r.sroScheduleNo}
                                           onChange={(e) =>
@@ -2233,7 +2233,7 @@ export default function StandaloneInvoiceForm({
                                           style={{
                                             ...styles.input,
                                             padding: "0.3rem 0.5rem",
-                                            fontSize: "0.78rem",
+                                            fontSize: "var(--k-fs-xs)",
                                           }}
                                           value={r.sroItemSerialNo}
                                           onChange={(e) =>
@@ -2338,7 +2338,7 @@ export default function StandaloneInvoiceForm({
                           style={{
                             ...styles.totalRow,
                             fontWeight: 700,
-                            fontSize: "1rem",
+                            fontSize: "var(--k-fs-md)",
                             borderTop: "2px solid #333",
                             paddingTop: "0.5rem",
                           }}
@@ -2383,7 +2383,7 @@ export default function StandaloneInvoiceForm({
                 setWithholdingTaxAmount(amount);
               }}
             />
-            <p style={{ color: "var(--k-muted)", fontSize: "0.85rem", lineHeight: 1.5 }}>
+            <p style={{ color: "var(--k-muted)", fontSize: "var(--k-fs-base)", lineHeight: 1.5 }}>
               Item Type is optional on bills. Selected types suggest filing groups; unclassified
               lines stay separate. The tax consultant can combine or separate them in Adjust
               invoice.
@@ -2407,11 +2407,23 @@ export default function StandaloneInvoiceForm({
           </div>
           <div data-admin-footer="" style={formStyles.footer}>
             {billNumberMode === "custom" && !billNumberOk ? (
-              <span style={{ fontSize: "0.8rem", color: "var(--k-danger)", marginRight: "auto" }}>
+              <span
+                style={{
+                  fontSize: "var(--k-fs-sm)",
+                  color: "var(--k-danger)",
+                  marginRight: "auto",
+                }}
+              >
                 Enter a bill number that isn&apos;t already in use, or switch back to Auto.
               </span>
             ) : !allRowsValid && rows.length > 0 && chosenScenario && selectedClientId ? (
-              <span style={{ fontSize: "0.8rem", color: "var(--k-danger)", marginRight: "auto" }}>
+              <span
+                style={{
+                  fontSize: "var(--k-fs-sm)",
+                  color: "var(--k-danger)",
+                  marginRight: "auto",
+                }}
+              >
                 Some required fields are missing.
               </span>
             ) : null}
@@ -2486,14 +2498,14 @@ const styles = {
   mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
   mcard: {
     border: `1px solid var(--k-line)`,
-    borderRadius: 12,
+    borderRadius: "var(--k-card-radius)",
     padding: "0.7rem 0.75rem",
     background: "var(--k-surface)",
   },
   mcardHead: { display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.5rem" },
   mlabel: {
     display: "block",
-    fontSize: "0.68rem",
+    fontSize: "var(--k-fs-2xs)",
     textTransform: "uppercase",
     letterSpacing: "0.03em",
     color: "var(--k-muted)",
@@ -2520,7 +2532,7 @@ const styles = {
     marginTop: "0.55rem",
     paddingTop: "0.45rem",
     borderTop: `1px dashed var(--k-line)`,
-    fontSize: "0.85rem",
+    fontSize: "var(--k-fs-base)",
     color: "var(--k-muted)",
   },
   row: { display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" },
@@ -2529,16 +2541,16 @@ const styles = {
     display: "block",
     marginBottom: "var(--ui-label-gap, 0.35rem)",
     fontWeight: 600,
-    fontSize: "var(--ui-label-size, 0.85rem)",
+    fontSize: "var(--ui-label-size, var(--k-fs-base))",
     color: "var(--k-muted)",
   },
   input: {
     width: "100%",
     padding: "var(--ui-input-pad, 0.55rem 0.75rem)",
     minHeight: "var(--ui-control-h, 0px)",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     border: `1px solid var(--k-line-strong)`,
-    fontSize: "var(--ui-input-size, 0.9rem)",
+    fontSize: "var(--ui-input-size, var(--k-fs-base))",
     backgroundColor: `var(--ui-input-bg, var(--k-input-bg))`,
     color: "var(--k-ink)",
     outline: "none",
@@ -2548,9 +2560,9 @@ const styles = {
     width: "100%",
     padding: "var(--ui-select-pad, 0.6rem 0.75rem)",
     minHeight: "var(--ui-control-h, 0px)",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     border: `1px solid var(--k-line-strong)`,
-    fontSize: "var(--ui-input-size, 0.9rem)",
+    fontSize: "var(--ui-input-size, var(--k-fs-base))",
     backgroundColor: `var(--ui-input-bg, var(--k-input-bg))`,
     color: "var(--k-ink)",
     outline: "none",
@@ -2560,22 +2572,22 @@ const styles = {
     backgroundColor: "var(--k-danger-bg)",
     color: "var(--k-danger)",
     padding: "0.65rem 1rem",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     marginBottom: "1rem",
     fontWeight: 500,
     border: `1px solid color-mix(in srgb, var(--k-danger) 19%, transparent)`,
-    fontSize: "0.85rem",
+    fontSize: "var(--k-fs-base)",
   },
   warnAlert: {
     display: "flex",
     alignItems: "center",
     gap: "0.5rem",
     padding: "0.65rem 0.85rem",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     backgroundColor: colors.warnLight,
     border: `1px solid color-mix(in srgb, ${colors.warn} 19%, transparent)`,
     color: colors.warn,
-    fontSize: "0.85rem",
+    fontSize: "var(--k-fs-base)",
   },
   totalsBox: {
     display: "flex",
@@ -2584,7 +2596,7 @@ const styles = {
     alignItems: "flex-end",
     padding: "1rem",
     backgroundColor: "var(--k-surface-2)",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     border: `1px solid var(--k-line)`,
     marginTop: "0.5rem",
   },
@@ -2592,17 +2604,17 @@ const styles = {
     display: "flex",
     gap: "2rem",
     justifyContent: "flex-end",
-    fontSize: "0.9rem",
+    fontSize: "var(--k-fs-base)",
     minWidth: 280,
   },
-  fbrToggleHint: { margin: "0.3rem 0 0", fontSize: "0.75rem", color: "var(--k-muted)" },
+  fbrToggleHint: { margin: "0.3rem 0 0", fontSize: "var(--k-fs-xs)", color: "var(--k-muted)" },
   optionalTag: {
     marginLeft: "0.3rem",
     padding: "0.05rem 0.35rem",
-    borderRadius: 4,
+    borderRadius: "var(--k-r-xs)",
     backgroundColor: "var(--k-warn-bg)",
     color: "var(--k-warn)",
-    fontSize: "0.62rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 800,
     letterSpacing: "0.03em",
     textTransform: "uppercase",
@@ -2610,10 +2622,10 @@ const styles = {
   lockedTag: {
     marginLeft: "0.3rem",
     padding: "0.05rem 0.35rem",
-    borderRadius: 4,
+    borderRadius: "var(--k-r-xs)",
     backgroundColor: "var(--k-teal-bg)",
     color: "var(--k-teal-ink)",
-    fontSize: "0.62rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
     letterSpacing: "0.03em",
     textTransform: "uppercase",
@@ -2634,7 +2646,7 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     padding: "0.25rem",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     border: `1px solid var(--k-blue)`,
     backgroundColor: "var(--k-surface)",
     color: "var(--k-blue)",
@@ -2645,14 +2657,14 @@ const styles = {
     width: "100%",
     overflowX: "auto",
     border: `1px solid var(--k-line)`,
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
   },
   unifiedTable: { width: "100%", borderCollapse: "collapse", minWidth: 1200 },
   unifiedThead: { backgroundColor: "#eff3f8" },
   unifiedTh: {
     padding: "0.5rem 0.45rem",
     textAlign: "left",
-    fontSize: "0.7rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 800,
     color: "var(--k-muted)",
     textTransform: "uppercase",
@@ -2662,7 +2674,7 @@ const styles = {
   unifiedRow: { backgroundColor: "var(--k-surface)" },
   unifiedTd: {
     padding: "0.3rem 0.4rem",
-    fontSize: "0.8rem",
+    fontSize: "var(--k-fs-sm)",
     borderBottom: `1px solid var(--k-line)`,
     verticalAlign: "middle",
   },
@@ -2671,7 +2683,7 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: "0.5rem",
-    fontSize: "0.95rem",
+    fontSize: "var(--k-fs-md)",
     fontWeight: 700,
     color: "var(--k-ink)",
     marginBottom: "0.4rem",
@@ -2683,15 +2695,15 @@ const styles = {
     width: 22,
     height: 22,
     borderRadius: "50%",
-    backgroundColor: "var(--k-blue)",
+    backgroundColor: "var(--k-accent-solid, var(--k-blue))",
     color: "#fff",
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 800,
     flexShrink: 0,
   },
   stepHint: {
     margin: "0 0 0.6rem 30px",
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     color: "var(--k-muted)",
     lineHeight: 1.4,
   },
@@ -2706,7 +2718,7 @@ const styles = {
     width: "100%",
     minHeight: "var(--ui-btn-h, 0px)",
     padding: "var(--ui-input-pad, 0.6rem 0.85rem)",
-    borderRadius: 10,
+    borderRadius: "var(--k-radius)",
     border: `1px solid var(--k-line)`,
     backgroundColor: "var(--k-surface-2)",
     cursor: "pointer",
@@ -2716,7 +2728,7 @@ const styles = {
     margin: 0,
   },
   scenarioCollapseTitle: {
-    fontSize: "0.92rem",
+    fontSize: "var(--k-fs-base)",
     fontWeight: 700,
     color: "var(--k-ink)",
     flexShrink: 0,
@@ -2726,20 +2738,20 @@ const styles = {
     alignItems: "center",
     gap: "0.4rem",
     flex: 1,
-    fontSize: "0.82rem",
+    fontSize: "var(--k-fs-sm)",
     color: "var(--k-ink)",
     flexWrap: "wrap",
     minWidth: 0,
   },
   scenarioCollapseSummaryMuted: {
     flex: 1,
-    fontSize: "0.82rem",
+    fontSize: "var(--k-fs-sm)",
     color: "var(--k-muted)",
     fontStyle: "italic",
   },
   scenarioCollapseMeta: {
     color: "var(--k-muted)",
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
   },
   scenarioCollapseCode: {
     fontWeight: 700,
@@ -2752,17 +2764,17 @@ const styles = {
     gap: "0.2rem",
     color: "var(--k-blue)",
     fontWeight: 600,
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     flexShrink: 0,
   },
   scenarioCollapseChevronLabel: {
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 600,
   },
   scenarioCollapseBody: {
     marginTop: "0.65rem",
     padding: "0.65rem 0.85rem",
-    borderRadius: 10,
+    borderRadius: "var(--k-radius)",
     border: `1px solid var(--k-line)`,
     backgroundColor: "var(--k-surface)",
   },
@@ -2776,7 +2788,7 @@ const styles = {
   scenarioCard: {
     textAlign: "left",
     padding: "0.7rem 0.85rem",
-    borderRadius: 10,
+    borderRadius: "var(--k-radius)",
     border: "2px solid",
     cursor: "pointer",
     display: "flex",
@@ -2789,22 +2801,22 @@ const styles = {
   scenarioCardHeader: { display: "flex", justifyContent: "space-between", alignItems: "center" },
   scenarioCode: {
     fontWeight: 800,
-    fontSize: "0.95rem",
+    fontSize: "var(--k-fs-md)",
     color: "var(--k-blue)",
     fontFamily: "monospace",
   },
   scenarioSaleType: {
-    fontSize: "0.82rem",
+    fontSize: "var(--k-fs-sm)",
     color: "var(--k-ink)",
     fontWeight: 600,
     lineHeight: 1.25,
   },
-  scenarioRate: { fontSize: "0.74rem", color: "var(--k-muted)" },
+  scenarioRate: { fontSize: "var(--k-fs-xs)", color: "var(--k-muted)" },
   scenarioBadges: { display: "flex", flexWrap: "wrap", gap: "0.25rem", marginTop: "0.15rem" },
   scenarioBadge: {
-    fontSize: "0.65rem",
+    fontSize: "var(--k-fs-2xs)",
     padding: "0.1rem 0.4rem",
-    borderRadius: 4,
+    borderRadius: "var(--k-r-xs)",
     fontWeight: 700,
     letterSpacing: "0.02em",
   },
@@ -2819,11 +2831,11 @@ const styles = {
     gap: "0.4rem",
     marginTop: "0.6rem",
     padding: "0.5rem 0.75rem",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     backgroundColor: "var(--k-info-bg)",
     border: "1px solid #90caf9",
     color: "var(--k-blue)",
-    fontSize: "0.82rem",
+    fontSize: "var(--k-fs-sm)",
     lineHeight: 1.4,
   },
 
@@ -2834,24 +2846,24 @@ const styles = {
     gap: "0.5rem",
     padding: "0.5rem 0.85rem",
     marginBottom: "0.6rem",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     backgroundColor: "var(--k-teal-bg)",
     border: "1px solid #80cbc4",
     color: "var(--k-teal-ink)",
-    fontSize: "0.82rem",
+    fontSize: "var(--k-fs-sm)",
   },
-  lockedSaleTypeHint: { color: "var(--k-teal-ink)", opacity: 0.8, fontSize: "0.75rem" },
+  lockedSaleTypeHint: { color: "var(--k-teal-ink)", opacity: 0.8, fontSize: "var(--k-fs-xs)" },
 
   permHintBlock: {
     display: "inline-flex",
     alignItems: "center",
     gap: "0.35rem",
     padding: "0.45rem 0.75rem",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     backgroundColor: "var(--k-warn-bg-2)",
     border: `1px solid color-mix(in srgb, ${colors.warn} 19%, transparent)`,
     color: colors.warn,
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     lineHeight: 1.35,
     flexWrap: "wrap",
   },
@@ -2860,26 +2872,26 @@ const styles = {
     alignItems: "center",
     gap: "0.25rem",
     color: colors.warn,
-    fontSize: "0.72rem",
+    fontSize: "var(--k-fs-2xs)",
     flexWrap: "wrap",
   },
   permCode: {
     fontFamily: "monospace",
     padding: "0 0.25rem",
-    borderRadius: 3,
+    borderRadius: "var(--k-r-xs)",
     backgroundColor: "#f5f5f5",
     fontWeight: 700,
-    fontSize: "0.74rem",
+    fontSize: "var(--k-fs-xs)",
   },
 
   // ── HS code typeahead inside ItemTypeForm ─────────────────────────
   scenarioPillSmall: {
     marginLeft: "0.5rem",
     padding: "0.1rem 0.4rem",
-    borderRadius: 4,
+    borderRadius: "var(--k-r-xs)",
     backgroundColor: "var(--k-info-bg)",
     color: "var(--k-blue)",
-    fontSize: "0.7rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 800,
     fontFamily: "monospace",
   },
@@ -2893,11 +2905,11 @@ const styles = {
     overflowY: "auto",
     backgroundColor: "var(--k-surface)",
     border: `1px solid var(--k-line)`,
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     boxShadow: "var(--k-card-shadow)",
     zIndex: 1200,
   },
-  hsLoading: { padding: "0.6rem 0.85rem", fontSize: "0.82rem", color: "var(--k-muted)" },
+  hsLoading: { padding: "0.6rem 0.85rem", fontSize: "var(--k-fs-sm)", color: "var(--k-muted)" },
   hsOption: {
     display: "flex",
     flexDirection: "column",
@@ -2915,10 +2927,10 @@ const styles = {
     fontWeight: 700,
     color: "var(--k-blue)",
     fontFamily: "monospace",
-    fontSize: "0.85rem",
+    fontSize: "var(--k-fs-base)",
   },
   hsOptionDesc: {
-    fontSize: "0.74rem",
+    fontSize: "var(--k-fs-xs)",
     color: "var(--k-muted)",
     marginTop: 2,
     lineHeight: 1.3,
@@ -2936,7 +2948,7 @@ const styles = {
     flexWrap: "wrap",
     padding: "0.55rem 0.85rem",
     marginBottom: "0.5rem",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     border: `1px solid var(--k-line)`,
     backgroundColor: "var(--k-surface-2)",
   },

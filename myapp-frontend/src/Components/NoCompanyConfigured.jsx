@@ -62,7 +62,7 @@ const styles = {
     textAlign: "center",
     background: "var(--k-surface, #ffffff)",
     border: "1px solid var(--k-line, #e8edf3)",
-    borderRadius: 16,
+    borderRadius: "var(--k-r-xl)",
     padding: "var(--sc-panel-pad, clamp(1.5rem, 4vw, 2.5rem))",
     boxShadow:
       "var(--k-card-shadow, 0 1px 3px rgba(16,32,64,0.04), 0 6px 18px rgba(16,32,64,0.06))",
@@ -74,12 +74,12 @@ const styles = {
     borderRadius: "50%",
     display: "grid",
     placeItems: "center",
-    background: "#e8f0fe",
+    background: "var(--k-tint, #e8f0fe)",
     color: "var(--k-blue, #0d47a1)",
   },
   title: {
     margin: "0 0 0.5rem",
-    fontSize: "var(--sc-hero-title, 1.35rem)",
+    fontSize: "var(--sc-hero-title, var(--k-fs-xl))",
     color: "var(--k-ink, #1a2332)",
   },
   text: {

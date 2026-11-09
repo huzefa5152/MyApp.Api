@@ -56,7 +56,7 @@ export default function CustomerImportArchive({ companyId }) {
             key={row.id}
             style={{
               border: "1px solid var(--k-line-strong)",
-              borderRadius: 8,
+              borderRadius: "var(--k-radius)",
               padding: 12,
               overflowWrap: "anywhere",
             }}

@@ -139,7 +139,7 @@ export default function ConfirmProvider({ children }) {
                 <p
                   style={{
                     margin: 0,
-                    fontSize: "var(--sc-dlg-msg, 0.9rem)",
+                    fontSize: "var(--sc-dlg-msg, var(--k-fs-base))",
                     color: "var(--k-muted, #5f6d7e)",
                     lineHeight: 1.5,
                   }}

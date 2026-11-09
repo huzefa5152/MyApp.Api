@@ -205,7 +205,11 @@ export default function ByCounterpartyCard({
                   }}
                 >
                   <span
-                    style={{ color: "var(--k-muted)", fontSize: "0.75rem", marginRight: "0.4rem" }}
+                    style={{
+                      color: "var(--k-muted)",
+                      fontSize: "var(--k-fs-xs)",
+                      marginRight: "var(--k-fs-2xs)",
+                    }}
                   >
                     #{idx + 1}
                   </span>
@@ -240,7 +244,7 @@ export default function ByCounterpartyCard({
                     style={{
                       fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
                       fontVariantNumeric: "tabular-nums",
-                      fontSize: "0.72rem",
+                      fontSize: "var(--k-fs-2xs)",
                       color: "var(--k-muted)",
                       textAlign: "right",
                     }}
@@ -265,7 +269,7 @@ function TitleWithSwatch({ title, accent }) {
           display: "inline-flex",
           width: 10,
           height: 10,
-          borderRadius: 3,
+          borderRadius: "var(--k-r-xs)",
           background: accent,
           boxShadow: `0 0 0 4px color-mix(in srgb, ${accent} 10%, transparent)`,
           flexShrink: 0,

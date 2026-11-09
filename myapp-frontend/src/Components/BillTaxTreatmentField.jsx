@@ -12,7 +12,7 @@ export default function BillTaxTreatmentField({
     <div
       style={{
         border: `1px solid var(--k-line)`,
-        borderRadius: 10,
+        borderRadius: "var(--k-radius)",
         padding: 14,
         marginBottom: 14,
       }}

@@ -271,16 +271,16 @@ export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPr
 
 const st = {
   badge: {
-    fontSize: "0.7rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
     padding: "0.1rem 0.5rem",
-    borderRadius: 20,
+    borderRadius: "var(--k-r-xl)",
     background: "rgba(255,255,255,0.22)",
     color: "#fff",
     border: "1px solid rgba(255,255,255,0.4)",
   },
   clientName: {
-    fontSize: "calc(var(--k-font) + 0.15rem)",
+    fontSize: "var(--k-fs-md)",
     fontWeight: 700,
     color: "var(--k-ink)",
     marginBottom: "0.75rem",
@@ -314,7 +314,7 @@ const st = {
     flex: "0 0 auto",
     width: 24,
     height: 24,
-    borderRadius: 7,
+    borderRadius: "var(--k-r-sm)",
     background: "var(--k-surface-3)",
     color: "var(--k-muted)",
     display: "grid",
@@ -349,7 +349,7 @@ const st = {
     marginTop: 4,
     paddingTop: 8,
     fontWeight: 800,
-    fontSize: "calc(var(--k-font) + 0.1rem)",
+    fontSize: "var(--k-fs-md)",
     color: "var(--k-blue)",
   },
   notes: {
@@ -358,7 +358,7 @@ const st = {
     whiteSpace: "pre-wrap",
     background: "var(--k-surface-2)",
     border: "1px solid var(--k-line)",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     padding: "0.6rem 0.8rem",
   },
 };

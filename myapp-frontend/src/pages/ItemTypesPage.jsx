@@ -283,7 +283,7 @@ export default function ItemTypesPage() {
                             {it.name}
                           </div>
                           {isFbr && (
-                            <div style={{ fontSize: "0.75rem", color: "var(--k-blue)" }}>
+                            <div style={{ fontSize: "var(--k-fs-xs)", color: "var(--k-blue)" }}>
                               {it.isHsCodePartial
                                 ? "Needs complete sales HS code"
                                 : "FBR invoice classification"}
@@ -371,7 +371,7 @@ export default function ItemTypesPage() {
                           {it.name}
                         </h3>
                         {isFbr && (
-                          <div style={{ fontSize: "0.75rem", color: "var(--k-blue)" }}>
+                          <div style={{ fontSize: "var(--k-fs-xs)", color: "var(--k-blue)" }}>
                             {it.isHsCodePartial
                               ? "Needs complete sales HS code"
                               : "FBR invoice classification"}
@@ -501,7 +501,7 @@ const clamp2 = {
 
 const styles = {
   itemName: { ...clamp2, fontWeight: 600, color: "var(--k-ink)", lineHeight: 1.3 },
-  itemDesc: { ...clamp2, fontSize: "0.7rem", color: "var(--k-muted)", lineHeight: 1.3 },
+  itemDesc: { ...clamp2, fontSize: "var(--k-fs-2xs)", color: "var(--k-muted)", lineHeight: 1.3 },
   // Entity-card layout shared with the client / company cards. marginTop: 0
   // cancels the kit's `.k-card + .k-card` stacking gap inside the list.
   card: { display: "flex", flexDirection: "column", overflow: "hidden", marginTop: 0 },
@@ -509,7 +509,7 @@ const styles = {
   cardName: {
     ...clamp2,
     margin: 0,
-    fontSize: "calc(var(--k-font) + 0.1rem)",
+    fontSize: "var(--k-fs-md)",
     fontWeight: 700,
     lineHeight: 1.3,
     color: "var(--k-ink)",

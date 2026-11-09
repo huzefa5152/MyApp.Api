@@ -345,7 +345,9 @@ export default function POFormatForm({
                         "Click to upload a sample PO: PDF, scanned PDF or photo"
                       )}
                     </p>
-                    <span style={{ fontSize: "0.78rem", color: "var(--k-muted)" }}>Max 10 MB</span>
+                    <span style={{ fontSize: "var(--k-fs-xs)", color: "var(--k-muted)" }}>
+                      Max 10 MB
+                    </span>
                   </div>
                 </Field>
               </div>
@@ -368,7 +370,7 @@ export default function POFormatForm({
                       className="k-textarea"
                       style={{
                         fontFamily: "monospace",
-                        fontSize: "0.78rem",
+                        fontSize: "var(--k-fs-xs)",
                         backgroundColor: "var(--k-surface-2)",
                       }}
                       rows={8}
@@ -510,10 +512,15 @@ const styles = {
   },
   sectionTitle: {
     margin: "0.5rem 0 0.25rem",
-    fontSize: "calc(var(--k-font) + 0.05rem)",
+    fontSize: "var(--k-fs-md)",
     fontWeight: 600,
     color: "var(--k-ink)",
   },
   sectionHint: { margin: "0 0 0.75rem", fontSize: "var(--k-font-sm)", color: "var(--k-muted)" },
-  hint: { marginTop: "0.25rem", fontSize: "0.78rem", color: "var(--k-muted)", fontStyle: "italic" },
+  hint: {
+    marginTop: "0.25rem",
+    fontSize: "var(--k-fs-xs)",
+    color: "var(--k-muted)",
+    fontStyle: "italic",
+  },
 };

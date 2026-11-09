@@ -72,7 +72,7 @@ function WarningTooltip({ warnings }) {
               padding: "0.6rem 0.75rem",
               background: "var(--k-surface)",
               border: "1px solid #e65100",
-              borderRadius: 8,
+              borderRadius: "var(--k-radius)",
               boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
               color: "#333",
               pointerEvents: "none",
@@ -82,13 +82,20 @@ function WarningTooltip({ warnings }) {
               style={{
                 fontWeight: 700,
                 marginBottom: 4,
-                fontSize: "0.78rem",
+                fontSize: "var(--k-fs-xs)",
                 color: "var(--k-warn)",
               }}
             >
               FBR Setup Required
             </div>
-            <ul style={{ margin: 0, paddingLeft: "1.1rem", fontSize: "0.75rem", lineHeight: 1.6 }}>
+            <ul
+              style={{
+                margin: 0,
+                paddingLeft: "1.1rem",
+                fontSize: "var(--k-fs-xs)",
+                lineHeight: 1.6,
+              }}
+            >
               {warnings.map((w, i) => (
                 <li key={i}>{w}</li>
               ))}
@@ -243,7 +250,7 @@ export default function ChallanList({
                       {c.invoiceNumber != null && (
                         <span
                           style={{
-                            fontSize: "0.72rem",
+                            fontSize: "var(--k-fs-2xs)",
                             color: "var(--k-muted)",
                             whiteSpace: "nowrap",
                           }}
@@ -268,7 +275,7 @@ export default function ChallanList({
                         gap: "0.35rem",
                         color: "var(--k-purple-3)",
                         fontWeight: 600,
-                        fontSize: "0.78rem",
+                        fontSize: "var(--k-fs-xs)",
                         marginTop: "-0.15rem",
                       }}
                     >
@@ -318,7 +325,9 @@ export default function ChallanList({
                       {new Date(c.deliveryDate).toLocaleDateString()}
                     </p>
                   )}
-                  <p style={{ ...styles.text, fontSize: "0.78rem", color: "var(--k-muted)" }}>
+                  <p
+                    style={{ ...styles.text, fontSize: "var(--k-fs-xs)", color: "var(--k-muted)" }}
+                  >
                     {c.items?.length || 0} item{(c.items?.length || 0) !== 1 ? "s" : ""}
                   </p>
                 </div>
@@ -499,7 +508,7 @@ const styles = {
     height: "100%",
   },
   title: {
-    fontSize: "calc(var(--k-font) + 0.2rem)",
+    fontSize: "var(--k-fs-md)",
     fontWeight: 800,
     margin: "0 0 0.5rem",
     color: "var(--k-ink)",
@@ -539,10 +548,10 @@ const styles = {
   statusBadge: {
     display: "inline-flex",
     alignItems: "center",
-    fontSize: "0.72rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
     padding: "0.2rem 0.65rem",
-    borderRadius: 20,
+    borderRadius: "var(--k-r-xl)",
     whiteSpace: "nowrap",
     textTransform: "uppercase",
     letterSpacing: "0.03em",

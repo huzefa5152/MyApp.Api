@@ -1144,7 +1144,7 @@ export default function PurchaseBillForm({
                                         }
                                         style={{
                                           padding: "0.4rem 0.55rem",
-                                          fontSize: "0.82rem",
+                                          fontSize: "var(--k-fs-sm)",
                                           ...(isAgainstSale && !it.itemTypeId
                                             ? { borderColor: "var(--k-danger)" }
                                             : {}),
@@ -1306,7 +1306,7 @@ export default function PurchaseBillForm({
                                           }
                                           style={{
                                             padding: "0.3rem 0.5rem",
-                                            fontSize: "0.78rem",
+                                            fontSize: "var(--k-fs-xs)",
                                             ...(isAgainstSale && !it.itemTypeId
                                               ? { borderColor: "var(--k-danger)" }
                                               : {}),
@@ -1439,15 +1439,13 @@ export default function PurchaseBillForm({
                       style={{
                         color: "var(--k-ink)",
                         fontWeight: 700,
-                        fontSize: "calc(var(--k-font) + 0.1rem)",
+                        fontSize: "var(--k-fs-md)",
                       }}
                     >
                       Grand Total:
                     </span>
                     <span></span>
-                    <strong
-                      style={{ fontSize: "calc(var(--k-font) + 0.15rem)", color: "var(--k-blue)" }}
-                    >
+                    <strong style={{ fontSize: "var(--k-fs-md)", color: "var(--k-blue)" }}>
                       Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </strong>
                   </div>
@@ -1459,7 +1457,7 @@ export default function PurchaseBillForm({
                       style={{
                         marginTop: 16,
                         padding: 16,
-                        borderRadius: 10,
+                        borderRadius: "var(--k-radius)",
                         border: `1px solid var(--k-line)`,
                         background: "var(--k-surface-2)",
                       }}
@@ -1467,7 +1465,7 @@ export default function PurchaseBillForm({
                       <strong style={{ color: "var(--k-blue)" }}>Inventory impact</strong>
                       <p
                         style={{
-                          fontSize: "0.85rem",
+                          fontSize: "var(--k-fs-base)",
                           color: "var(--k-muted)",
                           margin: "8px 0",
                         }}
@@ -1513,13 +1511,15 @@ export default function PurchaseBillForm({
                                   style={{
                                     padding: 12,
                                     background: "white",
-                                    borderRadius: 8,
+                                    borderRadius: "var(--k-radius)",
                                     border: `1px solid var(--k-line)`,
                                     overflowWrap: "anywhere",
                                   }}
                                 >
                                   <strong>{item.name}</strong>
-                                  <div style={{ fontSize: "0.8rem", color: "var(--k-muted)" }}>
+                                  <div
+                                    style={{ fontSize: "var(--k-fs-sm)", color: "var(--k-muted)" }}
+                                  >
                                     {item.hsCode || "No HS code"}
                                   </div>
                                   {!item.tracksStock && item.changeQuantity === 0 ? (
@@ -1559,7 +1559,7 @@ export default function PurchaseBillForm({
                             </div>
                             <p
                               style={{
-                                fontSize: "0.8rem",
+                                fontSize: "var(--k-fs-sm)",
                                 color: "var(--k-muted)",
                                 marginBottom: 0,
                               }}
@@ -1643,12 +1643,12 @@ const cellInput = {
   padding: "0.3rem 0.5rem",
   fontSize: "var(--k-font-sm)",
   border: "1px solid var(--k-line-strong)",
-  borderRadius: 6,
+  borderRadius: "var(--k-r-sm)",
   backgroundColor: "var(--k-input-bg)",
   color: "var(--k-ink)",
   outline: "none",
 };
-const saleNote = { fontSize: "0.7rem", color: "var(--k-muted)", marginTop: 2 };
+const saleNote = { fontSize: "var(--k-fs-2xs)", color: "var(--k-muted)", marginTop: 2 };
 const itemsBox = {
   marginTop: "0.75rem",
   padding: "0.75rem",
@@ -1679,7 +1679,7 @@ const mStyles = {
   head: { display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.5rem" },
   label: {
     display: "block",
-    fontSize: "0.68rem",
+    fontSize: "var(--k-fs-2xs)",
     textTransform: "uppercase",
     letterSpacing: "0.03em",
     color: "var(--k-muted)",

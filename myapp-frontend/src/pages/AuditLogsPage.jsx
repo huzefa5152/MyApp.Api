@@ -227,10 +227,10 @@ export default function AuditLogsPage() {
                               alignItems: "center",
                               gap: 4,
                               padding: "2px 8px",
-                              borderRadius: 6,
+                              borderRadius: "var(--k-r-sm)",
                               background: badge.bg,
                               color: badge.color,
-                              fontSize: "0.78rem",
+                              fontSize: "var(--k-fs-xs)",
                               fontWeight: 600,
                             }}
                           >
@@ -241,7 +241,7 @@ export default function AuditLogsPage() {
                           <span
                             style={{
                               fontWeight: 700,
-                              fontSize: "0.78rem",
+                              fontSize: "var(--k-fs-xs)",
                               color: methodColor[log.httpMethod] || "var(--k-ink)",
                             }}
                           >
@@ -255,7 +255,7 @@ export default function AuditLogsPage() {
                             textOverflow: "ellipsis",
                             whiteSpace: "nowrap",
                             fontFamily: "monospace",
-                            fontSize: "0.8rem",
+                            fontSize: "var(--k-fs-sm)",
                           }}
                         >
                           {log.requestPath}
@@ -431,7 +431,12 @@ function Detail({ label, value, mono, full }) {
   return (
     <div style={full ? { gridColumn: "1 / -1" } : {}}>
       <div
-        style={{ fontSize: "0.75rem", color: "var(--k-muted)", fontWeight: 600, marginBottom: 2 }}
+        style={{
+          fontSize: "var(--k-fs-xs)",
+          color: "var(--k-muted)",
+          fontWeight: 600,
+          marginBottom: 2,
+        }}
       >
         {label}
       </div>
@@ -439,7 +444,7 @@ function Detail({ label, value, mono, full }) {
         style={{
           color: "var(--k-ink)",
           fontFamily: mono ? "monospace" : "inherit",
-          fontSize: mono ? "0.82rem" : "0.88rem",
+          fontSize: mono ? "var(--k-fs-sm)" : "var(--k-fs-base)",
           wordBreak: "break-all",
         }}
       >
@@ -453,7 +458,12 @@ function DetailBlock({ label, value, mono }) {
   return (
     <div style={{ marginBottom: 12 }}>
       <div
-        style={{ fontSize: "0.75rem", color: "var(--k-muted)", fontWeight: 600, marginBottom: 4 }}
+        style={{
+          fontSize: "var(--k-fs-xs)",
+          color: "var(--k-muted)",
+          fontWeight: 600,
+          marginBottom: 4,
+        }}
       >
         {label}
       </div>
@@ -461,9 +471,9 @@ function DetailBlock({ label, value, mono }) {
         style={{
           background: "var(--k-surface-2)",
           border: "1px solid var(--k-line)",
-          borderRadius: 8,
+          borderRadius: "var(--k-radius)",
           padding: 12,
-          fontSize: "0.8rem",
+          fontSize: "var(--k-fs-sm)",
           fontFamily: mono ? "monospace" : "inherit",
           whiteSpace: "pre-wrap",
           wordBreak: "break-all",
@@ -482,7 +492,7 @@ const chip = {
   display: "inline-flex",
   alignItems: "center",
   minHeight: 30,
-  borderRadius: 8,
+  borderRadius: "var(--k-radius)",
   padding: "0 14px",
   fontSize: "var(--k-font-sm)",
   fontWeight: 600,

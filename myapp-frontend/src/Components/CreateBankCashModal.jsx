@@ -213,7 +213,7 @@ const st = {
   fieldRow: { display: "flex", gap: "0.75rem", flexWrap: "wrap" },
   label: {
     display: "block",
-    fontSize: "0.85rem",
+    fontSize: "var(--k-fs-base)",
     fontWeight: 700,
     marginBottom: 4,
     color: "var(--k-muted)",

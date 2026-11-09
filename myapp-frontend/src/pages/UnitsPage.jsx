@@ -198,7 +198,7 @@ export default function UnitsPage() {
                         >
                           {checked ? (
                             <>
-                              <MdCheck style={{ fontSize: "1rem" }} /> Decimal allowed
+                              <MdCheck style={{ fontSize: "var(--k-fs-md)" }} /> Decimal allowed
                             </>
                           ) : (
                             "Integer only"
@@ -231,7 +231,7 @@ const styles = {
     gap: "0.35rem",
     minHeight: "calc(var(--k-h) - 6px)",
     padding: "0 0.85rem",
-    borderRadius: 999,
+    borderRadius: "var(--k-r-pill)",
     fontSize: "var(--k-font-sm)",
     fontWeight: 600,
     boxShadow: "none",

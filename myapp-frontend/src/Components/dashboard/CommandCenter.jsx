@@ -464,9 +464,9 @@ export function TrendChart({ points, bars, line = null, height = 220, ariaLabel 
 
 export const AGING = [
   { key: "current", label: "Not yet due", color: "var(--k-success)" },
-  { key: "days1To30", label: "1–30 days", color: "#9ccc65" },
-  { key: "days31To60", label: "31–60 days", color: "#f9a825" },
-  { key: "days61To90", label: "61–90 days", color: "#ef6c00" },
+  { key: "days1To30", label: "1–30 days", color: "var(--k-chart-aging-2)" },
+  { key: "days31To60", label: "31–60 days", color: "var(--k-chart-aging-3)" },
+  { key: "days61To90", label: "61–90 days", color: "var(--k-chart-aging-4)" },
   { key: "over90", label: "Over 90 days", color: "var(--k-danger-ink)" },
 ];
 

@@ -308,7 +308,7 @@ export default function TaxSheetPage() {
     switch (key) {
       case "ntn":
         return (
-          <td key={key} style={{ fontFamily: "monospace", fontSize: "0.75rem" }}>
+          <td key={key} style={{ fontFamily: "monospace", fontSize: "var(--k-fs-xs)" }}>
             {row.ntn}
           </td>
         );
@@ -341,7 +341,7 @@ export default function TaxSheetPage() {
           <td key={key} style={{ maxWidth: 260 }}>
             <div style={clamp2}>{row.description}</div>
             {row.currentHsCode && (
-              <div style={{ fontSize: "0.72rem", color: "var(--k-muted)" }}>
+              <div style={{ fontSize: "var(--k-fs-2xs)", color: "var(--k-muted)" }}>
                 Filed HS: {row.currentHsCode}
               </div>
             )}
@@ -351,7 +351,12 @@ export default function TaxSheetPage() {
         return (
           <td key={key}>
             <span
-              style={{ ...pill, fontSize: "0.78rem", display: "inline-block", lineHeight: 1.3 }}
+              style={{
+                ...pill,
+                fontSize: "var(--k-fs-xs)",
+                display: "inline-block",
+                lineHeight: 1.3,
+              }}
             >
               {row.itemTypeName}
             </span>
@@ -633,13 +638,13 @@ export default function TaxSheetPage() {
                         <span style={{ fontWeight: 700, color: "var(--k-blue)" }}>
                           {row.documentNumber}
                         </span>
-                        <span style={{ fontSize: "0.78rem", color: "var(--k-muted)" }}>
+                        <span style={{ fontSize: "var(--k-fs-xs)", color: "var(--k-muted)" }}>
                           {new Date(row.documentDate).toLocaleDateString()}
                         </span>
                       </div>
                       <div
                         style={{
-                          fontSize: "0.88rem",
+                          fontSize: "var(--k-fs-base)",
                           fontWeight: 600,
                           color: "var(--k-ink)",
                           ...clamp2,
@@ -659,13 +664,15 @@ export default function TaxSheetPage() {
                         <span
                           style={{
                             fontFamily: "monospace",
-                            fontSize: "0.74rem",
+                            fontSize: "var(--k-fs-xs)",
                             color: "var(--k-muted)",
                           }}
                         >
                           {row.ntn}
                         </span>
-                        <span style={{ ...pill, fontSize: "0.74rem" }}>{row.itemTypeName}</span>
+                        <span style={{ ...pill, fontSize: "var(--k-fs-xs)" }}>
+                          {row.itemTypeName}
+                        </span>
                       </div>
                       <div style={tsCardMeta}>
                         <div>
@@ -811,7 +818,7 @@ const pill = {
   background: "var(--k-warn-bg-4)",
   color: "#a15c00",
   padding: "2px 8px",
-  borderRadius: 6,
+  borderRadius: "var(--k-r-sm)",
   fontWeight: 600,
 };
 const totalBand = { background: totalBg, borderTop: "2px solid var(--k-blue)" };
@@ -866,13 +873,18 @@ const tsCardMeta = {
 };
 const tsLbl = {
   display: "block",
-  fontSize: "0.62rem",
+  fontSize: "var(--k-fs-2xs)",
   fontWeight: 700,
   textTransform: "uppercase",
   letterSpacing: "0.05em",
   color: "var(--k-muted)",
 };
-const tsVal = { display: "block", fontSize: "0.85rem", fontWeight: 600, color: "var(--k-ink)" };
+const tsVal = {
+  display: "block",
+  fontSize: "var(--k-fs-base)",
+  fontWeight: 600,
+  color: "var(--k-ink)",
+};
 
 // Segmented control (Month / Year vs Custom range) — kit has no segmented
 // control, so it is built locally from the --k-* tokens.

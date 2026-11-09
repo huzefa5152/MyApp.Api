@@ -77,7 +77,14 @@ export default function TaxSheetImportDialog({ companyId, onClose, onApplied }) 
         </div>
 
         <div data-admin-body="" style={formStyles.body}>
-          <p style={{ margin: "0 0 1rem", fontSize: "0.88rem", color: muted, lineHeight: 1.6 }}>
+          <p
+            style={{
+              margin: "0 0 1rem",
+              fontSize: "var(--k-fs-base)",
+              color: muted,
+              lineHeight: 1.6,
+            }}
+          >
             Export the sheet from <strong>Reports, Tax Sheet, Excel</strong> and fill the yellow
             columns:
             <strong> Real Hscode</strong> on every line, <strong>FBR Unit</strong> only when the HS
@@ -109,7 +116,7 @@ export default function TaxSheetImportDialog({ companyId, onClose, onApplied }) 
               gap: "0.75rem",
               textAlign: "left",
               padding: "0.9rem 1rem",
-              borderRadius: 12,
+              borderRadius: "var(--k-card-radius)",
               cursor: busy || done ? "default" : "pointer",
               background: "#f7faff",
               border: "1.5px dashed #9db8e0",
@@ -123,13 +130,13 @@ export default function TaxSheetImportDialog({ companyId, onClose, onApplied }) 
                 style={{
                   display: "block",
                   fontWeight: 700,
-                  fontSize: "0.92rem",
+                  fontSize: "var(--k-fs-base)",
                   overflowWrap: "anywhere",
                 }}
               >
                 {file ? file.name : "Choose the filled Excel file"}
               </span>
-              <span style={{ display: "block", fontSize: "0.78rem", color: muted }}>
+              <span style={{ display: "block", fontSize: "var(--k-fs-xs)", color: muted }}>
                 {busy
                   ? "Reading…"
                   : file
@@ -170,11 +177,11 @@ export default function TaxSheetImportDialog({ companyId, onClose, onApplied }) 
                     gap: "0.5rem",
                     alignItems: "center",
                     padding: "0.7rem 0.9rem",
-                    borderRadius: 10,
+                    borderRadius: "var(--k-radius)",
                     background: "var(--k-success-bg)",
                     color: "var(--k-success)",
                     fontWeight: 600,
-                    fontSize: "0.88rem",
+                    fontSize: "var(--k-fs-base)",
                   }}
                 >
                   <MdCheckCircle size={20} style={{ flexShrink: 0 }} />
@@ -188,7 +195,7 @@ export default function TaxSheetImportDialog({ companyId, onClose, onApplied }) 
                   <div
                     style={{
                       fontWeight: 700,
-                      fontSize: "0.82rem",
+                      fontSize: "var(--k-fs-sm)",
                       color: "var(--k-danger)",
                       marginBottom: "0.4rem",
                       display: "flex",
@@ -204,7 +211,7 @@ export default function TaxSheetImportDialog({ companyId, onClose, onApplied }) 
                       maxHeight: 220,
                       overflowY: "auto",
                       border: `1px solid ${line}`,
-                      borderRadius: 10,
+                      borderRadius: "var(--k-radius)",
                     }}
                   >
                     {result.issues.map((i, n) => (
@@ -214,10 +221,10 @@ export default function TaxSheetImportDialog({ companyId, onClose, onApplied }) 
                           display: "flex",
                           gap: "0.6rem",
                           padding: "0.55rem 0.8rem",
-                          fontSize: "0.84rem",
+                          fontSize: "var(--k-fs-sm)",
                           lineHeight: 1.45,
                           borderTop: n ? `1px solid ${line}` : "none",
-                          background: n % 2 ? "#fafbfd" : "#fff",
+                          background: n % 2 ? "#fafbfd" : "var(--k-surface)",
                         }}
                       >
                         <span
@@ -275,13 +282,13 @@ function Stat({ label, value, tone }) {
       style={{
         background: "#f7faff",
         border: `1px solid ${line}`,
-        borderRadius: 10,
+        borderRadius: "var(--k-radius)",
         padding: "0.55rem 0.75rem",
       }}
     >
       <div
         style={{
-          fontSize: "0.68rem",
+          fontSize: "var(--k-fs-2xs)",
           fontWeight: 700,
           textTransform: "uppercase",
           letterSpacing: "0.05em",
@@ -290,7 +297,7 @@ function Stat({ label, value, tone }) {
       >
         {label}
       </div>
-      <div style={{ fontSize: "1.15rem", fontWeight: 800, color: c }}>{value}</div>
+      <div style={{ fontSize: "var(--k-fs-lg)", fontWeight: 800, color: c }}>{value}</div>
     </div>
   );
 }

@@ -77,7 +77,7 @@ export default function DuplicateChallanDialog({ open, challanNumber, onConfirm,
           <h3
             style={{
               margin: "0 0 8px",
-              fontSize: "var(--ui-modal-title-size, 1.15rem)",
+              fontSize: "var(--ui-modal-title-size, var(--k-fs-lg))",
               fontWeight: 700,
               color: "var(--k-ink)",
             }}
@@ -132,7 +132,7 @@ export default function DuplicateChallanDialog({ open, challanNumber, onConfirm,
           <div
             style={{
               textAlign: "center",
-              fontSize: "0.75rem",
+              fontSize: "var(--k-fs-xs)",
               color: "var(--k-faint)",
               padding: "0 28px 4px",
             }}
@@ -167,11 +167,11 @@ const S = {
     background: "var(--k-surface)",
     color: "var(--k-ink)",
     fontWeight: 700,
-    fontSize: "1.1rem",
+    fontSize: "var(--k-fs-lg)",
   },
   input: {
     width: 84,
-    fontSize: "1.1rem",
+    fontSize: "var(--k-fs-lg)",
     fontWeight: 700,
     textAlign: "center",
     padding: "0 10px",

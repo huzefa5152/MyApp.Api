@@ -23,16 +23,16 @@
   margin: 0;
 }
 .supplier-page-heading h2 {
-  font-size: 20px;
+  font-size: var(--k-fs-xl);
   margin: 0;
 }
 .supplier-page-heading h3 {
-  font-size: 17px;
+  font-size: var(--k-fs-lg);
   margin: 0;
 }
 .supplier-page-heading p,
 .supplier-hint {
-  font-size: 13px;
+  font-size: var(--k-fs-sm);
   color: var(--k-muted);
   line-height: 1.5;
   margin: 6px 0;
@@ -79,14 +79,14 @@
   gap: 10px;
 }
 .supplier-toolbar label {
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
 }
 .supplier-toolbar input,
 .supplier-toolbar select {
   box-sizing: border-box;
   border: 1px solid var(--k-line-strong);
-  border-radius: 7px;
-  font-size: 13px;
+  border-radius: var(--k-r-sm);
+  font-size: var(--k-fs-sm);
   width: 100%;
   background: var(--k-surface);
 }
@@ -107,7 +107,7 @@
   box-shadow: var(--k-card-shadow);
 }
 .supplier-metric > span {
-  font-size: 13px;
+  font-size: var(--k-fs-sm);
   color: var(--k-muted);
 }
 .supplier-metric > strong {
@@ -117,7 +117,7 @@
 }
 .supplier-metric > small {
   display: block;
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   color: var(--k-muted);
   line-height: 1.4;
 }
@@ -129,10 +129,10 @@
   color: var(--k-blue);
 }
 .supplier-table {
-  font-size: 13px;
+  font-size: var(--k-fs-sm);
 }
 .supplier-table th {
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   color: var(--k-muted);
   background: var(--k-surface-2);
 }
@@ -142,7 +142,7 @@
 .supplier-table small {
   display: block;
   color: var(--k-muted);
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   line-height: 1.45;
   margin-top: 4px;
 }
@@ -153,7 +153,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0 10px;
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
 }
 .supplier-source-links small {
   color: var(--k-muted);
@@ -176,7 +176,7 @@
 }
 .supplier-settlement {
   display: block;
-  font-size: 11px;
+  font-size: var(--k-fs-2xs);
   font-weight: 600;
   margin-top: 5px;
   color: #92400e;
@@ -189,11 +189,11 @@
 }
 .supplier-reconciliation {
   border: 1px solid var(--k-line-strong);
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   padding: 0 12px;
   margin: 14px 0;
   background: var(--k-surface-2);
-  font-size: 13px;
+  font-size: var(--k-fs-sm);
 }
 .supplier-reconciliation summary {
   cursor: pointer;
@@ -210,7 +210,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 4px 0;
-  font-size: 13px;
+  font-size: var(--k-fs-sm);
 }
 .supplier-payables dt {
   font-weight: 400;
@@ -223,10 +223,10 @@
   white-space: nowrap;
 }
 .supplier-filter-result {
-  font-size: 13px;
+  font-size: var(--k-fs-sm);
   padding: 10px 12px;
   background: var(--k-surface-3);
-  border-radius: 7px;
+  border-radius: var(--k-r-sm);
 }
 .supplier-mobile-list {
   gap: 10px;
@@ -235,18 +235,18 @@
 .supplier-allocation-list > article {
   padding: 12px;
   border: 1px solid var(--k-line-strong);
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   background: var(--k-surface);
   min-width: 0;
   overflow-wrap: anywhere;
 }
 .supplier-mobile-list h2 {
-  font-size: 16px;
+  font-size: var(--k-fs-md);
   margin: 0 0 8px;
 }
 .supplier-mobile-list small,
 .supplier-allocation-list small {
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   color: var(--k-muted);
 }
 .supplier-history {
@@ -255,11 +255,11 @@
 }
 .supplier-history > p,
 .supplier-reconciliation p {
-  font-size: 13px;
+  font-size: var(--k-fs-sm);
   line-height: 1.5;
 }
 .supplier-cost-change {
-  font-size: 12px !important;
+  font-size: var(--k-fs-xs) !important;
   color: #92400e !important;
 }
 .supplier-allocation-list {
@@ -285,7 +285,7 @@
     padding: 10px;
   }
   .supplier-metric > strong {
-    font-size: 18px;
+    font-size: var(--k-fs-lg);
   }
   .supplier-allocation-list > article {
     flex-direction: column;
@@ -313,8 +313,8 @@
   border: 1px solid #86b99b;
   background: #f0fdf4;
   color: #166534;
-  border-radius: 7px;
-  font-size: 13px;
+  border-radius: var(--k-r-sm);
+  font-size: var(--k-fs-sm);
 }
 
 .supplier-table td.supplier-number {
@@ -355,7 +355,7 @@
 }
 .supplier-panel h2,
 .supplier-panel h3 {
-  font-size: 17px;
+  font-size: var(--k-fs-lg);
   font-weight: 700;
   margin: 0;
   color: var(--k-ink);
@@ -368,11 +368,11 @@
   flex-wrap: wrap;
 }
 .supplier-panel-heading > span {
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
   padding: 5px 10px;
   background: var(--k-surface-3);
   color: var(--k-blue);
-  border-radius: 20px;
+  border-radius: var(--k-r-xl);
 }
 .supplier-panel > .supplier-hint {
   margin: 8px 0 18px;
@@ -381,11 +381,11 @@
   padding: 20px;
   border: 1px solid var(--k-line);
   border-left: 4px solid var(--k-teal);
-  border-radius: 12px;
+  border-radius: var(--k-card-radius);
   background: var(--k-surface);
 }
 .supplier-eyebrow {
-  font-size: 11px;
+  font-size: var(--k-fs-2xs);
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--k-teal);
@@ -404,10 +404,10 @@
   place-items: center;
   width: 30px;
   height: 30px;
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   background: var(--k-surface-3);
   color: var(--k-teal);
-  font-size: 18px;
+  font-size: var(--k-fs-lg);
 }
 .supplier-metric > strong {
   font-variant-numeric: tabular-nums;
@@ -440,7 +440,7 @@
 .supplier-panel .supplier-toolbar {
   padding: 12px;
   background: var(--k-surface-2);
-  border-radius: 9px;
+  border-radius: var(--k-radius);
   margin: 16px 0;
 }
 .supplier-table th {
@@ -464,14 +464,14 @@
 .supplier-filter-result {
   background: var(--k-surface-3);
   color: var(--k-muted);
-  font-size: 12px;
+  font-size: var(--k-fs-xs);
 }
 .supplier-filter-result strong {
   color: var(--k-teal);
 }
 .supplier-settlement {
   width: fit-content;
-  border-radius: 20px;
+  border-radius: var(--k-r-xl);
   background: var(--k-warn-bg-4);
   padding: 3px 8px;
   margin-left: auto;
@@ -487,7 +487,7 @@
 }
 .supplier-mobile-list > article {
   border-color: var(--k-line);
-  border-radius: 10px;
+  border-radius: var(--k-radius);
   box-shadow: var(--k-card-shadow);
 }
 .supplier-reconciliation {
@@ -530,7 +530,7 @@
     align-items: flex-start;
   }
   .supplier-hero h1 {
-    font-size: 21px;
+    font-size: var(--k-fs-xl);
   }
   .supplier-metric .supplier-metric-icon {
     right: 10px;
@@ -557,7 +557,7 @@
     padding: 14px 16px;
   }
   .supplier-metric > strong {
-    font-size: 23px;
+    font-size: var(--k-fs-2xl);
   }
   .supplier-metric > small {
     max-width: none;

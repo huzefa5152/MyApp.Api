@@ -122,7 +122,7 @@
   .list-filters {
     background: var(--k-surface);
     border: 1px solid var(--k-line);
-    border-radius: 10px;
+    border-radius: var(--k-radius);
     margin-bottom: 10px;
   }
   .list-filters > summary {
@@ -132,7 +132,7 @@
     min-height: var(--k-btn-h);
     padding: 10px 12px;
     color: var(--k-blue);
-    font-size: 13px;
+    font-size: var(--k-fs-sm);
     font-weight: 600;
     cursor: pointer;
     list-style: none;
@@ -142,7 +142,7 @@
   }
   .list-filters > summary > span {
     color: var(--k-muted);
-    font-size: 12px;
+    font-size: var(--k-fs-xs);
     font-weight: 400;
   }
   .list-filters > summary:focus-visible {

@@ -44,8 +44,8 @@ export default function PurchaseBillTable({
               style={{
                 marginLeft: 6,
                 padding: "1px 6px",
-                borderRadius: 6,
-                fontSize: "0.7rem",
+                borderRadius: "var(--k-r-sm)",
+                fontSize: "var(--k-fs-2xs)",
                 fontWeight: 600,
                 background: "var(--k-teal-bg)",
                 color: "var(--k-teal-ink)",
@@ -114,7 +114,9 @@ export default function PurchaseBillTable({
       defaultHidden: true,
       render: (b) =>
         b.supplierIRN ? (
-          <span style={{ fontFamily: "monospace", fontSize: "0.75rem", wordBreak: "break-all" }}>
+          <span
+            style={{ fontFamily: "monospace", fontSize: "var(--k-fs-xs)", wordBreak: "break-all" }}
+          >
             {b.supplierIRN}
           </span>
         ) : (

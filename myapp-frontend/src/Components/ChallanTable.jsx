@@ -188,7 +188,7 @@ export default function ChallanTable({
           {c.invoiceNumber != null && (
             <div
               style={{
-                fontSize: "0.72rem",
+                fontSize: "var(--k-fs-2xs)",
                 color: "var(--k-muted)",
                 marginTop: 2,
                 whiteSpace: "nowrap",
@@ -382,7 +382,7 @@ const baseBtn = {
   justifyContent: "center",
   width: 30,
   height: 28,
-  borderRadius: 6,
+  borderRadius: "var(--k-r-sm)",
   border: "none",
   cursor: "pointer",
   padding: 0,

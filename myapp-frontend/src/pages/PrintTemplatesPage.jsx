@@ -1096,7 +1096,7 @@ export default function PrintTemplatesPage() {
                           <code
                             style={{
                               fontFamily: "monospace",
-                              fontSize: "0.72rem",
+                              fontSize: "var(--k-fs-2xs)",
                               color: "var(--k-blue)",
                               overflow: "hidden",
                               textOverflow: "ellipsis",
@@ -1380,7 +1380,7 @@ function StampUploadModal({ replacing, onClose, onUpload, uploading }) {
             <p
               style={{
                 margin: "0.15rem 0 0",
-                fontSize: "0.78rem",
+                fontSize: "var(--k-fs-xs)",
                 color: "var(--ui-modal-title-color, #ffffff)",
                 opacity: 0.85,
               }}
@@ -1448,7 +1448,7 @@ function StampUploadModal({ replacing, onClose, onUpload, uploading }) {
             )}
           </button>
           {replacing ? (
-            <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--k-muted)" }}>
+            <p style={{ margin: 0, fontSize: "var(--k-fs-base)", color: "var(--k-muted)" }}>
               <strong>{replacing.name}</strong> keeps its merge field{" "}
               <code
                 style={{ fontFamily: "monospace", overflowWrap: "anywhere" }}
@@ -1535,7 +1535,7 @@ const st = {
   sectionTitle: {
     fontWeight: 800,
     color: "var(--k-ink)",
-    fontSize: "calc(var(--k-font) + 0.05rem)",
+    fontSize: "var(--k-fs-md)",
   },
   sectionLink: { color: "var(--k-blue)" },
   emptyActions: {
@@ -1570,7 +1570,7 @@ const st = {
     gap: "0.5rem",
   },
   tName: {
-    fontSize: "calc(var(--k-font) + 0.05rem)",
+    fontSize: "var(--k-fs-md)",
     fontWeight: 700,
     color: "var(--k-ink)",
     minWidth: 0,
@@ -1584,49 +1584,49 @@ const st = {
     display: "inline-flex",
     alignItems: "center",
     gap: 3,
-    fontSize: "0.64rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 800,
     color: "#f57f17",
     background: "var(--k-warn-bg-2)",
     padding: "2px 7px",
-    borderRadius: 5,
+    borderRadius: "var(--k-r-xs)",
     textTransform: "uppercase",
     letterSpacing: "0.4px",
     flexShrink: 0,
   },
   metaRow: { display: "flex", gap: "0.4rem", flexWrap: "wrap" },
   typeChip: {
-    fontSize: "0.68rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
     color: "#3949ab",
     background: "#e8eaf6",
     padding: "2px 8px",
-    borderRadius: 5,
+    borderRadius: "var(--k-r-xs)",
   },
   excelChip: {
     display: "inline-flex",
     alignItems: "center",
     gap: 3,
-    fontSize: "0.66rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
     color: "var(--k-success-strong)",
     background: "var(--k-success-bg)",
     padding: "2px 7px",
-    borderRadius: 5,
+    borderRadius: "var(--k-r-xs)",
   },
   noExcelChip: {
-    fontSize: "0.66rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
     color: "#90a4ae",
     background: "var(--k-surface-3)",
     padding: "2px 7px",
-    borderRadius: 5,
+    borderRadius: "var(--k-r-xs)",
   },
   metaLine: {
     display: "flex",
     gap: "0.5rem",
     alignItems: "center",
-    fontSize: "0.72rem",
+    fontSize: "var(--k-fs-2xs)",
     flexWrap: "wrap",
   },
   actions: {
@@ -1650,7 +1650,7 @@ const st = {
     borderTop: "1px dashed var(--k-line)",
   },
   stampLabel: {
-    fontSize: "0.72rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 600,
     color: "var(--k-muted)",
     textTransform: "uppercase",
@@ -1662,7 +1662,7 @@ const st = {
     justifyContent: "center",
     height: 96,
     border: "1px solid var(--k-line)",
-    borderRadius: 8,
+    borderRadius: "var(--k-radius)",
     background: "var(--k-surface)",
     padding: "0.4rem",
   },
@@ -1674,7 +1674,7 @@ const st = {
     gap: "0.4rem",
     width: "100%",
     padding: "0.3rem 0.5rem",
-    borderRadius: 7,
+    borderRadius: "var(--k-r-sm)",
     border: "1px dashed var(--k-line-strong)",
     background: "var(--k-surface-2)",
     cursor: "pointer",

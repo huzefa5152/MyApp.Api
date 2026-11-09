@@ -440,12 +440,12 @@ export default function RolesPage() {
                 {role.description && <p style={styles.cardDescription}>{role.description}</p>}
                 <div style={styles.cardMeta}>
                   <span style={styles.metaChip}>
-                    <MdAdminPanelSettings style={{ fontSize: "0.95rem" }} />
+                    <MdAdminPanelSettings style={{ fontSize: "var(--k-fs-md)" }} />
                     {role.permissionKeys.filter((key) => !key.startsWith("mcp.")).length}{" "}
                     permissions
                   </span>
                   <span style={styles.metaChip}>
-                    <MdPeople style={{ fontSize: "0.95rem" }} />
+                    <MdPeople style={{ fontSize: "var(--k-fs-md)" }} />
                     {role.userCount} user{role.userCount !== 1 ? "s" : ""}
                   </span>
                 </div>
@@ -601,7 +601,7 @@ export default function RolesPage() {
                       <span
                         style={{
                           color: "var(--k-muted)",
-                          fontSize: "0.82rem",
+                          fontSize: "var(--k-fs-sm)",
                           marginLeft: "0.5rem",
                         }}
                       >
@@ -638,14 +638,17 @@ export default function RolesPage() {
                               title={secAll ? "Clear section" : "Select all in section"}
                             >
                               {secAll ? (
-                                <MdCheckBox style={{ color: "#fff", fontSize: "1.2rem" }} />
+                                <MdCheckBox style={{ color: "#fff", fontSize: "var(--k-fs-xl)" }} />
                               ) : secSome ? (
                                 <MdIndeterminateCheckBox
-                                  style={{ color: "#fff", fontSize: "1.2rem" }}
+                                  style={{ color: "#fff", fontSize: "var(--k-fs-xl)" }}
                                 />
                               ) : (
                                 <MdCheckBoxOutlineBlank
-                                  style={{ color: "rgba(255,255,255,0.85)", fontSize: "1.2rem" }}
+                                  style={{
+                                    color: "rgba(255,255,255,0.85)",
+                                    fontSize: "var(--k-fs-xl)",
+                                  }}
                                 />
                               )}
                               <span style={styles.sectionName}>{sec.section}</span>
@@ -686,17 +689,23 @@ export default function RolesPage() {
                                     >
                                       {modAll ? (
                                         <MdCheckBox
-                                          style={{ color: "var(--k-blue)", fontSize: "1.15rem" }}
+                                          style={{
+                                            color: "var(--k-blue)",
+                                            fontSize: "var(--k-fs-lg)",
+                                          }}
                                         />
                                       ) : modSome ? (
                                         <MdIndeterminateCheckBox
-                                          style={{ color: "var(--k-blue)", fontSize: "1.15rem" }}
+                                          style={{
+                                            color: "var(--k-blue)",
+                                            fontSize: "var(--k-fs-lg)",
+                                          }}
                                         />
                                       ) : (
                                         <MdCheckBoxOutlineBlank
                                           style={{
                                             color: "var(--k-muted)",
-                                            fontSize: "1.15rem",
+                                            fontSize: "var(--k-fs-lg)",
                                           }}
                                         />
                                       )}
@@ -732,21 +741,21 @@ export default function RolesPage() {
                                               <MdCheckBox
                                                 style={{
                                                   color: "var(--k-teal)",
-                                                  fontSize: "1.05rem",
+                                                  fontSize: "var(--k-fs-md)",
                                                 }}
                                               />
                                             ) : pgSome ? (
                                               <MdIndeterminateCheckBox
                                                 style={{
                                                   color: "var(--k-teal)",
-                                                  fontSize: "1.05rem",
+                                                  fontSize: "var(--k-fs-md)",
                                                 }}
                                               />
                                             ) : (
                                               <MdCheckBoxOutlineBlank
                                                 style={{
                                                   color: "var(--k-muted)",
-                                                  fontSize: "1.05rem",
+                                                  fontSize: "var(--k-fs-md)",
                                                 }}
                                               />
                                             )}
@@ -809,7 +818,7 @@ export default function RolesPage() {
                   (copySource && copyTargets.size === 0)
                 }
               >
-                <MdSave style={{ fontSize: "1.1rem" }} />
+                <MdSave style={{ fontSize: "var(--k-fs-lg)" }} />
                 {saving
                   ? "Saving..."
                   : copySource
@@ -886,7 +895,7 @@ const styles = {
   },
   cardTitle: {
     margin: 0,
-    fontSize: "calc(var(--k-font) + 0.1rem)",
+    fontSize: "var(--k-fs-md)",
     fontWeight: 700,
     color: "var(--k-ink)",
     overflowWrap: "anywhere",
@@ -902,7 +911,7 @@ const styles = {
     display: "inline-block",
     padding: "0.15rem 0.5rem",
     borderRadius: 50,
-    fontSize: "0.7rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
     background: `color-mix(in srgb, var(--k-teal) 9%, transparent)`,
     color: "var(--k-teal)",
@@ -915,7 +924,7 @@ const styles = {
     gap: "0.3rem",
     padding: "0.2rem 0.6rem",
     borderRadius: 50,
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 600,
     background: `color-mix(in srgb, var(--k-blue) 6%, transparent)`,
     color: "var(--k-blue)",
@@ -939,7 +948,7 @@ const styles = {
     backgroundColor: "transparent",
     border: "none",
     color: "var(--k-blue)",
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 600,
     padding: "0.15rem 0.35rem",
     margin: 0,
@@ -948,7 +957,7 @@ const styles = {
     textDecoration: "underline",
     textUnderlineOffset: 2,
     lineHeight: 1.2,
-    borderRadius: 4,
+    borderRadius: "var(--k-r-xs)",
   },
   permHeader: {
     display: "flex",
@@ -961,7 +970,7 @@ const styles = {
   },
   permTree: {
     border: `1px solid var(--k-line)`,
-    borderRadius: 10,
+    borderRadius: "var(--k-radius)",
     maxHeight: "46vh",
     overflowY: "auto",
     background: "#fafcfe",
@@ -1000,7 +1009,7 @@ const styles = {
     padding: "0.25rem",
     fontWeight: 700,
     color: "#fff",
-    fontSize: "0.95rem",
+    fontSize: "var(--k-fs-md)",
     textAlign: "left",
     letterSpacing: "0.02em",
     textTransform: "uppercase",
@@ -1009,7 +1018,7 @@ const styles = {
   sectionCount: {
     fontWeight: 700,
     color: "var(--k-blue)",
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     background: "var(--k-surface)",
     borderRadius: 50,
     padding: "0.1rem 0.6rem",
@@ -1043,14 +1052,14 @@ const styles = {
     padding: "0.25rem",
     fontWeight: 700,
     color: "var(--k-ink)",
-    fontSize: "0.9rem",
+    fontSize: "var(--k-fs-base)",
     textAlign: "left",
   },
   moduleName: { flex: 1 },
   moduleCount: {
     fontWeight: 600,
     color: "var(--k-muted)",
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     background: "var(--k-surface)",
     borderRadius: 50,
     padding: "0.1rem 0.55rem",
@@ -1066,7 +1075,7 @@ const styles = {
     padding: "0.15rem 0",
     fontWeight: 600,
     color: "var(--k-ink)",
-    fontSize: "0.85rem",
+    fontSize: "var(--k-fs-base)",
   },
   pageName: { color: "var(--k-ink)" },
   actionList: {
@@ -1081,9 +1090,9 @@ const styles = {
     alignItems: "center",
     gap: "0.5rem",
     padding: "0.25rem 0.4rem",
-    borderRadius: 6,
+    borderRadius: "var(--k-r-sm)",
     cursor: "pointer",
-    fontSize: "0.85rem",
+    fontSize: "var(--k-fs-base)",
     color: "var(--k-ink)",
   },
   checkbox: { cursor: "pointer", accentColor: "var(--k-blue)" },
@@ -1091,7 +1100,7 @@ const styles = {
   actionKey: {
     marginLeft: "auto",
     color: "var(--k-muted)",
-    fontSize: "0.73rem",
+    fontSize: "var(--k-fs-xs)",
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
   },
   // Delete-confirm uses the smallest tier with centered icon + text;

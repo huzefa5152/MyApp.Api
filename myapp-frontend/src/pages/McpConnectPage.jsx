@@ -244,11 +244,11 @@ const s = {
     lineHeight: 1.45,
     color: "var(--k-ink)",
   },
-  pi: { fontSize: "1.2rem", flexShrink: 0, marginTop: 1, color: "var(--k-blue)" },
+  pi: { fontSize: "var(--k-fs-xl)", flexShrink: 0, marginTop: 1, color: "var(--k-blue)" },
   label: {
     display: "block",
     margin: "0.4rem 0 0.4rem",
-    fontSize: "0.72rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
     textTransform: "uppercase",
     letterSpacing: "0.04em",

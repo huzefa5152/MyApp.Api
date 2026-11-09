@@ -508,7 +508,13 @@ export default function UsersPage() {
         </div>
 
         {/* Summary */}
-        <p style={{ color: "var(--k-muted)", fontSize: "var(--k-font-sm)", marginTop: "1rem" }}>
+        <p
+          style={{
+            color: "var(--k-muted)",
+            fontSize: "var(--k-font-sm)",
+            marginTop: "var(--k-fs-md)",
+          }}
+        >
           {filtered.length} user{filtered.length !== 1 ? "s" : ""} total
         </p>
       </div>
@@ -527,7 +533,7 @@ export default function UsersPage() {
                 onClick={closeModal}
                 aria-label="Close"
               >
-                <MdClose style={{ fontSize: "1.25rem" }} />
+                <MdClose style={{ fontSize: "var(--k-fs-xl)" }} />
               </button>
             </div>
 
@@ -606,7 +612,11 @@ export default function UsersPage() {
                 />
                 {!editUser && availableRoles.length > 0 && (
                   <p
-                    style={{ margin: "0.35rem 0 0", fontSize: "0.72rem", color: "var(--k-muted)" }}
+                    style={{
+                      margin: "0.35rem 0 0",
+                      fontSize: "var(--k-fs-2xs)",
+                      color: "var(--k-muted)",
+                    }}
                   >
                     The selected role's permissions will be auto-assigned to this user on create.
                   </p>
@@ -642,7 +652,7 @@ export default function UsersPage() {
                 Cancel
               </button>
               <button type="button" style={styles.saveBtn} onClick={handleSave} disabled={saving}>
-                <MdSave style={{ fontSize: "1.1rem" }} />
+                <MdSave style={{ fontSize: "var(--k-fs-lg)" }} />
                 {saving ? "Saving..." : editUser ? "Update" : "Create"}
               </button>
             </div>
@@ -663,14 +673,20 @@ export default function UsersPage() {
                 onClick={closeRolesModal}
                 aria-label="Close"
               >
-                <MdClose style={{ fontSize: "1.25rem" }} />
+                <MdClose style={{ fontSize: "var(--k-fs-xl)" }} />
               </button>
             </div>
 
             <div data-admin-body="" style={styles.modalBody}>
               {rolesMsg && <Alert tone={msgTone(rolesMsg.type)}>{rolesMsg.text}</Alert>}
 
-              <p style={{ margin: "0 0 0.75rem", color: "var(--k-muted)", fontSize: "0.85rem" }}>
+              <p
+                style={{
+                  margin: "0 0 0.75rem",
+                  color: "var(--k-muted)",
+                  fontSize: "var(--k-fs-base)",
+                }}
+              >
                 Select the roles this user should have. Their permissions are the union of
                 everything granted by their assigned roles.
               </p>
@@ -695,7 +711,7 @@ export default function UsersPage() {
                           gap: "0.75rem",
                           padding: "0.75rem 0.9rem",
                           border: `1px solid ${checked ? "var(--k-blue)" : "var(--k-line)"}`,
-                          borderRadius: 10,
+                          borderRadius: "var(--k-radius)",
                           background: checked
                             ? `color-mix(in srgb, var(--k-blue) 5%, transparent)`
                             : "var(--k-surface)",
@@ -722,7 +738,7 @@ export default function UsersPage() {
                               style={{
                                 fontWeight: 600,
                                 color: "var(--k-ink)",
-                                fontSize: "0.92rem",
+                                fontSize: "var(--k-fs-base)",
                               }}
                             >
                               {role.name}
@@ -733,7 +749,7 @@ export default function UsersPage() {
                                   display: "inline-block",
                                   padding: "0.1rem 0.45rem",
                                   borderRadius: 50,
-                                  fontSize: "0.68rem",
+                                  fontSize: "var(--k-fs-2xs)",
                                   fontWeight: 700,
                                   background: `color-mix(in srgb, var(--k-teal) 9%, transparent)`,
                                   color: "var(--k-teal)",
@@ -747,7 +763,7 @@ export default function UsersPage() {
                             <span
                               style={{
                                 marginLeft: "auto",
-                                fontSize: "0.78rem",
+                                fontSize: "var(--k-fs-xs)",
                                 color: "var(--k-muted)",
                               }}
                             >
@@ -760,7 +776,7 @@ export default function UsersPage() {
                               style={{
                                 margin: "0.25rem 0 0",
                                 color: "var(--k-muted)",
-                                fontSize: "0.82rem",
+                                fontSize: "var(--k-fs-sm)",
                               }}
                             >
                               {role.description}
@@ -790,7 +806,7 @@ export default function UsersPage() {
                 onClick={handleSaveRoles}
                 disabled={rolesSaving || rolesLoading}
               >
-                <MdSave style={{ fontSize: "1.1rem" }} />
+                <MdSave style={{ fontSize: "var(--k-fs-lg)" }} />
                 {rolesSaving ? "Saving..." : "Save roles"}
               </button>
             </div>
@@ -806,7 +822,7 @@ export default function UsersPage() {
           <div data-admin-dialog="" style={styles.deleteModal} onClick={(e) => e.stopPropagation()}>
             <MdDelete style={{ fontSize: "2.5rem", color: "var(--k-danger)" }} />
             <h3 style={{ margin: "0.75rem 0 0.5rem", color: "var(--k-ink)" }}>Delete User?</h3>
-            <p style={{ margin: 0, color: "var(--k-muted)", fontSize: "0.9rem" }}>
+            <p style={{ margin: 0, color: "var(--k-muted)", fontSize: "var(--k-fs-base)" }}>
               Are you sure you want to delete <strong>{deleteConfirm.fullName}</strong>? This action
               cannot be undone.
             </p>
@@ -884,19 +900,19 @@ const styles = {
     height: 36,
     flex: "none",
     borderRadius: "50%",
-    background: `linear-gradient(135deg, var(--k-blue), var(--k-teal))`,
+    background: `linear-gradient(135deg, var(--k-accent-solid, var(--k-blue)), var(--k-teal-solid, var(--k-teal)))`,
     color: "#fff",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: "0.8rem",
+    fontSize: "var(--k-fs-sm)",
     fontWeight: 700,
   },
   roleBadge: {
     display: "inline-block",
     padding: "0.25rem 0.75rem",
     borderRadius: 50,
-    fontSize: "0.78rem",
+    fontSize: "var(--k-fs-xs)",
     fontWeight: 600,
     background: `color-mix(in srgb, var(--k-blue) 8%, transparent)`,
     color: "var(--k-blue)",
@@ -918,7 +934,7 @@ const styles = {
     gap: "0.4rem",
   },
   labelIcon: {
-    fontSize: "1rem",
+    fontSize: "var(--k-fs-md)",
     color: "var(--k-blue)",
   },
   cancelBtn: { ...formStyles.button, ...formStyles.cancel },

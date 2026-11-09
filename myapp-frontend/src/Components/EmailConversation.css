@@ -7,7 +7,7 @@
 }
 .ew .ew-thread-message {
   border: 1px solid var(--k-line);
-  border-radius: 12px;
+  border-radius: var(--k-card-radius);
   padding: 12px;
   margin: 10px 0;
   background: var(--k-surface-2);
@@ -33,7 +33,7 @@
 .ew-thread-message summary span {
   display: block;
   color: var(--k-muted);
-  font-size: 0.85rem;
+  font-size: var(--k-fs-base);
 }
 .ew-thread-text {
   white-space: pre-wrap;
@@ -41,7 +41,7 @@
 }
 .ew-reply {
   border: 1px solid var(--k-line-strong);
-  border-radius: 12px;
+  border-radius: var(--k-card-radius);
   padding: clamp(12px, 2vw, 20px);
   margin-top: 16px;
   background: white;
@@ -49,7 +49,7 @@
 .ew-reply-preview {
   margin-top: 16px;
   padding: 12px;
-  border-radius: 12px;
+  border-radius: var(--k-card-radius);
   background: #f1f7fa;
 }
 .ew-reply-preview dd {
@@ -66,7 +66,7 @@
   width: 100%;
   box-sizing: border-box;
   min-height: 88px;
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   border: 1px solid var(--k-line-strong);
   padding: 12px;
   font: inherit;

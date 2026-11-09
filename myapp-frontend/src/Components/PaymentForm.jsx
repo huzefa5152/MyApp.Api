@@ -1677,7 +1677,11 @@ const payeeTab = {
   cursor: "pointer",
   boxShadow: "none",
 };
-const payeeTabActive = { background: "var(--k-blue)", borderColor: "var(--k-blue)", color: "#fff" };
+const payeeTabActive = {
+  background: "var(--k-accent-solid, var(--k-blue))",
+  borderColor: "var(--k-accent-solid, var(--k-blue))",
+  color: "#fff",
+};
 const payeeHint = {
   display: "block",
   marginTop: "0.35rem",
@@ -1701,7 +1705,7 @@ const expTaxCell = { flex: "0.6 1 80px", minWidth: 0 };
 const expTaxHint = { flexBasis: "100%", color: "var(--k-muted)", fontSize: "var(--k-font-sm)" };
 
 const summaryStrong = {
-  fontSize: "calc(var(--k-font) * 1.15)",
+  fontSize: "var(--k-fs-md)",
   fontWeight: 700,
   color: "var(--k-blue)",
 };

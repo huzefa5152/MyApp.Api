@@ -42,7 +42,7 @@ const colors = {
   cardBorder: "var(--k-line)",
   inputBorder: "var(--k-line-strong)",
   rowAlt: "#fafbfd",
-  totalBg: "#eef4ff",
+  totalBg: "var(--k-total-bg, #eef4ff)",
 };
 
 // Columns of the on-screen ledger. `total` marks a column with a grand total.
@@ -315,7 +315,7 @@ export default function OutstandingLedgerPage() {
         return (
           <td
             key={key}
-            style={{ ...td, fontFamily: "monospace", fontSize: "0.75rem", maxWidth: 140 }}
+            style={{ ...td, fontFamily: "monospace", fontSize: "var(--k-fs-xs)", maxWidth: 140 }}
           >
             {row.dcNumbers || "—"}
           </td>
@@ -363,8 +363,8 @@ export default function OutstandingLedgerPage() {
                 background: ss.bg,
                 color: ss.fg,
                 padding: "2px 8px",
-                borderRadius: 999,
-                fontSize: "0.72rem",
+                borderRadius: "var(--k-r-pill)",
+                fontSize: "var(--k-fs-2xs)",
                 fontWeight: 700,
                 whiteSpace: "nowrap",
               }}
@@ -381,7 +381,7 @@ export default function OutstandingLedgerPage() {
               ...td,
               maxWidth: 320,
               minWidth: 160,
-              fontSize: "0.76rem",
+              fontSize: "var(--k-fs-xs)",
               color: "var(--k-muted)",
             }}
           >
@@ -659,8 +659,8 @@ export default function OutstandingLedgerPage() {
                           background: ss.bg,
                           color: ss.fg,
                           padding: "2px 8px",
-                          borderRadius: 6,
-                          fontSize: "0.72rem",
+                          borderRadius: "var(--k-r-sm)",
+                          fontSize: "var(--k-fs-2xs)",
                           fontWeight: 700,
                         }}
                       >
@@ -668,7 +668,7 @@ export default function OutstandingLedgerPage() {
                       </span>
                     </div>
                     {row.poNumber && (
-                      <div style={{ fontSize: "0.8rem", color: "var(--k-muted)" }}>
+                      <div style={{ fontSize: "var(--k-fs-sm)", color: "var(--k-muted)" }}>
                         PO: {row.poNumber}
                       </div>
                     )}
@@ -712,7 +712,7 @@ export default function OutstandingLedgerPage() {
                           marginTop: 6,
                           paddingTop: 6,
                           borderTop: `1px dashed var(--k-line)`,
-                          fontSize: "0.78rem",
+                          fontSize: "var(--k-fs-xs)",
                           color: "var(--k-muted)",
                         }}
                       >
@@ -799,7 +799,7 @@ const seg = {
     boxShadow: "none",
     whiteSpace: "nowrap",
   },
-  on: { background: "var(--k-blue)", color: "#fff" },
+  on: { background: "var(--k-accent-solid, var(--k-blue))", color: "#fff" },
   off: { background: "transparent", color: "var(--k-muted)" },
 };
 
@@ -822,7 +822,7 @@ const card = {
   },
   lbl: {
     display: "block",
-    fontSize: "0.6rem",
+    fontSize: "var(--k-fs-2xs)",
     fontWeight: 700,
     textTransform: "uppercase",
     letterSpacing: "0.05em",
