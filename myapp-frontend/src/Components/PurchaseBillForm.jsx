@@ -840,7 +840,7 @@ export default function PurchaseBillForm({
                           </div>
 
                           <div>
-                            <label style={mStyles.label}>Item Type (FBR catalog)</label>
+                            <label style={mStyles.label}>Item Type (FBR catalog) *</label>
                             <SearchableItemTypeSelect
                               companyId={companyId}
                               onItemTypeCreated={(created) =>
@@ -856,7 +856,7 @@ export default function PurchaseBillForm({
                               nonInventoryItems={nonInvItems}
                               nonInventoryValue={it.nonInventoryItemId || ""}
                               onPickNonInventory={(n) => pickNonInventory(idx, n)}
-                              placeholder="— optional —"
+                              placeholder="— pick item type —"
                               style={{ padding: "0.5rem 0.6rem", fontSize: "0.9rem" }}
                             />
                           </div>
@@ -939,7 +939,7 @@ export default function PurchaseBillForm({
                     >
                       <thead>
                         <tr style={{ backgroundColor: "#f5f8fc" }}>
-                          <th style={th}>Item Type (FBR catalog)</th>
+                          <th style={th}>Item Type (FBR catalog) *</th>
                           <th style={th}>Description *</th>
                           <th style={{ ...th, textAlign: "right", width: 120, minWidth: 120 }}>
                             Qty *
@@ -973,7 +973,7 @@ export default function PurchaseBillForm({
                                   nonInventoryItems={nonInvItems}
                                   nonInventoryValue={it.nonInventoryItemId || ""}
                                   onPickNonInventory={(n) => pickNonInventory(idx, n)}
-                                  placeholder="— optional —"
+                                  placeholder="— pick item type —"
                                   style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
                                 />
                               </td>

@@ -137,8 +137,15 @@ export default function CustomerDemandPicker({
       const { line } = lineByKey.get(k);
       const quantity = parseFloat(picked[k]);
       const source = { kind: line.kind, lineId: line.lineId, quantity };
+      // Same item = same item type or non-inventory item; a line with neither
+      // matches only lines with the same description.
+      const item = line.itemTypeId
+        ? `t${line.itemTypeId}`
+        : line.nonInventoryItemId
+          ? `n${line.nonInventoryItemId}`
+          : `d${(line.description || "").trim().toLowerCase()}`;
       const group = combine
-        ? `${line.itemTypeId || ""}|${line.nonInventoryItemId || ""}|${(line.unit || "").toLowerCase()}|${line.cost ?? ""}`
+        ? `${item}|${(line.unit || "").trim().toLowerCase()}|${line.cost ?? ""}`
         : k;
       const existing = byGroup.get(group);
       if (existing) {
