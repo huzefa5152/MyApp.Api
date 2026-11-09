@@ -33,10 +33,17 @@ Trader integration (2026-10-09): includes the current Trader security and busine
 
 ## What a user sees
 
-- Two themes: **Classic** (default — the original look, tidied so every screen
-  uses the same header / button / card / table style) and **Workspace** (the same
+- Four themes: **Classic** (default — the original look, tidied so every screen
+  uses the same header / button / card / table style), **Workspace** (the same
   screens, compact: 32px controls, flat cards, denser tables, company switcher and
-  "Search or go to…" in the topbar, slimmer sidebar).
+  "Search or go to…" in the topbar, slimmer sidebar), **Aurora** (Workspace layout
+  in violet and magenta, rounder cards, soft tinted shadows, gradient sidebar and
+  primary buttons; `ui2/theme-aurora.css`) and **Midnight** (Workspace layout,
+  dark surfaces and light text, dark status shades, `color-scheme: dark`;
+  `ui2/theme-midnight.css`).
+- A colour theme is one CSS file of token overrides under
+  `:root[data-ui-theme="<id>"]`, imported in `main.jsx`. Shared styles keep their
+  original value as the `var()` fallback, so Classic and Workspace are unchanged.
 - Pick in the account menu → **Theme**, or **Profile → Appearance**.
 - The choice is stored **per user, per browser** (`localStorage` key
   `ui.theme:<userId>`) and never changes until that user picks again. Another user
@@ -126,8 +133,10 @@ step-by-step. In short:
 
 ## Known follow-ups (not done)
 
-- A dark theme still needs its own values for the sidebar gradient in
-  `layouts/DashboardLayout.css`, which keeps fixed navigation shades.
+- Midnight still shows a few small light status chips (Pending, Cancelled, Costing
+  not added) whose colours are inline values without a token; they stay readable.
+- The Classic sidebar gradient in `layouts/DashboardLayout.css` keeps fixed shades;
+  the colour themes use the Workspace shell, which reads `--u2-nav-bg`.
 - Theme choice is per browser. If it should follow the user across devices, it
   needs a small user-preference API — that is a backend change, deliberately not
   part of this UI-only work.
