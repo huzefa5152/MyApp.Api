@@ -54,8 +54,6 @@
         public int? DefaultPurchaseAccountId { get; set; }
         /// <summary>Company default income-tax withholding rate (%) that pre-fills new invoices/bills. Null = none.</summary>
         public decimal? DefaultWithholdingTaxRate { get; set; }
-        /// <summary>The purchase picker offers documents dated on or after this day; null = all.</summary>
-        public DateTime? PurchaseDocumentsFrom { get; set; }
 
         // ── Inventory module toggles ──────────────────────────────
         // Off by default. While off, no Stock movements are emitted by

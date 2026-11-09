@@ -358,13 +358,5 @@ st, err = http("PATCH", f"/api/invoices/{b10['id']}/itemtypes-and-qty", a.base, 
 check("bill-mode quantity edit below bought refused", st == 400 and "purchased" in str(err), (st, err))
 sql(f"UPDATE Companies SET FbrEnabled = 0 WHERE Id = {cid}")
 
-# ── 9. Company start date: older documents count as settled ──
-check("new companies offer every document", call("GET", f"/api/companies/{cid}").get("purchaseDocumentsFrom") is None)
-sql(f"UPDATE Companies SET PurchaseDocumentsFrom = DATEADD(day, 1, CAST(GETDATE() AS date)) WHERE Id = {cid}")
-check("documents before the start date are not offered", awaiting(groupBy="latest", allSuppliers="true") == [])
-sql(f"UPDATE Companies SET PurchaseDocumentsFrom = CAST(GETDATE() AS date) WHERE Id = {cid}")
-check("documents on the start date are offered", len(awaiting(groupBy="latest", allSuppliers="true")) > 0)
-sql(f"UPDATE Companies SET PurchaseDocumentsFrom = NULL WHERE Id = {cid}")
-
 print(f"{checks}/{checks} purchase demand checks passed")
 print(f"Fixture company {cid} kept for browser checks.")

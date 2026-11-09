@@ -49,14 +49,6 @@
         // empty). Purely a convenience pre-fill; never forces WHT onto a doc.
         public decimal? DefaultWithholdingTaxRate { get; set; }
 
-        /// <summary>
-        /// The purchase picker offers only customer documents (sales orders,
-        /// challans, sale bills) dated on or after this day. Documents before it
-        /// count as settled: purchases made for them before purchases recorded
-        /// their sources cannot be told apart. Null = offer every document.
-        /// </summary>
-        public DateTime? PurchaseDocumentsFrom { get; set; }
-
         // ── Default inventory GL accounts (2026-07-14) ──
         // Where inventory item-type lines post when the item (via its
         // CompanyItemTypeSetting overlay) doesn't pin its own account. These

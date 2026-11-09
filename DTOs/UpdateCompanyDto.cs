@@ -45,7 +45,5 @@
         // Company default income-tax withholding rate (%) — pre-fills new
         // invoices/bills. Null clears the default. See CompanyDto for semantics.
         public decimal? DefaultWithholdingTaxRate { get; set; }
-        /// <summary>The purchase picker offers documents dated on or after this day; null = all.</summary>
-        public DateTime? PurchaseDocumentsFrom { get; set; }
     }
 }

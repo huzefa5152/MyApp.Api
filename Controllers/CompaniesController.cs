@@ -245,8 +245,7 @@ namespace MyApp.Api.Controllers
                 STRN = company.STRN,
                 LogoPath = logoPath,
                 StartingChallanNumber = company.StartingChallanNumber,
-                StartingInvoiceNumber = company.StartingInvoiceNumber,
-                PurchaseDocumentsFrom = company.PurchaseDocumentsFrom,
+                StartingInvoiceNumber = company.StartingInvoiceNumber
             };
             var updated = await _companyService.UpdateAsync(id, updateDto);
             return Ok(updated);
