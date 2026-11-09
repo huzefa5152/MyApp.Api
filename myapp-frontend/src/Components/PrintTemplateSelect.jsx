@@ -75,7 +75,7 @@ export default function PrintTemplateSelect({ picker, style }) {
         <span
           style={{
             fontSize: "0.85rem",
-            color: "#334e68",
+            color: "var(--k-muted)",
             maxWidth: 240,
             overflow: "hidden",
             textOverflow: "ellipsis",

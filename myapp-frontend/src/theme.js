@@ -43,9 +43,9 @@ export const cardStyles = {
     gap: "var(--ui-card-gap, var(--admin-card-gap, 1.25rem))",
   },
   card: {
-    backgroundColor: colors.cardBg,
+    backgroundColor: "var(--k-surface)",
     borderRadius: "var(--ui-card-radius, 14px)",
-    border: `1px solid ${colors.cardBorder}`,
+    border: `1px solid var(--k-line)`,
     // Layered soft shadow reads cleaner than a single flat blur.
     boxShadow:
       "var(--ui-card-shadow, 0 1px 3px rgba(16,32,64,0.04), 0 6px 18px rgba(16,32,64,0.06))",
@@ -64,12 +64,12 @@ export const cardStyles = {
     fontSize: "var(--ui-card-title, 1.12rem)",
     fontWeight: "800",
     marginBottom: "0.5rem",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     letterSpacing: "-0.01em",
   },
   text: {
     fontSize: "var(--ui-card-text, 0.88rem)",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     marginBottom: "0.2rem",
     lineHeight: 1.5,
   },
@@ -85,7 +85,7 @@ export const cardStyles = {
   cardLead: {
     fontSize: "0.98rem",
     fontWeight: 700,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     margin: "0 0 0.65rem",
     lineHeight: 1.3,
     display: "-webkit-box",
@@ -105,13 +105,13 @@ export const cardStyles = {
     fontWeight: 700,
     textTransform: "uppercase",
     letterSpacing: "0.05em",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     marginBottom: 1,
   },
   metaValue: {
     fontSize: "0.85rem",
     fontWeight: 600,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     lineHeight: 1.3,
     wordBreak: "break-word",
   },
@@ -133,12 +133,12 @@ export const cardStyles = {
     fontWeight: 700,
     textTransform: "uppercase",
     letterSpacing: "0.05em",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
   },
   amount: {
     fontSize: "1.2rem",
     fontWeight: 800,
-    color: colors.blue,
+    color: "var(--k-blue)",
     letterSpacing: "-0.01em",
     whiteSpace: "nowrap",
     fontVariantNumeric: "tabular-nums",
@@ -150,7 +150,7 @@ export const cardStyles = {
     gap: "0.5rem",
     marginTop: "var(--ui-card-actions-gap, 1rem)",
     paddingTop: "var(--ui-card-actions-pad, 0.9rem)",
-    borderTop: `1px solid ${colors.cardBorder}`,
+    borderTop: `1px solid var(--k-line)`,
   },
   button: {
     minHeight: "var(--ui-btn-h, 44px)",
@@ -168,9 +168,9 @@ export const cardStyles = {
     color: "#fff",
   },
   delete: {
-    backgroundColor: colors.dangerLight,
-    color: colors.danger,
-    border: `1px solid ${colors.danger}20`,
+    backgroundColor: "var(--k-danger-bg)",
+    color: "var(--k-danger)",
+    border: `1px solid color-mix(in srgb, var(--k-danger) 13%, transparent)`,
   },
 };
 
@@ -179,9 +179,9 @@ export const dropdownStyles = {
     padding: "var(--ui-select-pad, 0.55rem 1rem)",
     minHeight: "var(--ui-control-h, 0px)",
     borderRadius: "8px",
-    border: `1px solid ${colors.inputBorder}`,
-    backgroundColor: `var(--ui-input-bg, ${colors.inputBg})`,
-    color: colors.textPrimary,
+    border: `1px solid var(--k-line-strong)`,
+    backgroundColor: `var(--ui-input-bg, var(--k-input-bg))`,
+    color: "var(--k-ink)",
     outline: "none",
     // Was a fixed 250px which forced horizontal overflow on phones
     // (DashboardLayout content area can be ~340px wide on 360px-class
@@ -237,7 +237,7 @@ export const formStyles = {
     overflowY: "auto",
   },
   modal: {
-    backgroundColor: colors.cardBg,
+    backgroundColor: "var(--k-surface)",
     borderRadius: "var(--ui-modal-radius, 16px)",
     width: "100%",
     // Default size = "md". Override per-modal via inline spread:
@@ -246,7 +246,7 @@ export const formStyles = {
     maxHeight: "96vh", // cap at 96% of viewport so header + footer always stay visible
     boxShadow: "var(--ui-modal-shadow, 0 20px 60px rgba(13,71,161,0.2))",
     overflow: "hidden",
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     animation: "dlModalIn 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both",
     // Flex column so header / body / footer stack and body can scroll independently
     display: "flex",
@@ -319,13 +319,13 @@ export const formStyles = {
     maxHeight: "var(--admin-dialog-body-max, calc(96vh - 140px))",
   },
   error: {
-    backgroundColor: colors.dangerLight,
-    color: colors.danger,
+    backgroundColor: "var(--k-danger-bg)",
+    color: "var(--k-danger)",
     padding: "0.75rem 1rem",
     borderRadius: "8px",
     marginBottom: "1rem",
     fontWeight: "500",
-    border: `1px solid ${colors.danger}30`,
+    border: `1px solid color-mix(in srgb, var(--k-danger) 19%, transparent)`,
     fontSize: "0.88rem",
   },
   formGroup: {
@@ -336,17 +336,17 @@ export const formStyles = {
     marginBottom: "var(--ui-label-gap, 0.35rem)",
     fontWeight: "600",
     fontSize: "var(--ui-label-size, 0.85rem)",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
   },
   input: {
     width: "100%",
     padding: "var(--ui-input-pad, 0.6rem 0.85rem)",
     minHeight: "var(--ui-control-h, 0px)",
     borderRadius: "8px",
-    border: `1px solid ${colors.inputBorder}`,
+    border: `1px solid var(--k-line-strong)`,
     fontSize: "var(--ui-input-size, 0.95rem)",
-    backgroundColor: `var(--ui-input-bg, ${colors.inputBg})`,
-    color: colors.textPrimary,
+    backgroundColor: `var(--ui-input-bg, var(--k-input-bg))`,
+    color: "var(--k-ink)",
     outline: "none",
     transition: "border-color 0.25s, box-shadow 0.25s",
   },
@@ -360,7 +360,7 @@ export const formStyles = {
       "var(--ui-foot-pad, var(--admin-dialog-footer-padding, 1rem clamp(0.9rem, 2vw, 1.5rem)))",
     gap: "0.6rem",
     backgroundColor: "var(--ui-foot-bg, #f5f7fa)",
-    borderTop: `1px solid ${colors.cardBorder}`,
+    borderTop: `1px solid var(--k-line)`,
     flexShrink: 0, // footer always visible (buttons like Save/Cancel)
   },
   button: {
@@ -375,7 +375,7 @@ export const formStyles = {
   },
   cancel: {
     backgroundColor: "var(--ui-cancel-bg, #e9ecf1)",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     border: "var(--ui-cancel-border, none)",
   },
   submit: {

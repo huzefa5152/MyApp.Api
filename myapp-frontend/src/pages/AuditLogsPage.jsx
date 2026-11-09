@@ -31,7 +31,7 @@ const methodColor = {
   POST: "#198754",
   PUT: "#fd7e14",
   DELETE: "var(--k-danger)",
-  PATCH: "#6f42c1",
+  PATCH: "var(--k-purple-method, #6f42c1)",
 };
 
 function formatDate(iso) {
@@ -123,10 +123,22 @@ export default function AuditLogsPage() {
         actions={
           summary && (
             <>
-              <span style={{ ...chip, background: "var(--k-danger-bg)", color: "#842029" }}>
+              <span
+                style={{
+                  ...chip,
+                  background: "var(--k-danger-bg)",
+                  color: "var(--k-danger-deep, #842029)",
+                }}
+              >
                 {summary.errorsLast24h} errors (24h)
               </span>
-              <span style={{ ...chip, background: "var(--k-warn-bg-5)", color: "#664d03" }}>
+              <span
+                style={{
+                  ...chip,
+                  background: "var(--k-warn-bg-5)",
+                  color: "var(--k-warn-deep, #664d03)",
+                }}
+              >
                 {summary.warningsLast24h} warnings (24h)
               </span>
             </>

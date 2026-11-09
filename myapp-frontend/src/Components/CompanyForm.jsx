@@ -629,7 +629,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                   <span
                     style={{
                       fontSize: "0.76rem",
-                      color: "#334e68",
+                      color: "var(--k-muted)",
                       marginTop: "0.3rem",
                       display: "block",
                       lineHeight: 1.4,

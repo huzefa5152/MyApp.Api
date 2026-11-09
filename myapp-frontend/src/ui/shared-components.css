@@ -206,7 +206,7 @@
   border-color: transparent;
 }
 .sc-seg__btn[aria-selected="true"] {
-  background: #fff;
+  background: var(--k-surface);
   color: var(--k-blue);
   box-shadow: 0 1px 4px rgba(13, 71, 161, 0.18);
 }
@@ -248,7 +248,7 @@
   padding: 0.25rem;
   list-style: none;
   overflow-y: auto;
-  background: #fff;
+  background: var(--k-surface);
   border: 1px solid var(--k-line-strong);
   border-radius: var(--k-radius);
   box-shadow: 0 10px 28px rgba(16, 32, 64, 0.16);
@@ -276,7 +276,7 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  background: #fff;
+  background: var(--k-surface);
 }
 
 /* Item-type picker option rows */
