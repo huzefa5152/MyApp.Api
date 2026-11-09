@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { MdClose, MdSearch, MdShoppingCart } from "react-icons/md";
 import { getAwaitingLinesForPurchase } from "../api/purchaseBillApi";
 import { formStyles } from "../theme";
+import { useCompany } from "../contexts/CompanyContext";
 import { docTrail } from "../utils/demandTags";
 import SearchableSelect from "./SearchableSelect";
 
@@ -52,6 +53,11 @@ export default function CustomerDemandPicker({
   const [combine, setCombine] = useState(false);
   // trailKey -> quantity typed (string while editing)
   const [picked, setPicked] = useState({});
+  // Documents before the company's start date count as settled and are never offered.
+  const { companies } = useCompany();
+  const documentsFrom = companies?.find(
+    (c) => String(c.id) === String(companyId),
+  )?.purchaseDocumentsFrom;
 
   useEffect(() => {
     const t = setTimeout(() => setQuery(search.trim()), 300);
@@ -280,6 +286,13 @@ export default function CustomerDemandPicker({
             <div style={s.empty}>
               Nothing left to buy{query || doc ? " for this search" : ""}.
               {supplierId && !allSuppliers && " Lines planned for other suppliers are hidden."}
+              {documentsFrom && (
+                <div style={{ marginTop: 6, fontSize: "0.8rem" }}>
+                  Only documents dated from {new Date(documentsFrom).toLocaleDateString()} are
+                  offered. Change it in company settings under{" "}
+                  <strong>Buy for customer documents from</strong>.
+                </div>
+              )}
             </div>
           ) : (
             open.map((c) => {
