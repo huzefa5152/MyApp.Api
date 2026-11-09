@@ -1,5 +1,7 @@
 import useAdminAccessibility from "../hooks/useAdminAccessibility";
 // src/layouts/DashboardLayout.jsx
+
+import BrandMark from "../Components/BrandMark";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -470,7 +472,7 @@ export default function DashboardLayout() {
         <div className="dl-brand">
           <div className="dl-brand__row">
             <span className="dl-brand__icon" aria-hidden="true">
-              📄
+              <BrandMark size={24} />
             </span>
             <h1 className="dl-brand__name">FBR Digital ERP</h1>
             <button

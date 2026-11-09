@@ -15,7 +15,7 @@
   --k-teal: #2dd4bf;
   --k-ink: #e6e9f2;
   --k-muted: #9aa3b5;
-  --k-faint: #6b7489;
+  --k-faint: #8b94a8;
   --k-line: #262c3b;
   --k-line-strong: #343c50;
   --k-row-line: #232a3a;
@@ -27,7 +27,29 @@
   --k-danger: #f87171;
   --k-danger-bg: #3a1b20;
   --k-focus: #8ab8ff;
+  --k-tint: #172a4a;
   --k-hover-line: #46506a;
+  --k-accent-solid: #2563eb;
+  --k-teal-solid: #0f766e;
+  --k-total-bg: #172a4a;
+  --u2-accent-solid: #2563eb;
+  --k-chip-blue-bg: #172a4a;
+  --k-chip-blue-ink: #bcd4ff;
+  --k-chip-amber-bg: #362b0f;
+  --k-chip-amber-ink: #fcd98a;
+  --k-chip-green-bg: #13301f;
+  --k-chip-green-ink: #a7f3c0;
+  --k-chip-red-bg: #3a1b20;
+  --k-chip-red-ink: #fca5a5;
+  --k-warn-ink-4: #fcd34d;
+  --k-warn-line-2: #6b5414;
+  --k-slate-ink: #cbd5e1;
+  --k-purple-4: #c4b5fd;
+  --k-purple-line: #4c3d7a;
+  --k-teal-bg-2: #10302d;
+  --k-teal-ink-2: #5eead4;
+  --k-teal-line-2: #1d5e57;
+  --k-slate-bg-2: #252b38;
   --k-pill-bg: #1b2030;
   --k-count-bg: #1c2740;
   --k-danger-deep: #fca5a5;
@@ -43,9 +65,9 @@
   --k-alert-success-line: #1f5133;
   --k-alert-success-ink: #a7f3c0;
   --k-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 8px 24px rgba(0, 0, 0, 0.35);
-  --k-primary-bg: linear-gradient(135deg, #3b82f6, #14b8a6);
-  --k-primary-hover: linear-gradient(135deg, #2563eb, #0d9488);
-  --k-primary-shadow: 0 4px 14px rgba(59, 130, 246, 0.3);
+  --k-primary-bg: #2563eb;
+  --k-primary-hover: #1d4ed8;
+  --k-primary-shadow: none;
 
   /* status and accents, dark-surface shades */
   --k-success: #4ade80;
@@ -85,11 +107,11 @@
 
   /* workspace shell and lists */
   --u2-blue: #6ea8ff;
-  --u2-blue-600: #3b82f6;
+  --u2-blue-600: #2563eb;
   --u2-teal: #2dd4bf;
   --u2-ink: #e6e9f2;
   --u2-muted: #9aa3b5;
-  --u2-faint: #6b7489;
+  --u2-faint: #8b94a8;
   --u2-line: #262c3b;
   --u2-line-strong: #343c50;
   --u2-surface: #161a24;
@@ -117,8 +139,8 @@
   --ui-input-bg: #11151e;
   --ui-modal-shadow: 0 18px 48px rgba(0, 0, 0, 0.6);
   --ui-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 8px 24px rgba(0, 0, 0, 0.35);
-  --ui-submit-bg: linear-gradient(135deg, #3b82f6, #14b8a6);
-  --ui-card-edit-bg: linear-gradient(135deg, #3b82f6, #14b8a6);
+  --ui-submit-bg: #2563eb;
+  --ui-card-edit-bg: #2563eb;
 
   /* Bootstrap's own components (tables, form controls, dropdowns) */
   --bs-body-bg: #0f121a;
@@ -175,4 +197,46 @@
   --k-tone: #cbd5e1;
   --k-tone-soft: #252b38;
   --k-tone-grad: linear-gradient(135deg, #475569, #64748b);
+}
+
+/* Sign-in page: dark form panel to match the app; the brand panel is already dark. */
+:root[data-ui-theme="midnight"] {
+  --lg-blue: #60a5fa;
+  --lg-blue-mid: #3b82f6;
+  --lg-cyan-deep: #60a5fa;
+  --lg-grad-brand: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  --lg-bg-light: #0f121a;
+  --lg-card: #161a24;
+  --lg-ink-text: #e6e9f2;
+  --lg-mute: #9aa3b5;
+  --lg-line-light: #262c3b;
+  --lg-input-bg: #11151e;
+  --lg-placeholder: #8b94a8;
+  --lg-icon: #8b94a8;
+  --lg-warn-bg: #362b0f;
+  --lg-warn-line: #6b5414;
+  --lg-warn-ink: #fcd98a;
+  --lg-error-bg: #3a1b20;
+  --lg-error-line: #7f2a33;
+  --lg-error-ink: #fca5a5;
+}
+
+/* Charts on dark surfaces: brighter, evenly weighted series. */
+:root[data-ui-theme="midnight"] {
+  --k-chart-1: #60a5fa;
+  --k-chart-2: #2dd4bf;
+  --k-chart-3: #c084fc;
+  --k-chart-4: #fb923c;
+  --k-chart-5: #4ade80;
+  --k-chart-6: #f87171;
+  --k-chart-7: #38bdf8;
+  --k-chart-8: #d6a77a;
+  --k-chart-other: #6b7489;
+  --k-chart-muted: #64748b;
+  --k-chart-track: #212739;
+  --k-chart-good: #4ade80;
+  --k-chart-warn: #fbbf24;
+  --k-chart-aging-2: #a3e635;
+  --k-chart-aging-3: #facc15;
+  --k-chart-aging-4: #fb923c;
 }

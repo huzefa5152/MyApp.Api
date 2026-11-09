@@ -5,6 +5,9 @@
 
    `:root[data-ui-theme]` outranks the `[data-ui-layout]` blocks it overrides.
    Status colours (paid, warning, danger) keep their meaning and stay as they are.
+   Personality comes from the hue, the rounder shape and the tinted depth;
+   gradients are kept to the page-header icon tiles so the working surface
+   stays calm. Magenta is the secondary accent only.
    ===================================================================== */
 
 :root[data-ui-theme="aurora"] {
@@ -14,7 +17,7 @@
   --k-teal: #c026d3;
   --k-ink: #1e1533;
   --k-muted: #6b5f80;
-  --k-faint: #9d92b3;
+  --k-faint: #756a8b;
   --k-line: #ebe5f4;
   --k-line-strong: #d8cdea;
   --k-row-line: #f0ebf7;
@@ -24,15 +27,19 @@
   --k-input-bg: #ffffff;
   --k-th-bg: #f7f3fc;
   --k-focus: #8b5cf6;
+  --k-tint: #f1eafd;
+  --k-total-bg: #f1eafd;
+  --k-accent-solid: #6d28d9;
+  --u2-accent-solid: #6d28d9;
 
-  /* shape and depth: rounder corners, soft tinted shadows, gradient primary */
+  /* shape and depth: rounder corners, soft tinted shadows, solid primary */
   --k-radius: 10px;
   --k-card-radius: 16px;
   --k-icon-radius: 12px;
   --k-card-shadow: 0 1px 2px rgba(76, 29, 149, 0.05), 0 8px 24px rgba(76, 29, 149, 0.08);
-  --k-primary-bg: linear-gradient(135deg, #6d28d9, #c026d3);
-  --k-primary-hover: linear-gradient(135deg, #5b21b6, #a21caf);
-  --k-primary-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
+  --k-primary-bg: #6d28d9;
+  --k-primary-hover: #5b21b6;
+  --k-primary-shadow: 0 2px 8px rgba(109, 40, 217, 0.22);
   --k-lift: translateY(-1px);
 
   /* workspace shell and lists */
@@ -41,7 +48,7 @@
   --u2-teal: #c026d3;
   --u2-ink: #1e1533;
   --u2-muted: #6b5f80;
-  --u2-faint: #9d92b3;
+  --u2-faint: #756a8b;
   --u2-line: #ebe5f4;
   --u2-line-strong: #d8cdea;
   --u2-surface-2: #faf8fd;
@@ -51,7 +58,7 @@
   --u2-radius-lg: 14px;
   --u2-shadow-sm: 0 1px 2px rgba(76, 29, 149, 0.08);
   --u2-shadow-md: 0 10px 28px rgba(76, 29, 149, 0.16);
-  --u2-nav-bg: linear-gradient(180deg, #2a1052 0%, #1b0b38 100%);
+  --u2-nav-bg: #23103f;
   --u2-nav-hover: rgba(255, 255, 255, 0.08);
   --u2-nav-text: #e4dcf5;
   --u2-nav-muted: #a99bc9;
@@ -63,8 +70,8 @@
   --ui-modal-shadow: 0 18px 48px rgba(46, 16, 101, 0.25);
   --ui-modal-title-color: #1e1533;
   --ui-close-color: #6b5f80;
-  --ui-submit-bg: linear-gradient(135deg, #6d28d9, #c026d3);
-  --ui-card-edit-bg: linear-gradient(135deg, #6d28d9, #c026d3);
+  --ui-submit-bg: #6d28d9;
+  --ui-card-edit-bg: #6d28d9;
   --ui-card-radius: 16px;
   --ui-card-shadow: 0 1px 2px rgba(76, 29, 149, 0.05), 0 8px 24px rgba(76, 29, 149, 0.08);
 }
@@ -74,7 +81,7 @@
 [data-ui-theme="aurora"] .k-tone-brand {
   --k-tone: #6d28d9;
   --k-tone-soft: #f1eafd;
-  --k-tone-grad: linear-gradient(135deg, #6d28d9, #c026d3);
+  --k-tone-grad: linear-gradient(135deg, #6d28d9, #7c3aed);
 }
 [data-ui-theme="aurora"] .k-tone-teal {
   --k-tone: #a21caf;
@@ -85,4 +92,40 @@
   --k-tone: #4f46e5;
   --k-tone-soft: #eef0ff;
   --k-tone-grad: linear-gradient(135deg, #4f46e5, #7c3aed);
+}
+
+/* Sign-in page: the same violet identity, deep plum brand panel. */
+:root[data-ui-theme="aurora"] {
+  --lg-ink-0: #0c0518;
+  --lg-ink-1: #140a29;
+  --lg-ink-2: #1d0f3b;
+  --lg-ink-glow: #2a1157;
+  --lg-blue: #6d28d9;
+  --lg-blue-mid: #7c3aed;
+  --lg-teal: #a21caf;
+  --lg-cyan: #c4b5fd;
+  --lg-cyan-soft: #ddd6fe;
+  --lg-cyan-deep: #6d28d9;
+  --lg-grad-brand: linear-gradient(135deg, #6d28d9 0%, #7c3aed 100%);
+  --lg-grad-accent: linear-gradient(92deg, #c4b5fd 0%, #f0abfc 100%);
+  --lg-bg-light: #f6f3fb;
+  --lg-ink-text: #1e1533;
+  --lg-mute: #6b5f80;
+  --lg-line-light: #e6dff2;
+  --lg-input-bg: #faf8fd;
+  --lg-placeholder: #756a8b;
+  --lg-icon: #756a8b;
+}
+
+/* Charts: violet leads, magenta follows, the rest stay distinguishable. */
+:root[data-ui-theme="aurora"] {
+  --k-chart-2: #d946ef;
+  --k-chart-3: #4f46e5;
+  --k-chart-4: #f59e0b;
+  --k-chart-5: #16a34a;
+  --k-chart-6: #dc2626;
+  --k-chart-7: #0ea5e9;
+  --k-chart-8: #78716c;
+  --k-chart-muted: #b4a7d6;
+  --k-chart-track: #efe9f8;
 }

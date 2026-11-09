@@ -12,41 +12,81 @@
    #00897b, ink #1a2332, muted #5f6d7e, borders #e8edf3/#d0d7e2.
    ===================================================================== */
 
+/* Type and radius scales. One hierarchy for every theme: a theme picks which
+   step a role uses (Workspace is one step smaller), never a value of its own.
+   Screens use the steps; kit components use the role tokens below them. */
+:root {
+  --k-fs-2xs: 0.6875rem; /* 11px  overlines, tiny badges, table headings */
+  --k-fs-xs: 0.75rem; /* 12px  helper text, meta, captions */
+  --k-fs-sm: 0.8125rem; /* 13px  secondary text, compact body, labels */
+  --k-fs-base: 0.875rem; /* 14px  body, inputs, table cells */
+  --k-fs-md: 1rem; /* 16px  card and section headings */
+  --k-fs-lg: 1.125rem; /* 18px  dialog titles, emphasised figures */
+  --k-fs-xl: 1.25rem; /* 20px  page titles (compact), stat figures */
+  --k-fs-2xl: 1.5rem; /* 24px  page titles */
+  --k-fs-3xl: 2rem; /* 32px  display figures */
+
+  --k-r-xs: 4px; /* inline code, tiny tags */
+  --k-r-sm: 6px; /* chips, small controls, menu items */
+  --k-r-lg: 12px; /* dropdowns, popovers, inner panels */
+  --k-r-xl: 16px; /* dialogs, drawers, large containers */
+  --k-r-pill: 999px; /* pills and counts */
+
+  /* Chart palette: series in a fixed order so segment and legend row match,
+     plus the chart chrome. Themes override the values, never the order. */
+  --k-chart-1: var(--k-blue);
+  --k-chart-2: #4db6ac;
+  --k-chart-3: #6a1b9a;
+  --k-chart-4: #e65100;
+  --k-chart-5: #2e7d32;
+  --k-chart-6: #c62828;
+  --k-chart-7: #0277bd;
+  --k-chart-8: #5d4037;
+  --k-chart-other: #9e9e9e;
+  --k-chart-muted: #90a4c8; /* a comparison series that should recede */
+  --k-chart-track: #eef2f7;
+  --k-chart-good: #15803d;
+  --k-chart-warn: #b26a00;
+  --k-chart-aging-2: #9ccc65;
+  --k-chart-aging-3: #f9a825;
+  --k-chart-aging-4: #ef6c00;
+}
+
 :root,
 [data-ui-layout="classic"] {
   --k-blue: #0d47a1;
   --k-blue-600: #1565c0;
-  --k-teal: #00897b;
+  --k-teal: #00796b;
   --k-ink: #1a2332;
   --k-muted: #5f6d7e;
-  --k-faint: #94a3b8;
+  --k-faint: #5b6879;
   --k-line: #e8edf3;
   --k-line-strong: #d0d7e2;
   --k-surface: #ffffff;
   --k-surface-2: #f8f9fb;
   --k-surface-3: #f3f6fa;
-  --k-danger: #dc3545;
+  --k-danger: #c82333;
   --k-danger-bg: #fff0f1;
   --k-focus: #1565c0;
 
-  --k-font: 0.9rem;
-  --k-font-sm: 0.8rem;
+  --k-font: var(--k-fs-base);
+  --k-font-sm: var(--k-fs-sm);
   --k-h: 40px; /* inputs, selects */
   --k-btn-h: 44px; /* buttons */
   --k-btn-pad: 0 1.15rem;
-  --k-btn-font: 0.9rem;
+  --k-btn-font: var(--k-fs-base);
   --k-btn-sm-h: 32px; /* small buttons on cards / bars */
   --k-icon-btn: 34px; /* icon-only buttons in rows */
   --k-radius: 10px;
-  --k-primary-bg: linear-gradient(135deg, #0d47a1, #00897b);
+  --k-primary-bg: linear-gradient(135deg, #0d47a1, #00796b);
   --k-primary-hover: linear-gradient(135deg, #0a3680, #00796b);
   --k-primary-shadow: 0 4px 14px rgba(13, 71, 161, 0.25);
   --k-lift: translateY(-2px);
   --k-input-bg: #f8f9fb;
   --k-input-pad-x: 0.75rem;
 
-  --k-title: 1.5rem;
-  --k-sub: 0.88rem;
+  --k-title: var(--k-fs-xl);
+  --k-sub: var(--k-fs-base);
   --k-icon-tile: 48px;
   --k-icon-radius: 14px;
   --k-icon-glyph: 26px;
@@ -59,15 +99,15 @@
 
   --k-th-h: 40px;
   --k-th-bg: #f8f9fb;
-  --k-th-font: 0.7rem;
+  --k-th-font: var(--k-fs-2xs);
   --k-td-h: 42px; /* the original DataTable row height */
   --k-td-pad-x: 0.9rem;
-  --k-td-font: 0.88rem;
+  --k-td-font: var(--k-fs-base);
   --k-row-line: #e8edf3;
 
   --k-tab-h: 44px;
   --k-stat-pad: 1rem 1.15rem;
-  --k-stat-value: 1.35rem;
+  --k-stat-value: var(--k-fs-xl);
 }
 
 /* Status and accent palette. One value in every theme today; a theme that needs
@@ -78,11 +118,11 @@
   --k-success-alt: #28a745;
   --k-success-bg: #e8f5e9;
   --k-success-line: #a5d6a7;
-  --k-warn: #e65100;
+  --k-warn: #c2410c;
   --k-warn-2: #f57c00;
   --k-warn-ink: #8a4b00;
   --k-warn-ink-2: #8a5a00;
-  --k-warn-ink-3: #b26a00;
+  --k-warn-ink-3: #9a5b00;
   --k-warn-bg: #fff3e0;
   --k-warn-bg-2: #fff8e1;
   --k-warn-bg-3: #fff4e0;
@@ -105,21 +145,22 @@
   --k-teal-bg: #e0f2f1;
   --k-teal-line: #80cbc4;
   --k-slate: #37474f;
+  --k-slate-ink: #546e7a;
   --k-slate-bg: #eceff1;
   --k-slate-line: #b0bec5;
 }
 
 [data-ui-layout="workspace"] {
-  --k-faint: #8a97a8;
+  --k-faint: #5b6879;
   --k-danger: #c62828;
   --k-danger-bg: #fdecee;
 
-  --k-font: 0.8125rem;
-  --k-font-sm: 0.75rem;
+  --k-font: var(--k-fs-sm);
+  --k-font-sm: var(--k-fs-xs);
   --k-h: 32px;
   --k-btn-h: 32px;
   --k-btn-pad: 0 0.8rem;
-  --k-btn-font: 0.8125rem;
+  --k-btn-font: var(--k-fs-sm);
   --k-btn-sm-h: 26px;
   --k-icon-btn: 28px;
   --k-radius: 8px;
@@ -130,8 +171,8 @@
   --k-input-bg: #ffffff;
   --k-input-pad-x: 0.6rem;
 
-  --k-title: 1.25rem;
-  --k-sub: 0.8125rem;
+  --k-title: var(--k-fs-xl);
+  --k-sub: var(--k-fs-sm);
   --k-icon-tile: 32px;
   --k-icon-radius: 8px;
   --k-icon-glyph: 18px;
@@ -144,15 +185,15 @@
 
   --k-th-h: 34px;
   --k-th-bg: #ffffff;
-  --k-th-font: 0.66rem;
+  --k-th-font: var(--k-fs-2xs);
   --k-td-h: 40px;
   --k-td-pad-x: 0.75rem;
-  --k-td-font: 0.8125rem;
+  --k-td-font: var(--k-fs-sm);
   --k-row-line: #eff2f7;
 
   --k-tab-h: 36px;
   --k-stat-pad: 0.7rem 0.85rem;
-  --k-stat-value: 1.15rem;
+  --k-stat-value: var(--k-fs-lg);
 }
 @media (pointer: coarse) {
   [data-ui-layout="workspace"] {
@@ -227,7 +268,7 @@
   border-radius: 999px;
   background: var(--k-count-bg, #e8f0fb);
   color: var(--k-blue);
-  font-size: 0.75rem;
+  font-size: var(--k-fs-xs);
   font-weight: 700;
 }
 
@@ -332,7 +373,7 @@
   color: var(--k-blue);
 }
 .k-btn--teal {
-  background: var(--k-teal);
+  background: var(--k-teal-solid, var(--k-teal));
   color: #fff;
 }
 .k-btn--teal:hover:not(:disabled) {
@@ -519,12 +560,12 @@
   min-width: 0;
 }
 .k-field__label {
-  font-size: calc(var(--k-font) - 0.05rem);
+  font-size: var(--k-font-sm);
   font-weight: 600;
   color: var(--k-muted);
 }
 [data-ui-layout="workspace"] .k-field__label {
-  font-size: 0.72rem;
+  font-size: var(--k-fs-xs);
 }
 .k-field__hint {
   font-size: var(--k-font-sm);
@@ -570,7 +611,7 @@
   align-items: center;
   gap: 0.5rem;
   margin: 0;
-  font-size: calc(var(--k-font) + 0.1rem);
+  font-size: var(--k-fs-md);
   font-weight: 700;
   color: var(--k-ink);
 }
@@ -709,7 +750,7 @@
 .k-tab .k-count {
   height: 18px;
   min-width: 18px;
-  font-size: 0.68rem;
+  font-size: var(--k-fs-2xs);
 }
 
 /* ---------- Stats ---------- */
@@ -764,7 +805,7 @@
   line-height: 1.25;
 }
 .k-stat__hint {
-  font-size: 0.72rem;
+  font-size: var(--k-fs-xs);
   color: var(--k-faint);
 }
 
@@ -776,7 +817,7 @@
   margin: 0;
 }
 .k-facts dt {
-  font-size: 0.68rem;
+  font-size: var(--k-fs-2xs);
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -816,7 +857,7 @@
 .k-empty__title {
   margin: 0;
   font-weight: 700;
-  font-size: calc(var(--k-font) + 0.05rem);
+  font-size: var(--k-font);
   color: var(--k-ink);
 }
 .k-empty p {
@@ -1023,7 +1064,7 @@
 }
 .k-combo__opt-sub {
   display: block;
-  font-size: 0.72rem;
+  font-size: var(--k-fs-xs);
   color: var(--k-muted);
   font-weight: 400;
 }

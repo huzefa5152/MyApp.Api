@@ -7,7 +7,7 @@
 :root {
   --sidebar-width: 268px;
   --sidebar-bg-from: #0d47a1;
-  --sidebar-bg-to: #00897b;
+  --sidebar-bg-to: #00695c; /* deep enough for the light group titles at the foot (5.8:1) */
   --sidebar-text: #e8f4f8;
   --sidebar-text-muted: rgba(255, 255, 255, 0.72);
   --sidebar-active-bg: rgba(255, 255, 255, 0.16);
@@ -64,7 +64,7 @@ body.dl-body--locked {
 }
 .dl-sidebar::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.25);
-  border-radius: 4px;
+  border-radius: var(--k-r-xs);
 }
 
 /* Mobile: drawer width clamps so it doesn't fill the whole screen on
@@ -93,13 +93,13 @@ body.dl-body--locked {
 }
 
 .dl-brand__icon {
-  font-size: 1.4rem;
+  font-size: var(--k-fs-2xl);
   flex-shrink: 0;
   opacity: 0.95;
 }
 
 .dl-brand__name {
-  font-size: 1.05rem;
+  font-size: var(--k-fs-md);
   font-weight: 700;
   letter-spacing: 0.3px;
   color: #ffffff;
@@ -123,7 +123,7 @@ body.dl-body--locked {
   border: 1px solid rgba(255, 255, 255, 0.22);
   background: rgba(255, 255, 255, 0.14);
   color: #ffffff;
-  border-radius: 10px;
+  border-radius: var(--k-radius);
   cursor: pointer;
   flex-shrink: 0;
   padding: 0;
@@ -168,7 +168,7 @@ body.dl-body--locked {
 }
 .dl-nav::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.25);
-  border-radius: 4px;
+  border-radius: var(--k-r-xs);
 }
 
 /* ---------- Top-level item (Dashboard, etc.) ----------
@@ -180,10 +180,10 @@ body.dl-body--locked {
   gap: 0.7rem;
   padding: 0.55rem 0.75rem;
   min-height: 40px;
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   color: var(--sidebar-text);
   text-decoration: none;
-  font-size: 0.9rem;
+  font-size: var(--k-fs-base);
   font-weight: 500;
   cursor: pointer;
   user-select: none;
@@ -220,7 +220,7 @@ body.dl-body--locked {
 }
 
 .dl-item__icon {
-  font-size: 1.1rem;
+  font-size: var(--k-fs-lg);
   flex-shrink: 0;
   opacity: 0.92;
 }
@@ -234,7 +234,7 @@ body.dl-body--locked {
   .dl-item {
     min-height: 44px;
     padding: 0.65rem 0.75rem;
-    font-size: 0.95rem;
+    font-size: var(--k-fs-md);
   }
 }
 
@@ -253,9 +253,9 @@ body.dl-body--locked {
   gap: 0.7rem;
   padding: 0.55rem 0.75rem;
   min-height: 40px;
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   color: var(--sidebar-text);
-  font-size: 0.9rem;
+  font-size: var(--k-fs-base);
   font-weight: 500;
   cursor: pointer;
   border: none;
@@ -278,12 +278,12 @@ body.dl-body--locked {
   .dl-group__header {
     min-height: 44px;
     padding: 0.65rem 0.75rem;
-    font-size: 0.95rem;
+    font-size: var(--k-fs-md);
   }
 }
 
 .dl-group__icon {
-  font-size: 1.1rem;
+  font-size: var(--k-fs-lg);
   flex-shrink: 0;
   opacity: 0.85;
 }
@@ -294,10 +294,10 @@ body.dl-body--locked {
 }
 
 .dl-group__count {
-  font-size: 0.7rem;
+  font-size: var(--k-fs-2xs);
   font-weight: 600;
   padding: 1px 7px;
-  border-radius: 10px;
+  border-radius: var(--k-radius);
   background: rgba(255, 255, 255, 0.14);
   color: rgba(255, 255, 255, 0.85);
   line-height: 1.4;
@@ -305,7 +305,7 @@ body.dl-body--locked {
 }
 
 .dl-group__chevron {
-  font-size: 1rem;
+  font-size: var(--k-fs-md);
   flex-shrink: 0;
   opacity: 0.7;
   transition: transform var(--transition-normal) var(--easing-standard);
@@ -384,10 +384,10 @@ body.dl-body--locked {
   gap: 0.6rem;
   padding: 0.45rem 0.75rem 0.45rem 2rem;
   min-height: 36px;
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   color: var(--sidebar-text-muted);
   text-decoration: none;
-  font-size: 0.85rem;
+  font-size: var(--k-fs-base);
   font-weight: 400;
   position: relative;
   transition:
@@ -420,7 +420,7 @@ body.dl-body--locked {
 }
 
 .dl-subitem__icon {
-  font-size: 0.95rem;
+  font-size: var(--k-fs-md);
   flex-shrink: 0;
   opacity: 0.85;
 }
@@ -429,7 +429,7 @@ body.dl-body--locked {
   .dl-subitem {
     min-height: 40px;
     padding: 0.55rem 0.75rem 0.55rem 2rem;
-    font-size: 0.9rem;
+    font-size: var(--k-fs-base);
   }
 }
 
@@ -458,10 +458,10 @@ body.dl-body--locked {
   width: 100%;
   padding: 0.55rem 0.75rem;
   min-height: 38px;
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   background: rgba(255, 82, 82, 0.14);
-  color: #ffcdd2;
-  font-size: 0.88rem;
+  color: #ffffff;
+  font-size: var(--k-fs-base);
   font-weight: 500;
   border: 1px solid rgba(255, 82, 82, 0.25);
   cursor: pointer;
@@ -479,7 +479,7 @@ body.dl-body--locked {
 }
 
 .dl-sidebar-footer__copy {
-  font-size: 0.68rem;
+  font-size: var(--k-fs-2xs);
   color: rgba(255, 255, 255, 0.4);
   text-align: center;
   margin: 0.25rem 0 0;
@@ -526,9 +526,9 @@ body.dl-body--locked {
   border: none;
   cursor: pointer;
   padding: 0.35rem;
-  border-radius: 6px;
+  border-radius: var(--k-r-sm);
   color: var(--k-blue);
-  font-size: 1.3rem;
+  font-size: var(--k-fs-xl);
   display: none;
   align-items: center;
   line-height: 1;
@@ -547,7 +547,7 @@ body.dl-body--locked {
 
 .dl-topbar__breadcrumb {
   flex: 1;
-  font-size: 0.85rem;
+  font-size: var(--k-fs-base);
   color: #6c757d;
 }
 .dl-crumbs {
@@ -586,14 +586,14 @@ body.dl-body--locked {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--k-fs-base);
   color: #344054;
   font-weight: 500;
   background: none;
   border: none;
   cursor: pointer;
   padding: 0.35rem 0.5rem;
-  border-radius: 10px;
+  border-radius: var(--k-radius);
   transition: background-color 0.2s;
 }
 
@@ -602,7 +602,7 @@ body.dl-body--locked {
 }
 
 .dl-topbar__user-arrow {
-  font-size: 1.1rem;
+  font-size: var(--k-fs-lg);
   color: #6c757d;
   transition: transform 0.25s ease;
 }
@@ -620,7 +620,7 @@ body.dl-body--locked {
   align-items: center;
   justify-content: center;
   color: #fff;
-  font-size: 0.8rem;
+  font-size: var(--k-fs-sm);
   font-weight: 700;
   flex-shrink: 0;
   overflow: hidden;
@@ -640,7 +640,7 @@ body.dl-body--locked {
   right: 0;
   min-width: 180px;
   background: var(--k-surface);
-  border-radius: 12px;
+  border-radius: var(--k-card-radius);
   border: 1px solid var(--k-line);
   box-shadow: 0 8px 28px rgba(13, 71, 161, 0.14);
   z-index: 200;
@@ -657,10 +657,10 @@ body.dl-body--locked {
   border: none;
   background: none;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: var(--k-fs-base);
   font-weight: 500;
   color: #344054;
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   transition: background-color 0.2s;
 }
 
@@ -677,7 +677,7 @@ body.dl-body--locked {
 }
 
 .dl-user-menu__icon {
-  font-size: 1.15rem;
+  font-size: var(--k-fs-lg);
   flex-shrink: 0;
 }
 
@@ -736,7 +736,7 @@ body.dl-body--locked {
 }
 
 .dl-nav__section-label {
-  font-size: 0.65rem;
+  font-size: var(--k-fs-2xs);
   text-transform: uppercase;
   letter-spacing: 1.4px;
   color: rgba(255, 255, 255, 0.42);
@@ -785,7 +785,7 @@ body.dl-body--locked {
   margin-bottom: 1.25rem;
   padding: 0.5rem 0.75rem;
   background-color: var(--k-surface-2);
-  border-radius: 10px;
+  border-radius: var(--k-radius);
   border: 1px solid var(--k-line);
 }
 
@@ -818,9 +818,9 @@ body.dl-body--locked {
   width: 100%;
   box-sizing: border-box;
   padding: 0.4rem 0.6rem 0.4rem 1.8rem;
-  border-radius: 7px;
+  border-radius: var(--k-r-sm);
   border: 1px solid var(--k-line-strong);
-  font-size: 0.8rem;
+  font-size: var(--k-fs-sm);
   color: var(--k-ink);
   background-color: var(--k-surface);
   outline: none;
@@ -828,9 +828,9 @@ body.dl-body--locked {
 
 .filter-select {
   padding: 0.4rem 0.6rem;
-  border-radius: 7px;
+  border-radius: var(--k-r-sm);
   border: 1px solid var(--k-line-strong);
-  font-size: 0.8rem;
+  font-size: var(--k-fs-sm);
   color: var(--k-ink);
   background-color: var(--k-surface);
   outline: none;
@@ -845,9 +845,9 @@ body.dl-body--locked {
 
 .filter-date-input {
   padding: 0.4rem 0.4rem;
-  border-radius: 7px;
+  border-radius: var(--k-r-sm);
   border: 1px solid var(--k-line-strong);
-  font-size: 0.78rem;
+  font-size: var(--k-fs-xs);
   color: var(--k-ink);
   background-color: var(--k-surface);
   outline: none;
@@ -856,16 +856,16 @@ body.dl-body--locked {
 
 .filter-date-sep {
   color: var(--k-muted);
-  font-size: 0.8rem;
+  font-size: var(--k-fs-sm);
 }
 
 .filter-clear-btn {
   padding: 0.35rem 0.7rem;
-  border-radius: 7px;
+  border-radius: var(--k-r-sm);
   border: none;
   background-color: var(--k-danger-bg-2);
   color: var(--k-danger-ink);
-  font-size: 0.78rem;
+  font-size: var(--k-fs-xs);
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -961,7 +961,7 @@ body.dl-body--locked {
 .audit-card {
   background: var(--k-surface);
   border: 1px solid var(--k-line);
-  border-radius: 10px;
+  border-radius: var(--k-radius);
   padding: 0.75rem 0.85rem;
   cursor: pointer;
   display: flex;
@@ -989,14 +989,14 @@ body.dl-body--locked {
   align-items: center;
   gap: 4px;
   padding: 2px 8px;
-  border-radius: 6px;
-  font-size: 0.72rem;
+  border-radius: var(--k-r-sm);
+  font-size: var(--k-fs-2xs);
   font-weight: 600;
   flex-shrink: 0;
 }
 
 .audit-card__time {
-  font-size: 0.72rem;
+  font-size: var(--k-fs-2xs);
   color: var(--k-muted);
   white-space: nowrap;
 }
@@ -1006,21 +1006,21 @@ body.dl-body--locked {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem 0.75rem;
-  font-size: 0.78rem;
+  font-size: var(--k-fs-xs);
 }
 
 .audit-card__method {
   font-weight: 700;
-  font-size: 0.78rem;
+  font-size: var(--k-fs-xs);
 }
 
 .audit-card__status {
   font-weight: 700;
-  font-size: 0.78rem;
+  font-size: var(--k-fs-xs);
 }
 
 .audit-card__user {
-  font-size: 0.72rem;
+  font-size: var(--k-fs-2xs);
   color: var(--k-muted);
 }
 .audit-card__user::before {
@@ -1033,11 +1033,11 @@ body.dl-body--locked {
    overflow-wrap alone won't break inside an unbroken token. */
 .audit-card__path {
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  font-size: 0.78rem;
+  font-size: var(--k-fs-xs);
   color: var(--k-ink);
   background: #f5f8fc;
   border: 1px solid var(--k-line);
-  border-radius: 6px;
+  border-radius: var(--k-r-sm);
   padding: 0.35rem 0.55rem;
   word-break: break-all;
   line-height: 1.35;
@@ -1046,7 +1046,7 @@ body.dl-body--locked {
 /* Message: wrap freely on phones, clamped to 3 lines so a stack-like
    message doesn't blow out the card height. */
 .audit-card__msg {
-  font-size: 0.8rem;
+  font-size: var(--k-fs-sm);
   color: var(--k-ink);
   line-height: 1.4;
   word-break: break-word;
@@ -1088,7 +1088,7 @@ body.dl-body--locked {
 .irh-card {
   background: var(--k-surface);
   border: 1px solid var(--k-line);
-  border-radius: 12px;
+  border-radius: var(--k-card-radius);
   padding: 0.85rem;
   display: flex;
   flex-direction: column;
@@ -1112,11 +1112,11 @@ body.dl-body--locked {
 .irh-card__bill {
   font-weight: 700;
   color: var(--k-blue);
-  font-size: 0.95rem;
+  font-size: var(--k-fs-md);
 }
 
 .irh-card__date {
-  font-size: 0.78rem;
+  font-size: var(--k-fs-xs);
   color: var(--k-muted);
 }
 
@@ -1128,34 +1128,34 @@ body.dl-body--locked {
   flex-shrink: 0;
 }
 .irh-card__rate-label {
-  font-size: 0.65rem;
+  font-size: var(--k-fs-2xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--k-muted);
   font-weight: 600;
 }
 .irh-card__rate-value {
-  font-size: 1.05rem;
+  font-size: var(--k-fs-md);
   font-weight: 700;
   color: var(--k-teal-ink);
   white-space: nowrap;
 }
 
 .irh-card__client {
-  font-size: 0.85rem;
+  font-size: var(--k-fs-base);
   color: var(--k-ink);
   font-weight: 600;
 }
 
 .irh-card__desc {
-  font-size: 0.82rem;
+  font-size: var(--k-fs-sm);
   color: var(--k-ink);
   line-height: 1.4;
   word-break: break-word;
 }
 
 .irh-card__itemtype {
-  font-size: 0.72rem;
+  font-size: var(--k-fs-2xs);
   color: var(--k-muted);
   font-style: italic;
 }
@@ -1181,19 +1181,19 @@ body.dl-body--locked {
 }
 
 .irh-card__field-label {
-  font-size: 0.65rem;
+  font-size: var(--k-fs-2xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--k-muted);
   font-weight: 600;
 }
 .irh-card__field-value {
-  font-size: 0.85rem;
+  font-size: var(--k-fs-base);
   color: var(--k-ink);
   font-weight: 600;
 }
 .irh-card__uom {
-  font-size: 0.75rem;
+  font-size: var(--k-fs-xs);
   color: var(--k-muted);
   font-weight: 400;
 }
@@ -1203,11 +1203,11 @@ body.dl-body--locked {
   align-items: center;
   gap: 0.35rem;
   padding: 0.4rem 0.75rem;
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   border: 1px solid var(--k-info-line);
   background: var(--k-info-bg);
   color: var(--k-blue);
-  font-size: 0.78rem;
+  font-size: var(--k-fs-xs);
   font-weight: 600;
   cursor: pointer;
   flex-shrink: 0;
@@ -1234,10 +1234,10 @@ body.dl-body--locked {
   padding: 0.85rem;
   text-align: center;
   color: var(--k-muted);
-  font-size: 0.85rem;
+  font-size: var(--k-fs-base);
   background: var(--k-surface);
   border: 1px dashed var(--k-line-strong);
-  border-radius: 8px;
+  border-radius: var(--k-radius);
 }
 
 @media (max-width: 767.98px) {
@@ -1271,7 +1271,7 @@ body.dl-body--locked {
 .imp-item-card {
   background: var(--k-surface);
   border: 1px solid var(--k-line);
-  border-radius: 10px;
+  border-radius: var(--k-radius);
   padding: 0.75rem;
   display: flex;
   flex-direction: column;
@@ -1291,7 +1291,7 @@ body.dl-body--locked {
 }
 
 .imp-item-card__label {
-  font-size: 0.72rem;
+  font-size: var(--k-fs-2xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -1302,9 +1302,9 @@ body.dl-body--locked {
   width: 100%;
   box-sizing: border-box;
   padding: 0.5rem 0.65rem;
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   border: 1px solid var(--k-line-strong);
-  font-size: 0.95rem;
+  font-size: var(--k-fs-md);
   background: var(--k-surface);
   outline: none;
   min-height: 40px;
@@ -1317,11 +1317,11 @@ body.dl-body--locked {
   gap: 0.4rem;
   align-self: flex-end;
   padding: 0.5rem 0.85rem;
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   border: 1px solid rgba(220, 53, 69, 0.3);
   background: var(--k-danger-bg);
   color: var(--k-danger);
-  font-size: 0.8rem;
+  font-size: var(--k-fs-sm);
   font-weight: 600;
   cursor: pointer;
   min-height: 36px;
@@ -1365,7 +1365,7 @@ body.dl-body--locked {
 .stock-card {
   background: var(--k-surface);
   border: 1px solid var(--k-line);
-  border-radius: 12px;
+  border-radius: var(--k-card-radius);
   padding: 0.85rem;
   display: flex;
   flex-direction: column;
@@ -1390,12 +1390,12 @@ body.dl-body--locked {
 .stock-card__name {
   font-weight: 700;
   color: var(--k-ink);
-  font-size: 0.92rem;
+  font-size: var(--k-fs-base);
   word-break: break-word;
 }
 
 .stock-card__hs {
-  font-size: 0.75rem;
+  font-size: var(--k-fs-xs);
   color: var(--k-muted);
   font-family: monospace;
 }
@@ -1408,30 +1408,30 @@ body.dl-body--locked {
   flex-shrink: 0;
 }
 .stock-card__onhand-label {
-  font-size: 0.65rem;
+  font-size: var(--k-fs-2xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--k-muted);
   font-weight: 600;
 }
 .stock-card__onhand-value {
-  font-size: 1.1rem;
+  font-size: var(--k-fs-lg);
   font-weight: 700;
   white-space: nowrap;
 }
 .stock-card__uom {
-  font-size: 0.75rem;
+  font-size: var(--k-fs-xs);
   font-weight: 400;
   color: var(--k-muted);
 }
 
 .stock-card__direction {
-  font-size: 1.1rem;
+  font-size: var(--k-fs-lg);
   font-weight: 700;
   white-space: nowrap;
 }
 .stock-card__direction-label {
-  font-size: 0.7rem;
+  font-size: var(--k-fs-2xs);
   font-weight: 600;
   color: var(--k-muted);
   text-transform: uppercase;
@@ -1454,14 +1454,14 @@ body.dl-body--locked {
 }
 
 .stock-card__stat-label {
-  font-size: 0.65rem;
+  font-size: var(--k-fs-2xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--k-muted);
   font-weight: 600;
 }
 .stock-card__stat-value {
-  font-size: 0.85rem;
+  font-size: var(--k-fs-base);
   color: var(--k-ink);
   font-weight: 600;
 }
@@ -1476,7 +1476,7 @@ body.dl-body--locked {
 }
 
 .stock-card__notes {
-  font-size: 0.78rem;
+  font-size: var(--k-fs-xs);
   color: var(--k-muted);
   font-style: italic;
   word-break: break-word;
@@ -1488,11 +1488,11 @@ body.dl-body--locked {
   align-items: center;
   gap: 0.35rem;
   padding: 0.4rem 0.85rem;
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   border: 1px solid rgba(220, 53, 69, 0.3);
   background: var(--k-danger-bg);
   color: var(--k-danger-ink);
-  font-size: 0.78rem;
+  font-size: var(--k-fs-xs);
   font-weight: 600;
   cursor: pointer;
   min-height: 36px;
@@ -1525,7 +1525,7 @@ body.dl-body--locked {
 .it-card {
   background: var(--k-surface);
   border: 1px solid var(--k-line);
-  border-radius: 12px;
+  border-radius: var(--k-card-radius);
   padding: 0.85rem;
   display: flex;
   flex-direction: column;
@@ -1543,7 +1543,7 @@ body.dl-body--locked {
   border: none;
   cursor: pointer;
   padding: 4px;
-  border-radius: 6px;
+  border-radius: var(--k-r-sm);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1559,12 +1559,12 @@ body.dl-body--locked {
 .it-card__name {
   font-weight: 700;
   color: var(--k-ink);
-  font-size: 0.95rem;
+  font-size: var(--k-fs-md);
   word-break: break-word;
 }
 
 .it-card__desc {
-  font-size: 0.76rem;
+  font-size: var(--k-fs-xs);
   color: var(--k-muted);
   margin-top: 2px;
   line-height: 1.4;
@@ -1595,7 +1595,7 @@ body.dl-body--locked {
 }
 
 .it-card__field-label {
-  font-size: 0.65rem;
+  font-size: var(--k-fs-2xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--k-muted);
@@ -1603,7 +1603,7 @@ body.dl-body--locked {
 }
 
 .it-card__field-value {
-  font-size: 0.85rem;
+  font-size: var(--k-fs-base);
   color: var(--k-ink);
   font-weight: 500;
   word-break: break-word;
@@ -1623,9 +1623,9 @@ body.dl-body--locked {
   align-items: center;
   gap: 0.35rem;
   padding: 0.4rem 0.85rem;
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   border: 1px solid;
-  font-size: 0.78rem;
+  font-size: var(--k-fs-xs);
   font-weight: 600;
   cursor: pointer;
   min-height: 36px;
@@ -1670,7 +1670,7 @@ body.dl-body--locked {
 
 .pof-header__title {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: var(--k-fs-2xl);
   font-weight: 700;
   color: var(--k-ink);
   line-height: 1.2;
@@ -1679,7 +1679,7 @@ body.dl-body--locked {
 .pof-header__subtitle {
   margin: 0.35rem 0 0;
   color: var(--k-muted);
-  font-size: 0.88rem;
+  font-size: var(--k-fs-base);
   line-height: 1.5;
   max-width: 720px;
 }
@@ -1689,11 +1689,11 @@ body.dl-body--locked {
   align-items: center;
   gap: 0.4rem;
   padding: 0.6rem 1rem;
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   border: none;
-  background: var(--k-blue);
+  background: var(--k-accent-solid, var(--k-blue));
   color: #fff;
-  font-size: 0.9rem;
+  font-size: var(--k-fs-base);
   font-weight: 600;
   cursor: pointer;
   flex-shrink: 0;
@@ -1712,17 +1712,17 @@ body.dl-body--locked {
     margin-bottom: 1rem;
   }
   .pof-header__title {
-    font-size: 1.3rem;
+    font-size: var(--k-fs-xl);
   }
   .pof-header__subtitle {
-    font-size: 0.82rem;
+    font-size: var(--k-fs-sm);
     line-height: 1.45;
   }
   .pof-header__add {
     width: 100%;
     justify-content: center;
     min-height: 44px;
-    font-size: 0.92rem;
+    font-size: var(--k-fs-base);
   }
 }
 
@@ -1751,7 +1751,7 @@ body.dl-body--locked {
 .pof-card {
   background: var(--k-surface);
   border: 1px solid var(--k-line);
-  border-radius: 12px;
+  border-radius: var(--k-card-radius);
   padding: 0.85rem;
   display: flex;
   flex-direction: column;
@@ -1776,12 +1776,12 @@ body.dl-body--locked {
 .pof-card__name {
   font-weight: 700;
   color: var(--k-ink);
-  font-size: 0.95rem;
+  font-size: var(--k-fs-md);
   word-break: break-word;
 }
 
 .pof-card__version {
-  font-size: 0.72rem;
+  font-size: var(--k-fs-2xs);
   color: var(--k-muted);
   font-family: monospace;
 }
@@ -1789,8 +1789,8 @@ body.dl-body--locked {
 .pof-card__status {
   display: inline-block;
   padding: 0.2rem 0.6rem;
-  border-radius: 999px;
-  font-size: 0.72rem;
+  border-radius: var(--k-r-pill);
+  font-size: var(--k-fs-2xs);
   font-weight: 700;
   flex-shrink: 0;
 }
@@ -1820,7 +1820,7 @@ body.dl-body--locked {
 }
 
 .pof-card__field-label {
-  font-size: 0.65rem;
+  font-size: var(--k-fs-2xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--k-muted);
@@ -1828,7 +1828,7 @@ body.dl-body--locked {
 }
 
 .pof-card__field-value {
-  font-size: 0.82rem;
+  font-size: var(--k-fs-sm);
   color: var(--k-ink);
   font-weight: 500;
 }
@@ -1836,8 +1836,8 @@ body.dl-body--locked {
 .pof-card__chip {
   display: inline-block;
   padding: 0.2rem 0.6rem;
-  border-radius: 12px;
-  font-size: 0.78rem;
+  border-radius: var(--k-card-radius);
+  font-size: var(--k-fs-xs);
   font-weight: 600;
   background: var(--k-info-bg);
   color: var(--k-blue);
@@ -1863,9 +1863,9 @@ body.dl-body--locked {
   align-items: center;
   gap: 0.35rem;
   padding: 0.4rem 0.85rem;
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   border: 1px solid;
-  font-size: 0.78rem;
+  font-size: var(--k-fs-xs);
   font-weight: 600;
   cursor: pointer;
   min-height: 36px;
@@ -1909,7 +1909,7 @@ body.dl-body--locked {
 
 .fbr-header__title {
   margin: 0;
-  font-size: 1.4rem;
+  font-size: var(--k-fs-2xl);
   font-weight: 800;
   color: var(--k-ink);
   line-height: 1.2;
@@ -1918,17 +1918,17 @@ body.dl-body--locked {
 .fbr-header__subtitle {
   margin: 0.35rem 0 0;
   color: var(--k-muted);
-  font-size: 0.86rem;
+  font-size: var(--k-fs-base);
   line-height: 1.5;
   max-width: 720px;
 }
 
 .fbr-header__subtitle code {
   font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
-  font-size: 0.8rem;
+  font-size: var(--k-fs-sm);
   background: #f5f8fc;
   padding: 1px 5px;
-  border-radius: 4px;
+  border-radius: var(--k-r-xs);
 }
 
 .fbr-header__actions {
@@ -1941,10 +1941,10 @@ body.dl-body--locked {
 .fbr-header__company-select {
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--k-line-strong);
-  border-radius: 6px;
+  border-radius: var(--k-r-sm);
   background: var(--k-surface);
   color: var(--k-ink);
-  font-size: 0.85rem;
+  font-size: var(--k-fs-base);
   font-weight: 600;
   min-width: 200px;
   cursor: pointer;
@@ -1953,7 +1953,7 @@ body.dl-body--locked {
 .fbr-header__icon-btn {
   padding: 0.5rem;
   border: 1px solid var(--k-line);
-  border-radius: 6px;
+  border-radius: var(--k-r-sm);
   background: var(--k-surface);
   cursor: pointer;
   color: var(--k-ink);
@@ -1974,12 +1974,12 @@ body.dl-body--locked {
   gap: 0.35rem;
   padding: 0.5rem 1rem;
   border: none;
-  border-radius: 6px;
-  background: var(--k-blue);
+  border-radius: var(--k-r-sm);
+  background: var(--k-accent-solid, var(--k-blue));
   color: #fff;
   cursor: pointer;
   font-weight: 700;
-  font-size: 0.84rem;
+  font-size: var(--k-fs-sm);
   white-space: nowrap;
   min-height: 38px;
 }
@@ -1998,10 +1998,10 @@ body.dl-body--locked {
     gap: 0.85rem;
   }
   .fbr-header__title {
-    font-size: 1.2rem;
+    font-size: var(--k-fs-xl);
   }
   .fbr-header__subtitle {
-    font-size: 0.8rem;
+    font-size: var(--k-fs-sm);
     line-height: 1.45;
   }
   /* Company select takes the full first row; reload + seed share the
@@ -2054,7 +2054,7 @@ body.dl-body--locked {
 .fbr-card {
   background: var(--k-surface);
   border: 1px solid var(--k-line);
-  border-radius: 12px;
+  border-radius: var(--k-card-radius);
   padding: 0.85rem;
   display: flex;
   flex-direction: column;
@@ -2078,20 +2078,20 @@ body.dl-body--locked {
 .fbr-card__sn {
   font-weight: 700;
   color: var(--k-blue);
-  font-size: 0.95rem;
+  font-size: var(--k-fs-md);
   font-family: monospace;
 }
 
 .fbr-card__bill {
-  font-size: 0.75rem;
+  font-size: var(--k-fs-xs);
   color: var(--k-muted);
 }
 
 .fbr-card__status {
   display: inline-block;
   padding: 0.2rem 0.6rem;
-  border-radius: 999px;
-  font-size: 0.7rem;
+  border-radius: var(--k-r-pill);
+  font-size: var(--k-fs-2xs);
   font-weight: 700;
   flex-shrink: 0;
   white-space: nowrap;
@@ -2114,7 +2114,7 @@ body.dl-body--locked {
 }
 
 .fbr-card__desc {
-  font-size: 0.85rem;
+  font-size: var(--k-fs-base);
   color: var(--k-ink);
   line-height: 1.4;
   word-break: break-word;
@@ -2136,7 +2136,7 @@ body.dl-body--locked {
 }
 
 .fbr-card__field-label {
-  font-size: 0.65rem;
+  font-size: var(--k-fs-2xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--k-muted);
@@ -2144,7 +2144,7 @@ body.dl-body--locked {
 }
 
 .fbr-card__field-value {
-  font-size: 0.85rem;
+  font-size: var(--k-fs-base);
   color: var(--k-ink);
   font-weight: 500;
   word-break: break-word;
@@ -2167,11 +2167,11 @@ body.dl-body--locked {
 }
 .fbr-card__irn-value {
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  font-size: 0.78rem;
+  font-size: var(--k-fs-xs);
   color: var(--k-success);
   background: #f5f8fc;
   border: 1px solid var(--k-line);
-  border-radius: 6px;
+  border-radius: var(--k-r-sm);
   padding: 0.35rem 0.55rem;
   word-break: break-all;
   line-height: 1.35;
@@ -2187,9 +2187,9 @@ body.dl-body--locked {
   padding: 0.5rem 0.6rem;
   background: var(--k-danger-bg);
   border: 1px solid rgba(220, 53, 69, 0.25);
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   color: var(--k-danger-ink);
-  font-size: 0.78rem;
+  font-size: var(--k-fs-xs);
   line-height: 1.4;
   word-break: break-word;
   -webkit-line-clamp: 4;
@@ -2204,11 +2204,11 @@ body.dl-body--locked {
   align-items: center;
   gap: 0.35rem;
   padding: 0.4rem 0.85rem;
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   border: 1px solid rgba(220, 53, 69, 0.3);
   background: var(--k-danger-bg);
   color: var(--k-danger-ink);
-  font-size: 0.78rem;
+  font-size: var(--k-fs-xs);
   font-weight: 600;
   cursor: pointer;
   min-height: 36px;
@@ -2242,7 +2242,7 @@ body.dl-body--locked {
 .tenant-card {
   background: var(--k-surface);
   border: 1px solid var(--k-line);
-  border-radius: 12px;
+  border-radius: var(--k-card-radius);
   padding: 0.85rem;
   display: flex;
   flex-direction: column;
@@ -2265,7 +2265,7 @@ body.dl-body--locked {
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 1rem;
+  font-size: var(--k-fs-md);
   flex-shrink: 0;
 }
 
@@ -2280,12 +2280,12 @@ body.dl-body--locked {
 .tenant-card__name {
   font-weight: 700;
   color: var(--k-ink);
-  font-size: 0.95rem;
+  font-size: var(--k-fs-md);
   word-break: break-word;
 }
 
 .tenant-card__username {
-  font-size: 0.78rem;
+  font-size: var(--k-fs-xs);
   color: var(--k-muted);
   font-family: monospace;
 }
@@ -2307,7 +2307,7 @@ body.dl-body--locked {
 }
 
 .tenant-card__stat-label {
-  font-size: 0.65rem;
+  font-size: var(--k-fs-2xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--k-muted);
@@ -2317,11 +2317,11 @@ body.dl-body--locked {
 .tenant-card__pill {
   display: inline-block;
   padding: 0.2rem 0.6rem;
-  border-radius: 999px;
+  border-radius: var(--k-r-pill);
   background: var(--k-surface-2);
   border: 1px solid var(--k-line);
   color: var(--k-ink);
-  font-size: 0.78rem;
+  font-size: var(--k-fs-xs);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -2355,11 +2355,11 @@ body.dl-body--locked {
   gap: 0.4rem;
   width: 100%;
   padding: 0.55rem 0.85rem;
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   border: none;
-  background: var(--k-blue);
+  background: var(--k-accent-solid, var(--k-blue));
   color: #fff;
-  font-size: 0.88rem;
+  font-size: var(--k-fs-base);
   font-weight: 600;
   cursor: pointer;
   min-height: 40px;
@@ -2397,11 +2397,11 @@ body.dl-body--locked {
   align-items: center;
   gap: 0.2rem;
   padding: 0.45rem 0.85rem;
-  border-radius: 8px;
+  border-radius: var(--k-radius);
   border: 1px solid var(--k-line-strong);
   background: var(--k-surface);
   color: var(--k-blue);
-  font-size: 0.85rem;
+  font-size: var(--k-fs-base);
   font-weight: 600;
   cursor: pointer;
   min-height: 38px;
@@ -2411,7 +2411,7 @@ body.dl-body--locked {
 }
 
 .irh-page-info {
-  font-size: 0.85rem;
+  font-size: var(--k-fs-base);
   color: var(--k-muted);
   font-weight: 500;
   text-align: center;

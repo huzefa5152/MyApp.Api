@@ -223,8 +223,8 @@ body.admin-ui {
     color var(--dl-fast);
 }
 .card-actions-more:hover {
-  border-color: #b8c4d4 !important;
-  color: #1a2332 !important;
+  border-color: var(--k-hover-line, #b8c4d4) !important;
+  color: var(--k-ink) !important;
 }
 /* Sized to sit among the small action chips with a mouse; a full 44px target
    on a touch screen. */
