@@ -29,6 +29,43 @@ Checked on 2026-11-08 at 375px and 1280px in Classic and Workspace: 54 routes wi
 sideways page scroll, and 44 to 48 dialogs per combination opened from New / Add / Record / View /
 Edit buttons and row menus (destructive actions such as Delete or Submit are never opened).
 
+Scales (2026-11-09): every theme shares one type scale and one radius scale,
+defined once at the top of `ui/kit.css`.
+
+- Type: `--k-fs-2xs` 11px, `xs` 12, `sm` 13, `base` 14, `md` 16, `lg` 18,
+  `xl` 20, `2xl` 24, `3xl` 32. Kit role tokens (`--k-font`, `--k-title`,
+  `--k-th-font`, `--k-stat-value` …) point at steps; Workspace picks one step
+  smaller for body text, it never uses a value of its own. Screens use the steps.
+  Rendered result on 15 representative screens: 7 sizes in every theme (was 34).
+- Radius: `--k-r-xs` 4, `--k-r-sm` 6, `--k-radius` (controls, per theme),
+  `--k-card-radius` (cards, per theme), `--k-r-lg` 12, `--k-r-xl` 16,
+  `--k-r-pill` 999. 5-6 rendered values per theme (was 10-13).
+- Charts: `--k-chart-1..8`, `--k-chart-other`, `-muted`, `-track`, `-good`,
+  `-warn`, `-aging-2..4`. Series keep their order in every theme so a legend row
+  and its segment always match; Aurora and Midnight override the values. SVG
+  `fill`/`stroke` attributes accept `var()`.
+- Sign-in page: its own `--lg-*` tokens; Aurora and Midnight override them, so
+  the login follows the device's last theme.
+
+Design audit (2026-11-09): all four themes were measured on 14 real screens for
+text contrast (WCAG 2.2 AA), focus visibility, target size and consistency, then
+fixed. Text below 4.5:1 went from 5-7% of all text to about 1% in every theme;
+what remains are a few gradient fills the measurement cannot judge reliably.
+Rules that came out of it:
+
+- `--k-faint` is still body text (meta, captions, placeholders), so it must reach
+  4.5:1 on `--k-surface-2`. Do not lighten it for subtlety.
+- A token that is used as TEXT on a dark theme is too light to carry white text,
+  so solid fills that hold white text read `--k-accent-solid` / `--u2-accent-solid`
+  / `--k-teal-solid` with the text colour as the fallback.
+- `layouts/AdminDensity.css` sizes controls from `--admin-control-height`, which
+  only the Classic layout defines; every use needs `var(--k-h)` as its fallback,
+  or inputs in the other themes collapse to their text height.
+- Status chips on bills and invoices read `--k-chip-*`; a theme with dark surfaces
+  sets them, light themes keep the original values through the fallback.
+- Aurora keeps gradients to the page-header icon tiles; Midnight uses solid
+  primary fills. Gradients on working surfaces read as decoration, not hierarchy.
+
 Trader integration (2026-10-09): includes the current Trader security and business workflows. Admin density overrides apply to Classic; Workspace keeps its theme tokens. Dialog focus handling and popup accessibility apply to both layouts. This integration remains local until explicitly pushed.
 
 ## What a user sees
