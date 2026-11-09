@@ -25,6 +25,20 @@ export const THEMES = [
     layout: "workspace",
     swatch: ["#0a1628", "#1565c0", "#f0f4f8"],
   },
+  {
+    id: "aurora",
+    label: "Aurora",
+    description: "Violet and magenta, rounder and softer, on the compact layout.",
+    layout: "workspace",
+    swatch: ["#2a1052", "#c026d3", "#f6f3fb"],
+  },
+  {
+    id: "midnight",
+    label: "Midnight",
+    description: "Dark surfaces and light text, easy on the eyes at night.",
+    layout: "workspace",
+    swatch: ["#0b0e15", "#3b82f6", "#161a24"],
+  },
 ];
 
 export const DEFAULT_THEME = "classic";

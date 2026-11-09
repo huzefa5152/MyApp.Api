@@ -8,6 +8,8 @@ import { PermissionsProvider } from "./contexts/PermissionsContext";
 import { CompanyProvider } from "./contexts/CompanyContext";
 import { UiThemeProvider } from "./ui2/UiThemeContext";
 import "./ui/kit.css";
+import "./ui2/theme-aurora.css";
+import "./ui2/theme-midnight.css";
 import ErrorBoundary from "./Components/ErrorBoundary";
 import NotificationProvider from "./Components/NotificationProvider";
 import ConfirmProvider from "./Components/ConfirmDialog";
