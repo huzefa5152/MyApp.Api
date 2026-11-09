@@ -295,7 +295,7 @@ namespace MyApp.Api.Helpers
 
         /// <summary>
         /// Lines left to buy, grouped into cards by <c>query.GroupBy</c>:
-        /// "latest" (each trail under its newest document), "order" or "bill".
+        /// "latest" (each trail under its newest document), "order", "challan" or "bill".
         /// Only document kinds in <paramref name="viewable"/> are shown.
         /// </summary>
         public List<AwaitingCardDto> AwaitingCards(AwaitingLinesQuery q, HashSet<int>? allowedDivisionIds, ISet<DemandKind> viewable)
@@ -317,6 +317,7 @@ namespace MyApp.Api.Helpers
                 {
                     "order" => t.Order,
                     "bill" => t.Bills.OrderByDescending(b => b.Id).FirstOrDefault(),
+                    "challan" => t.Challans.OrderByDescending(c => c.Id).FirstOrDefault(),
                     _ => t.Latest,
                 };
                 var none = link == null;
@@ -333,11 +334,11 @@ namespace MyApp.Api.Helpers
                     && !t.Members.Any(m => viewable.Contains(m.Kind) && m.Description.ToLowerInvariant().Contains(term) || (m.Doc.Po ?? "").ToLowerInvariant().Contains(term)))
                     continue;
 
-                var cardKey = none ? (group == "order" ? "none-order" : "none-bill") : $"{Tag(link.Doc.Kind)}:{link.Doc.Id}";
+                var cardKey = none ? (group == "order" ? "none-order" : group == "challan" ? "none-challan" : "none-bill") : $"{Tag(link.Doc.Kind)}:{link.Doc.Id}";
                 if (!cards.TryGetValue(cardKey, out var card))
                 {
                     card = none
-                        ? new AwaitingCardDto { Kind = cardKey, Title = group == "order" ? "No sales order" : "Not billed yet" }
+                        ? new AwaitingCardDto { Kind = cardKey, Title = group == "order" ? "No sales order" : group == "challan" ? "Not delivered yet" : "Not billed yet" }
                         : new AwaitingCardDto
                         {
                             Kind = Tag(link.Doc.Kind),

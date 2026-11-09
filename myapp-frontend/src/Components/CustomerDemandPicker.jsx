@@ -10,6 +10,7 @@ const fmt = (n) => Number(n || 0).toLocaleString(undefined, { maximumFractionDig
 const GROUPS = [
   { value: "latest", label: "Latest step" },
   { value: "order", label: "Sales order" },
+  { value: "challan", label: "Delivery challan" },
   { value: "bill", label: "Sale bill" },
 ];
 
@@ -40,9 +41,7 @@ export default function CustomerDemandPicker({
   onAdd,
   onClose,
 }) {
-  const [groupBy, setGroupBy] = useState(
-    forDoc?.kind && forDoc.kind !== "challan" ? forDoc.kind : "latest",
-  );
+  const [groupBy, setGroupBy] = useState(forDoc?.kind || "latest");
   const [allSuppliers, setAllSuppliers] = useState(false);
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");

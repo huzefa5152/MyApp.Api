@@ -151,7 +151,7 @@ check("legacy_copy_is_proportional", res == ["3.0000", "9.0000"], res)
 call("DELETE", f"/api/purchasebills/{legacy['id']}")
 
 # ── 2. Awaiting lines ──
-for g in ("latest", "order", "bill"):
+for g in ("latest", "order", "challan", "bill"):
     found = [l["trailKey"] for c in awaiting(groupBy=g) for l in c["lines"]]
     check(f"trail_shown_once_per_grouping ({g})", found.count(BOLT) == 1 and len(found) == len(set(found)))
 t = trails()
@@ -165,6 +165,11 @@ by_order = awaiting(groupBy="order")
 none = next(c for c in by_order if c["kind"] == "none-order")
 check("group_by_order_has_no_order_card", none["title"] == "No sales order"
       and {l["trailKey"] for l in none["lines"]} >= {WASHER, PIN})
+by_challan = awaiting(groupBy="challan")
+bolt_card = next(c for c in by_challan if any(l["trailKey"] == BOLT for l in c["lines"]))
+none_ch = next(c for c in by_challan if c["kind"] == "none-challan")
+check("group_by_challan", bolt_card["kind"] == "challan" and bolt_card["documentId"] == dc1["id"]
+      and none_ch["title"] == "Not delivered yet" and {NUT, PIN} <= {l["trailKey"] for l in none_ch["lines"]})
 check("for_filter", set(trails(forKind="order", forId=so1["id"])) == {BOLT, NUT})
 nut_line = so1l["Nut"]
 sql(f"UPDATE InvoiceItems SET SalesOrderItemId = {nut_line} WHERE Id = {b1l['Bolt']}")

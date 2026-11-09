@@ -117,7 +117,7 @@ namespace MyApp.Api.Controllers
         /// <summary>
         /// Customer-document lines still to buy, for the purchase picker: sales
         /// order, challan and sale bill lines counted as one demand ("trail"), in
-        /// cards by <c>groupBy</c> (latest | order | bill). With a supplier, only
+        /// cards by <c>groupBy</c> (latest | order | challan | bill). With a supplier, only
         /// trails planned for that supplier or for nobody, unless
         /// <c>allSuppliers</c>. <c>excludeBillId</c> is the bill being edited:
         /// its own purchases count as still open. Only document kinds the caller
