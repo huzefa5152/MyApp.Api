@@ -997,8 +997,8 @@ namespace MyApp.Api.Services.Implementations
 
         /// <summary>
         /// Records which customer-document lines each purchase row buys, after
-        /// checking every line is this company's and live, a row's sources add up
-        /// to its quantity, no trail sits on two rows, and no trail is bought past
+        /// checking every line is this company's and live, a row's sources do not
+        /// exceed its quantity (the rest of the row is a stock purchase), no trail sits on two rows, and no trail is bought past
         /// what it asks for. Trail roots are locked first, so two bills saved at
         /// once cannot both take the same remainder. Challan lines on a bought
         /// trail with no planned supplier or cost take this purchase's.
@@ -1025,8 +1025,9 @@ namespace MyApp.Api.Services.Implementations
                         throw new InvalidOperationException("A quantity taken from a customer document must be greater than zero.");
                     claims.Add((item, r!, src.Quantity, trail));
                 }
-                if (Math.Abs(sources!.Sum(x => x.Quantity) - item.Quantity) > 0.0001m)
-                    throw new InvalidOperationException("The quantities taken from customer documents must add up to the row's quantity.");
+                // A row may buy more than its customer lines need; the rest is stock.
+                if (sources!.Sum(x => x.Quantity) > item.Quantity + 0.0001m)
+                    throw new InvalidOperationException("The quantities taken from customer documents are more than the row's quantity.");
             }
 
             var twice = claims.GroupBy(c => c.Trail).FirstOrDefault(g => g.Select(c => c.Item).Distinct().Count() > 1);

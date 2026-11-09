@@ -325,7 +325,9 @@ export default function PurchaseBillForm({
         next[at] = {
           ...next[at],
           quantity,
-          sources: [{ ...next[at].sources[0], quantity }],
+          sources: [
+            { ...next[at].sources[0], quantity: next[at].sources[0].quantity + row.quantity },
+          ],
         };
       }
       return next;
@@ -1168,19 +1170,17 @@ export default function PurchaseBillForm({
   );
 }
 
-// A row's sources must add up to its quantity. When the operator changes the
-// quantity of a picked row, the change lands on its last source (a lower
-// quantity empties the last sources first). The server checks what is left.
+// A row's sources never exceed its quantity. Lowering a picked row's quantity
+// empties its last sources first; raising it buys the extra as stock (pick the
+// line again to buy more for the customer).
 function fitSources(row) {
-  const sources = row.sources || [];
-  if (sources.length === 0) return [];
   let remaining = parseFloat(row.quantity) || 0;
   const out = [];
-  sources.forEach((src, n) => {
-    const quantity = n === sources.length - 1 ? remaining : Math.min(src.quantity, remaining);
+  for (const src of row.sources || []) {
+    const quantity = Math.min(src.quantity, remaining);
     remaining -= quantity;
     if (quantity > 0) out.push({ ...src, quantity });
-  });
+  }
   return out;
 }
 
