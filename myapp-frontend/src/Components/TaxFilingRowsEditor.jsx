@@ -400,8 +400,8 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
               </div>
               {data.requiresReview && (
                 <div className="tf-warning">
-                  The original bill changed after its last review. Check all current source lines
-                  and amounts before saving. Rebuild rows if lines were added or removed.
+                  {data.reviewReason ??
+                    "The original bill changed after its last review. Check all current source lines and amounts before saving. Rebuild rows if lines were added or removed."}
                 </div>
               )}
               {!editable && !readOnly && (

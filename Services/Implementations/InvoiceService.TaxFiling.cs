@@ -63,6 +63,7 @@ public partial class InvoiceService
         Version = TaxFilingProjection.EditVersion(bill),
         HasSavedRows = bill.TaxFilingRowsJson != null,
         RequiresReview = TaxFilingProjection.NeedsReReview(bill),
+        ReviewReason = TaxFilingProjection.ReviewReason(bill),
         Rows = TaxFilingProjection.Plan(bill)?.Rows ?? TaxFilingProjection.InitialRows(bill, perLine: OriginalLinesOnly(bill)),
         InitialRows = TaxFilingProjection.InitialRows(bill, commercial: true, perLine: OriginalLinesOnly(bill))
     };

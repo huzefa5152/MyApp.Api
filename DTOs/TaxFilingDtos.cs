@@ -40,6 +40,7 @@ public class TaxFilingEditorDto
     public string Version { get; set; } = "";
     public bool HasSavedRows { get; set; }
     public bool RequiresReview { get; set; }
+    public string? ReviewReason { get; set; }
     public List<TaxFilingRowDto> Rows { get; set; } = new();
     public List<TaxFilingRowDto> InitialRows { get; set; } = new();
 }

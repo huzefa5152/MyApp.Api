@@ -66,6 +66,43 @@ public static class TaxFilingProjection
         });
     }
 
+    // The sentence the consultant reads on the filing editor when the bill needs a fresh review.
+    public static string? ReviewReason(Invoice bill)
+    {
+        if (!NeedsReReview(bill)) return null;
+        if (IsStale(bill)) return "The bill changed after you saved these filing rows, so they no longer match it. The tax invoice prints the current bill lines until you review and save again.";
+        if (bill.Items.Any(i => i.Adjustment is { } a && (a.AdjustedQuantity.HasValue || a.AdjustedUnitPrice.HasValue)))
+            return "The bill changed since your last review. Check the adjustment against the current lines and save before FBR submit.";
+        return "The bill changed after your review (for example its delivery challan). Your item and HS code choices are kept; quantities and amounts were reset to the bill's current lines. Check them and save before FBR submit.";
+    }
+
+    // After a challan change: every saved row keeps its classification and takes the quantity and value
+    // of the bill lines it still covers. Removed lines leave their row. New lines follow the invoice's
+    // own print setting: one row per item type when it groups, one row per line when it does not.
+    public static void ResetPlanToBill(Invoice bill)
+    {
+        var plan = Plan(bill);
+        if (plan == null) return;
+        var lines = bill.Items.ToDictionary(i => i.Id);
+        var rows = new List<TaxFilingRowDto>();
+        foreach (var row in plan.Rows)
+        {
+            var sources = row.SourceLineIds.Where(lines.ContainsKey).Select(id => lines[id]).ToList();
+            if (sources.Count == 0) continue;
+            row.SourceLineIds = sources.Select(i => i.Id).ToList();
+            row.Quantity = sources.Sum(i => i.Quantity);
+            row.ValueExclTax = sources.Sum(i => i.LineTotal);
+            row.RetailPrice = sources.Sum(i => i.FixedNotifiedValueOrRetailPrice ?? 0m);
+            rows.Add(row);
+        }
+        var covered = rows.SelectMany(r => r.SourceLineIds).ToHashSet();
+        var perLine = !bill.GroupTaxInvoiceByItemType || bill.Company?.TaxInvoiceUseOriginalBillLines == true;
+        rows.AddRange(InitialRows(bill, perLine: perLine, except: covered));
+        plan.Rows = rows;
+        plan.SourceVersion = SourceVersion(bill);
+        bill.TaxFilingRowsJson = JsonSerializer.Serialize(plan);
+    }
+
     public static void RecordCommercialChange(Invoice bill, string previousSource, bool hadConsultantWork)
     {
         if (!hadConsultantWork) bill.FbrReviewRequiredAt = null;
@@ -107,7 +144,8 @@ public static class TaxFilingProjection
     /// unit and no quantity, for the consultant to file in one FBR unit. <paramref name="splitUnits"/> keeps the
     /// old split for converting a legacy overlay, which is saved as is and must keep a real quantity per row.
     /// </summary>
-    public static List<TaxFilingRowDto> InitialRows(Invoice bill, bool commercial = false, bool perLine = false, bool splitUnits = false) => bill.Items.Select(i => commercial ? i : LegacyLine(i))
+    public static List<TaxFilingRowDto> InitialRows(Invoice bill, bool commercial = false, bool perLine = false, bool splitUnits = false, ISet<int>? except = null) => bill.Items
+        .Where(i => except == null || !except.Contains(i.Id)).Select(i => commercial ? i : LegacyLine(i))
         .GroupBy(i => perLine ? (object)i.Id : new { Classification = TaxInvoiceGrouping.Key(i), Unit = splitUnits ? i.UOM : null }).Select(g =>
         {
             var mixedUnits = g.Select(i => i.UOM?.Trim().ToUpperInvariant()).Distinct().Count() > 1;

@@ -445,6 +445,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
 | Company stamps: replace keeps the merge field and templates, every stamp action over MCP, refusals, image never echoed or logged, cross-company ids at prepare and commit | `python scripts/test_stamp_operations.py --base <url>` | `69/69 stamp operation checks passed` |
 | Shared starter templates: seed-admin-only writes over HTTP and MCP, every rule refuses and saves nothing, hide/show/delete, apply like a code starter, audit with no company | `python scripts/test_shared_starters.py --base <url>` | `57/57 shared starter checks passed` |
+| A challan change keeps the consultant's item and HS code, resets quantities to the bill, never blocks the tax invoice print, and keeps the grouped / individual / original-lines layout | `python scripts/test_challan_resets_filing.py --base <url>` | `55/55 challan reset checks passed` |
 | No production identifiers in tracked files | `python scripts/verify_no_production_identifiers.py` | `no production identifiers in tracked files` |
 
 **PO parser / import changes — MANDATORY.** Any change to
