@@ -182,7 +182,9 @@ def main():
         check(changed['requiresReview'] and changed['bill']['fbrAdjustmentStale'], 'same-total commercial edit requires a fresh review')
         preview = good('GET', f'/api/fbr/{iid}/preview-payload', admin)
         check(not preview.get('success'), 'stale filing cannot be previewed/submitted')
-        check(req('GET', f'/api/invoices/{iid}/print/tax-invoice', admin)[0] == 400, 'stale tax invoice cannot be printed with mismatched header totals')
+        status, stale_print = req('GET', f'/api/invoices/{iid}/print/tax-invoice', admin)
+        check(status == 200 and abs(sum(i['valueExclTax'] for i in stale_print['items']) - stale_print['subtotal']) < .01,
+              'stale tax invoice prints the current bill lines, matching its header totals')
         reject(three, 'bill edit invalidates the consultant edit version', current['version'])
         good('PUT', path, admin, {'version': changed['version'], 'rows': separate})
         check(not good('GET', path, admin)['requiresReview'], 'reviewing current bill clears the stale state')

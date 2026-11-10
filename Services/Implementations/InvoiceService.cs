@@ -4016,8 +4016,6 @@ namespace MyApp.Api.Services.Implementations
         {
             var inv = await _invoiceRepo.GetByIdAsync(invoiceId);
             if (inv == null) return null;
-            if (inv.TaxFilingRowsJson != null && TaxFilingProjection.IsStale(inv))
-                throw new InvalidOperationException("Review the filing rows against the changed bill before printing or exporting its tax invoice.");
 
             // A STANDALONE bill has no challan to carry a PO, so it keeps its
             // own on Invoice.PoNumber — set on the bill form. Taking the PO
@@ -4239,7 +4237,9 @@ namespace MyApp.Api.Services.Implementations
                             }, new[] { ii }, inv.GSTRate);
                         }).ToList()
             };
-            if (inv.TaxFilingRowsJson != null)
+            // Rows saved against an older bill (a direct bill edit after the consultant's save) are not
+            // printed: the invoice shows the current lines until the consultant reviews again.
+            if (inv.TaxFilingRowsJson != null && !TaxFilingProjection.IsStale(inv))
             {
                 var filing = TaxFilingProjection.Plan(inv)!;
                 var lines = TaxFilingProjection.Lines(inv);

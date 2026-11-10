@@ -282,7 +282,7 @@ public partial class InvoiceService
             }
         }
         RecalculateBillTotals(invoice);
-        TaxFilingProjection.RecordCommercialChange(invoice, previousFilingSource, hadConsultantWork);
+        await ResetConsultantWorkAsync(invoice, previousFilingSource, hadConsultantWork);
         invoice.FbrStatus = null;
         invoice.FbrErrorMessage = null;
         await _context.SaveChangesAsync();
@@ -328,13 +328,44 @@ public partial class InvoiceService
             throw new InvalidOperationException("The linked bill is in a locked accounting period.");
     }
 
+    // A challan change to a bill the consultant already worked on keeps the classification (item,
+    // HS code, unit, sale type) and resets the numbers: adjusted quantity and price go back to the
+    // bill's own lines, on the overlay and in the saved filing rows. FbrReviewedAt stays (or is set)
+    // as the record that consultant work existed, so with the review flag the bill reads "needs
+    // review". Printing is never blocked; FBR submit waits for the consultant to check and save.
+    private async Task ResetConsultantWorkAsync(Invoice bill, string previousFilingSource, bool hadConsultantWork)
+    {
+        TaxFilingProjection.RecordCommercialChange(bill, previousFilingSource, hadConsultantWork);
+        if (!hadConsultantWork || previousFilingSource == TaxFilingProjection.SourceVersion(bill)) return;
+        bill.FbrReviewedAt ??= DateTime.UtcNow;
+        foreach (var line in bill.Items)
+        {
+            var overlay = line.Adjustment;
+            if (overlay == null) continue;
+            if (overlay.AdjustedItemTypeId == null && string.IsNullOrWhiteSpace(overlay.AdjustedHSCode))
+            {
+                _context.InvoiceItemAdjustments.Remove(overlay);
+                line.Adjustment = null;
+                continue;
+            }
+            overlay.AdjustedQuantity = null;
+            overlay.AdjustedUnitPrice = null;
+            overlay.AdjustedLineTotal = line.LineTotal;
+            overlay.UpdatedAt = DateTime.UtcNow;
+        }
+        if (bill.TaxFilingRowsJson == null) return;
+        // New bill lines get their ids on save, and the rows refer to lines by id.
+        await _context.SaveChangesAsync();
+        TaxFilingProjection.ResetPlanToBill(bill);
+    }
+
     public async Task ReconcileChallanBillAsync(int id, string previousFilingSource, bool hadConsultantWork)
     {
         var bill = await _invoiceRepo.GetByIdAsync(id) ?? throw new InvalidOperationException("Linked bill not found.");
         if (bill.Items.Count == 0)
             throw new InvalidOperationException("This would leave an empty bill. Replace its challan, or cancel the bill explicitly first.");
         RecalculateBillTotals(bill);
-        TaxFilingProjection.RecordCommercialChange(bill, previousFilingSource, hadConsultantWork);
+        await ResetConsultantWorkAsync(bill, previousFilingSource, hadConsultantWork);
         bill.FbrStatus = null; bill.FbrErrorMessage = null;
         await _context.SaveChangesAsync();
         await _stock.SyncInvoiceStockMovementsAsync(bill);
