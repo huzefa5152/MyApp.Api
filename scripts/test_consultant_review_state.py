@@ -76,7 +76,8 @@ try:
  available=next(x for x in opts['available'] if x['id']==third['id'])
  changed=call('PUT',path+'/challans',{'version':opts['version'],'challanIds':[first['id'],second['id'],third['id']],'addedChallanVersions':{str(third['id']):available['version']},'unitPrices':{str(x['id']):100 for x in available['items']}})
  check(changed['fbrReviewRequired'] and not changed['fbrAdjustmentRequired'],'adding a challan after consultant work requires re-review')
- check(call('GET',path+'/tax-filing')['rows']==reviewed_rows,'challan addition preserves prior saved filing rows')
+ state=call('GET',path+'/tax-filing')
+ check(state['hasSavedRows'] and state['rows'][0]['hsCode']==reviewed_rows[0]['hsCode'] and 'HS code choices are kept' in (state.get('reviewReason') or ''),'challan addition keeps the classification, resets the numbers and says why')
  print(f'{count} passed, 0 failed',flush=True)
 finally:
  call('DELETE',f'/api/companies/{cid}')

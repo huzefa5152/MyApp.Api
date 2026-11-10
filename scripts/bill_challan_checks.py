@@ -92,12 +92,18 @@ def run(http, check, base, token, company_id, client_id, item_type_id=None, stoc
     check(suite, "addition requires consultant review", saved["fbrReviewRequired"] and not saved["fbrReady"])
     retained = next(r for r in saved["items"] if r["id"] == line["id"])
     check(suite, "retained line and rate preserved", retained["unitPrice"] == 100 and retained["quantity"] == 10)
-    check(suite, "retained overlay preserved", (retained.get("adjustment") or {}).get("adjustedQuantity") == 5)
+    check(suite, "overlay reset to physical on addition", retained.get("adjustment") is None)
+    st, editor = call("GET", f"/api/invoices/{iid}/tax-filing")
+    check(suite, "consultant is told the challan change reset the adjustment", st == 200 and editor["requiresReview"]
+          and "reset" in (editor.get("reviewReason") or ""), str(editor.get("reviewReason")) if st == 200 else str(st))
+    st, printed = call("GET", f"/api/invoices/{iid}/print/tax-invoice")
+    check(suite, "tax invoice prints the current bill after the reset", st == 200
+          and abs(sum(r["valueExclTax"] for r in printed["items"]) - saved["subtotal"]) < .01, str(st))
     check(suite, "new rate and taxes recalculated", saved["subtotal"] == 8880 and saved["gstAmount"] == 1598.4
           and saved["furtherTaxAmount"] == 177.6 and saved["grandTotal"] == 10656
           and saved["withholdingTaxAmount"] == 586.08 and saved["freightCharges"] == 50, str(saved))
     if stock:
-        check(suite, "addition reflows stock with retained overlay", abs(stock() - 93) < .001, str(stock()))
+        check(suite, "addition reflows stock to physical after overlay reset", abs(stock() - 88) < .001, str(stock()))
     st, value = call("PUT", path, good)
     expect("replayed selection rejected", st, value, 400)
     st, chart = call("GET", f"/api/accounts/company/{company_id}/flat")
@@ -158,6 +164,16 @@ def run(http, check, base, token, company_id, client_id, item_type_id=None, stoc
     check(suite, "no-op keeps item identity", st == 200 and noop["items"][0]["id"] == replaced["items"][0]["id"])
     if stock:
         check(suite, "replacement records correct net stock", abs(stock() - 99) < .001, str(stock()))
+    # After the reset, the consultant adjusts again: the new overlay must survive later saves that change nothing.
+    line2 = replaced["items"][0]
+    st, readjusted = call("PATCH", f"/api/invoices/{iid}/itemtypes-and-qty", {
+        "writeMode": "adjustment", "items": [{"id": line2["id"], "quantity": 2, "unitPrice": 1970}]})
+    expect("re-adjust after reset saves", st, readjusted)
+    st, kept = call("GET", f"/api/invoices/{iid}")
+    check(suite, "re-adjusted overlay persists on bill", st == 200 and (kept["items"][0].get("adjustment") or {}).get("adjustedQuantity") == 2)
+    snap = options()
+    st, again = call("PUT", path, payload(snap, [c["id"]]))
+    check(suite, "no-op challan save keeps re-adjusted overlay", st == 200 and (again["items"][0].get("adjustment") or {}).get("adjustedQuantity") == 2)
     snap = options()
     concurrent_change = payload(snap, [c["id"], a["id"]])
     with ThreadPoolExecutor(max_workers=2) as workers:
