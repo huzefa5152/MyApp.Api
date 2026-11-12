@@ -145,17 +145,17 @@ namespace MyApp.Api.Services.Implementations
                 ["Goods at Standard Rate (default)"] = "Goods at Standard Rate (default)",
                 ["Goods at standard rate (default)"] = "Goods at Standard Rate (default)",
                 ["goods at standard rate (default)"] = "Goods at Standard Rate (default)",
-                ["3rd Schedule Goods"]               = "3rd Schedule Goods",
-                ["Goods at Reduced Rate"]            = "Goods at Reduced Rate",
-                ["Goods at zero-rate"]               = "Goods at zero-rate",
-                ["Exempt Goods"]                     = "Exempt Goods",
-                ["Exempt goods"]                     = "Exempt Goods",
+                ["3rd Schedule Goods"] = "3rd Schedule Goods",
+                ["Goods at Reduced Rate"] = "Goods at Reduced Rate",
+                ["Goods at zero-rate"] = "Goods at zero-rate",
+                ["Exempt Goods"] = "Exempt Goods",
+                ["Exempt goods"] = "Exempt Goods",
                 // FBR's transaction-type list has no space after the slash, and
                 // rejects the spaced form with [0204]. Both spellings are mapped
                 // so a bill already stored with the old string still files.
-                ["Processing/Conversion of Goods"]    = "Processing/Conversion of Goods",
-                ["Processing/ Conversion of Goods"]   = "Processing/Conversion of Goods",
-                ["Processing / Conversion of Goods"]  = "Processing/Conversion of Goods",
+                ["Processing/Conversion of Goods"] = "Processing/Conversion of Goods",
+                ["Processing/ Conversion of Goods"] = "Processing/Conversion of Goods",
+                ["Processing / Conversion of Goods"] = "Processing/Conversion of Goods",
             };
 
         /// <summary>Exempt goods, however the row spelled it.</summary>
@@ -339,29 +339,29 @@ namespace MyApp.Api.Services.Implementations
             // values in the deprecated columns.
             return new InvoiceItem
             {
-                Id              = ii.Id,
-                InvoiceId       = ii.InvoiceId,
-                DeliveryItemId  = ii.DeliveryItemId,
+                Id = ii.Id,
+                InvoiceId = ii.InvoiceId,
+                DeliveryItemId = ii.DeliveryItemId,
                 // A NORMAL company reads the classification off the bill line:
                 // the overlay is numeric-only there (2026-05-12) and those
                 // columns are null anyway. An OVERLAY company files its second
                 // book, whose whole point is a different, HS-coded item -- take
                 // it when the overlay carries one, fall back otherwise.
-                ItemTypeId      = overlayCompany ? (a.AdjustedItemTypeId   ?? ii.ItemTypeId)   : ii.ItemTypeId,
-                ItemTypeName    = overlayCompany ? (a.AdjustedItemTypeName ?? ii.ItemTypeName) : ii.ItemTypeName,
-                Description     = ii.Description,
-                Quantity        = a.AdjustedQuantity   ?? ii.Quantity,
-                UOM             = overlayCompany ? (a.AdjustedUOM ?? ii.UOM) : ii.UOM,
-                UnitPrice       = a.AdjustedUnitPrice  ?? ii.UnitPrice,
-                LineTotal       = a.AdjustedLineTotal  ?? ii.LineTotal,
-                HSCode          = overlayCompany ? (a.AdjustedHSCode   ?? ii.HSCode)   : ii.HSCode,
-                FbrUOMId        = overlayCompany ? (a.AdjustedFbrUOMId ?? ii.FbrUOMId) : ii.FbrUOMId,
-                SaleType        = overlayCompany ? (a.AdjustedSaleType ?? ii.SaleType) : ii.SaleType,
-                RateId          = ii.RateId,
+                ItemTypeId = overlayCompany ? (a.AdjustedItemTypeId ?? ii.ItemTypeId) : ii.ItemTypeId,
+                ItemTypeName = overlayCompany ? (a.AdjustedItemTypeName ?? ii.ItemTypeName) : ii.ItemTypeName,
+                Description = ii.Description,
+                Quantity = a.AdjustedQuantity ?? ii.Quantity,
+                UOM = overlayCompany ? (a.AdjustedUOM ?? ii.UOM) : ii.UOM,
+                UnitPrice = a.AdjustedUnitPrice ?? ii.UnitPrice,
+                LineTotal = a.AdjustedLineTotal ?? ii.LineTotal,
+                HSCode = overlayCompany ? (a.AdjustedHSCode ?? ii.HSCode) : ii.HSCode,
+                FbrUOMId = overlayCompany ? (a.AdjustedFbrUOMId ?? ii.FbrUOMId) : ii.FbrUOMId,
+                SaleType = overlayCompany ? (a.AdjustedSaleType ?? ii.SaleType) : ii.SaleType,
+                RateId = ii.RateId,
                 FixedNotifiedValueOrRetailPrice = ii.FixedNotifiedValueOrRetailPrice,
-                SroScheduleNo   = ii.SroScheduleNo,
+                SroScheduleNo = ii.SroScheduleNo,
                 SroItemSerialNo = ii.SroItemSerialNo,
-                ItemType        = ii.ItemType,
+                ItemType = ii.ItemType,
             };
         }
 
@@ -589,7 +589,7 @@ namespace MyApp.Api.Services.Implementations
             // so pre-validate and payload build always agree on the sanitised value.
             // The local aliases keep the call sites below readable.
             static string StripDigits(string? v) => StripAllDigits(v);
-            static string StripNtn(string? v)    => SanitizeNtn(v);
+            static string StripNtn(string? v) => SanitizeNtn(v);
 
             // ─ Seller ─
             // ONE rule for sellerNTNCNIC, shared with the payload builder below:
@@ -1023,9 +1023,9 @@ namespace MyApp.Api.Services.Implementations
                         if (!line.ItemTypeId.HasValue) continue;
                         if (!liveTypes.TryGetValue(line.ItemTypeId.Value, out var t)) continue;
 
-                        if (line.HSCode       != t.HSCode)        { line.HSCode = t.HSCode;        anyChanged = true; }
-                        if ((line.UOM ?? "")  != (t.UOM ?? ""))   { line.UOM = t.UOM ?? "";        anyChanged = true; }
-                        if (line.FbrUOMId     != t.FbrUOMId)      { line.FbrUOMId = t.FbrUOMId;    anyChanged = true; }
+                        if (line.HSCode != t.HSCode) { line.HSCode = t.HSCode; anyChanged = true; }
+                        if ((line.UOM ?? "") != (t.UOM ?? "")) { line.UOM = t.UOM ?? ""; anyChanged = true; }
+                        if (line.FbrUOMId != t.FbrUOMId) { line.FbrUOMId = t.FbrUOMId; anyChanged = true; }
                         // An item type with NO sale type used to copy its null onto the
                         // line here, and pre-flight then refused the bill for the very
                         // field this sync had just erased. The catalog wins when it has
@@ -1045,8 +1045,8 @@ namespace MyApp.Api.Services.Implementations
                             : !string.IsNullOrWhiteSpace(t.SaleType)
                                 ? t.SaleType
                                 : FbrSaleTypeDefaults.Resolve(line.SaleType, company);
-                        if (line.SaleType     != syncedSaleType) { line.SaleType = syncedSaleType; anyChanged = true; }
-                        if (line.ItemTypeName != t.Name)          { line.ItemTypeName = t.Name;    anyChanged = true; }
+                        if (line.SaleType != syncedSaleType) { line.SaleType = syncedSaleType; anyChanged = true; }
+                        if (line.ItemTypeName != t.Name) { line.ItemTypeName = t.Name; anyChanged = true; }
                     }
 
                     if (anyChanged)
