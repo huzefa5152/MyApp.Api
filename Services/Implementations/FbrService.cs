@@ -1236,6 +1236,39 @@ namespace MyApp.Api.Services.Implementations
                     .ToList()
                 : effectiveItems.ToList();
 
+            // Merge items FBR cannot tell apart (2026-11-12). ProductDescription
+            // is filed blank, so two item types sharing an HS code, unit, sale
+            // type and SRO reach PRAL as the same item with different
+            // quantities -- refused "DUPLICATE INVOICE EXISTS" on the second
+            // (importer bill 115: two OSRAM track lights, HS 9405.1190). Summing
+            // them files the same goods and value as one item. This is the
+            // filed payload only (validate, submit and the preview): the bill,
+            // its lines with their own HS codes, and its prints are untouched.
+            fbrItems = fbrItems
+                .GroupBy(ii => (
+                    Hs: (ii.HSCode ?? "").Trim(),
+                    Uom: (ii.UOM ?? "").Trim().ToLowerInvariant(),
+                    ii.FbrUOMId,
+                    Sale: (ii.SaleType ?? "").Trim().ToLowerInvariant(),
+                    Sro: (ii.SroScheduleNo ?? "").Trim(),
+                    Serial: (ii.SroItemSerialNo ?? "").Trim()))
+                .Select(g => g.Count() == 1 ? g.First() : new InvoiceItem
+                {
+                    ItemTypeId = g.First().ItemTypeId,
+                    ItemTypeName = g.First().ItemTypeName,
+                    UOM = g.First().UOM,
+                    FbrUOMId = g.First().FbrUOMId,
+                    HSCode = g.First().HSCode,
+                    SaleType = g.First().SaleType,
+                    SroScheduleNo = g.First().SroScheduleNo,
+                    SroItemSerialNo = g.First().SroItemSerialNo,
+                    Description = g.First().Description,
+                    Quantity = g.Sum(ii => ii.Quantity),
+                    LineTotal = g.Sum(ii => ii.LineTotal),
+                    FixedNotifiedValueOrRetailPrice = g.Sum(ii => ii.FixedNotifiedValueOrRetailPrice ?? 0m),
+                })
+                .ToList();
+
             // Resolve UOM descriptions + compute FBR-compliant tax numbers per
             // (grouped) item. Helpers/FbrLineTax encodes the three rules that
             // differ from plain "line × rate":
