@@ -10,17 +10,18 @@
  */
 export const DEFAULT_SALE_TYPE = "Goods at Standard Rate (default)";
 
-/** The sale type a catalog row files as: its own, else the company default. */
-export function effectiveSaleType(itemType, company) {
-  const own = (itemType?.saleType || "").trim();
-  if (own) return own;
-  const companyDefault = (company?.fbrDefaultSaleType || "").trim();
-  return companyDefault || DEFAULT_SALE_TYPE;
-}
-
-/** True when a catalog row belongs in a picker locked to `scenarioSaleType`. */
-export function matchesScenarioSaleType(itemType, scenarioSaleType, company) {
+/**
+ * True when a catalog row belongs in a picker locked to `scenarioSaleType`.
+ *
+ * A row with no sale type of its own fits EVERY scenario: when the bill names
+ * a scenario, filing gives each line the scenario's sale type
+ * (FbrService, 2026-09-24), so the catalog's blank never reaches FBR. Treating
+ * it as standard rate left SN005 / SN006 / SN007 / SN024 pickers empty.
+ * Only a row whose own sale type is another scenario's is kept out.
+ */
+export function matchesScenarioSaleType(itemType, scenarioSaleType) {
   const target = (scenarioSaleType || "").trim().toLowerCase();
-  if (!target) return true;
-  return effectiveSaleType(itemType, company).toLowerCase() === target;
+  const own = (itemType?.saleType || "").trim().toLowerCase();
+  if (!target || !own) return true;
+  return own === target;
 }
