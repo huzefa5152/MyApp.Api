@@ -10,6 +10,7 @@ import {
   MdContentCopy,
 } from "react-icons/md";
 import httpClient from "../api/httpClient";
+import SearchableClientSelect from "./SearchableClientSelect";
 import { formStyles, modalSizes } from "../theme";
 
 /**
@@ -33,7 +34,21 @@ import { formStyles, modalSizes } from "../theme";
  *   • Items table inside each expanded row uses `responsive-table-wrap`
  *     so it scrolls horizontally on phones.
  */
-export default function BulkFbrPreviewDialog({ invoices, onClose }) {
+export default function BulkFbrPreviewDialog({ invoices: allInvoices, onClose }) {
+  // Narrow the preview to one customer. The picker lists only the customers
+  // that have a bill here, so every choice shows something.
+  const [clientId, setClientId] = useState("");
+  const clients = useMemo(() => {
+    const byId = new Map();
+    allInvoices.forEach((i) => byId.set(i.clientId, { id: i.clientId, name: i.clientName }));
+    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [allInvoices]);
+  const invoices = useMemo(
+    () =>
+      clientId ? allInvoices.filter((i) => String(i.clientId) === String(clientId)) : allInvoices,
+    [allInvoices, clientId],
+  );
+
   // Per-row UI state: which rows are expanded + their cached payloads.
   const [expandedById, setExpandedById] = useState({}); // { id: boolean }
   const [payloadById, setPayloadById] = useState({}); // { id: { loading, error, data, itemCount, originalLineCount } }
@@ -156,6 +171,16 @@ export default function BulkFbrPreviewDialog({ invoices, onClose }) {
         </div>
 
         <div data-admin-body="" style={{ ...formStyles.body, overflow: "auto", flex: 1 }}>
+          {clients.length > 1 && (
+            <div style={s.clientFilter}>
+              <SearchableClientSelect
+                clients={clients}
+                value={clientId}
+                onChange={(id) => setClientId(id)}
+                placeholder={`All clients (${clients.length})`}
+              />
+            </div>
+          )}
           {/* Summary strip — what's about to go to FBR. Wraps on narrow viewports. */}
           <div style={s.summaryStrip}>
             <div style={s.summaryItem}>
@@ -447,6 +472,8 @@ function PayloadPanel({ payload, itemCount, originalLineCount, fmtNum, fmtQty })
 }
 
 const s = {
+  // Full width on a phone, capped on a wider screen.
+  clientFilter: { maxWidth: 360, marginBottom: "0.65rem" },
   summaryStrip: {
     display: "flex",
     alignItems: "center",

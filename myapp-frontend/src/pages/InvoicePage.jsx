@@ -449,8 +449,11 @@ export default function InvoicePage({ mode = "invoices" }) {
   // for Validate All / Submit All as a collapsible list. Operators
   // use it to scan the whole queue before launching a bulk action,
   // without bouncing through each card's per-bill "View FBR" button.
-  // 2026-05-13: added.
-  const [showBulkFbrPreview, setShowBulkFbrPreview] = useState(false);
+  // 2026-05-13: added. Holds every bill the bulk actions would take, across
+  // all pages (null = closed).
+  const [bulkPreviewBills, setBulkPreviewBills] = useState(null);
+  const [bulkPreviewLoading, setBulkPreviewLoading] = useState(false);
+  const [readyTotal, setReadyTotal] = useState(0);
   const [clients, setClients] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [attachTarget, setAttachTarget] = useState(null);
@@ -579,6 +582,16 @@ export default function InvoicePage({ mode = "invoices" }) {
         setTotalCount(data.totalCount);
         setTotalPages(data.totalPages);
         setObservedSize(data.pageSize ?? null);
+        // How many bills the bulk FBR actions would take, across EVERY page
+        // (they ignore the FBR-status and handover filters). The bar used to
+        // count only this page, so it vanished whenever the ready bills sat on
+        // a later one.
+        if (!isBillsMode) {
+          const readyParams = { ...params, fbrFilter: "ready", page: 1, pageSize: 1 };
+          delete readyParams.handoverFilter;
+          const ready = await getPagedInvoicesByCompany(companyId, readyParams);
+          if (requestId === listRequest.current) setReadyTotal(ready.data.totalCount || 0);
+        }
         // Hydrate the in-memory "locally validated" Set from the
         // persisted FbrStatus. Pre-fix the Set was session-only, so a
         // bill that had been validated successfully (now persisted as
@@ -1059,20 +1072,32 @@ export default function InvoicePage({ mode = "invoices" }) {
     fetchInvoices(selectedCompany.id, page);
   };
 
+  // Every bill matching the screen's filters, read page by page. The server
+  // caps a page at 200 (PaginationHelper.DefaultMax), so one big request
+  // silently stopped at the newest 200 and older pending bills were never
+  // validated, submitted or previewed.
+  const fetchAllMatching = async (extra = {}) => {
+    const params = { ...extra, pageSize: 200 };
+    if (search) params.search = search;
+    if (clientFilter) params.clientId = clientFilter;
+    if (dateFrom) params.dateFrom = dateFrom;
+    if (dateTo) params.dateTo = dateTo;
+    if (isBillsMode && costingStatus) params.costingStatus = costingStatus;
+    if (isNotesMode) params.type = noteDocType === 10 ? "creditnotes" : "debitnotes";
+    const all = [];
+    for (let p = 1; ; p++) {
+      const { data } = await getPagedInvoicesByCompany(selectedCompany.id, { ...params, page: p });
+      all.push(...(data.items || []));
+      if (p >= (data.totalPages || 1)) return all;
+    }
+  };
+
   // Gather ALL pending invoices matching the current filters (across pages),
-  // then open the bulk dialog. Mirrors fetchAllFilteredBills (FBR bulk).
+  // then open the bulk dialog.
   const openBulkHandover = async () => {
     setHandoverBulkBusy(true);
     try {
-      const params = { page: 1, pageSize: 10000, handoverFilter: "pending" };
-      if (search) params.search = search;
-      if (clientFilter) params.clientId = clientFilter;
-      if (dateFrom) params.dateFrom = dateFrom;
-      if (dateTo) params.dateTo = dateTo;
-      if (isBillsMode && costingStatus) params.costingStatus = costingStatus;
-      if (isNotesMode) params.type = noteDocType === 10 ? "creditnotes" : "debitnotes";
-      const { data } = await getPagedInvoicesByCompany(selectedCompany.id, params);
-      const ids = (data.items || []).map((i) => i.id);
+      const ids = (await fetchAllMatching({ handoverFilter: "pending" })).map((i) => i.id);
       if (ids.length === 0) {
         notify("No pending documents to mark delivered.", "info");
         return;
@@ -1098,27 +1123,29 @@ export default function InvoicePage({ mode = "invoices" }) {
     fetchInvoices(selectedCompany.id, page);
   };
 
-  // Fetches every bill matching the current filters (client / date range /
-  // search) across all pages, not just the current page. Uses a large pageSize
-  // to pull everything in a single round-trip. Returns only bills eligible for
-  // the given action:
-  //   action="validate" → not yet Submitted AND FBR-ready
+  // Every bill matching the current filters (client / date range / search)
+  // across all pages, not just the current page. Returns only bills eligible
+  // for the given action:
+  //   action="validate" → not yet Submitted AND FBR-ready (also Preview All)
   //   action="submit"   → not yet Submitted AND already locally validated
   //                       (user must Validate All first, or click Validate per bill)
   const fetchAllFilteredBills = async (action) => {
-    const params = { page: 1, pageSize: 10000 };
-    if (search) params.search = search;
-    if (clientFilter) params.clientId = clientFilter;
-    if (dateFrom) params.dateFrom = dateFrom;
-    if (dateTo) params.dateTo = dateTo;
-    if (isBillsMode && costingStatus) params.costingStatus = costingStatus;
-    if (isNotesMode) params.type = noteDocType === 10 ? "creditnotes" : "debitnotes";
-    const { data } = await getPagedInvoicesByCompany(selectedCompany.id, params);
-    const all = data.items || [];
+    const all = await fetchAllMatching();
     if (action === "validate") return all.filter(isBulkFbrCandidate);
     if (action === "submit")
       return all.filter((inv) => isBulkFbrCandidate(inv) && fbrValidated.has(inv.id));
     return all;
+  };
+
+  const openBulkPreview = async () => {
+    setBulkPreviewLoading(true);
+    try {
+      setBulkPreviewBills(await fetchAllFilteredBills("validate"));
+    } catch {
+      notify("Failed to load the bills to preview.", "error");
+    } finally {
+      setBulkPreviewLoading(false);
+    }
   };
 
   const handleBulkValidateAll = async () => {
@@ -1492,7 +1519,7 @@ export default function InvoicePage({ mode = "invoices" }) {
             {!isBillsMode &&
               canFbrAny &&
               selectedCompany?.hasFbrToken &&
-              unsubmittedInvoices.length > 0 && (
+              Math.max(readyTotal, unsubmittedInvoices.length) > 0 && (
                 <div style={styles.fbrBulkBar}>
                   <div
                     style={{
@@ -1506,7 +1533,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                     <span
                       style={{ fontSize: "0.85rem", fontWeight: 600, color: colors.textPrimary }}
                     >
-                      FBR: {unsubmittedInvoices.length} ready to submit
+                      FBR: {Math.max(readyTotal, unsubmittedInvoices.length)} ready to submit
                       {validatedCount > 0 ? `, ${validatedCount} validated` : ""}
                     </span>
                     {incompleteCount > 0 && (
@@ -1529,15 +1556,21 @@ export default function InvoicePage({ mode = "invoices" }) {
                     {/* Preview All — read-only inspector for the whole bulk
                     queue. Gated on the same permission as the per-bill
                     preview dialog so we don't unintentionally expose
-                    payload data to roles that lacked it before. Hidden
-                    on tabs without ready bills. 2026-05-13. */}
-                    {canFbrPreview && unsubmittedInvoices.length > 0 && (
+                    payload data to roles that lacked it before. It lists
+                    every ready bill matching the filters on every page,
+                    the same set Validate All takes. 2026-05-13. */}
+                    {canFbrPreview && (
                       <button
                         style={{ ...styles.fbrBulkBtn, ...styles.fbrBulkPreviewBtn }}
-                        onClick={() => setShowBulkFbrPreview(true)}
+                        disabled={bulkPreviewLoading}
+                        onClick={openBulkPreview}
                         title="Preview the FBR payload for every bill that's ready to validate — collapsible rows, no network call to FBR."
                       >
-                        <MdViewList size={15} />
+                        {bulkPreviewLoading ? (
+                          <span className="btn-spinner" />
+                        ) : (
+                          <MdViewList size={15} />
+                        )}
                         Preview All
                       </button>
                     )}
@@ -2674,10 +2707,10 @@ export default function InvoicePage({ mode = "invoices" }) {
 
         {/* Bulk FBR preview — every Validate All / Submit All candidate as
           a collapsible list, lazy-loading per-row payload on expand. */}
-        {showBulkFbrPreview && (
+        {bulkPreviewBills && (
           <BulkFbrPreviewDialog
-            invoices={unsubmittedInvoices}
-            onClose={() => setShowBulkFbrPreview(false)}
+            invoices={bulkPreviewBills}
+            onClose={() => setBulkPreviewBills(null)}
           />
         )}
 
