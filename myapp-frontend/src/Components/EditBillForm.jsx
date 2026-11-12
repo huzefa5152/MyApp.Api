@@ -2171,7 +2171,7 @@ export default function EditBillForm({
                     help={
                       readOnly
                         ? null
-                        : "The scenario narrows the item types offered below to its sale type. The GST rate is set in Buyer & invoice details."
+                        : "The scenario sets the sale type every line files under. The GST rate is set in Buyer & invoice details."
                     }
                     summary={
                       chosenScenario ? (
@@ -2208,7 +2208,7 @@ export default function EditBillForm({
                               fontSize: "0.7rem",
                             }}
                           >
-                            filters items below
+                            sets every line's sale type
                           </span>
                         </label>
                         <select
@@ -2235,8 +2235,8 @@ export default function EditBillForm({
                             }}
                           >
                             <b>{chosenScenario.code}</b> —{" "}
-                            {chosenScenario.description || chosenScenario.saleType}. Showing only
-                            item types with sale type "{chosenScenario.saleType}".
+                            {chosenScenario.description || chosenScenario.saleType}. Every line
+                            files as "{chosenScenario.saleType}".
                           </div>
                         )}
                       </div>

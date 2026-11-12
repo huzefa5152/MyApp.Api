@@ -13,15 +13,17 @@ export const DEFAULT_SALE_TYPE = "Goods at Standard Rate (default)";
 /**
  * True when a catalog row belongs in a picker locked to `scenarioSaleType`.
  *
- * A row with no sale type of its own fits EVERY scenario: when the bill names
- * a scenario, filing gives each line the scenario's sale type
- * (FbrService, 2026-09-24), so the catalog's blank never reaches FBR. Treating
- * it as standard rate left SN005 / SN006 / SN007 / SN024 pickers empty.
- * Only a row whose own sale type is another scenario's is kept out.
+ * A row with no sale type, or with the standard-rate default, fits EVERY
+ * scenario: when the bill names a scenario, filing gives each line the
+ * scenario's sale type (FbrService, 2026-09-24), so the catalog's value never
+ * reaches FBR. The imports save no sale type and the Item Type form starts on
+ * the standard-rate default, so filtering on either left SN005 / SN006 /
+ * SN007 / SN024 pickers empty. Only a row with another special sale type of
+ * its own (Exempt Goods under SN024, say) is kept out.
  */
 export function matchesScenarioSaleType(itemType, scenarioSaleType) {
   const target = (scenarioSaleType || "").trim().toLowerCase();
   const own = (itemType?.saleType || "").trim().toLowerCase();
-  if (!target || !own) return true;
+  if (!target || !own || own === DEFAULT_SALE_TYPE.toLowerCase()) return true;
   return own === target;
 }
