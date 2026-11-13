@@ -1,6 +1,6 @@
 import ListFilters from "../Components/ListFilters";
 import RecordsViewport from "../Components/RecordsViewport";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { MdBusiness, MdDownload, MdFactCheck, MdRefresh } from "react-icons/md";
 import { CompanyPicker, Dot, PrintPdfButtons, ReportBar } from "../Components/reports/ReportChrome";
 import { fileSlug, pdfReport, printReport } from "../utils/reportPrintKit";
@@ -35,7 +35,12 @@ const defaults = (companyId) => ({
 const money = (n) =>
   Number(n || 0).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 // # | description | qty | rate | excl || HS | filed item | filed qty | FBR unit | filed excl | tax
-const COLUMN_WIDTHS = ["4%", "20%", "8%", "8%", "9%", "8%", "15%", "7%", "8%", "7%", "6%"];
+// Money and codes never wrap, so their columns are sized for the longest amount (1,234,567.89);
+// description and filed item share what is left and wrap.
+const COLUMN_WIDTHS = [32, null, 84, 108, 108, 84, null, 72, 96, 108, 96];
+// The table needs its fixed columns plus room for the two text columns; narrower than that, each
+// filed row is shown as a card. Measured on the list itself, so the sidebar cannot push it over.
+const TABLE_MIN_WIDTH = COLUMN_WIDTHS.reduce((s, w) => s + (w || 116), 0) + 40;
 const tone = (s) => (s === "Failed" ? "bad" : s === "Validated" ? "ok" : "info");
 
 export default function ReadyForFbrPage() {
@@ -65,11 +70,28 @@ export default function ReadyForFbrPage() {
     [printing, setPrinting] = useState("");
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
-  // The comparison table has 11 columns: below 1024px each filed row becomes a card instead.
-  const narrow = useIsNarrow(1024);
+  const narrow = useIsNarrow(760);
   const invalid =
     filters.period === "custom" && (!filters.from || !filters.to || filters.from > filters.to);
   const report = answer?.key === key && canView && !invalid ? answer.data : null;
+  // The list's own width (a callback ref, so the observer follows the element as it mounts).
+  const [listEl, setListEl] = useState(null);
+  const [listWidth, setListWidth] = useState(Infinity);
+  // Measured when the list mounts and on every window resize; the observer also catches the
+  // sidebar opening or closing, which changes the list's width without resizing the window.
+  useLayoutEffect(() => {
+    if (!listEl) return;
+    const measure = () => setListWidth(listEl.getBoundingClientRect().width);
+    measure();
+    window.addEventListener("resize", measure);
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(listEl);
+    return () => {
+      window.removeEventListener("resize", measure);
+      observer?.disconnect();
+    };
+  }, [listEl]);
+  const cards = narrow || listWidth < TABLE_MIN_WIDTH;
 
   useEffect(() => {
     if (!companyId || !canView || invalid) {
@@ -358,9 +380,9 @@ export default function ReadyForFbrPage() {
                   {filters.clientId || filters.search ? " for these filters" : ""}.
                 </div>
               )}
-              <div style={{ display: "grid", gap: 12 }}>
+              <div ref={setListEl} style={{ display: "grid", gap: 12, minWidth: 0 }}>
                 {view.bills.map((b) => (
-                  <BillComparison key={b.invoiceId} bill={b} narrow={narrow} />
+                  <BillComparison key={b.invoiceId} bill={b} narrow={cards} />
                 ))}
               </div>
               {bills.length > 0 && (
