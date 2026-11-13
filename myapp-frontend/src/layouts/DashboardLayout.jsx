@@ -244,6 +244,7 @@ export default function DashboardLayout() {
   const reportsKeys = [
     "reports.sales.view",
     "reports.invoicedetail.view",
+    "reports.readyforfbr.view",
     "reports.taxsheet.view",
     "reports.outstanding.view",
   ];
@@ -887,6 +888,8 @@ export default function DashboardLayout() {
                   <MdAssessment className="dl-subitem__icon" aria-hidden="true" />
                   <span>Invoice Sales Detail</span>
                 </NavLink>
+              </Can>
+              <Can permission="reports.readyforfbr.view">
                 <NavLink
                   to="/reports/ready-for-fbr"
                   className={({ isActive }) =>

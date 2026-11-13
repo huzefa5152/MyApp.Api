@@ -169,6 +169,8 @@ def main():
         check("the user is refused the other company's report", s == 403, s)
         s, _ = http(b, "GET", f"/api/reports/company/{cid}/invoice-sales-detail/excel?period=thisMonth&fbrStatus=ready", ut, raw=True)
         check("and its Excel", s == 403, s)
+        s, _ = http(b, "GET", f"/api/reports/company/{other}/ready-for-fbr?period=thisMonth", ut)
+        check("Sales Edition carries the Ready for FBR keys: the user reads their own company", s == 200, s)
         s, _ = http(b, "GET", f"/api/reports/company/{cid}/ready-for-fbr?period=thisMonth", ut)
         check("the user is refused the other company's Ready for FBR report", s == 403, s)
         s, _ = http(b, "GET", f"/api/reports/company/{cid}/ready-for-fbr/excel?period=thisMonth", ut, raw=True)

@@ -96,7 +96,7 @@ namespace MyApp.Api.Controllers
 
         /// <summary>Bills classified and not yet sent to FBR: original lines beside the rows to be filed.</summary>
         [HttpGet("company/{companyId}/ready-for-fbr")]
-        [HasPermission("reports.invoicedetail.view")]
+        [HasPermission("reports.readyforfbr.view")]
         [AuthorizeCompany]
         public async Task<ActionResult<ReadyForFbrReportDto>> GetReadyForFbr(
             int companyId, [FromQuery] InvoiceSalesDetailQueryDto query)
@@ -107,7 +107,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("company/{companyId}/ready-for-fbr/excel")]
-        [HasPermission("reports.invoicedetail.export")]
+        [HasPermission("reports.readyforfbr.export")]
         [AuthorizeCompany]
         public async Task<IActionResult> GetReadyForFbrExcel(
             int companyId, [FromQuery] InvoiceSalesDetailQueryDto query)

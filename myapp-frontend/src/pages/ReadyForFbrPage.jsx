@@ -34,13 +34,15 @@ const defaults = (companyId) => ({
 });
 const money = (n) =>
   Number(n || 0).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// # | description | qty | rate | excl || HS | filed item | filed qty | FBR unit | filed excl | tax
+const COLUMN_WIDTHS = ["4%", "20%", "8%", "8%", "9%", "8%", "15%", "7%", "8%", "7%", "6%"];
 const tone = (s) => (s === "Failed" ? "bad" : s === "Validated" ? "ok" : "info");
 
 export default function ReadyForFbrPage() {
   const { companies, selectedCompany, setSelectedCompany } = useCompany();
   const { has, loading: permissionsLoading } = usePermissions();
-  const canView = has("reports.invoicedetail.view"),
-    canExport = has("reports.invoicedetail.export");
+  const canView = has("reports.readyforfbr.view"),
+    canExport = has("reports.readyforfbr.export");
   const companyId = selectedCompany?.id;
   const [stored, setStored] = useState(() => defaults(companyId));
   const filters = useMemo(
@@ -391,9 +393,13 @@ function BillComparison({ bill, narrow }) {
   }));
   const filedExcl = bill.filingRows.reduce((s, r) => s + r.excludingTax, 0);
   return (
-    <article className="isd-bill-card" aria-label={`Bill ${bill.invoiceNumber}`}>
+    <article
+      className="isd-bill-card"
+      style={styles.billCard}
+      aria-label={`Bill ${bill.invoiceNumber}`}
+    >
       <div style={styles.billHead}>
-        <div className="isd-cell-stack">
+        <div className="isd-cell-stack" style={styles.billWho}>
           <strong className="isd-reference">
             Bill #{bill.invoiceNumber} · {fmtDay(bill.date)}
           </strong>
@@ -442,7 +448,13 @@ function BillComparison({ bill, narrow }) {
         </ol>
       ) : (
         <div className="rw-table-wrap">
-          <table className="rw-table" style={{ minWidth: 0, width: "100%" }}>
+          <table className="rw-table" style={styles.table}>
+            {/* Fixed widths so every bill's columns line up down the page. */}
+            <colgroup>
+              {COLUMN_WIDTHS.map((w, i) => (
+                <col key={i} style={{ width: w }} />
+              ))}
+            </colgroup>
             <thead>
               <tr>
                 <th colSpan={5} style={styles.bandOrig}>
@@ -576,21 +588,24 @@ const styles = {
     textTransform: "uppercase",
     letterSpacing: "0.05em",
   },
+  billCard: { padding: "14px 16px 12px" },
   billHead: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(min(200px,100%),1fr))",
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "flex-start",
     gap: "8px 16px",
-    alignItems: "start",
-    marginBottom: 10,
+    marginBottom: 12,
   },
-  billMoney: { display: "flex", gap: 14, justifyContent: "flex-end", flexWrap: "wrap" },
+  billWho: { flex: "1 1 220px", minWidth: 0 },
+  billMoney: { display: "flex", gap: 18, marginLeft: "auto", flexWrap: "wrap" },
+  table: { width: "100%", minWidth: 0, tableLayout: "fixed" },
   clamp: {
     display: "-webkit-box",
     WebkitLineClamp: 2,
     WebkitBoxOrient: "vertical",
     overflow: "hidden",
   },
-  desc: { minWidth: 160, whiteSpace: "normal" },
+  desc: { whiteSpace: "normal", overflowWrap: "anywhere" },
   bandOrig: { textAlign: "center", background: "#edf4ff" },
   bandFiled: { textAlign: "center", background: "#e1f3ef" },
   filedCell: { background: "#f3faf8", verticalAlign: "top" },
