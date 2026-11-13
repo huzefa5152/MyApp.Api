@@ -23,7 +23,13 @@ export const ISD_PERIOD_OPTIONS = PERIOD_OPTIONS.filter((o) => o.value !== "allP
 export const FBR_STATUS_OPTIONS = [
   { id: "submitted", name: "Submitted to FBR" },
   { id: "notSubmitted", name: "Not submitted to FBR" },
+  // Classified by the consultant, not yet sent: what is left to validate and submit.
+  { id: "ready", name: "Ready for FBR (classified)" },
 ];
+
+/** A status named in the page's URL (the Reports menu's "Ready for FBR" link), if it is one. */
+export const statusFromUrl = (value) =>
+  FBR_STATUS_OPTIONS.some((o) => o.id === value) ? value : "";
 
 export const DEFAULT_PAGE_SIZE = 50;
 

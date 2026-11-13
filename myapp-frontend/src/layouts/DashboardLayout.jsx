@@ -881,11 +881,27 @@ export default function DashboardLayout() {
                 <NavLink
                   to="/reports/invoice-sales-detail"
                   className={({ isActive }) =>
-                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                    "dl-subitem" +
+                    (isActive && !location.search.includes("status=ready")
+                      ? " dl-subitem--active"
+                      : "")
                   }
                 >
                   <MdAssessment className="dl-subitem__icon" aria-hidden="true" />
                   <span>Invoice Sales Detail</span>
+                </NavLink>
+                {/* The same report, filtered to bills classified and waiting for FBR. */}
+                <NavLink
+                  to="/reports/invoice-sales-detail?status=ready"
+                  className={({ isActive }) =>
+                    "dl-subitem" +
+                    (isActive && location.search.includes("status=ready")
+                      ? " dl-subitem--active"
+                      : "")
+                  }
+                >
+                  <MdFactCheck className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Ready for FBR</span>
                 </NavLink>
               </Can>
               <Can permission="reports.taxsheet.view">
