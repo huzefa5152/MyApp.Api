@@ -1,7 +1,6 @@
 import ListFilters from "../Components/ListFilters";
 import RecordsViewport from "../Components/RecordsViewport";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import { MdAssessment, MdBusiness, MdDownload, MdRefresh } from "react-icons/md";
 import { CompanyPicker, Dot, PrintPdfButtons, ReportBar } from "../Components/reports/ReportChrome";
 import { fileSlug, pdfReport, printReport } from "../utils/reportPrintKit";
@@ -21,16 +20,15 @@ import {
   fmtDay,
   groupBills,
   pageOfBills,
-  statusFromUrl,
   toApiParams,
   totalsFor,
 } from "../utils/invoiceSalesDetail";
 
-const defaults = (companyId, status = "") => ({
+const defaults = (companyId) => ({
   companyId,
   period: "thisMonth",
   search: "",
-  status,
+  status: "",
   clientId: "",
   from: "",
   to: "",
@@ -44,18 +42,11 @@ export default function InvoiceSalesDetailPage() {
   const canView = has("reports.invoicedetail.view"),
     canExport = has("reports.invoicedetail.export");
   const companyId = selectedCompany?.id;
-  const [searchParams] = useSearchParams();
-  const urlStatus = statusFromUrl(searchParams.get("status"));
-  const [stored, setStored] = useState(() => defaults(companyId, urlStatus));
+  const [stored, setStored] = useState(() => defaults(companyId));
   const filters = useMemo(
-    () => (stored.companyId === companyId ? stored : defaults(companyId, urlStatus)),
-    [stored, companyId, urlStatus],
+    () => (stored.companyId === companyId ? stored : defaults(companyId)),
+    [stored, companyId],
   );
-  // The Reports menu opens this screen with or without "?status=ready": follow the link.
-  useEffect(() => {
-    setStored((s) => ({ ...s, status: urlStatus }));
-    setPage(1);
-  }, [urlStatus]);
   const change = (key, value) => {
     setStored({ ...filters, [key]: value });
     setPage(1);

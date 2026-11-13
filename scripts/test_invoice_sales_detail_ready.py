@@ -127,7 +127,34 @@ def main():
         s, bad = http(b, "GET", q + "&fbrStatus=nonsense", t)
         check("an unknown status is refused", s == 400, s)
 
-        print("\n[5. Another company's user is refused]")
+        print("\n[5. Reports > Ready for FBR: original bill beside what is filed]")
+        rq = f"/api/reports/company/{cid}/ready-for-fbr?period=thisMonth"
+        s, rf = http(b, "GET", rq, t)
+        bills = rf.get("bills", []) if s == 200 else []
+        check("the report answers", s == 200, f"{s} {rf}")
+        check("it lists only the ready bill", [x["invoiceId"] for x in bills] == [ready["id"]],
+              [x["invoiceId"] for x in bills])
+        if bills:
+            x = bills[0]
+            line, row = x["originalLines"][0], x["filingRows"][0]
+            check("the original line is the bill's own", line["description"] == "GATE VALVE" and line["unit"] == "Pcs"
+                  and line["quantity"] == 2 and line["excludingTax"] == 1000, line)
+            check("the filing row carries the HS code and catalog item",
+                  row["hsCode"] == "8481.8090" and row["item"] == valves["name"], row)
+            check("the filing row files in the FBR unit", row["unit"] == "Numbers, pieces, units" and row["quantity"] == 2, row)
+            check("the line points at its filing row and back", line["filingRow"] == row["rowNumber"]
+                  and row["sourceLines"] == [line["lineNumber"]], (line, row))
+            check("filing value and tax add up to the bill", row["excludingTax"] == x["excludingTax"]
+                  and row["salesTax"] == x["salesTax"] == 180, (row, x["excludingTax"], x["salesTax"]))
+            check("its status says it is waiting to be validated", x["fbrStatus"] == "Ready to validate", x["fbrStatus"])
+        s, xl = http(b, "GET", rq.replace("ready-for-fbr?", "ready-for-fbr/excel?"), t, raw=True)
+        strings = zipfile.ZipFile(io.BytesIO(xl)).read("xl/sharedStrings.xml").decode() if s == 200 else ""
+        check("its Excel downloads", s == 200, s)
+        check("its Excel has the filing row: HS code, item, FBR unit and the bill line",
+              all(v in strings for v in ("8481.8090", valves["name"], "Numbers, pieces, units", "GATE VALVE")))
+        check("its Excel leaves out bills not ready", "DOOR HINGE" not in strings and "BALL VALVE" not in strings)
+
+        print("\n[6. Another company's user is refused]")
         s, roles = http(b, "GET", "/api/roles", t)
         sales = next(r for r in roles if r["name"] == "Sales Edition")
         s, u = http(b, "POST", "/api/users", t, {"username": f"isdready{tag}", "fullName": "isd ready", "password": PW, "role": "User"})
@@ -141,6 +168,10 @@ def main():
         s, _ = http(b, "GET", q + "&fbrStatus=ready", ut)
         check("the user is refused the other company's report", s == 403, s)
         s, _ = http(b, "GET", f"/api/reports/company/{cid}/invoice-sales-detail/excel?period=thisMonth&fbrStatus=ready", ut, raw=True)
+        check("and its Excel", s == 403, s)
+        s, _ = http(b, "GET", f"/api/reports/company/{cid}/ready-for-fbr?period=thisMonth", ut)
+        check("the user is refused the other company's Ready for FBR report", s == 403, s)
+        s, _ = http(b, "GET", f"/api/reports/company/{cid}/ready-for-fbr/excel?period=thisMonth", ut, raw=True)
         check("and its Excel", s == 403, s)
     finally:
         for uid in made_users:

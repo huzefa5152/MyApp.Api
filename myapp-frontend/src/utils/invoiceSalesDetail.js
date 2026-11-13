@@ -27,10 +27,6 @@ export const FBR_STATUS_OPTIONS = [
   { id: "ready", name: "Ready for FBR (classified)" },
 ];
 
-/** A status named in the page's URL (the Reports menu's "Ready for FBR" link), if it is one. */
-export const statusFromUrl = (value) =>
-  FBR_STATUS_OPTIONS.some((o) => o.id === value) ? value : "";
-
 export const DEFAULT_PAGE_SIZE = 50;
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;

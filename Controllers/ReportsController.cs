@@ -94,6 +94,32 @@ namespace MyApp.Api.Controllers
             return Ok(await _reports.GetInvoiceSalesDetailAsync(companyId, query));
         }
 
+        /// <summary>Bills classified and not yet sent to FBR: original lines beside the rows to be filed.</summary>
+        [HttpGet("company/{companyId}/ready-for-fbr")]
+        [HasPermission("reports.invoicedetail.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReadyForFbrReportDto>> GetReadyForFbr(
+            int companyId, [FromQuery] InvoiceSalesDetailQueryDto query)
+        {
+            if (InvoiceSalesDetailFilter.Validate(query) is { } err)
+                return BadRequest(new { message = err });
+            return Ok(await _reports.GetReadyForFbrAsync(companyId, query));
+        }
+
+        [HttpGet("company/{companyId}/ready-for-fbr/excel")]
+        [HasPermission("reports.invoicedetail.export")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> GetReadyForFbrExcel(
+            int companyId, [FromQuery] InvoiceSalesDetailQueryDto query)
+        {
+            if (InvoiceSalesDetailFilter.Validate(query) is { } err)
+                return BadRequest(new { message = err });
+            var bytes = await _reports.GetReadyForFbrExcelAsync(companyId, query);
+            var window = InvoiceSalesDetailFilter.ResolveWindow(query);
+            return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                $"ready-for-fbr-{window.From:yyyy-MM-dd}-to-{window.To:yyyy-MM-dd}.xlsx");
+        }
+
         [HttpGet("company/{companyId}/invoice-sales-detail/excel")]
         [HasPermission("reports.invoicedetail.export")]
         [AuthorizeCompany]
