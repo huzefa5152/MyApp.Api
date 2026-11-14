@@ -82,6 +82,7 @@ public static class McpToolAccessCatalog
         new("get_stock_values", "Stock", "Read stock on hand with values", new[] { "stock.dashboard.view" }),
         new("get_stock_movements", "Stock", "Read stock movements", new[] { "stock.movements.view" }),
         new("get_stock_gd_details", "Stock", "Read an item's GD pools", new[] { "stock.dashboard.view" }),
+        new("check_bill_stock_cost", "Stock", "Compare invoice amounts with the stock value they took out", new[] { "stock.dashboard.view" }),
         new("get_stock_tie_out", "Stock", "Read the month-end stock tie-out", new[] { "importcosting.taxdesk.view" }),
         new("prepare_stock_adjustment", "Stock", "Prepare a stock adjustment", new[] { "stock.adjust.create" }, McpScopes.Stock, Write: true),
         new("search_withholding_receipts", "Receipts and payments", "Find withholding tax receipts", new[] { "withholdingtax.list.view" }),

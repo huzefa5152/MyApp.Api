@@ -98,7 +98,7 @@ listed = set(tools(T))
 
 # ── phase 1 ──────────────────────────────────────────────────────────
 print("\n== Phase 1: edits, allocation, withholding tax, stock, single reads ==")
-phase1 = {"get_stock_values", "get_stock_movements", "get_stock_gd_details", "get_stock_tie_out", "prepare_stock_adjustment",
+phase1 = {"get_stock_values", "get_stock_movements", "get_stock_gd_details", "get_stock_tie_out", "check_bill_stock_cost", "prepare_stock_adjustment",
           "search_withholding_receipts", "get_withholding_receipt", "prepare_withholding_receipt", "prepare_receipt_allocation",
           "get_receipt", "get_payment", "get_goods_receipt", "get_journal_entry"}
 check("every phase 1 tool is listed for an administrator with MCP write", phase1 <= listed, sorted(phase1 - listed))
@@ -220,6 +220,9 @@ sv = read(T, "get_stock_values", {"companyId": A})
 check("get_stock_values gives values", sv and sv.get("totalValueExcludingTax") is not None and sv.get("items"), sv)
 check("get_stock_movements answers", read(T, "get_stock_movements", {"companyId": A, "itemTypeId": bolt_a}))
 check("get_stock_gd_details answers", read(T, "get_stock_gd_details", {"companyId": A, "itemTypeId": bolt_a}) is not None)
+r, text = call(T, "check_bill_stock_cost", {"companyId": A, "dateFrom": "2020-01-01", "minGap": "0"})
+check("check_bill_stock_cost answers with totals", not r and "stockCostOut" in text and "billedExcludingTax" in text, text)
+refused(T, "check_bill_stock_cost with the period backwards", "check_bill_stock_cost", {"companyId": A, "dateFrom": "2026-02-01", "dateTo": "2026-01-01"})
 r, text = call(T, "get_stock_tie_out", {"companyId": A})
 check("get_stock_tie_out answers", not r and "stockValue" in text, text)
 before = val(f"SELECT COUNT(*) FROM StockMovements WHERE CompanyId = {A} AND ItemTypeId = {bolt_a} AND SourceType = 3")
@@ -228,7 +231,7 @@ check("an adjustment movement was written", int(val(f"SELECT COUNT(*) FROM Stock
 refused(T, "adjust B's item", "prepare_stock_adjustment", {"companyId": A, "itemTypeId": bolt_b, "mode": "delta", "delta": "-1"})
 
 # whole-company cross checks: every phase 1 read against company B itself
-for tool, args in [("get_stock_values", {}), ("get_stock_movements", {}), ("get_stock_tie_out", {}), ("search_withholding_receipts", {}),
+for tool, args in [("get_stock_values", {}), ("get_stock_movements", {}), ("get_stock_tie_out", {}), ("check_bill_stock_cost", {}), ("search_withholding_receipts", {}),
                    ("get_stock_gd_details", {"itemTypeId": bolt_b})]:
     refused(T, f"{tool} for company B", tool, {"companyId": B, **args})
 
@@ -265,6 +268,27 @@ cc = one(f"SELECT TOP 1 Id FROM DeliveryChallans WHERE CompanyId = {A} AND Site 
 run(T, "challan cancelled", "prepare_void", {"companyId": A, "kind": "challan", "id": cc})
 check("the challan is Cancelled", val(f"SELECT Status FROM DeliveryChallans WHERE Id = {cc}") == "Cancelled")
 refused(T, "cancel B's challan", "prepare_void", {"companyId": A, "kind": "challan", "id": c_b})
+
+# a bill line priced from an amount: whole units on the invoice, the amount's worth out of stock
+amount_line = {"description": "by amount", "unit": "Pcs", "amount": "137.77", "itemTypeId": bolt_a}
+plan, text = prepare(T, "prepare_bill", {"companyId": A, "clientId": client_a, "paymentTerms": "mcpp by amount", "items": [amount_line]})
+if check("bill by amount: prepares, priced from stock", plan and "stockQuantity" in text, text):
+    res, text = commit(T, plan)
+    check("bill by amount: commits", res and res.get("committed"), text)
+    ab = one(f"SELECT TOP 1 Id FROM Invoices WHERE CompanyId = {A} AND PaymentTerms = 'mcpp by amount' ORDER BY Id DESC")
+    check("bill by amount: the line is the amount, in whole units",
+          val(f"SELECT CASE WHEN LineTotal = 137.77 AND Quantity = FLOOR(Quantity) AND Quantity >= 1 THEN 1 ELSE 0 END FROM InvoiceItems WHERE InvoiceId = {ab}") == "1")
+    check("bill by amount: its stock quantity is within one unit of the billed quantity",
+          val(f"SELECT CASE WHEN StockQuantity IS NULL OR ABS(StockQuantity - Quantity) < 1 THEN 1 ELSE 0 END FROM InvoiceItems WHERE InvoiceId = {ab}") == "1")
+    check("bill by amount: stock gave up the stock quantity, not the billed one",
+          val(f"SELECT CASE WHEN (SELECT SUM(Quantity) FROM StockMovements WHERE SourceType = 2 AND SourceId = {ab} AND Direction = 2) = "
+              f"(SELECT SUM(COALESCE(StockQuantity, Quantity)) FROM InvoiceItems WHERE InvoiceId = {ab}) THEN 1 ELSE 0 END") == "1")
+refused(T, "a line with both an amount and a quantity", "prepare_bill", {"companyId": A, "clientId": client_a,
+        "items": [{**amount_line, "quantity": "1", "unitPrice": "5"}]})
+refused(T, "an amount on a new item, which has no stock", "prepare_bill", {"companyId": A, "clientId": client_a,
+        "items": [{"description": "x", "unit": "Pcs", "amount": "50", "newItemType": {"name": "mcpp none", "hsCode": "8481.8090"}}]})
+refused(T, "an amount on B's item", "prepare_bill", {"companyId": A, "clientId": client_a,
+        "items": [{**amount_line, "itemTypeId": bolt_b}]})
 
 # a bill made for the purpose: credit note, exclusion, void
 run(T, "throwaway bill", "prepare_bill", {"companyId": A, "clientId": client_a, "paymentTerms": "mcpp note me",

@@ -144,6 +144,7 @@ picker):
 | `get_stock_values` | `stock.dashboard.view` | the Stock screen's on-hand grid with values (`StockController.GetOnHand`; actual cost only with `stock.actualcost.view`) |
 | `get_stock_movements` | `stock.movements.view` | the movement feed (`StockController.GetMovements`) |
 | `get_stock_gd_details` | `stock.dashboard.view` | an item's GD pools (`StockController.GetGdDetails`) |
+| `check_bill_stock_cost` | `stock.dashboard.view` | invoice amounts beside the stock value they took out, for tracing a gap against a stock sheet (`StockController.GetBillCostCheck`) |
 | `get_stock_tie_out` | `importcosting.taxdesk.view` | the month-end tie-out (`StockController.GetTieOut`; whole-company access) |
 | `get_receipt`, `get_payment` | `accounting.receipts.view` / `accounting.payments.view` | `IPaymentService.GetByIdAsync`, with allocations, bank and cheque fields |
 | `get_goods_receipt` | `goodsreceipts.list.view` | `IGoodsReceiptService.GetByIdAsync` |

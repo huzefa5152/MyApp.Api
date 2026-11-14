@@ -86,3 +86,69 @@ export function fifoTierTakes(price, quantity, lineTotal) {
   }
   return rows;
 }
+
+/**
+ * What a line priced from an amount takes out of stock (2026-11-15).
+ *
+ * The invoice bills a whole quantity, and an amount rarely buys a whole number
+ * of units: 30,000 of a machine held as 1 Pcs worth 250,000 buys 0.12 Pcs.
+ * The invoice still says 1 Pcs; stock gives up `rawQty`, so the value that
+ * leaves is the amount that was billed. Null when that is the billed quantity
+ * itself, or when the two are a whole unit or more apart (the server refuses
+ * that, so it is never sent). Mirrors Helpers/StockOutQuantity.Resolve.
+ */
+export function stockQuantityForLine(rawQty, qty) {
+  const raw = Number(rawQty);
+  const billed = Number(qty);
+  if (!(raw > 0) || !(billed > 0)) return null;
+  const stock = Math.round(raw * 1e12) / 1e12;
+  if (stock === billed || Math.abs(stock - billed) >= 1) return null;
+  return stock;
+}
+
+/**
+ * What deriving a line from an amount remembers on the row: the stock quantity,
+ * and the item, quantity and rate it was worked out for.
+ */
+export function amountStock(rawQty, qty, rate, itemTypeId) {
+  const stock = stockQuantityForLine(rawQty, qty);
+  if (stock == null) return null;
+  return { stock, quantity: String(qty), unitPrice: String(rate), itemTypeId };
+}
+
+/**
+ * The stock quantity a row may send: the one worked out from its amount, only
+ * while the row still shows the item, quantity and rate it was worked out for.
+ * A quantity or rate typed by hand afterwards goes back to the billed quantity.
+ */
+export function rowStockQuantity(row) {
+  const a = row?.amountStock;
+  if (!a) return null;
+  return String(row.quantity) === a.quantity &&
+    String(row.unitPrice) === a.unitPrice &&
+    row.itemTypeId === a.itemTypeId
+    ? a.stock
+    : null;
+}
+
+/**
+ * Says so when an amount buys clearly less or more than the whole units the
+ * invoice will show (a tenth of the quantity or more). Small rounding is not
+ * worth a notice on every line.
+ */
+export function partUnitNote(stockQty, qty, uom, amount) {
+  const stock = Number(stockQty);
+  const billed = Number(qty);
+  if (!(stock > 0) || !(billed > 0) || Math.abs(stock - billed) / billed < 0.1) return null;
+  const n = (v, d) => Number(v).toLocaleString(undefined, { maximumFractionDigits: d });
+  const unit = uom ? ` ${uom}` : "";
+  const worth =
+    Number(amount) > 0
+      ? ` worth ${Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : "";
+  return (
+    `This amount buys ${n(stock, 4)}${unit}. The invoice shows ${n(billed, 4)}${unit}; ` +
+    `stock gives up ${n(stock, 4)}${unit}${worth}, not the whole ${n(billed, 4)}. ` +
+    "If the whole quantity was sold at this price, type the quantity and the rate instead."
+  );
+}

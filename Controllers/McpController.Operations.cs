@@ -79,6 +79,9 @@ namespace MyApp.Api.Controllers
                     Read: GetStockMovementsAsync),
                 new("get_stock_gd_details", "Which GD lines an item's stock sits in (FIFO pools): GD number, date, claim month, remaining quantity and value.",
                     Obj(new { companyId = CompanyProp, itemTypeId = Int() }, "companyId", "itemTypeId"), Read: GetStockGdDetailsAsync),
+                new("check_bill_stock_cost", "For a period, each invoice line's amount beside the stock value it took out (FIFO by GD), largest differences first, with totals over every line. Use it when the stock value disagrees with a stock sheet that deducts invoice amounts: it names the invoices and says why, for example a whole unit leaving stock for an amount that buys part of one. Read-only.",
+                    Obj(new { companyId = CompanyProp, dateFrom = DateProp, dateTo = DateProp, minGap = new { type = "string", description = "List lines whose difference is at least this many PKR. Default 100; 0 lists every line." } }, "companyId"),
+                    Read: CheckBillStockCostAsync),
                 new("get_stock_tie_out", "Month-end tie-out: stock screen vs the Inventory account vs Annex-H1, and GD balances vs Import Clearing, with the reasons for any difference.",
                     Obj(new { companyId = CompanyProp, month = Str(7, "yyyy-MM; default the current month.") }, "companyId"), Read: GetStockTieOutAsync),
                 new("prepare_stock_adjustment", "Prepare a stock correction for damaged, lost or miscounted goods: mode 'set' gives the figures it should be (quantity and/or value), 'delta' gives the change. isValuationCorrection=true when this fixes an earlier wrong figure (opening or imported value, onboarding count) — posted to equity; false (default) for a loss of the period — posted to the Inventory adjustments expense. A SOLD item needs its sale bill, not an adjustment. Nothing is saved until commit_action.",
@@ -153,6 +156,14 @@ namespace MyApp.Api.Controllers
             var companyId = await CompanyArg(args);
             var item = await ItemInCompanyAsync(args, "itemTypeId", companyId) ?? throw new ToolError("itemTypeId is required.");
             return await ScreenAsync(() => Screen<StockController>().GetGdDetails(companyId, item));
+        }
+
+        private async Task<object> CheckBillStockCostAsync(JsonElement args)
+        {
+            await Need("stock.dashboard.view");
+            var companyId = await CompanyArg(args);
+            var (from, to) = Dates(args);
+            return await ScreenAsync(() => Screen<StockController>().GetBillCostCheck(companyId, from, to, OptDec(args, "minGap", 0m, 999_999_999_999m, 2) ?? 100m));
         }
 
         private async Task<object> GetStockTieOutAsync(JsonElement args)

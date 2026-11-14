@@ -2886,6 +2886,10 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("SroScheduleNo")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<decimal?>("StockQuantity")
+                        .HasPrecision(28, 12)
+                        .HasColumnType("decimal(28,12)");
+
                     b.Property<string>("UOM")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");

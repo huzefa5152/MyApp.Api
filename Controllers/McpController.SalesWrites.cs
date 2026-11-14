@@ -40,14 +40,15 @@ namespace MyApp.Api.Controllers
         {
             type = "object",
             additionalProperties = false,
-            required = new[] { "description", "quantity", "unit" },
+            required = new[] { "description", "unit" },
             properties = new
             {
                 description = Str(500),
-                quantity = new { type = "string", description = "Greater than 0, up to 4 decimals." },
+                quantity = new { type = "string", description = "Greater than 0, up to 4 decimals. Give it with unitPrice, or give amount instead." },
                 unit = Str(50),
                 unitPrice = MoneyProp,
                 itemTypeId = Int("From search_item_types."),
+                amount = new { type = "string", description = "Instead of quantity and unitPrice: the line's amount excluding tax, PKR up to 2 decimals. The ERP prices it from the item's stock as the invoice screen does: a whole quantity on the invoice, a rate that makes the line this amount, and stock gives up exactly what the amount buys. Needs an itemTypeId that has stock." },
                 newItemType = new
                 {
                     type = "object",
@@ -127,7 +128,7 @@ namespace MyApp.Api.Controllers
                         idempotencyKey = IdemProp,
                     }, "companyId", "deliveryDate"),
                     Build: BuildChallanAsync, PerHour: 30, Noun: "challans"),
-                new("prepare_bill", "Prepare a sale invoice (the Invoices screen; the name keeps the old word). With challanIds it bills those challans (give a unitPrice for EVERY challan line, deliveryItemId from get_challan); without, a standalone invoice from items. An item line takes itemTypeId, or newItemType (name + FBR HS code) to add that item to the catalog on commit, in the same transaction; a company that blocks selling below stock refuses an item with no stock, as the screen does. With billId it edits that bill: send the whole bill as items, each existing line with its id from get_invoice. A new bill takes the next number of the legal invoice sequence when committed; nothing is submitted to FBR here.",
+                new("prepare_bill", "Prepare a sale invoice (the Invoices screen; the name keeps the old word). With challanIds it bills those challans (give a unitPrice for EVERY challan line, deliveryItemId from get_challan); without, a standalone invoice from items. An item line takes itemTypeId, or newItemType (name + FBR HS code) to add that item to the catalog on commit, in the same transaction; a company that blocks selling below stock refuses an item with no stock, as the screen does. With billId it edits that bill: send the whole bill as items, each existing line with its id from get_invoice. A new bill takes the next number of the legal invoice sequence when committed; nothing is submitted to FBR here. A standalone line may give amount instead of quantity and unitPrice; the ERP then prices it from stock, and the preview shows the quantity billed and the quantity leaving stock.",
                     Obj(new
                     {
                         companyId = CompanyProp, billId = Int("Edit this bill."), clientId = Int(), divisionId = DivisionProp,
@@ -151,9 +152,10 @@ namespace MyApp.Api.Controllers
 
         // ── shared parsing ─────────────────────────────────────────────────
 
-        private sealed record Line(string Description, decimal Quantity, string Unit, decimal? UnitPrice, int? ItemTypeId, int? Id = null, NewItemTypeDto? NewItem = null);
+        private sealed record Line(string Description, decimal Quantity, string Unit, decimal? UnitPrice, int? ItemTypeId, int? Id = null, NewItemTypeDto? NewItem = null,
+            decimal? Amount = null, decimal? StockQuantity = null);
 
-        private async Task<List<Line>> DocLinesAsync(JsonElement args, int companyId, bool pricesRequired, bool allowNewItem = false)
+        private async Task<List<Line>> DocLinesAsync(JsonElement args, int companyId, bool pricesRequired, bool allowNewItem = false, bool allowAmount = false)
         {
             var lines = new List<Line>();
             foreach (var it in Items(args, "items", 1, MaxDocLines))
@@ -162,8 +164,14 @@ namespace MyApp.Api.Controllers
                 var unit = OptText(it, "unit", 50);
                 if (string.IsNullOrEmpty(desc)) throw new ToolError("Item descriptions cannot be empty.");
                 if (string.IsNullOrEmpty(unit)) throw new ToolError("Item units cannot be empty.");
-                var qty = ReqDec(it, "quantity", 0m, 999_999_999m, 4, minInclusive: false);
-                var price = pricesRequired ? ReqDec(it, "unitPrice", 0m, 999_999_999m, 4, minInclusive: false) : OptDec(it, "unitPrice", 0m, 999_999_999m, 4);
+                // A bill line may give its amount; quantity and rate are then
+                // worked out from stock (PriceAmountLinesAsync).
+                var amount = allowAmount ? OptDec(it, "amount", 0m, 999_999_999_999m, 2, minInclusive: false) : null;
+                if (amount.HasValue && (Has(it, "quantity") || Has(it, "unitPrice")))
+                    throw new ToolError("A line takes either amount, or quantity and unitPrice, not both.");
+                var qty = amount.HasValue ? 0m : ReqDec(it, "quantity", 0m, 999_999_999m, 4, minInclusive: false);
+                var price = amount.HasValue ? null
+                    : pricesRequired ? ReqDec(it, "unitPrice", 0m, 999_999_999m, 4, minInclusive: false) : OptDec(it, "unitPrice", 0m, 999_999_999m, 4);
                 NewItemTypeDto? newItem = null;
                 if (allowNewItem && it.TryGetProperty("newItemType", out var ni) && ni.ValueKind == JsonValueKind.Object)
                 {
@@ -173,9 +181,44 @@ namespace MyApp.Api.Controllers
                     if (string.IsNullOrEmpty(niName) || string.IsNullOrEmpty(niHs)) throw new ToolError("newItemType needs a name and an hsCode.");
                     newItem = new NewItemTypeDto { Name = niName, HsCode = niHs, Uom = unit };
                 }
-                lines.Add(new Line(desc, qty, unit, price, newItem != null ? null : await ItemInCompanyAsync(it, "itemTypeId", companyId), OptId(it, "id"), newItem));
+                if (amount.HasValue && newItem != null) throw new ToolError("A new item has no stock to price an amount from. Give quantity and unitPrice.");
+                lines.Add(new Line(desc, qty, unit, price, newItem != null ? null : await ItemInCompanyAsync(it, "itemTypeId", companyId), OptId(it, "id"), newItem, amount));
             }
             return lines;
+        }
+
+        /// <summary>
+        /// Prices the bill lines that gave an amount, from the item's stock, by
+        /// the rule the invoice forms use (StockOutQuantity.PriceFromAmount): a
+        /// whole billed quantity, a rate that makes the line the amount, and
+        /// the stock quantity the amount buys.
+        /// </summary>
+        private async Task<List<Line>> PriceAmountLinesAsync(int companyId, List<Line> lines)
+        {
+            if (lines.All(l => l.Amount == null)) return lines;
+            if (lines.Any(l => l.Amount != null && l.ItemTypeId == null))
+                throw new ToolError("A line priced by amount needs an itemTypeId that has stock.");
+            if (await _context.Companies.AsNoTracking().Where(c => c.Id == companyId).Select(c => c.InventoryOverlayEnabled).FirstAsync())
+                throw new ToolError("This company keeps a separate commercial bill, which is not priced from stock. Give quantity and unitPrice.");
+            var ids = lines.Where(l => l.Amount != null).Select(l => l.ItemTypeId!.Value).Distinct().ToList();
+            var answer = await Screen<InvoicesController>().GetStockPricing(companyId, string.Join(",", ids));
+            var pricing = ((answer.Result as Microsoft.AspNetCore.Mvc.OkObjectResult)?.Value as List<StockLinePricingDto> ?? new List<StockLinePricingDto>())
+                .ToDictionary(p => p.ItemTypeId);
+            var decimalUnits = (await _context.Units.AsNoTracking().Where(u => u.AllowsDecimalQuantity).Select(u => u.Name).ToListAsync())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            return lines.Select(l =>
+            {
+                if (l.Amount is not { } amount) return l;
+                var p = pricing.GetValueOrDefault(l.ItemTypeId!.Value);
+                var priced = p is { CanPrice: true }
+                    ? StockOutQuantity.PriceFromAmount(amount, p.AvailableQuantity, p.AvailableValueExcludingTax, p.UnitCost,
+                        p.Tiers?.Select(t => new StockOutQuantity.Tier(t.Quantity, t.ValueExcludingTax, t.UnitCost)).ToList(),
+                        decimalUnits.Contains(p.Uom ?? l.Unit))
+                    : null;
+                if (priced is not { } x)
+                    throw new ToolError($"\"{l.Description}\" cannot be priced from an amount: {p?.Note ?? "the item has no stock to price from."} Give quantity and unitPrice instead.");
+                return l with { Quantity = x.Quantity, UnitPrice = x.UnitPrice, StockQuantity = x.StockQuantity };
+            }).ToList();
         }
 
         private static decimal Gst(JsonElement args) => OptDec(args, "gstRate", 0, 100, 2) ?? 18m;
@@ -613,7 +656,7 @@ namespace MyApp.Api.Controllers
             }
 
             if (Has(args, "prices")) throw new ToolError("prices applies to challan lines. For a standalone bill give items.");
-            var lines = await DocLinesAsync(args, companyId, pricesRequired: true, allowNewItem: true);
+            var lines = await PriceAmountLinesAsync(companyId, await DocLinesAsync(args, companyId, pricesRequired: true, allowNewItem: true, allowAmount: true));
             if (lines.Any(l => l.ItemTypeId == null && l.NewItem == null)) throw new ToolError("Every bill line needs an itemTypeId (search_item_types) or a newItemType.");
             if (lines.Any(l => l.NewItem != null)) await Need("itemtypes.manage.create");
             var sdto = new CreateStandaloneInvoiceDto
@@ -631,7 +674,7 @@ namespace MyApp.Api.Controllers
                 AdvanceTaxSection = advanceSection,
                 AdvanceTaxFilerActive = advanceFiler,
                 TaxRateOverrideReason = overrideReason,
-                Items = lines.Select(l => new CreateStandaloneInvoiceItemDto { Description = l.Description, Quantity = l.Quantity, UOM = l.Unit, UnitPrice = l.UnitPrice!.Value, ItemTypeId = l.ItemTypeId, NewItemType = l.NewItem }).ToList(),
+                Items = lines.Select(l => new CreateStandaloneInvoiceItemDto { Description = l.Description, Quantity = l.Quantity, UOM = l.Unit, UnitPrice = l.UnitPrice!.Value, ItemTypeId = l.ItemTypeId, NewItemType = l.NewItem, StockQuantity = l.StockQuantity }).ToList(),
             };
             var sub = Math.Round(lines.Sum(l => l.Quantity * l.UnitPrice!.Value), 2, MidpointRounding.AwayFromZero);
             var spreview = new
@@ -643,7 +686,7 @@ namespace MyApp.Api.Controllers
                 gstRate = gst,
                 furtherTaxRate = furtherTax,
                 advanceTaxSection = advanceSection,
-                lines = sdto.Items.Select(i => new { i.Description, i.Quantity, unit = i.UOM, i.UnitPrice, i.ItemTypeId, newItem = i.NewItemType == null ? null : new { i.NewItemType.Name, i.NewItemType.HsCode } }),
+                lines = sdto.Items.Select(i => new { i.Description, i.Quantity, unit = i.UOM, i.UnitPrice, i.ItemTypeId, stockQuantity = i.StockQuantity, newItem = i.NewItemType == null ? null : new { i.NewItemType.Name, i.NewItemType.HsCode } }),
                 subtotalAbout = sub,
                 currency = "PKR",
                 note = "The bill number, taxes and totals are fixed by the ERP when it is saved and reported back. Nothing is sent to FBR.",

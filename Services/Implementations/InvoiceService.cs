@@ -153,7 +153,9 @@ namespace MyApp.Api.Services.Implementations
         private async Task RoundUpCloseOutBinsAsync(Company company, int companyId, IEnumerable<InvoiceItem> items, DateTime date)
         {
             if (!company.InventoryTrackingEnabled) return;
-            var lines = items.Where(i => i.ItemTypeId.HasValue && i.Quantity > 0).ToList();
+            // A line carrying its own stock quantity already takes out exactly
+            // what its amount buys, so it is never rounded up.
+            var lines = items.Where(i => i.ItemTypeId.HasValue && i.Quantity > 0 && i.StockQuantity == null).ToList();
             if (lines.Count == 0) return;
             var ids = lines.Select(i => i.ItemTypeId!.Value).Distinct().ToList();
             var positions = await _stock.GetValuationsAsync(companyId, ids);
@@ -378,6 +380,7 @@ namespace MyApp.Api.Services.Implementations
                     LineTotal = ii.LineTotal,
                     HSCode = ii.HSCode,
                     KeepInStock = ii.KeepInStock,
+                    StockQuantity = ii.StockQuantity,
                     FbrUOMId = ii.FbrUOMId,
                     SaleType = ii.SaleType,
                     RateId = ii.RateId,
@@ -637,7 +640,7 @@ namespace MyApp.Api.Services.Implementations
 
             var requirements = items
                 .Where(i => i.ItemTypeId.HasValue && !i.KeepInStock)
-                .Select(i => new StockRequirement(i.ItemTypeId!.Value, i.ItemTypeName ?? "", i.Quantity))
+                .Select(i => new StockRequirement(i.ItemTypeId!.Value, i.ItemTypeName ?? "", StockOutQuantity.Of(i.StockQuantity, i.Quantity)))
                 .ToList();
             if (requirements.Count == 0) return;
 
@@ -1454,6 +1457,7 @@ namespace MyApp.Api.Services.Implementations
                     SaleType = effectiveSaleType,
                     RateId = itemDto.RateId,
                     FixedNotifiedValueOrRetailPrice = itemDto.FixedNotifiedValueOrRetailPrice,
+                    StockQuantity = itemType == null ? null : StockOutQuantity.Resolve(itemDto.StockQuantity, itemDto.Quantity),
                     // SRO refs flow through directly — they're scenario-driven
                     // (only SN028-style reduced-rate bills set them) and are
                     // never derived from the catalog.
@@ -1997,6 +2001,17 @@ namespace MyApp.Api.Services.Implementations
                     if (itemDto.ItemTypeId.HasValue && typeMap.TryGetValue(itemDto.ItemTypeId.Value, out var t))
                         pickedType = t;
 
+                    // The stock quantity belongs to this item at this quantity
+                    // and price: an edit that changes one without sending a new
+                    // stock quantity goes back to the billed quantity.
+                    existing.StockQuantity = pickedType == null
+                        ? null
+                        : StockOutQuantity.AfterEdit(
+                            itemDto.StockQuantity, existing.StockQuantity,
+                            lineUnchanged: existing.ItemTypeId == pickedType.Id
+                                && existing.Quantity == itemDto.Quantity
+                                && existing.UnitPrice == itemDto.UnitPrice,
+                            itemDto.Quantity);
                     existing.Description = itemDto.Description;
                     existing.Quantity = itemDto.Quantity;
                     existing.UnitPrice = itemDto.UnitPrice;
@@ -2346,6 +2361,7 @@ namespace MyApp.Api.Services.Implementations
                 foreach (var row in dto.Items)
                 {
                     var existing = invoice.Items.First(ii => ii.Id == row.Id);
+                    var lineBefore = (existing.ItemTypeId, existing.Quantity, existing.UnitPrice);
                     // Per-line GL account (design §3.3) is bill data — like the
                     // item type it's written straight to the InvoiceItem in both
                     // Bill and Adjustment write-modes.
@@ -2588,6 +2604,11 @@ namespace MyApp.Api.Services.Implementations
                         if (row.Quantity.HasValue || row.UnitPrice.HasValue)
                             existing.LineTotal = Math.Round(existing.Quantity * existing.UnitPrice, 2, MidpointRounding.AwayFromZero);
                     }
+
+                    // A stock quantity worked out for another item, quantity or
+                    // price no longer describes this line.
+                    if (lineBefore != (existing.ItemTypeId, existing.Quantity, existing.UnitPrice))
+                        existing.StockQuantity = null;
                 }
 
                 // Total-preservation guard.
@@ -2810,6 +2831,7 @@ namespace MyApp.Api.Services.Implementations
                 SaleType = effectiveSaleType,
                 RateId = itemDto.RateId,
                 FixedNotifiedValueOrRetailPrice = itemDto.FixedNotifiedValueOrRetailPrice,
+                StockQuantity = itemType == null ? null : StockOutQuantity.Resolve(itemDto.StockQuantity, itemDto.Quantity),
                 SroScheduleNo = string.IsNullOrWhiteSpace(itemDto.SroScheduleNo) ? null : itemDto.SroScheduleNo,
                 SroItemSerialNo = string.IsNullOrWhiteSpace(itemDto.SroItemSerialNo) ? null : itemDto.SroItemSerialNo,
             };
@@ -3388,6 +3410,9 @@ namespace MyApp.Api.Services.Implementations
                     // Its SHARE of MRP x Qty: a partial note returning 3 of 10
                     // carried the whole retail price, and FBR was told the full tax.
                     FixedNotifiedValueOrRetailPrice = SalesTaxBase.Rescale(src.FixedNotifiedValueOrRetailPrice, EffQty(src), qty),
+                    // Goods coming back return what the sale took out, not the
+                    // whole units the invoice showed.
+                    StockQuantity = StockOutQuantity.Share(src.StockQuantity, EffQty(src), qty),
                     SroScheduleNo = src.SroScheduleNo,
                     SroItemSerialNo = src.SroItemSerialNo,
                     DeliveryItemId = null,   // a note isn't tied to challan lines
@@ -3559,6 +3584,7 @@ namespace MyApp.Api.Services.Implementations
                             SaleType = i.SaleType,
                             RateId = i.RateId,
                             FixedNotifiedValueOrRetailPrice = i.FixedNotifiedValueOrRetailPrice,
+                            StockQuantity = i.StockQuantity,
                             SroScheduleNo = i.SroScheduleNo,
                             SroItemSerialNo = i.SroItemSerialNo
                         },

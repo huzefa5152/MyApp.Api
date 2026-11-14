@@ -97,7 +97,7 @@ namespace MyApp.Api.Controllers
             if (moving && division != existing.DivisionId) await AssertDivisionWriteAsync(companyId, division);
             var date = DateArg(args, "date") ?? existing.Date;
             if (PakistanClock.IsFutureInvoiceDate(date)) throw new ToolError("A bill cannot be dated in the future (FBR rule 0043).");
-            var lines = await DocLinesAsync(args, companyId, pricesRequired: true, allowNewItem: true);
+            var lines = await PriceAmountLinesAsync(companyId, await DocLinesAsync(args, companyId, pricesRequired: true, allowNewItem: true, allowAmount: true));
             if (lines.Any(l => l.ItemTypeId == null && l.NewItem == null)) throw new ToolError("Every bill line needs an itemTypeId (search_item_types) or a newItemType.");
             if (lines.Any(l => l.NewItem != null)) await Need("itemtypes.manage.create");
             KeepOwnLines(lines.Select(l => l.Id), existing.Items.Select(i => i.Id), "bill");
@@ -128,6 +128,7 @@ namespace MyApp.Api.Controllers
                     UnitPrice = l.UnitPrice!.Value,
                     ItemTypeId = l.ItemTypeId,
                     NewItemType = l.NewItem,
+                    StockQuantity = l.StockQuantity,
                 }).ToList(),
             };
             var sub = Math.Round(lines.Sum(l => l.Quantity * l.UnitPrice!.Value), 2, MidpointRounding.AwayFromZero);
@@ -138,7 +139,7 @@ namespace MyApp.Api.Controllers
                 date = Ymd(date),
                 gstRate = dto.GSTRate,
                 furtherTaxRate = dto.FurtherTaxRate,
-                lines = dto.Items.Select(i => new { i.Id, i.Description, i.Quantity, unit = i.UOM, i.UnitPrice, i.ItemTypeId, newItem = i.NewItemType == null ? null : new { i.NewItemType.Name, i.NewItemType.HsCode } }),
+                lines = dto.Items.Select(i => new { i.Id, i.Description, i.Quantity, unit = i.UOM, i.UnitPrice, i.ItemTypeId, stockQuantity = i.StockQuantity, newItem = i.NewItemType == null ? null : new { i.NewItemType.Name, i.NewItemType.HsCode } }),
                 subtotalAbout = sub,
                 currency = "PKR",
                 note = "Totals and taxes are worked out by the ERP when saved. Nothing is sent to FBR.",

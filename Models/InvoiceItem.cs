@@ -94,6 +94,16 @@ namespace MyApp.Api.Models
         public bool KeepInStock { get; set; }
 
         /// <summary>
+        /// What this line takes out of stock when that is not the billed
+        /// quantity (2026-11-15). Set only on a line priced from an amount,
+        /// where the invoice shows a whole quantity and the amount buys a
+        /// fraction more or less. Always within one unit of
+        /// <see cref="Quantity"/>; null means the billed quantity leaves stock.
+        /// Read it through <see cref="MyApp.Api.Helpers.StockOutQuantity"/>.
+        /// </summary>
+        public decimal? StockQuantity { get; set; }
+
+        /// <summary>
         /// FBR SRO / Schedule reference for reduced-rate or exempt items. FBR
         /// rejects non-18% submissions with [0077] unless this is populated.
         /// Common values: "EIGHTH SCHEDULE Table 1", "SRO 297(I)/2023".

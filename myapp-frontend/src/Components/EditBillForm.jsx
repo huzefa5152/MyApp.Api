@@ -71,7 +71,13 @@ import ItemTypeForm from "./ItemTypeForm";
 import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
 import BillNumberField from "./BillNumberField";
-import { fifoQuantityForAmount, fifoTierText } from "../utils/fifoPricing";
+import {
+  amountStock,
+  fifoQuantityForAmount,
+  fifoTierText,
+  partUnitNote,
+  rowStockQuantity,
+} from "../utils/fifoPricing";
 
 // The Customer Portal addresses a document by its NUMBER
 // (GET /portal/{token}/invoices/{invoiceNumber}), so changing it breaks a link
@@ -753,12 +759,15 @@ export default function EditBillForm({
         // exactly what was entered. The UOM does not decide the precision here
         // -- see the note in StandaloneInvoiceForm.deriveFromTotal.
         // FIFO by GD: the amount walks the GDs the sale will drain, in order.
-        const qty = Math.max(1, Math.round(fifoQuantityForAmount(price, total) ?? total / cost));
+        const rawQty = fifoQuantityForAmount(price, total) ?? total / cost;
+        const qty = Math.max(1, Math.round(rawQty));
         const rate = Math.round((total / qty) * 1e12) / 1e12;
         next[index] = {
           ...row,
           quantity: String(qty),
           unitPrice: String(rate),
+          // Stock gives up what the amount buys, not the whole units billed.
+          amountStock: amountStock(rawQty, qty, rate, row.itemTypeId),
           lineTotal: String(Math.round(total * 100) / 100),
         };
         return next;
@@ -1617,11 +1626,15 @@ export default function EditBillForm({
     // value. Billing an item with no stock is a supported flow, so lines the
     // system cannot price are left alone.
     if (!price?.canPrice) return null;
-    const want = parseFloat(row.quantity);
+    // Measured on what leaves stock, which on a line priced from an amount
+    // is what the amount buys rather than the whole units billed.
+    const want = rowStockQuantity(row) ?? parseFloat(row.quantity);
     if (!(want > 0)) return null;
     const orig = originalItemsRef.current[index];
     const alreadyTaken =
-      orig && orig.itemTypeId === row.itemTypeId ? parseFloat(orig.quantity) || 0 : 0;
+      orig && orig.itemTypeId === row.itemTypeId
+        ? parseFloat(orig.stockQuantity ?? orig.quantity) || 0
+        : 0;
     const have = Number(price.availableQuantity) + alreadyTaken;
     if (!(want > have)) return null;
     return {
@@ -1831,6 +1844,10 @@ export default function EditBillForm({
             // parseFloat preserves decimals (12.5 KG, 0.0004 Carat).
             // Server-side validation rejects fractions for integer-only UOMs.
             quantity: parseFloat(i.quantity) || 0,
+            // Sent only when this edit priced the line from an amount. A
+            // line left alone keeps what it had; one changed by hand goes
+            // back to the billed quantity (the server decides both).
+            stockQuantity: rowStockQuantity(i) ?? undefined,
             uom: i.uom || "",
             unitPrice: parseFloat(i.unitPrice),
             hsCode: i.hsCode || null,
@@ -3137,6 +3154,27 @@ export default function EditBillForm({
                                               : `${Number(price.unitCost).toLocaleString(undefined, { maximumFractionDigits: 4 })} each`}
                                           </div>
                                         )}
+                                        {(() => {
+                                          // An amount that buys only part of the units the
+                                          // invoice will show: say what leaves stock.
+                                          const note = partUnitNote(
+                                            rowStockQuantity(item),
+                                            item.quantity,
+                                            item.uom,
+                                            item.lineTotal,
+                                          );
+                                          return note ? (
+                                            <div
+                                              style={{
+                                                fontSize: "0.68rem",
+                                                color: colors.textSecondary,
+                                                marginTop: 2,
+                                              }}
+                                            >
+                                              {note}
+                                            </div>
+                                          ) : null;
+                                        })()}
                                         {(() => {
                                           // The figures the operator needs to act: what is
                                           // available to this line, what it is asking for, and

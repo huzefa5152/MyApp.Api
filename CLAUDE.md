@@ -1828,6 +1828,46 @@ string. Importers never adjust quantity or item type for FBR, so:
   `node scripts/test_invoice_screen.mjs` (53); the reflow gate's suite 8 pins
   the kept-in-stock choice.
 
+### 5b-23. A line priced from an amount takes out what the amount buys (2026-11-15)
+
+`InvoiceItem.StockQuantity` (nullable) is what a line takes out of stock when
+that is not its billed `Quantity`. `Helpers/StockOutQuantity.cs` is the ONE rule
+(pure; linked by the offline FIFO harness).
+
+- **Why.** Entering an AMOUNT bills a whole quantity (5b-7), and the amount
+  rarely buys whole units. A small amount billed against one costly unit took
+  the whole unit's value out of stock, while the consultant's stock sheet takes
+  off the invoice amount. With the stock quantity, value out = the amount billed.
+- **Only the stock movement changes.** The invoice, its print, the FBR payload
+  and every total keep the whole `Quantity`. `StockService` posts
+  `StockOutQuantity.Of(...)`; the dual-book overlay quantity still wins over it.
+- **It is the rounding of the billed quantity, nothing more.** `Resolve` refuses
+  (400) a value a whole unit or more from `Quantity`; equal or non-positive
+  stores null. Never widen that bound: a free second quantity is an unchecked
+  second book.
+- **Set only by pricing from an amount**: the two invoice forms
+  (`utils/fifoPricing.js` `amountStock` / `rowStockQuantity`) and MCP
+  `prepare_bill` lines that give `amount` (`StockOutQuantity.PriceFromAmount`,
+  the server copy of the forms' rule; change both). A quantity and rate typed by
+  hand send none, so the whole quantity leaves: that is how a whole unit sold
+  cheaply is billed, and the form's notice says so.
+- **Edits.** `AfterEdit`: a value sent replaces it (0 clears); none sent keeps it
+  only while item, quantity and unit price are unchanged. The narrow item-type
+  PATCH clears it on any such change. A challan-built bill never has one.
+- **Notes.** A stock-returning note line carries its SHARE (`Share`), so a
+  return brings back what left.
+- **The oversell guard and the forms' shortfall test measure the stock
+  quantity.** The close-out rounding skips a line that has one.
+- **Existing rows are not backfilled.** Null means the billed quantity, exactly
+  as before.
+- **Diagnosis.** `GET /api/stock/company/{id}/bill-cost-check?from=&to=&minGap=`
+  (`stock.dashboard.view`, FIFO only, read-only; MCP `check_bill_stock_cost`):
+  each invoice line's amount beside the FIFO cost it took out, largest gap
+  first, totals over every line. Start here when stock value disagrees with a
+  sheet that deducts invoice amounts.
+- Suites: reflow gate suite 9, harness case 25, `test_fifo_pricing.mjs`,
+  `test_mcp_parity.py` (bill by amount, `check_bill_stock_cost`), tenant route list.
+
 ### 5c. Customer Portal — the only anonymous surface
 
 `Controllers/PublicCustomerPortalController.cs` is one of just two
@@ -2347,7 +2387,7 @@ them can be resolved from FBR.
 | Invoice screen decisions (offline): description fill, stock before save, card/table actions, FBR chip | `node scripts/test_invoice_screen.mjs` | `51/51 checks passed` |
 | GD costing import: line rules on both paths, leave-out, choose item, file identity | `python scripts/test_gd_import_costing.py`; `node scripts/test_gd_costing_entry.mjs`; `cd scripts/gd_costing_harness && dotnet run -c Release` | `476 passed, 0 failed`; `54/54 checks passed`; `145 checks, 0 failed` |
 | Invoice Sales Detail: periods, filters, Excel = screen, Excel format pinned, access | `python scripts/test_invoice_sales_detail.py` (add `--db "<conn>"` for the FBR-submitted cases); `node scripts/test_invoice_sales_detail.mjs` | `64/64 checks passed` (with `--db`; 61 + 3 skipped without); `45/45 checks passed` |
-| FIFO by GD (claimed first, never blocks, WA unchanged) | `cd scripts/stock_fifo_harness && dotnet run -c Release`; `python scripts/test_stock_fifo.py`; `node scripts/test_fifo_pricing.mjs` | `159 checks, 0 failed`; `61/61 checks passed`; `11/11 checks passed` |
+| FIFO by GD (claimed first, never blocks, WA unchanged) | `cd scripts/stock_fifo_harness && dotnet run -c Release`; `python scripts/test_stock_fifo.py`; `node scripts/test_fifo_pricing.mjs` | `192 checks, 0 failed`; `94/94 checks passed`; `26/26 checks passed` |
 | Import Tax Desk (register, input-tax worksheet, tie-out) | `python scripts/test_import_tax_desk.py` | `27/27 checks passed` |
 | Dashboards (shared sale filter, receivables, landed margin, tax position, drills tie, permissions) | `python scripts/test_dashboard_kpis.py` (add `--db "<conn>"` for the DB-backed cases); `node scripts/test_dashboard_ui.mjs` | `197/197 checks passed` (with `--db`); `20 passed, 0 failed` |
 | GD charges, customs units, letters of credit | `python scripts/test_import_charges_units_lcs.py` | `24/24 checks passed` |

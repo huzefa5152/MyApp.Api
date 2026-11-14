@@ -40,7 +40,13 @@ import PermissionLackedHint from "./PermissionLackedHint";
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import AttachmentManager from "./AttachmentManager";
 import ManualFilingStep, { emptyManualFiling, keptCodes, manualFilingPayload } from "./ManualFilingStep";
-import { fifoQuantityForAmount, fifoTierTakes } from "../utils/fifoPricing";
+import {
+  amountStock,
+  fifoQuantityForAmount,
+  fifoTierTakes,
+  partUnitNote,
+  rowStockQuantity,
+} from "../utils/fifoPricing";
 
 // Bill-without-challan flow ("Standalone Bill"). Per FBR DI-API V1.12:
 //   • §9 (Scenarios) — locks Sale Type per SN.
@@ -1006,7 +1012,14 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     // re-rounded -- the two agree to the paisa by construction, and quoting the
     // typed figure back is what guarantees the operator never sees their own
     // number change.
-    return { qty, rate, exact: Math.round(total * 100) / 100 };
+    // Stock gives up what the amount buys, not the whole units billed: 30,000
+    // of a machine held as 1 Pcs worth 250,000 bills 1 Pcs and takes 0.12.
+    return {
+      qty,
+      rate,
+      exact: Math.round(total * 100) / 100,
+      amountStock: amountStock(rawQty, qty, rate, row.itemTypeId),
+    };
   };
 
   // The AMOUNT is the source of truth on a line priced from stock, so a line
@@ -1024,7 +1037,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         const p = String(d.rate);
         if (q === r.quantity && p === r.unitPrice) return r;
         changed = true;
-        return { ...r, quantity: q, unitPrice: p, lineTotal: String(d.exact) };
+        return { ...r, quantity: q, unitPrice: p, lineTotal: String(d.exact), amountStock: d.amountStock ?? null };
       });
       return changed ? next : rs;
     });
@@ -1078,7 +1091,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const stockShortfall = (row, extraAvailable = 0) => {
     const price = stockPricing[row.itemTypeId];
     if (!price?.canPrice) return null;
-    const want = parseFloat(row.quantity);
+    const want = rowStockQuantity(row) ?? parseFloat(row.quantity);
     if (!(want > 0)) return null;
     const have = Number(price.availableQuantity) + Number(extraAvailable || 0);
     if (!(want > have)) return null;
@@ -1107,6 +1120,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       lineTotal: raw,                      // verbatim, so typing works
       quantity: String(d.qty),
       unitPrice: String(d.rate),
+      amountStock: d.amountStock ?? null,
     });
   };
 
@@ -1120,7 +1134,12 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     if (!(fullValue > 0)) return;
     const d = deriveFromTotal(row, fullValue);
     if (!d) return;
-    updateRow(localId, { lineTotal: String(d.exact), quantity: String(d.qty), unitPrice: String(d.rate) });
+    updateRow(localId, {
+      lineTotal: String(d.exact),
+      quantity: String(d.qty),
+      unitPrice: String(d.rate),
+      amountStock: d.amountStock ?? null,
+    });
   };
 
   // On blur, settle the amount on what quantity x rate actually makes, so what
@@ -1134,6 +1153,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       lineTotal: String(d.exact),
       quantity: String(d.qty),
       unitPrice: String(d.rate),
+      amountStock: d.amountStock ?? null,
     });
   };
 
@@ -1306,6 +1326,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
           // own. Either way it lands on InvoiceItem.Description.
           description: r.description?.trim() || r.itemTypeName?.trim() || "",
           quantity: parseFloat(r.quantity),
+          // What leaves stock, when the line was priced from an amount.
+          stockQuantity: rowStockQuantity(r) ?? undefined,
           uom: r.uom?.trim() || null,
           unitPrice: parseFloat(r.unitPrice),
           hsCode: r.hsCode?.trim() || null,
@@ -1950,6 +1972,12 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       );
                                     })()}
                                     {(() => {
+                                      // An amount that buys only part of the units the
+                                      // invoice will show: say what leaves stock.
+                                      const note = partUnitNote(rowStockQuantity(r), r.quantity, r.uom, r.lineTotal);
+                                      return note ? <div style={styles.rateChipCheck}>{note}</div> : null;
+                                    })()}
+                                    {(() => {
                                       // States the two numbers the operator needs: what
                                       // they hold, and what this line would take. Saying
                                       // only "not enough stock" leaves them to work out
@@ -2264,7 +2292,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                   </td>
                                 </tr>
                                 {canDerive && gdOpen[r.localId] && (() => {
-                                  const takes = fifoTierTakes(priced, q, r.lineTotal);
+                                  const takes = fifoTierTakes(priced, rowStockQuantity(r) ?? q, r.lineTotal);
                                   if (!takes) return null;
                                   const n2 = (v) => Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                                   const nq = (v) => Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 });

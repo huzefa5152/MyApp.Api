@@ -15,5 +15,6 @@
     <Compile Include="..\..\Helpers\StockValuation.cs" />
     <Compile Include="..\..\Helpers\GdFifoValuation.cs" />
     <Compile Include="..\..\Helpers\BackdatedGdRestatement.Lines.cs" />
+    <Compile Include="..\..\Helpers\StockOutQuantity.cs" />
   </ItemGroup>
 </Project>

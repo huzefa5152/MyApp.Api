@@ -9,9 +9,15 @@
  */
 import assert from "node:assert";
 
-const { fifoQuantityForAmount, fifoTierText, fifoTierTakes } = await import(
-  new URL("../myapp-frontend/src/utils/fifoPricing.js", import.meta.url).href
-);
+const {
+  amountStock,
+  fifoQuantityForAmount,
+  fifoTierText,
+  fifoTierTakes,
+  partUnitNote,
+  rowStockQuantity,
+  stockQuantityForLine,
+} = await import(new URL("../myapp-frontend/src/utils/fifoPricing.js", import.meta.url).href);
 
 let pass = 0;
 const failures = [];
@@ -98,6 +104,68 @@ check("tier takes: values add up to the line amount", () => {
   near(t[0].takeValue, 1000);
 });
 check("tier takes: no tiers -> null", () => assert.strictEqual(fifoTierTakes({}, 5), null));
+
+// What a line priced from an amount takes out of stock (2026-11-15).
+const machine = {
+  tiers: [{ gdNumber: "GD-1", quantity: 1, unitCost: 250000, valueExcludingTax: 250000 }],
+};
+check("stock quantity: 30,000 of one 250,000 machine takes 0.12, not the unit", () => {
+  const raw = fifoQuantityForAmount(machine, 30000);
+  const stock = stockQuantityForLine(raw, Math.max(1, Math.round(raw)));
+  near(stock, 30000 / 250000);
+  near(stock * 250000, 30000);
+});
+check("stock quantity: an amount that buys whole units needs none", () =>
+  assert.strictEqual(stockQuantityForLine(5, 5), null),
+);
+check("stock quantity: rounding down keeps the fraction (798.313 billed as 798)", () =>
+  near(stockQuantityForLine(798.313, 798), 798.313),
+);
+check("stock quantity: never a whole unit or more from the billed quantity", () => {
+  assert.strictEqual(stockQuantityForLine(3.2, 5), null);
+  assert.strictEqual(stockQuantityForLine(2, 1), null);
+});
+check("stock quantity: nothing to work from -> null", () => {
+  assert.strictEqual(stockQuantityForLine(0, 1), null);
+  assert.strictEqual(stockQuantityForLine(null, 1), null);
+  assert.strictEqual(stockQuantityForLine(0.4, 0), null);
+});
+check("row: sends the stock quantity while the row is as it was priced", () => {
+  const a = amountStock(0.12, 1, 30000, 7);
+  assert.strictEqual(
+    rowStockQuantity({ amountStock: a, quantity: "1", unitPrice: "30000", itemTypeId: 7 }),
+    0.12,
+  );
+});
+check("row: a quantity, rate or item changed by hand sends none", () => {
+  const a = amountStock(0.12, 1, 30000, 7);
+  assert.strictEqual(
+    rowStockQuantity({ amountStock: a, quantity: "2", unitPrice: "30000", itemTypeId: 7 }),
+    null,
+  );
+  assert.strictEqual(
+    rowStockQuantity({ amountStock: a, quantity: "1", unitPrice: "29000", itemTypeId: 7 }),
+    null,
+  );
+  assert.strictEqual(
+    rowStockQuantity({ amountStock: a, quantity: "1", unitPrice: "30000", itemTypeId: 9 }),
+    null,
+  );
+  assert.strictEqual(rowStockQuantity({ quantity: "1", unitPrice: "30000" }), null);
+});
+check("row: whole units remember nothing", () =>
+  assert.strictEqual(amountStock(5, 5, 100, 1), null),
+);
+check("notice: part of a unit is spelled out with both quantities", () => {
+  const t = partUnitNote(0.12, 1, "Pcs", 30000);
+  assert.ok(t.includes("buys 0.12 Pcs"), t);
+  assert.ok(t.includes("invoice shows 1 Pcs"), t);
+  assert.ok(t.includes("30,000.00"), t);
+});
+check("notice: small rounding on a large quantity stays quiet", () => {
+  assert.strictEqual(partUnitNote(798.313, 798, "Kg", 746700), null);
+  assert.strictEqual(partUnitNote(null, 1, "Pcs", 100), null);
+});
 
 for (const f of failures) console.log(`FAIL  ${f}`);
 console.log(`${pass}/${pass + failures.length} checks passed`);

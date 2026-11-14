@@ -330,6 +330,9 @@
         /// "3rd Schedule Goods" to satisfy FBR error 0090.
         /// </summary>
         public decimal? FixedNotifiedValueOrRetailPrice { get; set; }
+        /// <summary>What the line takes out of stock when that is not <see cref="Quantity"/>
+        /// (a line priced from an amount). Null = the billed quantity.</summary>
+        public decimal? StockQuantity { get; set; }
         /// <summary>
         /// Optional dual-book overlay (2026-05-11). When present, the
         /// frontend's Invoice-mode view should render the AdjustedXxx
@@ -589,6 +592,13 @@
         public int? RateId { get; set; }
         /// <summary>3rd Schedule retail price (MRP × qty) — required for SN008 / SN027.</summary>
         public decimal? FixedNotifiedValueOrRetailPrice { get; set; }
+        /// <summary>
+        /// The quantity the line's amount buys from stock, when the line was
+        /// priced from an amount and the billed quantity is its whole-number
+        /// rounding. Must be within one unit of Quantity. Omit it and the
+        /// billed quantity leaves stock.
+        /// </summary>
+        public decimal? StockQuantity { get; set; }
         /// <summary>SRO Schedule reference — required for non-18 % rates (SN028, FBR rule 0077).</summary>
         public string? SroScheduleNo { get; set; }
         /// <summary>Serial number within the referenced SRO/Schedule — required when SroScheduleNo is set (FBR rule 0078).</summary>
@@ -870,6 +880,13 @@
         public int? RateId { get; set; }
         /// <summary>3rd Schedule retail price (MRP × qty) — required for "3rd Schedule Goods" sale type.</summary>
         public decimal? FixedNotifiedValueOrRetailPrice { get; set; }
+        /// <summary>
+        /// The quantity the line's amount buys from stock, when the line was
+        /// priced from an amount and the billed quantity is its whole-number
+        /// rounding. Must be within one unit of Quantity. Omit it and the
+        /// billed quantity leaves stock.
+        /// </summary>
+        public decimal? StockQuantity { get; set; }
         /// <summary>SRO Schedule reference — required when rate ≠ 18 % per FBR rule 0077.</summary>
         public string? SroScheduleNo { get; set; }
         /// <summary>Serial number within the referenced SRO/Schedule — FBR rule 0078.</summary>

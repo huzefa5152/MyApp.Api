@@ -113,6 +113,116 @@ namespace MyApp.Api.Controllers
             return Ok(rows);
         }
 
+        /// <summary>
+        /// Each invoice line's amount beside the stock value it took out
+        /// (2026-11-15). A consultant's stock sheet takes the INVOICE AMOUNT off
+        /// the stock; the books take the FIFO cost of the quantity that left.
+        /// The two agree while an amount buys about a whole number of units and
+        /// part company when a small amount is billed against one costly unit
+        /// (Rs 30,000 of a machine held as 1 Pcs worth 250,000 took the whole
+        /// machine). This lists the lines where they differ, largest first, so a
+        /// gap against the sheet is traced to its invoices in one read.
+        /// Read-only; FIFO by GD only, because only there is a sale costed line
+        /// by line. Totals cover every line in the period, not just those listed.
+        /// </summary>
+        [HttpGet("company/{companyId}/bill-cost-check")]
+        [HasPermission("stock.dashboard.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<StockBillCostCheckDto>> GetBillCostCheck(
+            int companyId, [FromQuery] DateTime? from = null, [FromQuery] DateTime? to = null,
+            [FromQuery] decimal minGap = 100m)
+        {
+            var today = PakistanClock.Today;
+            var start = (from ?? new DateTime(today.Year, today.Month, 1)).Date;
+            var end = (to ?? today).Date;
+            if (end < start) return BadRequest(new { message = "The period ends before it starts." });
+            if (!await StockCostingMethod.IsGdFifoAsync(_context, companyId))
+                return BadRequest(new { message = "This check needs FIFO-by-GD costing: under the weighted average a sale is not costed line by line." });
+            if (minGap < 0m) minGap = 0m;
+
+            var result = new StockBillCostCheckDto { From = start, To = end, MinGap = minGap };
+            var ids = await _context.StockMovements.AsNoTracking()
+                .Where(m => m.CompanyId == companyId && m.SourceType == StockMovementSourceType.Invoice
+                         && m.Direction == StockMovementDirection.Out
+                         && m.MovementDate >= start && m.MovementDate < end.AddDays(1))
+                .Select(m => m.ItemTypeId).Distinct().ToListAsync();
+            var walk = await FifoResultsBeforeAsync(companyId, ids, end.AddDays(1));
+            if (walk == null) return Ok(result);
+
+            // What each invoice took out, per item: quantity and FIFO cost.
+            var taken = walk.Value.Movements.Values
+                .Where(m => m.SourceType == StockMovementSourceType.Invoice && m.SourceId.HasValue
+                         && m.Direction == StockMovementDirection.Out && m.MovementDate >= start)
+                .GroupBy(m => (InvoiceId: m.SourceId!.Value, m.ItemTypeId))
+                .ToDictionary(g => g.Key, g => (
+                    Quantity: g.Sum(m => m.Quantity),
+                    Cost: g.Sum(m => walk.Value.Results[m.ItemTypeId].Takes.TryGetValue(m.Id, out var t) ? t.Sum(x => x.Value) : 0m)));
+            if (taken.Count == 0) return Ok(result);
+
+            var invoiceIds = taken.Keys.Select(k => k.InvoiceId).Distinct().ToList();
+            var lines = await _context.InvoiceItems.AsNoTracking()
+                .Where(i => invoiceIds.Contains(i.InvoiceId) && i.ItemTypeId != null && !i.KeepInStock)
+                .Select(i => new
+                {
+                    i.InvoiceId,
+                    ItemTypeId = i.ItemTypeId!.Value,
+                    i.Quantity,
+                    i.StockQuantity,
+                    i.LineTotal,
+                    i.UOM,
+                    i.HSCode,
+                    i.Invoice.InvoiceNumber,
+                    i.Invoice.Date,
+                    i.Invoice.DocumentType,
+                    Name = i.ItemType!.Name,
+                })
+                .ToListAsync();
+
+            var rows = new List<StockBillCostCheckRowDto>();
+            foreach (var g in lines.GroupBy(l => (l.InvoiceId, l.ItemTypeId)))
+            {
+                if (!taken.TryGetValue(g.Key, out var t)) continue;
+                var first = g.First();
+                var billed = g.Sum(l => l.LineTotal);
+                var billedQty = g.Sum(l => l.Quantity);
+                var gap = Math.Round(t.Cost - billed, 2, MidpointRounding.AwayFromZero);
+                result.BilledExcludingTax += billed;
+                result.StockCostOut += t.Cost;
+                if (Math.Abs(gap) < minGap) continue;
+                var ownQuantity = g.Any(l => l.StockQuantity.HasValue);
+                rows.Add(new StockBillCostCheckRowDto
+                {
+                    InvoiceId = first.InvoiceId,
+                    InvoiceNumber = first.InvoiceNumber,
+                    Date = first.Date,
+                    IsDebitNote = first.DocumentType == 9,
+                    ItemTypeId = first.ItemTypeId,
+                    ItemName = first.Name,
+                    HsCode = first.HSCode,
+                    Uom = first.UOM,
+                    BilledQuantity = billedQty,
+                    StockQuantity = t.Quantity,
+                    BilledAmount = billed,
+                    StockCost = Math.Round(t.Cost, 2, MidpointRounding.AwayFromZero),
+                    Gap = gap,
+                    Note = ownQuantity
+                        ? "The invoice shows whole units; stock gave up what the amount buys. The cost differs because the GD costs have changed since the invoice was priced."
+                        : billedQty <= 1m && t.Cost > billed * 1.5m
+                            ? "A whole unit left stock for an amount that buys only part of one. Open the invoice and enter the amount again, so stock gives up only what was billed."
+                            : gap > 0m
+                                ? "Sold below the cost the stock carries, or the quantity was typed by hand."
+                                : "Sold above the cost the stock carries, or the quantity was typed by hand.",
+                });
+            }
+            result.Gap = Math.Round(result.StockCostOut - result.BilledExcludingTax, 2, MidpointRounding.AwayFromZero);
+            result.StockCostOut = Math.Round(result.StockCostOut, 2, MidpointRounding.AwayFromZero);
+            result.InvoiceCount = invoiceIds.Count;
+            result.LinesOverGap = rows.Count;
+            result.Rows = rows.OrderByDescending(r => Math.Abs(r.Gap)).ThenBy(r => r.InvoiceNumber).Take(200).ToList();
+            result.Truncated = rows.Count > result.Rows.Count;
+            return Ok(result);
+        }
+
         /// <summary>Record the period actually filed for a GD. It is distinct
         /// from the declaration date and may remain unknown.</summary>
         [HttpPut("company/{companyId}/gd-claim-month")]

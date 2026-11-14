@@ -516,6 +516,46 @@
         public decimal? SalesTaxRate { get; set; }
     }
 
+    /// <summary>Invoice amounts beside the stock cost they took out, for a period.</summary>
+    public class StockBillCostCheckDto
+    {
+        public DateTime From { get; set; }
+        public DateTime To { get; set; }
+        /// <summary>Lines whose gap is smaller than this are counted in the totals but not listed.</summary>
+        public decimal MinGap { get; set; }
+        public int InvoiceCount { get; set; }
+        /// <summary>Every stock-moving invoice line in the period, at its invoice amount.</summary>
+        public decimal BilledExcludingTax { get; set; }
+        /// <summary>The same lines at the FIFO cost that left stock.</summary>
+        public decimal StockCostOut { get; set; }
+        /// <summary>StockCostOut - BilledExcludingTax: how far the stock value sits below a sheet that deducts invoice amounts.</summary>
+        public decimal Gap { get; set; }
+        public int LinesOverGap { get; set; }
+        public bool Truncated { get; set; }
+        public List<StockBillCostCheckRowDto> Rows { get; set; } = new();
+    }
+
+    public class StockBillCostCheckRowDto
+    {
+        public int InvoiceId { get; set; }
+        public int InvoiceNumber { get; set; }
+        public DateTime Date { get; set; }
+        public bool IsDebitNote { get; set; }
+        public int ItemTypeId { get; set; }
+        public string ItemName { get; set; } = "";
+        public string? HsCode { get; set; }
+        public string? Uom { get; set; }
+        /// <summary>The quantity printed on the invoice.</summary>
+        public decimal BilledQuantity { get; set; }
+        /// <summary>The quantity that left stock.</summary>
+        public decimal StockQuantity { get; set; }
+        public decimal BilledAmount { get; set; }
+        public decimal StockCost { get; set; }
+        /// <summary>StockCost - BilledAmount.</summary>
+        public decimal Gap { get; set; }
+        public string Note { get; set; } = "";
+    }
+
     /// <summary>One source row behind the stock position. Quantities here are
     /// source contributions, not remaining quantities after later sales.</summary>
     public class StockGdDetailDto

@@ -738,6 +738,7 @@ namespace MyApp.Api.Data
             // Carat) carry up to 4 places. Money is 2 places; quantity gets
             // 2 extra so e.g. 0.0004 Carat survives the round-trip.
             modelBuilder.Entity<InvoiceItem>().Property(ii => ii.Quantity).HasPrecision(28, 12);
+            modelBuilder.Entity<InvoiceItem>().Property(ii => ii.StockQuantity).HasPrecision(28, 12);
             modelBuilder.Entity<DeliveryItem>().Property(di => di.Quantity).HasPrecision(28, 12);
 
             // Optional: make ItemDescription.Name and Unit.Name unique

@@ -334,6 +334,9 @@ endpoints_to_test = [
     ("PUT",  "/api/stock/company/{cid}/costing-method"),
     ("POST", "/api/stock/company/{cid}/fifo-restatement"),
     ("GET",  "/api/stock/company/{cid}/gd-details"),
+    # Invoice amounts beside the stock cost they took out: another
+    # tenant's sales and stock values.
+    ("GET",  "/api/stock/company/{cid}/bill-cost-check"),
     ("GET",  "/api/invoices/company/{cid}/stock-pricing?itemTypeIds=1"),
     ("GET",  "/api/fbr/sandbox/{cid}"),
     ("GET",  "/api/fbr/scenarios/applicable/{cid}"),

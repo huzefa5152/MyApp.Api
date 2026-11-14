@@ -646,7 +646,7 @@ namespace MyApp.Api.Services.Implementations
                 if (!item.ItemTypeId.HasValue) continue;
                 if (!trackedItemTypeIds.Contains(item.ItemTypeId.Value)) continue;
                 if (item.KeepInStock) continue;   // filed by hand, operator kept it in stock
-                var q = overlayQtyByItemId.TryGetValue(item.Id, out var adjQty) ? adjQty : item.Quantity;
+                var q = overlayQtyByItemId.TryGetValue(item.Id, out var adjQty) ? adjQty : StockOutQuantity.Of(item.StockQuantity, item.Quantity);
                 if (q <= 0m) continue;
                 desired.TryGetValue(item.ItemTypeId.Value, out var cur);
                 desired[item.ItemTypeId.Value] = cur + q;
@@ -702,7 +702,7 @@ namespace MyApp.Api.Services.Implementations
                 if (item.KeepInStock) continue;   // filed by hand, operator kept it in stock
                 var effectiveQty = overlayQtyByItemId.TryGetValue(item.Id, out var adjQty)
                     ? adjQty
-                    : item.Quantity;
+                    : StockOutQuantity.Of(item.StockQuantity, item.Quantity);
                 if (effectiveQty <= 0) continue;
 
                 var hasOverlay = overlayQtyByItemId.ContainsKey(item.Id);
@@ -724,7 +724,9 @@ namespace MyApp.Api.Services.Implementations
                     MovementDate = invoice.Date,
                     Notes = hasOverlay
                         ? $"{docLabel} #{invoice.InvoiceNumber} saved (FBR-adjusted qty {effectiveQty:0.####}, row qty {item.Quantity:0.####})"
-                        : $"{docLabel} #{invoice.InvoiceNumber} saved",
+                        : item.StockQuantity.HasValue
+                            ? $"{docLabel} #{invoice.InvoiceNumber} saved ({effectiveQty:0.####} of {item.Quantity:0.####} {item.UOM} billed: what the amount buys)"
+                            : $"{docLabel} #{invoice.InvoiceNumber} saved",
                     CreatedAt = DateTime.UtcNow,
                 });
             }

@@ -833,6 +833,156 @@ def suite_manual_filing_keep(base, token, cid, client, supplier, suffix):
           f"{st} A={oa()} B={ob()}")
 
 
+# ── Suite 9 — A line priced from an amount takes what the amount buys ─
+def stock_value(base, token, cid, item_id) -> float:
+    status, rows = http("GET", f"/api/stock/company/{cid}/onhand", base, token=token)
+    if status == 200 and isinstance(rows, list):
+        for r in rows:
+            if r.get("itemTypeId") == item_id:
+                return float(r.get("valueExcludingTax") or 0)
+    return 0.0
+
+
+def suite_amount_stock_quantity(base, token, cid, client, supplier, suffix):
+    """The invoice bills whole units; stock gives up the line's stockQuantity
+    (what the amount buys), so the value that leaves is the amount billed."""
+    s = "9. Amount-priced line: stock quantity"
+    print(f"\n=== {s} ===")
+    A = make_item_type(base, token, f"AQ_A_{suffix}", hs=next_hs())
+    B = make_item_type(base, token, f"AQ_B_{suffix}", hs=next_hs())
+    if not (A and B):
+        check(s, "item types created", False, "creation failed"); return
+    st, _ = prestock(base, token, cid, supplier["id"], [(A, 100), (B, 100)])
+    check(s, "9.0 pre-stock A,B +100 at 10 each", st in (200, 201), f"{st}")
+    oa = lambda: onhand(base, token, cid, A["id"])
+    ob = lambda: onhand(base, token, cid, B["id"])
+    va = lambda: stock_value(base, token, cid, A["id"])
+
+    def line(inv):
+        return inv["items"][0]
+
+    def put(iid, item):
+        return http("PUT", f"/api/invoices/{iid}", base, token=token, body={"gstRate": 18, "items": [item]})
+
+    def cost_check():
+        return http("GET", f"/api/stock/company/{cid}/bill-cost-check?from={TODAY}&to={TODAY}&minGap=1",
+                    base, token=token)
+
+    # 9.1 an amount of 4 against a unit that costs 10: 1 Pcs billed, 0.4 leaves
+    st, inv = create_standalone(base, token, cid, client["id"], [
+        {"itemTypeId": A["id"], "description": "part of a unit", "quantity": 1, "uom": "Pcs",
+         "unitPrice": 4, "stockQuantity": 0.4}])
+    check(s, "9.1 bill 1 Pcs for 4 with stock quantity 0.4 ok", st in (200, 201), f"{st} {str(inv)[:200]}")
+    if st not in (200, 201):
+        return
+    iid = inv["id"]
+    check(s, "9.1 the invoice still bills 1 Pcs for 4",
+          approx(float(line(inv)["quantity"]), 1) and approx(float(line(inv)["lineTotal"]), 4), f"{line(inv)}")
+    check(s, "9.1 the line reports its stock quantity", approx(float(line(inv).get("stockQuantity") or 0), 0.4),
+          f"{line(inv).get('stockQuantity')}")
+    check(s, "9.1 A on-hand = 99.6, not 99", approx(oa(), 99.6), f"got {oa()}")
+    check(s, "9.1 stock value fell by the amount billed (1000 -> 996)", approx(va(), 996, 0.01), f"got {va()}")
+
+    # 9.2 a stock quantity a whole unit or more from the billed quantity is refused
+    st, bad = create_standalone(base, token, cid, client["id"], [
+        {"itemTypeId": A["id"], "description": "bad", "quantity": 1, "uom": "Pcs", "unitPrice": 4, "stockQuantity": 3}])
+    check(s, "9.2 stock quantity 3 on a 1 Pcs line is refused", st == 400, f"{st} {str(bad)[:160]}")
+    check(s, "9.2 and moved no stock", approx(oa(), 99.6), f"got {oa()}")
+
+    # 9.3 the check names nothing while cost out equals the amount ...
+    st, chk = cost_check()
+    mine = [r for r in (chk or {}).get("rows", []) if r.get("invoiceId") == iid] if st == 200 else None
+    check(s, "9.3 cost check: the amount-priced line shows no gap", st == 200 and mine == [], f"{st} {str(chk)[:200]}")
+
+    # 9.4 an edit that leaves the line alone keeps the stock quantity
+    lid = line(inv)["id"]
+    base_item = {"id": lid, "itemTypeId": A["id"], "description": "part of a unit", "uom": "Pcs"}
+    st, upd = put(iid, {**base_item, "quantity": 1, "unitPrice": 4})
+    check(s, "9.4 unchanged edit ok", st == 200, f"{st} {str(upd)[:200]}")
+    check(s, "9.4 A still 99.6", approx(oa(), 99.6), f"got {oa()}")
+
+    # 9.5 quantity typed by hand, none sent: the billed quantity leaves again
+    st, upd = put(iid, {**base_item, "quantity": 2, "unitPrice": 4})
+    check(s, "9.5 edit qty 1 -> 2 by hand ok", st == 200, f"{st} {str(upd)[:200]}")
+    check(s, "9.5 A = 98 (stock quantity cleared)", approx(oa(), 98), f"got {oa()}")
+    check(s, "9.5 the line carries no stock quantity", st == 200 and line(upd).get("stockQuantity") is None,
+          f"{line(upd).get('stockQuantity') if st == 200 else ''}")
+
+    # 9.6 ... and the check now names the hand-typed line: 2 units (20) left for 8
+    st, chk = cost_check()
+    mine = [r for r in (chk or {}).get("rows", []) if r.get("invoiceId") == iid] if st == 200 else []
+    check(s, "9.6 cost check lists the line with its gap of 12",
+          len(mine) == 1 and approx(float(mine[0]["gap"]), 12, 0.01) and approx(float(mine[0]["billedAmount"]), 8, 0.01),
+          f"{mine}")
+    check(s, "9.6 the totals cover every line",
+          st == 200 and approx(float(chk["gap"]), float(chk["stockCostOut"]) - float(chk["billedExcludingTax"]), 0.01),
+          f"{str(chk)[:200]}")
+
+    # 9.7 re-priced from an amount: a new stock quantity replaces it
+    st, upd = put(iid, {**base_item, "quantity": 2, "unitPrice": 11.5, "stockQuantity": 2.3})
+    check(s, "9.7 edit with stock quantity 2.3 ok", st == 200, f"{st} {str(upd)[:200]}")
+    check(s, "9.7 A = 97.7", approx(oa(), 97.7), f"got {oa()}")
+
+    # 9.8 a bad stock quantity on an edit is refused and changes nothing
+    st, upd = put(iid, {**base_item, "quantity": 2, "unitPrice": 11.5, "stockQuantity": 9})
+    check(s, "9.8 edit with stock quantity 9 on 2 Pcs refused", st == 400, f"{st} {str(upd)[:160]}")
+    check(s, "9.8 A still 97.7", approx(oa(), 97.7), f"got {oa()}")
+
+    # 9.10 zero clears it
+    st, upd = put(iid, {**base_item, "quantity": 2, "unitPrice": 11.5, "stockQuantity": 0})
+    check(s, "9.10 stock quantity 0 clears it (A = 98)", st == 200 and approx(oa(), 98), f"{st} got {oa()}")
+
+    # 9.11 narrow edit to another item: a stock quantity priced for A does not follow to B
+    put(iid, {**base_item, "quantity": 2, "unitPrice": 11.5, "stockQuantity": 2.3})
+    st, upd = http("PATCH", f"/api/invoices/{iid}/itemtypes", base, token=token,
+                   body={"items": [{"id": lid, "itemTypeId": B["id"]}]})
+    check(s, "9.11 PATCH A -> B ok", st == 200, f"{st} {str(upd)[:200]}")
+    check(s, "9.11 A back to 100, B gives up the billed 2", approx(oa(), 100) and approx(ob(), 98), f"A={oa()} B={ob()}")
+
+    # 9.12 delete restores everything
+    st, _ = http("DELETE", f"/api/invoices/{iid}", base, token=token)
+    check(s, "9.12 delete restores A,B to 100", st in (200, 204) and approx(oa(), 100) and approx(ob(), 100),
+          f"{st} A={oa()} B={ob()}")
+
+    # 9.13 a credit note that returns the goods brings back what left, not whole
+    # units. A note needs a filed invoice while FBR is on, so this runs in its
+    # own FBR-off company.
+    st, co = http("POST", "/api/companies", base, token=token, body={
+        "name": f"_test_stock_reflow note {suffix}", "fullAddress": "Test HQ", "phone": "+92-21-00000000",
+        "ntn": "9999999", "startingChallanNumber": 1, "startingInvoiceNumber": 1,
+        "startingPurchaseBillNumber": 1, "startingGoodsReceiptNumber": 1,
+        "inventoryTrackingEnabled": True, "stockGuardHardBlock": False,
+        "fbrEnabled": False, "inventoryFlowVersion": 1, "enableGl": False})
+    check(s, "9.13 FBR-off company for the note", st in (200, 201), f"{st} {str(co)[:160]}")
+    if st not in (200, 201):
+        return
+    nid = co["id"]
+    try:
+        _, ncl = http("POST", "/api/clients", base, token=token, body={
+            "name": f"Note Client {suffix}", "address": "1 Test Road, Karachi", "phone": "021-1234567",
+            "companyId": nid, "ntn": "1234567", "fbrProvinceCode": 8, "registrationType": "Registered"})
+        _, nsu = http("POST", "/api/suppliers", base, token=token, body={
+            "name": f"Note Supplier {suffix}", "companyId": nid, "ntn": "7654321",
+            "registrationType": "Registered", "fbrProvinceCode": 8})
+        N = make_item_type(base, token, f"AQ_N_{suffix}", hs=next_hs())
+        on = lambda: onhand(base, token, nid, N["id"])
+        prestock(base, token, nid, nsu["id"], [(N, 100)])
+        st, ninv = create_standalone(base, token, nid, ncl["id"], [
+            {"itemTypeId": N["id"], "description": "part units", "quantity": 15, "uom": "Pcs",
+             "unitPrice": 10.2, "stockQuantity": 15.3}])
+        check(s, "9.13 sell 15 Pcs taking 15.3 (on-hand 84.7)", st in (200, 201) and approx(on(), 84.7),
+              f"{st} got {on()} {str(ninv)[:160]}")
+        if st in (200, 201):
+            st, note = http("POST", "/api/invoices/notes", base, token=token, body={
+                "originalInvoiceId": ninv["id"], "documentType": 10, "reason": "reflow suite", "affectsStock": True,
+                "lines": [{"invoiceItemId": ninv["items"][0]["id"], "quantity": 5}]})
+            check(s, "9.13 partial credit note for 5 of 15 created", st in (200, 201), f"{st} {str(note)[:200]}")
+            check(s, "9.13 it returns its share, 5.1 (on-hand 89.8)", approx(on(), 89.8), f"got {on()}")
+    finally:
+        st, _ = http("DELETE", f"/api/companies/{nid}", base, token=token)
+        print(f"  delete note company returned {st}")
+
+
 # ── Reporter ───────────────────────────────────────────────────────
 def print_report() -> int:
     by_suite: dict[str, list[tuple[str, str]]] = {}
@@ -878,6 +1028,7 @@ def main() -> int:
         suite_noop_delta(args.base, token, cid, client, supplier, suffix)
         suite_deleted_item_hidden(args.base, token, cid, supplier, suffix)
         suite_manual_filing_keep(args.base, token, cid, client, supplier, suffix)
+        suite_amount_stock_quantity(args.base, token, cid, client, supplier, suffix)
     finally:
         teardown(args.base, token, company, args.keep)
 

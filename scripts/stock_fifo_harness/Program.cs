@@ -503,5 +503,79 @@ List<string> Order(Result r, int movementId) => r.Takes[movementId].Select(t => 
     Check("late-gd-oversold: above on-hand, so the restatement will refuse it", valve.Sum(l => l.Quantity) > 3579m);
 }
 
+// 25. What an invoice line priced from an amount takes out of stock
+//     (2026-11-15). The invoice bills whole units; stock gives up what the
+//     amount buys, so the value that leaves is the amount billed.
+{
+    bool Throws(Action a) { try { a(); return false; } catch (InvalidOperationException) { return true; } }
+
+    // One machine worth 250,000; 30,000 of it is billed.
+    var machine = new List<MyApp.Api.Helpers.StockOutQuantity.Tier> { new(1m, 250000m, 250000m) };
+    var part = MyApp.Api.Helpers.StockOutQuantity.PriceFromAmount(30000m, 1m, 250000m, 250000m, machine, decimalUnit: false)!.Value;
+    Check("stock-qty: part of a unit bills 1 whole unit", part.Quantity == 1m && part.UnitPrice == 30000m && !part.CloseOut);
+    Check("stock-qty: and takes out what the amount buys", part.StockQuantity == 0.12m);
+
+    // The FIFO walk then costs the sale at the amount, and leaves the rest.
+    var walk = GdFifoValuation.Compute(1m, 250000m, 0m, 18m, new GdFifoValuation.Book(), new[]
+    {
+        new GdFifoValuation.Movement(1, D(2026, 10, 5), false, part.StockQuantity!.Value, null, null, null, null, null, "Invoice", 1),
+    });
+    Check("stock-qty: the walk costs the sale at the amount billed", Math.Abs(walk.Takes[1].Sum(t => t.Value) - 30000m) < 0.01m,
+        $"{walk.Takes[1].Sum(t => t.Value)}");
+    Check("stock-qty: the rest of the unit stays, at its value", Math.Abs(walk.Position.ValueExcludingTax - 220000m) < 0.01m
+        && walk.Position.Quantity == 0.88m, $"{walk.Position.Quantity} / {walk.Position.ValueExcludingTax}");
+    var whole = GdFifoValuation.Compute(1m, 250000m, 0m, 18m, new GdFifoValuation.Book(), new[]
+    {
+        new GdFifoValuation.Movement(1, D(2026, 10, 5), false, 1m, null, null, null, null, null, "Invoice", 1),
+    });
+    Check("stock-qty: a whole unit typed by hand still takes the whole unit", whole.Position.ValueExcludingTax == 0m);
+
+    // Across two GDs: the amount drains the first and part of the second.
+    var two = new List<MyApp.Api.Helpers.StockOutQuantity.Tier> { new(10m, 1000m, 100m), new(20m, 1000m, 50m) };
+    Check("stock-qty: quantity walks the GDs in order", MyApp.Api.Helpers.StockOutQuantity.QuantityForAmount(1260m, 100m, two) == 15.2m);
+    var crossed = MyApp.Api.Helpers.StockOutQuantity.PriceFromAmount(1260m, 30m, 2000m, 100m, two, false)!.Value;
+    Check("stock-qty: rounded down on the invoice, fraction kept for stock", crossed.Quantity == 15m && crossed.StockQuantity == 15.2m
+        && Math.Round(crossed.Quantity * crossed.UnitPrice, 2) == 1260m);
+    Check("stock-qty: past the last GD its cost continues", MyApp.Api.Helpers.StockOutQuantity.QuantityForAmount(2500m, 100m, two) == 40m);
+    Check("stock-qty: weighted average prices at the one cost", MyApp.Api.Helpers.StockOutQuantity.QuantityForAmount(250m, 100m, null) == 2.5m);
+
+    var exact = MyApp.Api.Helpers.StockOutQuantity.PriceFromAmount(500m, 30m, 2000m, 100m, two, false)!.Value;
+    Check("stock-qty: an amount that buys whole units carries none", exact.Quantity == 5m && exact.StockQuantity == null);
+
+    // The whole bin stays the close-out case: rounded up, no stock quantity.
+    var bin = MyApp.Api.Helpers.StockOutQuantity.PriceFromAmount(317028.67m, 331.9597m, 317028.67m, 955.0215m, null, false)!.Value;
+    Check("stock-qty: billing the whole bin rounds up and is settled by the close-out", bin.CloseOut && bin.Quantity == 332m && bin.StockQuantity == null);
+    var binKg = MyApp.Api.Helpers.StockOutQuantity.PriceFromAmount(317028.67m, 331.9597m, 317028.67m, 955.0215m, null, true)!.Value;
+    Check("stock-qty: a decimal unit bills the exact bin", binKg.CloseOut && binKg.Quantity == 331.9597m);
+
+    Check("stock-qty: nothing on hand cannot be priced", MyApp.Api.Helpers.StockOutQuantity.PriceFromAmount(100m, 0m, 0m, 0m, null, false) == null);
+    Check("stock-qty: stock with no value cannot be priced", MyApp.Api.Helpers.StockOutQuantity.PriceFromAmount(100m, 5m, 0m, 0m, null, false) == null);
+    Check("stock-qty: no amount cannot be priced", MyApp.Api.Helpers.StockOutQuantity.PriceFromAmount(0m, 5m, 500m, 100m, null, false) == null);
+
+    // What a caller may send.
+    Check("stock-qty: none sent -> billed quantity leaves", MyApp.Api.Helpers.StockOutQuantity.Resolve(null, 5m) == null
+        && MyApp.Api.Helpers.StockOutQuantity.Of(null, 5m) == 5m);
+    Check("stock-qty: zero or negative clears", MyApp.Api.Helpers.StockOutQuantity.Resolve(0m, 5m) == null
+        && MyApp.Api.Helpers.StockOutQuantity.Resolve(-1m, 5m) == null);
+    Check("stock-qty: equal to the billed quantity stores nothing", MyApp.Api.Helpers.StockOutQuantity.Resolve(5m, 5m) == null);
+    Check("stock-qty: within a unit is kept", MyApp.Api.Helpers.StockOutQuantity.Resolve(4.6m, 5m) == 4.6m
+        && MyApp.Api.Helpers.StockOutQuantity.Of(4.6m, 5m) == 4.6m);
+    Check("stock-qty: a whole unit away is refused", Throws(() => MyApp.Api.Helpers.StockOutQuantity.Resolve(4m, 5m))
+        && Throws(() => MyApp.Api.Helpers.StockOutQuantity.Resolve(6m, 5m)) && Throws(() => MyApp.Api.Helpers.StockOutQuantity.Resolve(50m, 5m)));
+
+    // Edits.
+    Check("stock-qty edit: an untouched line keeps what it had", MyApp.Api.Helpers.StockOutQuantity.AfterEdit(null, 0.12m, true, 1m) == 0.12m);
+    Check("stock-qty edit: a changed line with none sent goes back to the billed quantity",
+        MyApp.Api.Helpers.StockOutQuantity.AfterEdit(null, 0.12m, false, 3m) == null);
+    Check("stock-qty edit: a new one replaces it", MyApp.Api.Helpers.StockOutQuantity.AfterEdit(2.4m, 0.12m, false, 2m) == 2.4m);
+    Check("stock-qty edit: zero clears it", MyApp.Api.Helpers.StockOutQuantity.AfterEdit(0m, 0.12m, true, 1m) == null);
+    Check("stock-qty edit: a bad one is refused", Throws(() => MyApp.Api.Helpers.StockOutQuantity.AfterEdit(9m, 0.12m, true, 1m)));
+
+    // A credit note returns its share of what the sale took, not whole units.
+    Check("stock-qty note: a full return brings back what left", MyApp.Api.Helpers.StockOutQuantity.Share(0.12m, 1m, 1m) == 0.12m);
+    Check("stock-qty note: a partial return brings back its share", MyApp.Api.Helpers.StockOutQuantity.Share(15.2m, 15m, 3m) == 3.04m);
+    Check("stock-qty note: a line without one returns its own quantity", MyApp.Api.Helpers.StockOutQuantity.Share(null, 15m, 3m) == null);
+}
+
 Console.WriteLine($"{passed + failed} checks, {failed} failed");
 return failed == 0 ? 0 : 1;
