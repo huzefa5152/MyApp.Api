@@ -44,9 +44,13 @@ export function fifoTierText(price, uom, max = 3) {
   const tiers = usable(price);
   if (tiers.length === 0) return null;
   const fmt = (n, d) => Number(n).toLocaleString(undefined, { maximumFractionDigits: d });
-  const parts = tiers.slice(0, max).map((t) =>
-    `${t.gdNumber ? `GD ${t.gdNumber}` : "other stock"}${t.claimed ? " (claimed)" : ""}: `
-    + `${fmt(t.quantity, 4)}${uom ? ` ${uom}` : ""} at ${fmt(t.unitCost, 4)}`);
+  const parts = tiers
+    .slice(0, max)
+    .map(
+      (t) =>
+        `${t.gdNumber ? `GD ${t.gdNumber}` : "other stock"}${t.claimed ? " (claimed)" : ""}: ` +
+        `${fmt(t.quantity, 4)}${uom ? ` ${uom}` : ""} at ${fmt(t.unitCost, 4)}`,
+    );
   const more = tiers.length > max ? `, then ${tiers.length - max} more` : "";
   return `Uses ${parts.join(", then ")}${more}`;
 }
@@ -66,7 +70,11 @@ export function fifoTierTakes(price, quantity, lineTotal) {
     const take = i === tiers.length - 1 ? left : Math.min(left, q);
     left -= take;
     const whole = take === q && Number(t.valueExcludingTax) > 0;
-    return { ...t, take, takeValue: whole ? Number(t.valueExcludingTax) : take * Number(t.unitCost) };
+    return {
+      ...t,
+      take,
+      takeValue: whole ? Number(t.valueExcludingTax) : take * Number(t.unitCost),
+    };
   });
   // The line's amount is what is billed, so the last GD the line reaches
   // carries the rounding and the values add up to it exactly.

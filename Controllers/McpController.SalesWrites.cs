@@ -18,11 +18,16 @@ namespace MyApp.Api.Controllers
 
         private static readonly object DocLine = new
         {
-            type = "object", additionalProperties = false, required = new[] { "description", "quantity", "unit" },
+            type = "object",
+            additionalProperties = false,
+            required = new[] { "description", "quantity", "unit" },
             properties = new
             {
-                description = Str(500), quantity = new { type = "string", description = "Greater than 0, up to 4 decimals." },
-                unit = Str(50), unitPrice = MoneyProp, itemTypeId = Int("From search_item_types."),
+                description = Str(500),
+                quantity = new { type = "string", description = "Greater than 0, up to 4 decimals." },
+                unit = Str(50),
+                unitPrice = MoneyProp,
+                itemTypeId = Int("From search_item_types."),
                 id = Int("When editing: the existing line's id (from the get_ tool) to keep that line; omit for a new line."),
             },
         };
@@ -33,14 +38,21 @@ namespace MyApp.Api.Controllers
         // caller who may add catalog items. Same rule as the Invoices screen.
         private static readonly object BillLine = new
         {
-            type = "object", additionalProperties = false, required = new[] { "description", "quantity", "unit" },
+            type = "object",
+            additionalProperties = false,
+            required = new[] { "description", "quantity", "unit" },
             properties = new
             {
-                description = Str(500), quantity = new { type = "string", description = "Greater than 0, up to 4 decimals." },
-                unit = Str(50), unitPrice = MoneyProp, itemTypeId = Int("From search_item_types."),
+                description = Str(500),
+                quantity = new { type = "string", description = "Greater than 0, up to 4 decimals." },
+                unit = Str(50),
+                unitPrice = MoneyProp,
+                itemTypeId = Int("From search_item_types."),
                 newItemType = new
                 {
-                    type = "object", additionalProperties = false, required = new[] { "name", "hsCode" },
+                    type = "object",
+                    additionalProperties = false,
+                    required = new[] { "name", "hsCode" },
                     description = "Instead of itemTypeId: an item to add to this company's catalog when the bill is committed (needs the Item Catalog add right). An item of that name and HS code the company already has is reused.",
                     properties = new { name = Str(100), hsCode = Str(20, "A Pakistan Customs Tariff code, e.g. 8481.8090.") },
                 },
@@ -63,10 +75,18 @@ namespace MyApp.Api.Controllers
         {
             var party = new Dictionary<string, object>
             {
-                ["companyId"] = CompanyProp, ["name"] = Str(200), ["address"] = Str(500), ["phone"] = Str(50), ["email"] = Str(200),
-                ["ntn"] = Str(50), ["strn"] = Str(50), ["cnic"] = Str(50), ["site"] = Str(200),
+                ["companyId"] = CompanyProp,
+                ["name"] = Str(200),
+                ["address"] = Str(500),
+                ["phone"] = Str(50),
+                ["email"] = Str(200),
+                ["ntn"] = Str(50),
+                ["strn"] = Str(50),
+                ["cnic"] = Str(50),
+                ["site"] = Str(200),
                 ["registrationType"] = new { type = "string", @enum = new[] { "Registered", "Unregistered" } },
-                ["fbrProvinceCode"] = Int(), ["idempotencyKey"] = IdemProp,
+                ["fbrProvinceCode"] = Int(),
+                ["idempotencyKey"] = IdemProp,
             };
             t.AddRange(new Tool[]
             {
@@ -278,7 +298,13 @@ namespace MyApp.Api.Controllers
             }
             var preview = new
             {
-                dto.Id, companyId, dto.Name, displayName = dto.CompanyDisplayName, hsCode = dto.HSCode, uom = dto.UOM, dto.SaleType,
+                dto.Id,
+                companyId,
+                dto.Name,
+                displayName = dto.CompanyDisplayName,
+                hsCode = dto.HSCode,
+                uom = dto.UOM,
+                dto.SaleType,
                 writesCompanyName = dto.WriteCompanyOverlay,
                 note = string.IsNullOrEmpty(dto.HSCode) ? "No HS code: an unclassified item that cannot be filed with FBR until classified." : "The HS code is checked when committed.",
             };
@@ -306,14 +332,32 @@ namespace MyApp.Api.Controllers
             var lines = await DocLinesAsync(args, companyId, pricesRequired: true);
             var dto = new SalesQuoteDto
             {
-                ClientId = clientId, DivisionId = division, Date = DateArg(args, "date") ?? PakistanClock.Today, ValidUntil = DateArg(args, "validUntil"),
-                CustomerEnquiryRef = OptText(args, "customerEnquiryRef", 200), EnquiryDate = DateArg(args, "enquiryDate"), Notes = OptText(args, "notes", 2000), GSTRate = gst,
+                ClientId = clientId,
+                DivisionId = division,
+                Date = DateArg(args, "date") ?? PakistanClock.Today,
+                ValidUntil = DateArg(args, "validUntil"),
+                CustomerEnquiryRef = OptText(args, "customerEnquiryRef", 200),
+                EnquiryDate = DateArg(args, "enquiryDate"),
+                Notes = OptText(args, "notes", 2000),
+                GSTRate = gst,
                 Items = lines.Select(l => new SalesQuoteItemDto { Description = l.Description, Quantity = l.Quantity, Unit = l.Unit, UnitPrice = l.UnitPrice!.Value, ItemTypeId = l.ItemTypeId, LineTotal = Math.Round(l.Quantity * l.UnitPrice!.Value, 2) }).ToList(),
             };
             var subtotal = dto.Items.Sum(i => i.LineTotal);
             var name = await ClientNameAsync(clientId);
-            var preview = new { clientId, clientName = name, divisionId = division, date = Ymd(dto.Date), validUntil = Ymd(dto.ValidUntil), dto.Notes, gstRate = gst,
-                items = dto.Items.Select(i => new { i.Description, i.Quantity, i.Unit, i.UnitPrice, i.ItemTypeId, i.LineTotal }), subtotal, gstAbout = Math.Round(subtotal * gst / 100m, 2), currency = "PKR" };
+            var preview = new
+            {
+                clientId,
+                clientName = name,
+                divisionId = division,
+                date = Ymd(dto.Date),
+                validUntil = Ymd(dto.ValidUntil),
+                dto.Notes,
+                gstRate = gst,
+                items = dto.Items.Select(i => new { i.Description, i.Quantity, i.Unit, i.UnitPrice, i.ItemTypeId, i.LineTotal }),
+                subtotal,
+                gstAbout = Math.Round(subtotal * gst / 100m, 2),
+                currency = "PKR"
+            };
             if (editId is int qid) return await EditQuoteAsync(companyId, qid, dto, lines, preview, args);
             return new Built(preview, $"Create a quotation for \"{name}\" in company {companyId}: {lines.Count} line(s), subtotal {subtotal:0.00} PKR, GST {gst}%",
                 async () =>
@@ -350,13 +394,27 @@ namespace MyApp.Api.Controllers
             var lines = await DocLinesAsync(args, companyId, pricesRequired: false);
             var dto = new SalesOrderDto
             {
-                ClientId = clientId, DivisionId = division, OrderDate = DateArg(args, "orderDate") ?? PakistanClock.Today, RequiredDate = DateArg(args, "requiredDate"),
-                CustomerPoNumber = OptText(args, "customerPoNumber", 100), CustomerPoDate = DateArg(args, "customerPoDate"), Site = OptText(args, "site", 300), Notes = OptText(args, "notes", 2000),
+                ClientId = clientId,
+                DivisionId = division,
+                OrderDate = DateArg(args, "orderDate") ?? PakistanClock.Today,
+                RequiredDate = DateArg(args, "requiredDate"),
+                CustomerPoNumber = OptText(args, "customerPoNumber", 100),
+                CustomerPoDate = DateArg(args, "customerPoDate"),
+                Site = OptText(args, "site", 300),
+                Notes = OptText(args, "notes", 2000),
                 Items = lines.Select(l => new SalesOrderItemDto { Description = l.Description, Quantity = l.Quantity, Unit = l.Unit, UnitPrice = l.UnitPrice, ItemTypeId = l.ItemTypeId }).ToList(),
             };
             var name = await ClientNameAsync(clientId);
-            var preview = new { clientId, clientName = name, divisionId = division, orderDate = Ymd(dto.OrderDate), requiredDate = Ymd(dto.RequiredDate), dto.CustomerPoNumber,
-                items = dto.Items.Select(i => new { i.Description, i.Quantity, i.Unit, i.UnitPrice, i.ItemTypeId }) };
+            var preview = new
+            {
+                clientId,
+                clientName = name,
+                divisionId = division,
+                orderDate = Ymd(dto.OrderDate),
+                requiredDate = Ymd(dto.RequiredDate),
+                dto.CustomerPoNumber,
+                items = dto.Items.Select(i => new { i.Description, i.Quantity, i.Unit, i.UnitPrice, i.ItemTypeId })
+            };
             if (editId is int oid) return await EditSalesOrderAsync(companyId, oid, dto, lines, preview, args);
             return new Built(preview, $"Create a sales order for \"{name}\" in company {companyId}: {lines.Count} line(s)",
                 async () =>
@@ -392,8 +450,16 @@ namespace MyApp.Api.Controllers
                     deliver.Add(new DeliverLineDto { SalesOrderItemId = lineId, Quantity = qty, ItemTypeId = await ItemInCompanyAsync(l, "itemTypeId", companyId) });
                 }
                 var dto0 = new CreateChallanFromOrderDto { DeliveryDate = delivery, Site = OptText(args, "site", 300), Lines = deliver };
-                var preview0 = new { salesOrderId = orderId, order.SalesOrderNumber, order.ClientName, order.DivisionId, deliveryDate = Ymd(delivery), dto0.Site,
-                    lines = deliver.Select(d => new { d.SalesOrderItemId, byId[d.SalesOrderItemId].Description, d.Quantity, byId[d.SalesOrderItemId].Unit }) };
+                var preview0 = new
+                {
+                    salesOrderId = orderId,
+                    order.SalesOrderNumber,
+                    order.ClientName,
+                    order.DivisionId,
+                    deliveryDate = Ymd(delivery),
+                    dto0.Site,
+                    lines = deliver.Select(d => new { d.SalesOrderItemId, byId[d.SalesOrderItemId].Description, d.Quantity, byId[d.SalesOrderItemId].Unit })
+                };
                 return new Built(preview0, $"Deliver {deliver.Count} line(s) of sales order #{order.SalesOrderNumber} for \"{order.ClientName}\" on {Ymd(delivery)} in company {companyId}",
                     async () =>
                     {
@@ -409,13 +475,28 @@ namespace MyApp.Api.Controllers
             var po = OptText(args, "poNumber", 100) ?? "";
             var dto = new DeliveryChallanDto
             {
-                CompanyId = companyId, ClientId = clientId, DivisionId = division, DeliveryDate = delivery, PoNumber = po,
-                PoDate = po.Length > 0 ? DateArg(args, "poDate") : null, IndentNo = OptText(args, "indentNo", 100), Site = OptText(args, "site", 300),
+                CompanyId = companyId,
+                ClientId = clientId,
+                DivisionId = division,
+                DeliveryDate = delivery,
+                PoNumber = po,
+                PoDate = po.Length > 0 ? DateArg(args, "poDate") : null,
+                IndentNo = OptText(args, "indentNo", 100),
+                Site = OptText(args, "site", 300),
                 Items = lines.Select(l => new DeliveryItemDto { Description = l.Description, Quantity = l.Quantity, Unit = l.Unit, ItemTypeId = l.ItemTypeId }).ToList(),
             };
             var name = await ClientNameAsync(clientId);
-            var preview = new { clientId, clientName = name, divisionId = division, deliveryDate = Ymd(delivery), poNumber = po, poDate = Ymd(dto.PoDate), dto.Site,
-                items = dto.Items.Select(i => new { i.Description, i.Quantity, i.Unit, i.ItemTypeId }) };
+            var preview = new
+            {
+                clientId,
+                clientName = name,
+                divisionId = division,
+                deliveryDate = Ymd(delivery),
+                poNumber = po,
+                poDate = Ymd(dto.PoDate),
+                dto.Site,
+                items = dto.Items.Select(i => new { i.Description, i.Quantity, i.Unit, i.ItemTypeId })
+            };
             if (editId is int chid) return await EditChallanAsync(companyId, chid, dto, lines, preview, args);
             return new Built(preview, $"Create a delivery challan for \"{name}\" in company {companyId}: {lines.Count} line(s), delivery {Ymd(delivery)}, " + (po.Length > 0 ? $"PO {po}" : "no PO"),
                 async () =>
@@ -480,7 +561,8 @@ namespace MyApp.Api.Controllers
                     if (priced.Any(x => x.DeliveryItemId == did)) throw new ToolError($"Line {did} is priced twice.");
                     priced.Add(new CreateInvoiceItemDto
                     {
-                        DeliveryItemId = did, UnitPrice = ReqDec(p, "unitPrice", 0m, 999_999_999m, 4, minInclusive: false),
+                        DeliveryItemId = did,
+                        UnitPrice = ReqDec(p, "unitPrice", 0m, 999_999_999m, 4, minInclusive: false),
                         Description = OptText(p, "description", 500) is { Length: > 0 } d ? d : di.Description,
                         ItemTypeId = lineItem,
                     });
@@ -489,17 +571,37 @@ namespace MyApp.Api.Controllers
                 if (missing.Count > 0) throw new ToolError("Every challan line needs a price. Missing: " + string.Join(", ", missing.Take(10)) + ".");
                 var dto = new CreateInvoiceDto
                 {
-                    CompanyId = companyId, DivisionId = division, ClientId = clientId, Date = date, GSTRate = gst, PaymentTerms = terms, PaymentMode = mode,
-                    PoNumber = poNumber, PoDate = poDate, ChallanIds = challanIds, Items = priced, FurtherTaxRate = furtherTax,
-                    AdvanceTaxSection = advanceSection, AdvanceTaxFilerActive = advanceFiler, TaxRateOverrideReason = overrideReason,
+                    CompanyId = companyId,
+                    DivisionId = division,
+                    ClientId = clientId,
+                    Date = date,
+                    GSTRate = gst,
+                    PaymentTerms = terms,
+                    PaymentMode = mode,
+                    PoNumber = poNumber,
+                    PoDate = poDate,
+                    ChallanIds = challanIds,
+                    Items = priced,
+                    FurtherTaxRate = furtherTax,
+                    AdvanceTaxSection = advanceSection,
+                    AdvanceTaxFilerActive = advanceFiler,
+                    TaxRateOverrideReason = overrideReason,
                 };
                 var subtotal = Math.Round(priced.Sum(x => deliveryItems[x.DeliveryItemId].Quantity * x.UnitPrice), 2, MidpointRounding.AwayFromZero);
                 var preview = new
                 {
-                    clientId, clientName = name, divisionId = division, date = Ymd(date), gstRate = gst, furtherTaxRate = furtherTax, advanceTaxSection = advanceSection,
-                    challanIds, challanNumbers = numbers,
+                    clientId,
+                    clientName = name,
+                    divisionId = division,
+                    date = Ymd(date),
+                    gstRate = gst,
+                    furtherTaxRate = furtherTax,
+                    advanceTaxSection = advanceSection,
+                    challanIds,
+                    challanNumbers = numbers,
                     lines = priced.Select(x => new { x.DeliveryItemId, x.Description, deliveryItems[x.DeliveryItemId].Quantity, deliveryItems[x.DeliveryItemId].Unit, x.UnitPrice, x.ItemTypeId }),
-                    subtotalAbout = subtotal, currency = "PKR",
+                    subtotalAbout = subtotal,
+                    currency = "PKR",
                     note = "The bill number, taxes and totals are fixed by the ERP when it is saved and reported back. Nothing is sent to FBR.",
                 };
                 return new Built(preview, $"Bill challan(s) {string.Join(", ", numbers)} for \"{name}\" in company {companyId}: {priced.Count} line(s), subtotal about {subtotal:0.00} PKR, GST {gst}%",
@@ -516,17 +618,34 @@ namespace MyApp.Api.Controllers
             if (lines.Any(l => l.NewItem != null)) await Need("itemtypes.manage.create");
             var sdto = new CreateStandaloneInvoiceDto
             {
-                CompanyId = companyId, DivisionId = division, ClientId = clientId, Date = date, GSTRate = gst, PaymentTerms = terms, PaymentMode = mode,
-                PoNumber = poNumber, PoDate = poDate, FurtherTaxRate = furtherTax, AdvanceTaxSection = advanceSection, AdvanceTaxFilerActive = advanceFiler,
+                CompanyId = companyId,
+                DivisionId = division,
+                ClientId = clientId,
+                Date = date,
+                GSTRate = gst,
+                PaymentTerms = terms,
+                PaymentMode = mode,
+                PoNumber = poNumber,
+                PoDate = poDate,
+                FurtherTaxRate = furtherTax,
+                AdvanceTaxSection = advanceSection,
+                AdvanceTaxFilerActive = advanceFiler,
                 TaxRateOverrideReason = overrideReason,
                 Items = lines.Select(l => new CreateStandaloneInvoiceItemDto { Description = l.Description, Quantity = l.Quantity, UOM = l.Unit, UnitPrice = l.UnitPrice!.Value, ItemTypeId = l.ItemTypeId, NewItemType = l.NewItem }).ToList(),
             };
             var sub = Math.Round(lines.Sum(l => l.Quantity * l.UnitPrice!.Value), 2, MidpointRounding.AwayFromZero);
             var spreview = new
             {
-                clientId, clientName = name, divisionId = division, date = Ymd(date), gstRate = gst, furtherTaxRate = furtherTax, advanceTaxSection = advanceSection,
+                clientId,
+                clientName = name,
+                divisionId = division,
+                date = Ymd(date),
+                gstRate = gst,
+                furtherTaxRate = furtherTax,
+                advanceTaxSection = advanceSection,
                 lines = sdto.Items.Select(i => new { i.Description, i.Quantity, unit = i.UOM, i.UnitPrice, i.ItemTypeId, newItem = i.NewItemType == null ? null : new { i.NewItemType.Name, i.NewItemType.HsCode } }),
-                subtotalAbout = sub, currency = "PKR",
+                subtotalAbout = sub,
+                currency = "PKR",
                 note = "The bill number, taxes and totals are fixed by the ERP when it is saved and reported back. Nothing is sent to FBR.",
             };
             return new Built(spreview, $"Create a standalone bill for \"{name}\" in company {companyId}: {lines.Count} line(s), subtotal about {sub:0.00} PKR, GST {gst}%",
@@ -552,9 +671,14 @@ namespace MyApp.Api.Controllers
             _resultSummary = $"FBR validation of bill #{bill.InvoiceNumber}: {(result.Success ? "valid" : "rejected")}";
             return new
             {
-                invoiceId = bill.Id, bill.InvoiceNumber, valid = result.Success, result.FbrStatus, result.ErrorMessage,
+                invoiceId = bill.Id,
+                bill.InvoiceNumber,
+                valid = result.Success,
+                result.FbrStatus,
+                result.ErrorMessage,
                 itemErrors = result.ItemErrors?.Select(e => new { e.ItemSNo, e.StatusCode, e.Status, e.ErrorCode, e.Error }),
-                submitted = false, note = "Validation only. Submitting to FBR stays a person's action on the Invoices screen.",
+                submitted = false,
+                note = "Validation only. Submitting to FBR stays a person's action on the Invoices screen.",
             };
         }
     }

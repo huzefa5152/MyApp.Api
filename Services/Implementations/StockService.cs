@@ -554,9 +554,9 @@ namespace MyApp.Api.Services.Implementations
             if (invoice.IsFbrExcluded || invoice.IsCancelled)
             {
                 var purge = await _context.StockMovements
-                    .Where(m => m.CompanyId  == invoice.CompanyId
+                    .Where(m => m.CompanyId == invoice.CompanyId
                              && m.SourceType == StockMovementSourceType.Invoice
-                             && m.SourceId   == invoice.Id)
+                             && m.SourceId == invoice.Id)
                     .ToListAsync();
                 if (purge.Count > 0)
                 {
@@ -574,9 +574,9 @@ namespace MyApp.Api.Services.Implementations
             if (isNote && invoice.NoteAffectsStock != true)
             {
                 var valueOnly = await _context.StockMovements
-                    .Where(m => m.CompanyId  == invoice.CompanyId
+                    .Where(m => m.CompanyId == invoice.CompanyId
                              && m.SourceType == StockMovementSourceType.Invoice
-                             && m.SourceId   == invoice.Id)
+                             && m.SourceId == invoice.Id)
                     .ToListAsync();
                 if (valueOnly.Count > 0)
                 {
@@ -602,10 +602,10 @@ namespace MyApp.Api.Services.Implementations
             if (invoice.IsDemo)
             {
                 var demoStale = await _context.StockMovements
-                    .Where(m => m.CompanyId  == invoice.CompanyId
+                    .Where(m => m.CompanyId == invoice.CompanyId
                              && m.SourceType == StockMovementSourceType.Invoice
-                             && m.SourceId   == invoice.Id
-                             && m.Direction  == dir)
+                             && m.SourceId == invoice.Id
+                             && m.Direction == dir)
                     .ToListAsync();
                 if (demoStale.Count > 0)
                 {
@@ -654,10 +654,10 @@ namespace MyApp.Api.Services.Implementations
 
             // What this invoice already posted (this direction), per ItemType.
             var postedRows = await _context.StockMovements
-                .Where(m => m.CompanyId  == invoice.CompanyId
+                .Where(m => m.CompanyId == invoice.CompanyId
                          && m.SourceType == StockMovementSourceType.Invoice
-                         && m.SourceId   == invoice.Id
-                         && m.Direction  == dir)
+                         && m.SourceId == invoice.Id
+                         && m.Direction == dir)
                 .ToListAsync();
             var posted = postedRows.GroupBy(m => m.ItemTypeId)
                 .ToDictionary(g => g.Key, g => g.Sum(m => m.Quantity));
@@ -680,7 +680,7 @@ namespace MyApp.Api.Services.Implementations
                 foreach (var m in drifted)
                 {
                     m.MovementDate = invoice.Date;
-                    m.DivisionId   = invoice.DivisionId;
+                    m.DivisionId = invoice.DivisionId;
                 }
                 await _context.SaveChangesAsync();
                 return priorDate;
@@ -707,25 +707,25 @@ namespace MyApp.Api.Services.Implementations
 
                 var hasOverlay = overlayQtyByItemId.ContainsKey(item.Id);
                 var docLabel = invoice.DocumentType == 10 ? "Credit Note"
-                             : invoice.DocumentType == 9  ? "Debit Note"
+                             : invoice.DocumentType == 9 ? "Debit Note"
                              : "Bill";
                 _context.StockMovements.Add(new StockMovement
                 {
-                    CompanyId    = invoice.CompanyId,
-                    DivisionId   = invoice.DivisionId,
-                    ItemTypeId   = item.ItemTypeId.Value,
-                    Direction    = dir,
+                    CompanyId = invoice.CompanyId,
+                    DivisionId = invoice.DivisionId,
+                    ItemTypeId = item.ItemTypeId.Value,
+                    Direction = dir,
                     // 2026-05-12: stored at full decimal(18,4) precision.
                     // Previously truncated to int (lost fractional KG /
                     // Liter / Carat sales).
-                    Quantity     = effectiveQty,
-                    SourceType   = StockMovementSourceType.Invoice,
-                    SourceId     = invoice.Id,
+                    Quantity = effectiveQty,
+                    SourceType = StockMovementSourceType.Invoice,
+                    SourceId = invoice.Id,
                     MovementDate = invoice.Date,
-                    Notes        = hasOverlay
+                    Notes = hasOverlay
                         ? $"{docLabel} #{invoice.InvoiceNumber} saved (FBR-adjusted qty {effectiveQty:0.####}, row qty {item.Quantity:0.####})"
                         : $"{docLabel} #{invoice.InvoiceNumber} saved",
-                    CreatedAt    = DateTime.UtcNow,
+                    CreatedAt = DateTime.UtcNow,
                 });
             }
 

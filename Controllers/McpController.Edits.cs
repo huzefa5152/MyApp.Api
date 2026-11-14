@@ -104,28 +104,44 @@ namespace MyApp.Api.Controllers
             var stored = existing.Items.ToDictionary(i => i.Id);
             var dto = new UpdateInvoiceDto
             {
-                Date = date, GSTRate = Has(args, "gstRate") ? Gst(args) : existing.GSTRate, ClientId = clientId,
+                Date = date,
+                GSTRate = Has(args, "gstRate") ? Gst(args) : existing.GSTRate,
+                ClientId = clientId,
                 PaymentTerms = Has(args, "paymentTerms") ? OptText(args, "paymentTerms", 200) : existing.PaymentTerms,
                 PaymentMode = Has(args, "paymentMode") ? OptText(args, "paymentMode", 50) : existing.PaymentMode,
-                DocumentType = existing.DocumentType, UpdateDivision = moving, DivisionId = division,
-                WithholdingTaxRate = existing.WithholdingTaxRate, WithholdingTaxAmount = existing.WithholdingTaxAmount,
+                DocumentType = existing.DocumentType,
+                UpdateDivision = moving,
+                DivisionId = division,
+                WithholdingTaxRate = existing.WithholdingTaxRate,
+                WithholdingTaxAmount = existing.WithholdingTaxAmount,
                 FurtherTaxRate = Has(args, "furtherTaxRate") ? OptDec(args, "furtherTaxRate", 0, 100, 2) : existing.FurtherTaxRate,
                 AdvanceTaxSection = Has(args, "advanceTaxSection") ? (OptText(args, "advanceTaxSection", 20) is { Length: > 0 } s ? s : null) : existing.AdvanceTaxSection,
                 AdvanceTaxFilerActive = Has(args, "advanceTaxFilerActive") ? OptBool(args, "advanceTaxFilerActive") : existing.AdvanceTaxFilerActive,
                 TaxRateOverrideReason = OptText(args, "taxRateOverrideReason", 500) is { Length: > 0 } why ? why : existing.TaxRateOverrideReason,
                 Items = lines.Select(l => new UpdateInvoiceItemDto
                 {
-                    Id = l.Id ?? 0, DeliveryItemId = l.Id is int k ? stored[k].DeliveryItemId : null,
-                    Description = l.Description, Quantity = l.Quantity, UOM = l.Unit, UnitPrice = l.UnitPrice!.Value, ItemTypeId = l.ItemTypeId,
+                    Id = l.Id ?? 0,
+                    DeliveryItemId = l.Id is int k ? stored[k].DeliveryItemId : null,
+                    Description = l.Description,
+                    Quantity = l.Quantity,
+                    UOM = l.Unit,
+                    UnitPrice = l.UnitPrice!.Value,
+                    ItemTypeId = l.ItemTypeId,
                     NewItemType = l.NewItem,
                 }).ToList(),
             };
             var sub = Math.Round(lines.Sum(l => l.Quantity * l.UnitPrice!.Value), 2, MidpointRounding.AwayFromZero);
             var preview = new
             {
-                clientId, divisionId = division, date = Ymd(date), gstRate = dto.GSTRate, furtherTaxRate = dto.FurtherTaxRate,
+                clientId,
+                divisionId = division,
+                date = Ymd(date),
+                gstRate = dto.GSTRate,
+                furtherTaxRate = dto.FurtherTaxRate,
                 lines = dto.Items.Select(i => new { i.Id, i.Description, i.Quantity, unit = i.UOM, i.UnitPrice, i.ItemTypeId, newItem = i.NewItemType == null ? null : new { i.NewItemType.Name, i.NewItemType.HsCode } }),
-                subtotalAbout = sub, currency = "PKR", note = "Totals and taxes are worked out by the ERP when saved. Nothing is sent to FBR.",
+                subtotalAbout = sub,
+                currency = "PKR",
+                note = "Totals and taxes are worked out by the ERP when saved. Nothing is sent to FBR.",
             };
             return new Built(EditPreview("bill", id, existing.InvoiceNumber, preview),
                 $"Update bill #{existing.InvoiceNumber} in company {companyId}: {lines.Count} line(s), subtotal about {sub:0.00} PKR",
@@ -146,14 +162,24 @@ namespace MyApp.Api.Controllers
             KeepOwnLines(lineIds, existing.Items.Select(i => i.Id), "purchase bill");
             var dto = new UpdatePurchaseBillDto
             {
-                Date = created.Date, SupplierBillNumber = created.SupplierBillNumber ?? existing.SupplierBillNumber, SupplierIRN = created.SupplierIRN ?? existing.SupplierIRN,
-                GSTRate = Has(args, "gstRate") ? created.GSTRate : existing.GSTRate, PaymentTerms = created.PaymentTerms ?? existing.PaymentTerms,
-                DocumentType = existing.DocumentType, PaymentMode = existing.PaymentMode,
-                WithholdingTaxRate = existing.WithholdingTaxRate, WithholdingTaxAmount = existing.WithholdingTaxAmount,
+                Date = created.Date,
+                SupplierBillNumber = created.SupplierBillNumber ?? existing.SupplierBillNumber,
+                SupplierIRN = created.SupplierIRN ?? existing.SupplierIRN,
+                GSTRate = Has(args, "gstRate") ? created.GSTRate : existing.GSTRate,
+                PaymentTerms = created.PaymentTerms ?? existing.PaymentTerms,
+                DocumentType = existing.DocumentType,
+                PaymentMode = existing.PaymentMode,
+                WithholdingTaxRate = existing.WithholdingTaxRate,
+                WithholdingTaxAmount = existing.WithholdingTaxAmount,
                 Items = created.Items.Select((it, i) => new UpdatePurchaseItemDto
                 {
-                    Id = lineIds[i] ?? 0, ItemTypeId = it.ItemTypeId, Description = it.Description, Quantity = it.Quantity,
-                    UOM = it.UOM ?? "", UnitPrice = it.UnitPrice, HSCode = it.HSCode,
+                    Id = lineIds[i] ?? 0,
+                    ItemTypeId = it.ItemTypeId,
+                    Description = it.Description,
+                    Quantity = it.Quantity,
+                    UOM = it.UOM ?? "",
+                    UnitPrice = it.UnitPrice,
+                    HSCode = it.HSCode,
                 }).ToList(),
             };
             return new Built(EditPreview("purchase bill", id, existing.PurchaseBillNumber, preview),
@@ -174,11 +200,19 @@ namespace MyApp.Api.Controllers
             KeepOwnLines(lineIds, existing.Items.Select(i => i.Id), "goods receipt");
             var dto = new UpdateGoodsReceiptDto
             {
-                ReceiptDate = created.ReceiptDate, SupplierId = created.SupplierId, PurchaseBillId = created.PurchaseBillId,
-                SupplierChallanNumber = created.SupplierChallanNumber, Site = created.Site, Status = existing.Status,
+                ReceiptDate = created.ReceiptDate,
+                SupplierId = created.SupplierId,
+                PurchaseBillId = created.PurchaseBillId,
+                SupplierChallanNumber = created.SupplierChallanNumber,
+                Site = created.Site,
+                Status = existing.Status,
                 Items = created.Items.Select((it, i) => new UpdateGoodsReceiptItemDto
                 {
-                    Id = lineIds[i] ?? 0, ItemTypeId = it.ItemTypeId, Description = it.Description, Quantity = it.Quantity, Unit = it.Unit,
+                    Id = lineIds[i] ?? 0,
+                    ItemTypeId = it.ItemTypeId,
+                    Description = it.Description,
+                    Quantity = it.Quantity,
+                    Unit = it.Unit,
                 }).ToList(),
             };
             return new Built(EditPreview("goods receipt", id, existing.GoodsReceiptNumber, preview),

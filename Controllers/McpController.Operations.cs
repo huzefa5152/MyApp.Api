@@ -129,7 +129,10 @@ namespace MyApp.Api.Controllers
             var list = rows.Where(r => search == "" || r.ItemTypeName.Contains(search, StringComparison.OrdinalIgnoreCase) || (r.HSCode ?? "").Contains(search)).ToList();
             return new
             {
-                totalCount = list.Count, offset, totalValueExcludingTax = list.Sum(r => r.ValueExcludingTax), currency = "PKR",
+                totalCount = list.Count,
+                offset,
+                totalValueExcludingTax = list.Sum(r => r.ValueExcludingTax),
+                currency = "PKR",
                 items = list.Skip(offset).Take(limit),
             };
         }
@@ -168,22 +171,36 @@ namespace MyApp.Api.Controllers
             var mode = OptText(args, "mode", 10) is "set" or "delta" ? OptText(args, "mode", 10)! : throw new ToolError("mode must be set or delta.");
             var dto = new CreateStockAdjustmentDto
             {
-                CompanyId = companyId, ItemTypeId = item, Mode = mode,
+                CompanyId = companyId,
+                ItemTypeId = item,
+                Mode = mode,
                 Delta = mode == "delta" ? OptDec(args, "delta", -999_999_999m, 999_999_999m, 4) ?? 0m : 0m,
                 ValueDelta = mode == "delta" ? OptDec(args, "valueDelta", -99_999_999_999m, 99_999_999_999m, 2) : null,
                 TargetQuantity = mode == "set" ? OptDec(args, "targetQuantity", 0m, 999_999_999m, 4) : null,
                 TargetValueExcludingTax = mode == "set" ? OptDec(args, "targetValueExcludingTax", 0m, 99_999_999_999m, 2) : null,
                 UnitCostExcludingTax = mode == "delta" ? OptDec(args, "unitCostExcludingTax", 0m, 99_999_999m, 4) : null,
                 SalesTaxRate = OptDec(args, "salesTaxRate", 0m, 100m, 2),
-                MovementDate = DateArg(args, "movementDate") ?? PakistanClock.Today, Notes = OptText(args, "notes", 500),
+                MovementDate = DateArg(args, "movementDate") ?? PakistanClock.Today,
+                Notes = OptText(args, "notes", 500),
                 IsValuationCorrection = OptBool(args, "isValuationCorrection") ?? false,
             };
             if (mode == "set" && dto.TargetQuantity == null && dto.TargetValueExcludingTax == null) throw new ToolError("Give targetQuantity and/or targetValueExcludingTax.");
             if (mode == "delta" && dto.Delta == 0m && dto.ValueDelta is null or 0m) throw new ToolError("Give a quantity change (delta) and/or a value change (valueDelta).");
             var name = await _context.ItemTypes.AsNoTracking().Where(i => i.Id == item).Select(i => i.Name).FirstAsync();
-            var preview = new { itemTypeId = item, itemName = name, mode, dto.TargetQuantity, dto.TargetValueExcludingTax, dto.Delta, dto.ValueDelta, movementDate = Ymd(dto.MovementDate), dto.Notes,
+            var preview = new
+            {
+                itemTypeId = item,
+                itemName = name,
+                mode,
+                dto.TargetQuantity,
+                dto.TargetValueExcludingTax,
+                dto.Delta,
+                dto.ValueDelta,
+                movementDate = Ymd(dto.MovementDate),
+                dto.Notes,
                 postsTo = dto.IsValuationCorrection ? "Stock value corrections (equity)" : "Inventory adjustments (expense)",
-                reminder = "Goods that were SOLD need their sale bill instead: an adjustment is not undone when the bill is entered later." };
+                reminder = "Goods that were SOLD need their sale bill instead: an adjustment is not undone when the bill is entered later."
+            };
             return new Built(preview, $"Adjust stock of \"{name}\" in company {companyId} ({mode})",
                 async () =>
                 {
@@ -233,8 +250,12 @@ namespace MyApp.Api.Controllers
             if (existing == null) await AssertDivisionWriteAsync(companyId, division);
             var dto = new WithholdingTaxReceiptDto
             {
-                CompanyId = companyId, ClientId = clientId, DivisionId = division, Amount = amount,
-                Date = DateArg(args, "date") ?? existing?.Date ?? PakistanClock.Today, Description = OptText(args, "description", 500) ?? existing?.Description,
+                CompanyId = companyId,
+                ClientId = clientId,
+                DivisionId = division,
+                Amount = amount,
+                Date = DateArg(args, "date") ?? existing?.Date ?? PakistanClock.Today,
+                Description = OptText(args, "description", 500) ?? existing?.Description,
             };
             var name = await ClientNameAsync(clientId);
             var preview = new { clientId, clientName = name, divisionId = division, date = Ymd(dto.Date), amount, dto.Description, currency = "PKR" };
