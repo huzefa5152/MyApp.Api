@@ -370,7 +370,25 @@ namespace MyApp.Api.Controllers
                 IsStockCount = OptBool(args, "isStockCount") ?? false,
             };
             var plan = As<StockReconcilePlanDto>(await ScreenAsync(() => Screen<StockController>().PlanReconcile(companyId, req)));
-            if (!plan.CanApply) throw new ToolError("The sheet cannot be applied yet: " + JsonSerializer.Serialize(plan.Messages) + " Resolve the rows the plan highlights (chosenItemTypeId) and prepare again.");
+            // Name what blocks the plan: an empty message list told the caller
+            // nothing (AY, 2026-11-15). Rows needing an item come with candidates.
+            if (!plan.CanApply)
+                throw new ToolError("The sheet cannot be applied yet: " + JsonSerializer.Serialize(new
+                {
+                    messages = plan.Messages,
+                    rowsNeedingAnItem = plan.Unmatched.Select(u => new
+                    {
+                        u.SourceRow,
+                        u.ItemNameOnSheet,
+                        u.HsCode,
+                        u.GdNumber,
+                        u.Reason,
+                        candidates = u.Candidates.Select(c => new { c.ItemTypeId, c.ItemTypeName }),
+                    }),
+                    itemsWithErrors = plan.Items.Where(i => i.Error != null)
+                        .Select(i => new { i.ItemTypeId, i.ItemTypeName, i.OnHand, i.SheetQuantity, i.Error }),
+                    rowsNotApplied = plan.NotApplied.Select(u => new { u.SourceRow, u.ItemNameOnSheet, u.Reason }),
+                }) + " Send chosenItemTypeId for each row needing an item (-1 leaves the row out) and prepare again.");
             return new Built(plan, $"Reconcile company {companyId}'s stock to {req.SourceFile ?? "the stock sheet"} as at {Ymd(req.AsOf)}: {plan.Items.Count} item(s)",
                 async () =>
                 {
