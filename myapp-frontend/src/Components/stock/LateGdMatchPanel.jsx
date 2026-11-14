@@ -70,8 +70,6 @@ export default function LateGdMatchPanel({ companyId, refreshKey, onDone }) {
     }
   };
 
-  const errors = (preview?.items || []).filter((i) => i.error);
-
   return (
     <div style={s.box}>
       <div style={s.head}>
@@ -107,25 +105,8 @@ export default function LateGdMatchPanel({ companyId, refreshKey, onDone }) {
 
       {preview && (
         <div style={s.preview}>
-          {preview.canCommit && (
-            <div>
-              Value of the items it can fix: <strong>{money(preview.valueBefore)}</strong> now →{" "}
-              <strong>{money(preview.valueAfter)}</strong> after the update. Quantities do not
-              change.
-            </div>
-          )}
-          {errors.length > 0 && (
-            <>
-              <div style={{ fontWeight: 700, marginTop: preview.canCommit ? 6 : 0 }}>
-                {preview.canCommit ? "Left out (fix these separately):" : "Cannot update:"}
-              </div>
-              {errors.map((i) => (
-                <div key={i.itemTypeId} style={{ color: colors.danger }}>
-                  {i.itemTypeName}: {i.error}
-                </div>
-              ))}
-            </>
-          )}
+          Value of these items: <strong>{money(preview.valueBefore)}</strong> now →{" "}
+          <strong>{money(preview.valueAfter)}</strong> after the update. Quantities do not change.
         </div>
       )}
       {error && <div style={{ ...s.preview, color: colors.danger }}>{error}</div>}

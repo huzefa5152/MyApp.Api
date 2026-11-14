@@ -260,21 +260,14 @@ namespace MyApp.Api.Services.Implementations
                     }).ToList());
             // A value correction has no sheet: what it left the item holding is the
             // walk's pools on its date without the late GDs. An item holding stock
-            // not traced to a GD cannot be restated that way and is listed with
-            // the reason instead.
+            // not traced to a GD cannot be restated that way; like any item this
+            // fix cannot update, it is not offered (see `changed` below).
             var held = new Dictionary<int, IReadOnlyList<FifoRestatementLineDto>>();
-            var untraced = new List<(BackdatedGdRestatement.Affected A, FifoRestatementItemDto Item)>();
             foreach (var a in affected.Where(a => !a.Restatement.IsSheetMatch).ToList())
             {
                 var lines = await BackdatedGdRestatement.HeldLinesAsync(context, companyId, a);
-                if (lines != null) { held[a.Restatement.MovementId] = lines; continue; }
-                affected.Remove(a);
-                untraced.Add((a, new FifoRestatementItemDto
-                {
-                    ItemTypeId = a.ItemTypeId,
-                    ItemTypeName = await context.ItemTypes.AsNoTracking().Where(i => i.Id == a.ItemTypeId).Select(i => i.Name).FirstOrDefaultAsync() ?? "",
-                    Error = "Holds stock not traced to a GD, so the late GD cannot be added automatically. Restate it from your stock sheet.",
-                }));
+                if (lines != null) held[a.Restatement.MovementId] = lines;
+                else affected.Remove(a);
             }
             IReadOnlyList<FifoRestatementLineDto> SheetOf(BackdatedGdRestatement.Affected a) =>
                 (a.Restatement.IsSheetMatch ? sheet.GetValueOrDefault(a.Restatement.MovementId) : held.GetValueOrDefault(a.Restatement.MovementId))
@@ -306,14 +299,18 @@ namespace MyApp.Api.Services.Implementations
                     Lines = lines.Values.SelectMany(l => l).ToList(),
                 });
 
-                // Only what the update would change (or cannot do) is offered. A
-                // GD arrival's movement holds its unit cost at 4dp, so its value can
-                // sit qty x 0.00005 off the sheet's (CLAUDE.md 5b-15): paisa that are
-                // not a wrong value. Pak Trade's 8 untouched items differed by
+                // Only what the update would change AND can do is offered. An item
+                // it cannot update (its sales used more than the sheet held, so the
+                // lines exceed on-hand) is not listed: "the value is off" was not
+                // true of it and it had no action to offer (AY gate valve, voltage
+                // rectifier, 2026-11-15). A month-end reconcile settles such items.
+                // A GD arrival's movement holds its unit cost at 4dp, so its value
+                // can sit qty x 0.00005 off the sheet's (CLAUDE.md 5b-15): paisa that
+                // are not a wrong value. Pak Trade's 8 untouched items differed by
                 // 0.01-0.04 and were listed as needing a fix until this tolerance.
                 var changed = full.Items
-                    .Where(i => i.Error != null
-                                || Math.Abs(i.FifoValue - i.SheetValue) >= 1m + Math.Abs(i.SheetQuantity) * 0.0001m)
+                    .Where(i => i.Error == null
+                                && Math.Abs(i.FifoValue - i.SheetValue) >= 1m + Math.Abs(i.SheetQuantity) * 0.0001m)
                     .ToList();
                 if (changed.Count == 0) continue;
                 var ids = changed.Select(i => i.ItemTypeId).ToHashSet();
@@ -328,8 +325,6 @@ namespace MyApp.Api.Services.Implementations
                     Lines = lines.Where(kv => ids.Contains(kv.Key)).SelectMany(kv => kv.Value).ToList(),
                 });
             }
-            keep.AddRange(untraced.Select(u => u.A));
-            items.AddRange(untraced.Select(u => u.Item));
             return new LateGdPlan(keep, requests, items);
         }
 
@@ -344,38 +339,29 @@ namespace MyApp.Api.Services.Implementations
             int companyId, int userId, string? userName, bool commit,
             ICollection<int>? onlyItemTypeIds = null, string? requestPath = null)
         {
+            // The plan holds only items it can update, so one item that cannot be
+            // restated no longer refuses the rest. Until 2026-11-15 it did, and the
+            // GD save's automatic fix only logged it (AY, GD KAPW-HC-65465).
             var plan = await PlanLateGdsAsync(companyId, userId, onlyItemTypeIds);
-            // An item that cannot be restated (its quantity is wrong, or it holds
-            // stock not traced to a GD) is left out and named; the others are
-            // still fixed. Until 2026-11-15 one such item refused them all, and
-            // the GD save's automatic fix only logged it (AY, GD KAPW-HC-65465).
-            var blocked = plan.Items.Where(i => i.Error != null).ToList();
-            var blockedIds = blocked.Select(i => i.ItemTypeId).ToHashSet();
-            var fixable = plan.Items.Where(i => i.Error == null).ToList();
             var result = new BackdatedGdRestateResultDto
             {
                 Items = plan.Items,
-                CanCommit = fixable.Count > 0,
-                ValueBefore = fixable.Sum(i => i.FifoValue),
-                ValueAfter = fixable.Sum(i => i.SheetValue),
+                CanCommit = plan.Items.Count > 0,
+                ValueBefore = plan.Items.Sum(i => i.FifoValue),
+                ValueAfter = plan.Items.Sum(i => i.SheetValue),
             };
             if (plan.Items.Count == 0)
             {
                 result.Messages.Add("Nothing to update: every item is already valued with its late GDs.");
                 return result;
             }
-            if (blocked.Count > 0)
-                result.Messages.Add($"{blocked.Count} item(s) left out: " +
-                    string.Join("; ", blocked.Select(i => $"{i.ItemTypeName}: {i.Error}")));
-            if (!commit || !result.CanCommit) return result;
+            if (!commit) return result;
 
             await using var tx = await context.Database.BeginTransactionAsync();
             try
             {
                 foreach (var r in plan.Requests)
                 {
-                    r.Lines = r.Lines.Where(l => !blockedIds.Contains(l.ItemTypeId)).ToList();
-                    if (r.Lines.Count == 0) continue;
                     r.Commit = true;
                     var res = await RestateAsync(companyId, userId, userName, r);
                     if (!res.Committed)
@@ -391,7 +377,7 @@ namespace MyApp.Api.Services.Implementations
             }
             result.Committed = true;
             var gds = string.Join(", ", plan.Affected.SelectMany(a => a.Lines.Select(l => l.GdNumber)).Distinct().OrderBy(g => g));
-            result.Messages.Insert(0, $"{fixable.Count} item(s) brought back in line with the stock sheet, now including GD {gds}. Quantities did not change.");
+            result.Messages.Add($"{plan.Items.Count} item(s) brought back in line with the stock sheet, now including GD {gds}. Quantities did not change.");
             await audit.LogAsync(new AuditLog
             {
                 Timestamp = DateTime.UtcNow,
@@ -404,7 +390,7 @@ namespace MyApp.Api.Services.Implementations
                 // Each is its own action: never folded into an earlier row by
                 // the 24h dedup (built for error floods).
                 Fingerprint = Guid.NewGuid().ToString("N"),
-                Message = $"Late GD {gds} added to the stock-sheet match for {fixable.Count} item(s) of company {companyId}: " +
+                Message = $"Late GD {gds} added to the stock-sheet match for {plan.Items.Count} item(s) of company {companyId}: " +
                           $"value {result.ValueBefore:0.00} -> {result.ValueAfter:0.00}",
                 CompanyId = companyId,
             });

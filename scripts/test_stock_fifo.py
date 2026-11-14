@@ -560,9 +560,10 @@ def main():
         # (AY, 2026-11-15, GD KAPW-HC-65465): the GD is added WHOLE, as the
         # consultant's sheet adds it, and the sales entered late come off the
         # sheet's lines. An item whose sales used more than its sheet held cannot
-        # be restated that way; it is left out and named, and the GD's other
-        # items are still put right. Until this fix that one item refused the
-        # whole GD and the save only logged it, so every item stayed off.
+        # be restated that way; it is left as it is and NOT flagged (a warning
+        # that "the value is off" with no action misled the consultant), and the
+        # GD's other items are still put right. Until this fix that one item
+        # refused the whole GD and the save only logged it, so every item stayed off.
         print("\n-- 12e. A late GD with one item fine and one oversold --")
 
         def gd(number, on, lines):
@@ -602,8 +603,8 @@ def main():
             late_gd3 = f"LATE3-{tag}"
             r = gd(late_gd3, yesterday, [(name, "8481.1000", 5, 2500), (name2, "8203.2000", 2, 400)])
             res = r.json() if r.ok else {}
-            check("the GD saves, puts the fine item right and leaves the oversold one out",
-                  r.ok and res.get("stockSheetMatchesUpdated") == 1 and res.get("stockSheetMatchItems") == 1, r.text[:400])
+            check("the GD saves and puts the fine item right",
+                  r.ok and res.get("stockSheetMatchesUpdated") == 1, r.text[:400])
             fixed2 = onhand(api, h, cid, iid2)
             check("the fine item: 9 worth 1,100 -- the sheet's 7 left after the sale, plus the GD whole",
                   near(fixed2["onHand"], 9, 1e-4) and near(fixed2["valueExcludingTax"], 1100),
@@ -612,10 +613,9 @@ def main():
             check("its GD panel holds the sheet line and the late GD", {f"BASE2-{tag}", late_gd3} <= set(g2), str(list(g2)))
             r = call("GET", f"{api}/stock/company/{cid}/backdated-gds", h)
             listed = [x["itemTypeId"] for x in r.json()] if r.ok else []
-            check("the Stock panel lists only the oversold item", listed == [iid], r.text[:300])
+            check("the Stock panel flags nothing: the oversold item has no fix to offer", r.ok and listed == [], r.text[:300])
             r = call("POST", f"{api}/stock/company/{cid}/backdated-gds/restate", h, json={"commit": False})
-            msgs = " ".join(r.json().get("messages", [])) if r.ok else r.text
-            check("the panel names why it is left out", r.ok and "left out" in msgs and "on hand" in msgs, msgs[:300])
+            check("and its update has nothing to do", r.ok and not r.json().get("canCommit"), r.text[:300])
 
             # ── 12f. A sale entered after the match, dated before it ────
             # (AY: October bills entered 10-14 Nov behind an 18 Oct match.) The
