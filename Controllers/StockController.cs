@@ -2207,6 +2207,8 @@ namespace MyApp.Api.Controllers
 
             if (req.AsOf.Date > PakistanClock.Today)
                 return (BadRequest(new { message = "The sheet's date is in the future." }), null);
+            if (!req.IsStockCount && req.AsOf.Date != StockSheetDates.MonthEnd(req.AsOf))
+                return (BadRequest(new { message = StockSheetDates.NotMonthEndMessage(req.AsOf) }), null);
             var (rows, _) = await BuildOnHandAsync(companyId, withMovements: false);
             var ids = rows.Select(r => r.ItemTypeId).ToList();
             // The books as they stood on the sheet's date -- the same cut the

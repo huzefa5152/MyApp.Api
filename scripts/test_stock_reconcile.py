@@ -112,6 +112,18 @@ def main():
                 row(8, "GD-R5", "9999.9999", "MYSTERY GOODS", 5, 500)]
         req = {"asOf": "2026-09-30", "sourceFile": "recon.xlsx", "rows": rows}
 
+        print("\n-- 0. A sheet is dated on its month end --")
+        # AY, 2026-11-15: a September sheet matched dated 18 Oct put every
+        # October document entered later in front of the match.
+        r = requests.post(f"{api}/stock/company/{cid}/reconcile/plan", headers=h,
+                          json={**req, "asOf": "2026-10-18"}, timeout=120)
+        msg = (r.json() if r.status_code == 400 else {}).get("message", "")
+        check("a sheet dated mid-month is refused, naming the month end to use",
+              r.status_code == 400 and "30 Sep 2026" in msg and "stock count" in msg, f"{r.status_code} {r.text[:300]}")
+        r = requests.post(f"{api}/stock/company/{cid}/reconcile/plan", headers=h,
+                          json={**req, "asOf": "2026-10-18", "isStockCount": True}, timeout=120)
+        check("a mid-month stock count is still planned", r.ok, f"{r.status_code} {r.text[:200]}")
+
         print("\n-- 1. The plan --")
         r = requests.post(f"{api}/stock/company/{cid}/reconcile/plan", headers=h, json=req, timeout=120)
         p = r.json() if r.ok else {}

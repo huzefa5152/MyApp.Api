@@ -56,10 +56,10 @@ namespace MyApp.Api.Controllers
                     Obj(new { companyId = CompanyProp, lineId = Int(), action = new { type = "string", @enum = new[] { "categorize", "ignore" } }, accountId = Int(),
                         contactType = new { type = "string", @enum = new[] { "Client", "Supplier", "Other" } }, contactId = Int(), description = Str(500), idempotencyKey = IdemProp }, "companyId", "lineId", "action"),
                     Build: BuildStatementLineAsync, PerHour: 100, Noun: "statement lines"),
-                new("prepare_stock_reconcile", "Prepare reconciling the company's stock to its stock sheet as at a date: send the sheet's rows (item name as on the sheet, GD number, GD date, claim month, balance quantity, value, rate; chosenItemTypeId where the plan asks). The plan says per item what changes; quantity corrections apply only to items listed in useSheetQuantityItemTypeIds; quantityDifferencesAreCorrections=true posts them to equity (fixing earlier figures), false (default) to the Inventory adjustments expense (a loss of the period). Nothing is saved until commit_action.",
+                new("prepare_stock_reconcile", "Prepare reconciling the company's stock to its stock sheet as at a date (the last day of the month the sheet describes, e.g. 2026-09-30 for a September sheet; isStockCount=true only for a physical count taken mid-month): send the sheet's rows (item name as on the sheet, GD number, GD date, claim month, balance quantity, value, rate; chosenItemTypeId where the plan asks). The plan says per item what changes; quantity corrections apply only to items listed in useSheetQuantityItemTypeIds; quantityDifferencesAreCorrections=true posts them to equity (fixing earlier figures), false (default) to the Inventory adjustments expense (a loss of the period). Nothing is saved until commit_action.",
                     Obj(new
                     {
-                        companyId = CompanyProp, asOf = DateProp, sourceFile = Str(200),
+                        companyId = CompanyProp, asOf = DateProp, isStockCount = new { type = "boolean" }, sourceFile = Str(200),
                         rows = new { type = "array", minItems = 1, maxItems = 2000, items = new { type = "object", additionalProperties = false, required = new[] { "sourceRow", "itemNameOnSheet", "balanceQuantity", "balanceValueExcludingTax" },
                             properties = new { sourceRow = Int(), itemNameOnSheet = Str(300), hsCode = Str(20), lotRef = Str(100), lotDate = DateProp, claimMonth = DateProp, unit = Str(50),
                                 balanceQuantity = new { type = "string" }, balanceValueExcludingTax = MoneyProp, balanceSalesTaxRate = new { type = "string" }, chosenItemTypeId = Int() } } },
@@ -367,6 +367,7 @@ namespace MyApp.Api.Controllers
                 Rows = rows,
                 UseSheetQuantityItemTypeIds = useSheet,
                 QuantityDifferencesAreCorrections = OptBool(args, "quantityDifferencesAreCorrections") ?? false,
+                IsStockCount = OptBool(args, "isStockCount") ?? false,
             };
             var plan = As<StockReconcilePlanDto>(await ScreenAsync(() => Screen<StockController>().PlanReconcile(companyId, req)));
             if (!plan.CanApply) throw new ToolError("The sheet cannot be applied yet: " + JsonSerializer.Serialize(plan.Messages) + " Resolve the rows the plan highlights (chosenItemTypeId) and prepare again.");

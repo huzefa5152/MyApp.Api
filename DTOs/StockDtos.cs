@@ -744,6 +744,11 @@
         /// lost since — decides equity vs expense for those adjustments. The
         /// GD-line restatement is always a correction.</summary>
         public bool QuantityDifferencesAreCorrections { get; set; }
+        /// <summary>A stock COUNT taken on a day inside a month. Without it the
+        /// date must be a month end: a stock sheet describes one, and a month's
+        /// sheet dated later turns that month's documents into "late" ones (AY,
+        /// Sep 2026 sheet dated 18 Oct).</summary>
+        public bool IsStockCount { get; set; }
     }
 
     public class StockReconcileLineDto

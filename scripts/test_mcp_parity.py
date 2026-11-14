@@ -370,11 +370,11 @@ name_a = val(f"SELECT Name FROM ItemTypes WHERE Id = {bolt_a}")
 rows = [{"sourceRow": i + 1, "itemNameOnSheet": name_a, "lotRef": p.get("gdNumber"), "balanceQuantity": str(p.get("remainingQuantity") or 0),
          "balanceValueExcludingTax": str(p.get("remainingValueExcludingTax") or p.get("remainingValue") or 0), "balanceSalesTaxRate": "18", "chosenItemTypeId": bolt_a}
         for i, p in enumerate(pools) if (p.get("remainingQuantity") or 0) > 0]
-r, text = call(T, "prepare_stock_reconcile", {"companyId": A, "asOf": TODAY, "sourceFile": "mcpp sheet", "rows": rows or [{"sourceRow": 1, "itemNameOnSheet": name_a, "balanceQuantity": "0", "balanceValueExcludingTax": "0", "chosenItemTypeId": bolt_a}]})
+r, text = call(T, "prepare_stock_reconcile", {"companyId": A, "asOf": TODAY, "isStockCount": True, "sourceFile": "mcpp sheet", "rows": rows or [{"sourceRow": 1, "itemNameOnSheet": name_a, "balanceQuantity": "0", "balanceValueExcludingTax": "0", "chosenItemTypeId": bolt_a}]})
 check("stock reconcile prepares a plan, or says what to resolve (never a denial)", "denied" not in text.lower(), text)
 if not r:
     call(T, "cancel_action", {"planId": json.loads(text)["planId"]})
-refused(T, "stock reconcile choosing B's item", "prepare_stock_reconcile", {"companyId": A, "asOf": TODAY, "rows": [{"sourceRow": 1, "itemNameOnSheet": "x", "balanceQuantity": "1", "balanceValueExcludingTax": "1", "chosenItemTypeId": bolt_b}]})
+refused(T, "stock reconcile choosing B's item", "prepare_stock_reconcile", {"companyId": A, "asOf": TODAY, "isStockCount": True, "rows": [{"sourceRow": 1, "itemNameOnSheet": "x", "balanceQuantity": "1", "balanceValueExcludingTax": "1", "chosenItemTypeId": bolt_b}]})
 
 # ── phase 4 ──────────────────────────────────────────────────────────
 print("\n== Phase 4: every accounting report, sales detail, client ledger ==")
