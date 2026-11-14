@@ -1765,8 +1765,9 @@ namespace MyApp.Api.Services.Implementations
                             gdItems, "/api/spreadsheet-import/gd-costing/commit");
                         if (fix.Committed)
                         {
-                            result.StockSheetMatchesUpdated = fix.Items.Count;
-                            result.StockSheetMatchMessage = fix.Messages.FirstOrDefault();
+                            // Items left out (named in the second message) were not changed.
+                            result.StockSheetMatchesUpdated = fix.Items.Count(i => i.Error == null);
+                            result.StockSheetMatchMessage = string.Join(" ", fix.Messages);
                         }
                     }
                     catch (Exception ex)

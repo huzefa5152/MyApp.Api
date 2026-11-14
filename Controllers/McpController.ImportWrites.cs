@@ -197,16 +197,18 @@ namespace MyApp.Api.Controllers
             if (plan.Items.Count == 0) throw new ToolError("Nothing to fix: every item is already valued with its late GDs.");
             if (!plan.CanCommit)
                 throw new ToolError(string.Join("; ", plan.Items.Where(i => i.Error != null).Select(i => $"{i.ItemTypeName}: {i.Error}")));
+            var fixable = plan.Items.Where(i => i.Error == null).ToList();
             var preview = new
             {
-                items = plan.Items.Select(i => new { i.ItemTypeId, i.ItemTypeName, i.OnHand, valueNow = i.FifoValue, valueAfter = i.SheetValue }),
+                items = fixable.Select(i => new { i.ItemTypeId, i.ItemTypeName, i.OnHand, valueNow = i.FifoValue, valueAfter = i.SheetValue }),
+                leftOut = plan.Items.Where(i => i.Error != null).Select(i => new { i.ItemTypeId, i.ItemTypeName, reason = i.Error }),
                 valueBefore = plan.ValueBefore,
                 valueAfter = plan.ValueAfter,
                 quantitiesChange = false,
                 currency = "PKR",
             };
             return new Built(preview,
-                $"Add late GDs to {plan.Items.Count} item(s) in company {companyId}: value {plan.ValueBefore:N2} -> {plan.ValueAfter:N2}",
+                $"Add late GDs to {fixable.Count} item(s) in company {companyId}: value {plan.ValueBefore:N2} -> {plan.ValueAfter:N2}",
                 async () =>
                 {
                     var done = await LateGd(svc => svc.RestateLateGdsAsync(companyId, CurrentUserId, User.Identity?.Name, commit: true));

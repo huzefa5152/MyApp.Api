@@ -461,5 +461,47 @@ List<string> Order(Result r, int movementId) => r.Takes[movementId].Select(t => 
     Check("reval-empty: stays zero", r.Position.ValueExcludingTax == 0m);
 }
 
+// 21. A late GD is added WHOLE, as the consultant's stock sheet adds it, and
+//     sales entered late come off the sheet's lines first (AY, Oct 2026).
+{
+    var match = D(2026, 10, 18);
+    MyApp.Api.DTOs.FifoRestatementLineDto Sheet(string gd, DateTime on, decimal q, decimal v) => new()
+    {
+        ItemTypeId = 5829,
+        GdNumber = gd,
+        GdDate = on,
+        ClaimMonth = D(2026, 6),
+        Quantity = q,
+        ValueExcludingTax = v,
+        SalesTaxRate = 18
+    };
+    var sheet = new List<MyApp.Api.DTOs.FifoRestatementLineDto> {
+        Sheet("KAPW-HC-116986", D(2025, 12, 26), 2502.676491561680m, 438698.33m),
+        Sheet("KAPW-HC-173918", D(2026, 3, 25), 1331m, 1039493m),
+        Sheet("KAPW-HC-197973", D(2026, 5, 9), 175m, 893491.67m) };
+    var late = new List<BackdatedGdRestatement.LateLine> { new(5829, "KAPW-HC-65465", D(2026, 10, 12),
+        D(2026, 10), 7, "WASHING MACHINE PARTS", 660m, 376940.67m, 18m) };
+    // 2,811 sold on 13 Oct, entered on 14 Nov: on hand on the match date is 4,008.68 + 660 - 2,811.
+    var lines = BackdatedGdRestatement.BuildLines(5829, match, sheet, late, 4008.676491561680m + 660m - 2811m);
+    Check("late-gd-whole: the GD is added whole", lines.Single(l => l.GdNumber == "KAPW-HC-65465").Quantity == 660m);
+    Check("late-gd-whole: the sale comes off the oldest sheet line first",
+        lines.All(l => l.GdNumber != "KAPW-HC-116986")
+        && Math.Abs(lines.Single(l => l.GdNumber == "KAPW-HC-173918").Quantity - 1022.676491561680m) < 0.0001m,
+        string.Join(", ", lines.Select(l => $"{l.GdNumber} {l.Quantity}")));
+    Check("late-gd-whole: the plan equals on-hand", Math.Abs(lines.Sum(l => l.Quantity) - 1857.676491561680m) < 0.0001m);
+
+    // Sold more than the sheet held (gate valve: sheet 3,660, GD 4,450, sold 4,531):
+    // the sheet is used up and the GD stays whole, so the plan is above on-hand and
+    // the restatement leaves this item out instead of revaluing it off the sheet.
+    var valve = BackdatedGdRestatement.BuildLines(7816, match,
+        new List<MyApp.Api.DTOs.FifoRestatementLineDto> { new() { ItemTypeId = 7816, GdNumber = "KAPE-HC-6575",
+            GdDate = D(2026, 8, 8), Quantity = 3660m, ValueExcludingTax = 2149215.83m, SalesTaxRate = 18m } },
+        new List<BackdatedGdRestatement.LateLine> { new(7816, "KAPW-HC-65465", D(2026, 10, 12), D(2026, 10), 16,
+            "VALVE", 4450m, 1497476.17m, 18m) }, 3579m);
+    Check("late-gd-oversold: only the GD is left, whole", valve.Count == 1 && valve[0].Quantity == 4450m
+        && valve[0].ValueExcludingTax == 1497476.17m);
+    Check("late-gd-oversold: above on-hand, so the restatement will refuse it", valve.Sum(l => l.Quantity) > 3579m);
+}
+
 Console.WriteLine($"{passed + failed} checks, {failed} failed");
 return failed == 0 ? 0 : 1;

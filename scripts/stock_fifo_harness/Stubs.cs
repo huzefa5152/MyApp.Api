@@ -23,3 +23,20 @@ namespace MyApp.Api.Models
         public DateTime MovementDate { get; set; }
     }
 }
+
+namespace MyApp.Api.DTOs
+{
+    // Shape-for-shape copy of DTOs/StockDtos.cs FifoRestatementLineDto.
+    public class FifoRestatementLineDto
+    {
+        public int ItemTypeId { get; set; }
+        public string GdNumber { get; set; } = "";
+        public DateTime? GdDate { get; set; }
+        public DateTime? ClaimMonth { get; set; }
+        public int SourceRow { get; set; }
+        public string? Description { get; set; }
+        public decimal Quantity { get; set; }
+        public decimal ValueExcludingTax { get; set; }
+        public decimal SalesTaxRate { get; set; }
+    }
+}

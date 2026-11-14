@@ -345,18 +345,28 @@ namespace MyApp.Api.Services.Implementations
             ICollection<int>? onlyItemTypeIds = null, string? requestPath = null)
         {
             var plan = await PlanLateGdsAsync(companyId, userId, onlyItemTypeIds);
+            // An item that cannot be restated (its quantity is wrong, or it holds
+            // stock not traced to a GD) is left out and named; the others are
+            // still fixed. Until 2026-11-15 one such item refused them all, and
+            // the GD save's automatic fix only logged it (AY, GD KAPW-HC-65465).
+            var blocked = plan.Items.Where(i => i.Error != null).ToList();
+            var blockedIds = blocked.Select(i => i.ItemTypeId).ToHashSet();
+            var fixable = plan.Items.Where(i => i.Error == null).ToList();
             var result = new BackdatedGdRestateResultDto
             {
                 Items = plan.Items,
-                CanCommit = plan.Items.Count > 0 && plan.Items.All(i => i.Error == null),
-                ValueBefore = plan.Items.Sum(i => i.FifoValue),
-                ValueAfter = plan.Items.Sum(i => i.SheetValue),
+                CanCommit = fixable.Count > 0,
+                ValueBefore = fixable.Sum(i => i.FifoValue),
+                ValueAfter = fixable.Sum(i => i.SheetValue),
             };
             if (plan.Items.Count == 0)
             {
                 result.Messages.Add("Nothing to update: every item is already valued with its late GDs.");
                 return result;
             }
+            if (blocked.Count > 0)
+                result.Messages.Add($"{blocked.Count} item(s) left out: " +
+                    string.Join("; ", blocked.Select(i => $"{i.ItemTypeName}: {i.Error}")));
             if (!commit || !result.CanCommit) return result;
 
             await using var tx = await context.Database.BeginTransactionAsync();
@@ -364,6 +374,8 @@ namespace MyApp.Api.Services.Implementations
             {
                 foreach (var r in plan.Requests)
                 {
+                    r.Lines = r.Lines.Where(l => !blockedIds.Contains(l.ItemTypeId)).ToList();
+                    if (r.Lines.Count == 0) continue;
                     r.Commit = true;
                     var res = await RestateAsync(companyId, userId, userName, r);
                     if (!res.Committed)
@@ -379,7 +391,7 @@ namespace MyApp.Api.Services.Implementations
             }
             result.Committed = true;
             var gds = string.Join(", ", plan.Affected.SelectMany(a => a.Lines.Select(l => l.GdNumber)).Distinct().OrderBy(g => g));
-            result.Messages.Add($"{plan.Items.Count} item(s) brought back in line with the stock sheet, now including GD {gds}. Quantities did not change.");
+            result.Messages.Insert(0, $"{fixable.Count} item(s) brought back in line with the stock sheet, now including GD {gds}. Quantities did not change.");
             await audit.LogAsync(new AuditLog
             {
                 Timestamp = DateTime.UtcNow,
@@ -392,7 +404,7 @@ namespace MyApp.Api.Services.Implementations
                 // Each is its own action: never folded into an earlier row by
                 // the 24h dedup (built for error floods).
                 Fingerprint = Guid.NewGuid().ToString("N"),
-                Message = $"Late GD {gds} added to the stock-sheet match for {plan.Items.Count} item(s) of company {companyId}: " +
+                Message = $"Late GD {gds} added to the stock-sheet match for {fixable.Count} item(s) of company {companyId}: " +
                           $"value {result.ValueBefore:0.00} -> {result.ValueAfter:0.00}",
                 CompanyId = companyId,
             });
