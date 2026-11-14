@@ -48,7 +48,10 @@ namespace MyApp.Api.Helpers
             if (itemTypeIds != null) q = q.Where(m => itemTypeIds.Contains(m.ItemTypeId));
             var rows = await q.Select(m => new
             {
-                m.Id, m.ItemTypeId, m.MovementDate, m.CreatedAt,
+                m.Id,
+                m.ItemTypeId,
+                m.MovementDate,
+                m.CreatedAt,
                 Sheet = db.StockRestatementLines.Any(r => r.StockMovementId == m.Id),
             }).ToListAsync();
             return rows.GroupBy(r => r.ItemTypeId).ToDictionary(
@@ -76,9 +79,18 @@ namespace MyApp.Api.Helpers
                       && m.SourceType == StockMovementSourceType.ImportConsignment
                 select new
                 {
-                    MovementId = m.Id, m.ItemTypeId, m.MovementDate, m.CreatedAt, m.Quantity,
-                    c.GdNumber, c.GdDate, l.ClaimMonth, l.SourceRow, l.DescriptionOnSheet,
-                    l.SellingValueExcludingTax, l.SalesTaxRate,
+                    MovementId = m.Id,
+                    m.ItemTypeId,
+                    m.MovementDate,
+                    m.CreatedAt,
+                    m.Quantity,
+                    c.GdNumber,
+                    c.GdDate,
+                    l.ClaimMonth,
+                    l.SourceRow,
+                    l.DescriptionOnSheet,
+                    l.SellingValueExcludingTax,
+                    l.SalesTaxRate,
                 }).ToListAsync();
             if (arrivals.Count == 0) return new List<Affected>();
 
@@ -124,10 +136,15 @@ namespace MyApp.Api.Helpers
             if (held.Any(p => string.IsNullOrWhiteSpace(p.GdNumber))) return null;
             return held.Select(p => new FifoRestatementLineDto
             {
-                ItemTypeId = id, GdNumber = p.GdNumber!.Trim(), GdDate = p.OrderDate?.Date,
+                ItemTypeId = id,
+                GdNumber = p.GdNumber!.Trim(),
+                GdDate = p.OrderDate?.Date,
                 ClaimMonth = p.ClaimMonth is { } cm ? new DateTime(cm.Year, cm.Month, 1) : null,
-                SourceRow = p.Tiebreak, Description = p.Description, Quantity = p.Quantity,
-                ValueExcludingTax = Math.Round(p.Value, 2, MidpointRounding.AwayFromZero), SalesTaxRate = p.Rate,
+                SourceRow = p.Tiebreak,
+                Description = p.Description,
+                Quantity = p.Quantity,
+                ValueExcludingTax = Math.Round(p.Value, 2, MidpointRounding.AwayFromZero),
+                SalesTaxRate = p.Rate,
             }).ToList();
         }
 
@@ -147,9 +164,15 @@ namespace MyApp.Api.Helpers
             var month = new DateTime(matchDate.Year, matchDate.Month, 1);
             var sheet = sheetLines.Select(l => new FifoRestatementLineDto
             {
-                ItemTypeId = itemTypeId, GdNumber = l.GdNumber, GdDate = l.GdDate, ClaimMonth = l.ClaimMonth,
-                SourceRow = l.SourceRow, Description = l.Description, Quantity = l.Quantity,
-                ValueExcludingTax = l.ValueExcludingTax, SalesTaxRate = l.SalesTaxRate,
+                ItemTypeId = itemTypeId,
+                GdNumber = l.GdNumber,
+                GdDate = l.GdDate,
+                ClaimMonth = l.ClaimMonth,
+                SourceRow = l.SourceRow,
+                Description = l.Description,
+                Quantity = l.Quantity,
+                ValueExcludingTax = l.ValueExcludingTax,
+                SalesTaxRate = l.SalesTaxRate,
             }).ToList();
             var surplus = sheet.Sum(l => l.Quantity) + late.Sum(l => l.Quantity) - onHandOnMatchDate;
             if (surplus > 0.0001m)
@@ -169,10 +192,15 @@ namespace MyApp.Api.Helpers
             }
             return sheet.Concat(late.Select(l => new FifoRestatementLineDto
             {
-                ItemTypeId = itemTypeId, GdNumber = l.GdNumber, GdDate = l.GdDate,
+                ItemTypeId = itemTypeId,
+                GdNumber = l.GdNumber,
+                GdDate = l.GdDate,
                 ClaimMonth = l.ClaimMonth is { } cm ? new DateTime(cm.Year, cm.Month, 1) : null,
-                SourceRow = l.SourceRow, Description = l.Description, Quantity = l.Quantity,
-                ValueExcludingTax = l.ValueExcludingTax, SalesTaxRate = l.SalesTaxRate,
+                SourceRow = l.SourceRow,
+                Description = l.Description,
+                Quantity = l.Quantity,
+                ValueExcludingTax = l.ValueExcludingTax,
+                SalesTaxRate = l.SalesTaxRate,
             })).ToList();
         }
     }

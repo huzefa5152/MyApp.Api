@@ -19,7 +19,9 @@ namespace MyApp.Api.Controllers
         {
             var debitLine = new
             {
-                type = "object", additionalProperties = false, required = new[] { "description", "quantity", "unitPrice" },
+                type = "object",
+                additionalProperties = false,
+                required = new[] { "description", "quantity", "unitPrice" },
                 properties = new { description = Str(500), quantity = new { type = "string" }, unit = Str(50), unitPrice = MoneyProp, itemTypeId = Int(), accountId = Int(), hsCode = Str(20) },
             };
             t.AddRange(new Tool[]
@@ -112,8 +114,12 @@ namespace MyApp.Api.Controllers
             }
             var dto = new CreateAccountTransferDto
             {
-                Date = DateArg(args, "date") ?? PakistanClock.Today, FromAccountId = from, ToAccountId = to,
-                Amount = ReqDec(args, "amount", 0m, 99_999_999_999m, 2, minInclusive: false), Description = OptText(args, "description", 500), DivisionId = division,
+                Date = DateArg(args, "date") ?? PakistanClock.Today,
+                FromAccountId = from,
+                ToAccountId = to,
+                Amount = ReqDec(args, "amount", 0m, 99_999_999_999m, 2, minInclusive: false),
+                Description = OptText(args, "description", 500),
+                DivisionId = division,
             };
             var preview = new { transferId = editId, date = Ymd(dto.Date), dto.FromAccountId, dto.ToAccountId, dto.Amount, dto.Description, currency = "PKR" };
             return new Built(preview, $"{(editId == null ? "Transfer" : "Update a transfer of")} {dto.Amount:0.00} PKR between accounts {from} and {to} in company {companyId}",
@@ -169,9 +175,13 @@ namespace MyApp.Api.Controllers
                 if (account is int acc) await AccountInCompanyAsync(companyId, acc);
                 items.Add(new CreatePurchaseDebitNoteItemDto
                 {
-                    Description = desc, Quantity = ReqDec(it, "quantity", 0m, 999_999_999m, 4, minInclusive: false), UOM = OptText(it, "unit", 50),
-                    UnitPrice = ReqDec(it, "unitPrice", 0m, 999_999_999m, 4, minInclusive: false), ItemTypeId = await ItemInCompanyAsync(it, "itemTypeId", companyId),
-                    AccountId = account, HSCode = OptText(it, "hsCode", 20) is { Length: > 0 } hs ? hs : null,
+                    Description = desc,
+                    Quantity = ReqDec(it, "quantity", 0m, 999_999_999m, 4, minInclusive: false),
+                    UOM = OptText(it, "unit", 50),
+                    UnitPrice = ReqDec(it, "unitPrice", 0m, 999_999_999m, 4, minInclusive: false),
+                    ItemTypeId = await ItemInCompanyAsync(it, "itemTypeId", companyId),
+                    AccountId = account,
+                    HSCode = OptText(it, "hsCode", 20) is { Length: > 0 } hs ? hs : null,
                 });
             }
             var name = await SupplierNameAsync(supplierId);
@@ -182,8 +192,12 @@ namespace MyApp.Api.Controllers
                 if (existing.DivisionId != null) await AssertDivisionWriteAsync(companyId, existing.DivisionId);
                 var udto = new UpdatePurchaseDebitNoteDto
                 {
-                    Date = DateArg(args, "date") ?? existing.Date, SupplierId = supplierId, SupplierRef = OptText(args, "supplierRef", 100) ?? existing.SupplierRef,
-                    Notes = OptText(args, "notes", 2000) ?? existing.Notes, GSTRate = Has(args, "gstRate") ? Gst(args) : existing.GSTRate, Items = items,
+                    Date = DateArg(args, "date") ?? existing.Date,
+                    SupplierId = supplierId,
+                    SupplierRef = OptText(args, "supplierRef", 100) ?? existing.SupplierRef,
+                    Notes = OptText(args, "notes", 2000) ?? existing.Notes,
+                    GSTRate = Has(args, "gstRate") ? Gst(args) : existing.GSTRate,
+                    Items = items,
                 };
                 return new Built(EditPreview("supplier debit note", eid, existing.DebitNoteNumber, preview), $"Update supplier debit note #{existing.DebitNoteNumber} in company {companyId}",
                     async () =>
@@ -196,8 +210,14 @@ namespace MyApp.Api.Controllers
             await AssertDivisionWriteAsync(companyId, division);
             var dto = new CreatePurchaseDebitNoteDto
             {
-                CompanyId = companyId, DivisionId = division, SupplierId = supplierId, Date = DateArg(args, "date") ?? PakistanClock.Today,
-                SupplierRef = OptText(args, "supplierRef", 100), Notes = OptText(args, "notes", 2000), GSTRate = Gst(args), Items = items,
+                CompanyId = companyId,
+                DivisionId = division,
+                SupplierId = supplierId,
+                Date = DateArg(args, "date") ?? PakistanClock.Today,
+                SupplierRef = OptText(args, "supplierRef", 100),
+                Notes = OptText(args, "notes", 2000),
+                GSTRate = Gst(args),
+                Items = items,
             };
             return new Built(preview, $"Raise a debit note on \"{name}\" in company {companyId}: {items.Count} line(s)",
                 async () =>
@@ -254,7 +274,8 @@ namespace MyApp.Api.Controllers
             await AccountInCompanyAsync(companyId, account, "bank account");
             var dto = new LockReconciliationDto
             {
-                BankAccountId = account, StatementDate = DateArg(args, "statementDate") ?? throw new ToolError("statementDate is required."),
+                BankAccountId = account,
+                StatementDate = DateArg(args, "statementDate") ?? throw new ToolError("statementDate is required."),
                 StatementBalance = ReqDec(args, "statementBalance", -99_999_999_999m, 99_999_999_999m, 2),
             };
             return new Built(new { dto.BankAccountId, statementDate = Ymd(dto.StatementDate), dto.StatementBalance, currency = "PKR" },
@@ -318,10 +339,17 @@ namespace MyApp.Api.Controllers
             {
                 rows.Add(new StockReconcileSheetRowDto
                 {
-                    SourceRow = IdArg(r, "sourceRow"), ItemNameOnSheet = OptText(r, "itemNameOnSheet", 300) ?? throw new ToolError("itemNameOnSheet is required."),
-                    HsCode = OptText(r, "hsCode", 20), LotRef = OptText(r, "lotRef", 100), LotDate = DateArg(r, "lotDate"), ClaimMonth = DateArg(r, "claimMonth"), Unit = OptText(r, "unit", 50),
-                    BalanceQuantity = ReqDec(r, "balanceQuantity", 0m, 999_999_999m, 4), BalanceValueExcludingTax = ReqDec(r, "balanceValueExcludingTax", 0m, 99_999_999_999m, 2),
-                    BalanceSalesTaxRate = OptDec(r, "balanceSalesTaxRate", 0m, 100m, 2) ?? 18m, ChosenItemTypeId = await ItemInCompanyAsync(r, "chosenItemTypeId", companyId),
+                    SourceRow = IdArg(r, "sourceRow"),
+                    ItemNameOnSheet = OptText(r, "itemNameOnSheet", 300) ?? throw new ToolError("itemNameOnSheet is required."),
+                    HsCode = OptText(r, "hsCode", 20),
+                    LotRef = OptText(r, "lotRef", 100),
+                    LotDate = DateArg(r, "lotDate"),
+                    ClaimMonth = DateArg(r, "claimMonth"),
+                    Unit = OptText(r, "unit", 50),
+                    BalanceQuantity = ReqDec(r, "balanceQuantity", 0m, 999_999_999m, 4),
+                    BalanceValueExcludingTax = ReqDec(r, "balanceValueExcludingTax", 0m, 99_999_999_999m, 2),
+                    BalanceSalesTaxRate = OptDec(r, "balanceSalesTaxRate", 0m, 100m, 2) ?? 18m,
+                    ChosenItemTypeId = await ItemInCompanyAsync(r, "chosenItemTypeId", companyId),
                 });
             }
             var useSheet = new List<int>();
@@ -334,7 +362,10 @@ namespace MyApp.Api.Controllers
                 }
             var req = new StockReconcileRequestDto
             {
-                AsOf = DateArg(args, "asOf") ?? throw new ToolError("asOf is required."), SourceFile = OptText(args, "sourceFile", 200), Rows = rows, UseSheetQuantityItemTypeIds = useSheet,
+                AsOf = DateArg(args, "asOf") ?? throw new ToolError("asOf is required."),
+                SourceFile = OptText(args, "sourceFile", 200),
+                Rows = rows,
+                UseSheetQuantityItemTypeIds = useSheet,
                 QuantityDifferencesAreCorrections = OptBool(args, "quantityDifferencesAreCorrections") ?? false,
             };
             var plan = As<StockReconcilePlanDto>(await ScreenAsync(() => Screen<StockController>().PlanReconcile(companyId, req)));

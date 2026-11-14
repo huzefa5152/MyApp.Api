@@ -319,15 +319,32 @@ namespace MyApp.Api.Controllers
 
             var lots = await lotsQuery.Select(l => new
             {
-                ItemTypeId = l.OpeningStockBalance.ItemTypeId, l.Id, l.ClaimMonth,
-                l.SourceRow, l.ItemNameOnSheet, l.HsCode, l.LotRef, l.LotDate,
-                l.BalanceQuantity, l.BalanceValueExcludingTax, l.BalanceSalesTaxRate,
+                ItemTypeId = l.OpeningStockBalance.ItemTypeId,
+                l.Id,
+                l.ClaimMonth,
+                l.SourceRow,
+                l.ItemNameOnSheet,
+                l.HsCode,
+                l.LotRef,
+                l.LotDate,
+                l.BalanceQuantity,
+                l.BalanceValueExcludingTax,
+                l.BalanceSalesTaxRate,
             }).ToListAsync();
             var lines = await linesQuery.Select(l => new
             {
-                ItemTypeId = l.ItemTypeId!.Value, l.Id, l.ClaimMonth, l.SourceRow, l.DescriptionOnSheet,
-                l.HsCode, l.Quantity, l.SellingValueExcludingTax, l.SalesTaxRate,
-                l.Disposition, l.ImportConsignment.Mode, l.ImportConsignment.GdNumber,
+                ItemTypeId = l.ItemTypeId!.Value,
+                l.Id,
+                l.ClaimMonth,
+                l.SourceRow,
+                l.DescriptionOnSheet,
+                l.HsCode,
+                l.Quantity,
+                l.SellingValueExcludingTax,
+                l.SalesTaxRate,
+                l.Disposition,
+                l.ImportConsignment.Mode,
+                l.ImportConsignment.GdNumber,
                 l.ImportConsignment.GdDate,
             }).ToListAsync();
             var restateItemQ = _context.StockRestatementLines.AsNoTracking().Where(l => l.CompanyId == companyId);
@@ -356,13 +373,19 @@ namespace MyApp.Api.Controllers
                 var gd = l.LotRef!.Trim();
                 result.Add(new StockGdDetailDto
                 {
-                    ItemTypeId = l.ItemTypeId, ItemTypeName = name, HsCode = l.HsCode,
-                    Source = "Opening sheet", GdNumber = gd, GdDate = l.LotDate,
+                    ItemTypeId = l.ItemTypeId,
+                    ItemTypeName = name,
+                    HsCode = l.HsCode,
+                    Source = "Opening sheet",
+                    GdNumber = gd,
+                    GdDate = l.LotDate,
                     LotId = l.Id,
                     // The line's own month first; the GD-level month covers a
                     // line imported before lines carried one.
-                    ClaimMonth = l.ClaimMonth ?? ClaimFor(gd), SourceRow = l.SourceRow,
-                    Description = l.ItemNameOnSheet, Quantity = l.BalanceQuantity,
+                    ClaimMonth = l.ClaimMonth ?? ClaimFor(gd),
+                    SourceRow = l.SourceRow,
+                    Description = l.ItemNameOnSheet,
+                    Quantity = l.BalanceQuantity,
                     ValueExcludingTax = l.BalanceValueExcludingTax,
                     SalesTaxRate = l.BalanceSalesTaxRate,
                 });
@@ -374,11 +397,15 @@ namespace MyApp.Api.Controllers
                 var gd = l.GdNumber.Trim();
                 result.Add(new StockGdDetailDto
                 {
-                    ItemTypeId = l.ItemTypeId, ItemTypeName = name, HsCode = l.HsCode,
+                    ItemTypeId = l.ItemTypeId,
+                    ItemTypeName = name,
+                    HsCode = l.HsCode,
                     Source = arrival ? "GD new arrival" : "Cost-only backfill",
-                    GdNumber = gd, GdDate = l.GdDate,
+                    GdNumber = gd,
+                    GdDate = l.GdDate,
                     ConsignmentLineId = l.Id,
-                    ClaimMonth = l.ClaimMonth ?? ClaimFor(gd), SourceRow = l.SourceRow,
+                    ClaimMonth = l.ClaimMonth ?? ClaimFor(gd),
+                    SourceRow = l.SourceRow,
                     Description = l.DescriptionOnSheet,
                     Quantity = arrival ? l.Quantity : null,
                     ValueExcludingTax = arrival ? l.SellingValueExcludingTax : null,
@@ -408,10 +435,18 @@ namespace MyApp.Api.Controllers
                     foreach (var l in rlines)
                         result.Add(new StockGdDetailDto
                         {
-                            ItemTypeId = itemId, ItemTypeName = name, Source = "Stock sheet restatement",
-                            GdNumber = l.GdNumber, GdDate = l.GdDate, ClaimMonth = l.ClaimMonth,
-                            RestatementLineId = l.Id, SourceRow = l.SourceRow, Description = l.Description,
-                            Quantity = l.Quantity, ValueExcludingTax = l.ValueExcludingTax, SalesTaxRate = l.SalesTaxRate,
+                            ItemTypeId = itemId,
+                            ItemTypeName = name,
+                            Source = "Stock sheet restatement",
+                            GdNumber = l.GdNumber,
+                            GdDate = l.GdDate,
+                            ClaimMonth = l.ClaimMonth,
+                            RestatementLineId = l.Id,
+                            SourceRow = l.SourceRow,
+                            Description = l.Description,
+                            Quantity = l.Quantity,
+                            ValueExcludingTax = l.ValueExcludingTax,
+                            SalesTaxRate = l.SalesTaxRate,
                         });
                 }
             }
@@ -955,8 +990,11 @@ namespace MyApp.Api.Controllers
             if (monthStart > new DateTime(today.Year, today.Month, 1))
                 return (BadRequest(new { message = "That month has not started yet." }), null);
             if (!await StockCostingMethod.IsGdFifoAsync(_context, companyId))
-                return (BadRequest(new { message =
-                    "The monthly GD sheet needs FIFO-by-GD costing: under the weighted average a sale is not allocated to a GD." }), null);
+                return (BadRequest(new
+                {
+                    message =
+                    "The monthly GD sheet needs FIFO-by-GD costing: under the weighted average a sale is not allocated to a GD."
+                }), null);
             var monthEnd = monthStart.AddMonths(1);
 
             var (rows, _) = await BuildOnHandAsync(companyId, withMovements: false);
@@ -1760,16 +1798,21 @@ namespace MyApp.Api.Controllers
                 .GroupBy(o => o.ItemTypeId)
                 .Select(g => new
                 {
-                    Qty = g.Sum(o => o.Quantity), Value = g.Sum(o => o.ValueExcludingTax),
-                    ActualCost = g.Sum(o => o.ActualCostExcludingTax), Rate = g.Max(o => o.SalesTaxRate),
+                    Qty = g.Sum(o => o.Quantity),
+                    Value = g.Sum(o => o.ValueExcludingTax),
+                    ActualCost = g.Sum(o => o.ActualCostExcludingTax),
+                    Rate = g.Max(o => o.SalesTaxRate),
                 }).FirstOrDefaultAsync();
             var moves = await _context.StockMovements.AsNoTracking()
                 .Where(m => m.CompanyId == companyId && m.ItemTypeId == itemTypeId).ToListAsync();
             moves.Add(new StockMovement
             {
-                Id = int.MaxValue, CompanyId = companyId, ItemTypeId = itemTypeId,
+                Id = int.MaxValue,
+                CompanyId = companyId,
+                ItemTypeId = itemTypeId,
                 Direction = qtyDelta > 0m ? StockMovementDirection.In : StockMovementDirection.Out,
-                Quantity = Math.Abs(qtyDelta), SourceType = StockMovementSourceType.Adjustment,
+                Quantity = Math.Abs(qtyDelta),
+                SourceType = StockMovementSourceType.Adjustment,
                 MovementDate = movementDate,
                 UnitCostExcludingTax = qtyDelta > 0m ? unitCost : null,
                 ActualUnitCostExcludingTax = qtyDelta > 0m ? actualUnitCost : null,
@@ -1868,11 +1911,17 @@ namespace MyApp.Api.Controllers
                     names.TryGetValue(id, out var n);
                     items.Add(new
                     {
-                        itemTypeId = id, itemTypeName = n?.Name, hsCode = n?.HSCode,
-                        quantity = wa.Quantity, fifoQuantity = f.Quantity,
-                        weightedAverageValue = wa.ValueExcludingTax, fifoValue = f.ValueExcludingTax,
-                        weightedAverageActual = wa.ActualValueExcludingTax, fifoActual = f.ActualValueExcludingTax,
-                        weightedAverageValueOut = wa.ValueOut, fifoValueOut = f.ValueOut,
+                        itemTypeId = id,
+                        itemTypeName = n?.Name,
+                        hsCode = n?.HSCode,
+                        quantity = wa.Quantity,
+                        fifoQuantity = f.Quantity,
+                        weightedAverageValue = wa.ValueExcludingTax,
+                        fifoValue = f.ValueExcludingTax,
+                        weightedAverageActual = wa.ActualValueExcludingTax,
+                        fifoActual = f.ActualValueExcludingTax,
+                        weightedAverageValueOut = wa.ValueOut,
+                        fifoValueOut = f.ValueOut,
                         gdPools = fr.Pools.Count(p => p.GdNumber != null),
                         shortfallQuantity = fr.ShortfallQuantity,
                     });
@@ -1884,9 +1933,12 @@ namespace MyApp.Api.Controllers
                 method = await StockCostingMethod.GetAsync(_context, companyId),
                 itemCount = ids.Count,
                 changedItemCount = items.Count,
-                weightedAverageValue = Money(waValue), fifoValue = Money(fifoValue),
-                weightedAverageValueOut = Money(waOut), fifoValueOut = Money(fifoOut),
-                weightedAverageActual = Money(waActual), fifoActual = Money(fifoActual),
+                weightedAverageValue = Money(waValue),
+                fifoValue = Money(fifoValue),
+                weightedAverageValueOut = Money(waOut),
+                fifoValueOut = Money(fifoOut),
+                weightedAverageActual = Money(waActual),
+                fifoActual = Money(fifoActual),
                 items,
             });
         }
@@ -2019,9 +2071,13 @@ namespace MyApp.Api.Controllers
                 {
                     var r = await AdjustStock(new CreateStockAdjustmentDto
                     {
-                        CompanyId = companyId, ItemTypeId = item.ItemTypeId, Mode = StockAdjustmentModes.Set,
-                        TargetQuantity = item.SheetQuantity, TargetValueExcludingTax = item.TargetValueExcludingTax,
-                        MovementDate = plan.AsOf, Notes = $"Reconciled to {file}",
+                        CompanyId = companyId,
+                        ItemTypeId = item.ItemTypeId,
+                        Mode = StockAdjustmentModes.Set,
+                        TargetQuantity = item.SheetQuantity,
+                        TargetValueExcludingTax = item.TargetValueExcludingTax,
+                        MovementDate = plan.AsOf,
+                        Notes = $"Reconciled to {file}",
                         IsValuationCorrection = req.QuantityDifferencesAreCorrections,
                     });
                     if (r is not OkObjectResult)
@@ -2029,13 +2085,20 @@ namespace MyApp.Api.Controllers
                 }
                 var restate = new FifoRestatementRequestDto
                 {
-                    SourceFile = file, Commit = true, AsOf = plan.AsOf,
+                    SourceFile = file,
+                    Commit = true,
+                    AsOf = plan.AsOf,
                     Lines = plan.Items.Where(i => i.Error == null).SelectMany(i => i.Lines.Select(l => new FifoRestatementLineDto
                     {
-                        ItemTypeId = i.ItemTypeId, GdNumber = l.GdNumber, GdDate = l.GdDate,
+                        ItemTypeId = i.ItemTypeId,
+                        GdNumber = l.GdNumber,
+                        GdDate = l.GdDate,
                         ClaimMonth = l.ClaimMonth is { } cm ? new DateTime(cm.Year, cm.Month, 1) : null,
-                        SourceRow = l.SourceRow, Description = l.Description,
-                        Quantity = l.Quantity, ValueExcludingTax = l.ValueExcludingTax, SalesTaxRate = l.SalesTaxRate,
+                        SourceRow = l.SourceRow,
+                        Description = l.Description,
+                        Quantity = l.Quantity,
+                        ValueExcludingTax = l.ValueExcludingTax,
+                        SalesTaxRate = l.SalesTaxRate,
                     })).ToList(),
                 };
                 var rr = await RestateFifo(companyId, restate);
@@ -2094,7 +2157,10 @@ namespace MyApp.Api.Controllers
                 AfterValueCorrection = !a.Restatement.IsSheetMatch,
                 Lines = a.Lines.Select(l => new BackdatedGdLineDto
                 {
-                    GdNumber = l.GdNumber, GdDate = l.GdDate, Quantity = l.Quantity, ValueExcludingTax = l.ValueExcludingTax,
+                    GdNumber = l.GdNumber,
+                    GdDate = l.GdDate,
+                    Quantity = l.Quantity,
+                    ValueExcludingTax = l.ValueExcludingTax,
                 }).ToList(),
             }).OrderBy(x => x.ItemTypeName).ToList());
         }
@@ -2261,9 +2327,14 @@ namespace MyApp.Api.Controllers
                 {
                     var r = await AdjustStock(new CreateStockAdjustmentDto
                     {
-                        CompanyId = companyId, ItemTypeId = item, Mode = StockAdjustmentModes.Set,
-                        TargetQuantity = qty, TargetValueExcludingTax = val, TargetActualCostExcludingTax = act,
-                        MovementDate = PakistanClock.Today, Notes = note,
+                        CompanyId = companyId,
+                        ItemTypeId = item,
+                        Mode = StockAdjustmentModes.Set,
+                        TargetQuantity = qty,
+                        TargetValueExcludingTax = val,
+                        TargetActualCostExcludingTax = act,
+                        MovementDate = PakistanClock.Today,
+                        Notes = note,
                         // Value moves between two items and nets to nil: a
                         // reclassification, never a loss.
                         IsValuationCorrection = true,
@@ -2274,10 +2345,15 @@ namespace MyApp.Api.Controllers
 
                 FifoRestatementLineDto Line(int itemId, StockSplitLineDto p, int row) => new()
                 {
-                    ItemTypeId = itemId, SourceRow = row,
+                    ItemTypeId = itemId,
+                    SourceRow = row,
                     GdNumber = string.IsNullOrWhiteSpace(p.GdNumber) ? "Opening (no GD)" : p.GdNumber!,
-                    GdDate = p.GdDate, ClaimMonth = p.ClaimMonth, Description = p.Description,
-                    Quantity = p.Quantity, ValueExcludingTax = p.ValueExcludingTax, SalesTaxRate = p.SalesTaxRate,
+                    GdDate = p.GdDate,
+                    ClaimMonth = p.ClaimMonth,
+                    Description = p.Description,
+                    Quantity = p.Quantity,
+                    ValueExcludingTax = p.ValueExcludingTax,
+                    SalesTaxRate = p.SalesTaxRate,
                 };
                 var lines = new List<FifoRestatementLineDto>();
                 var n = 1;
@@ -2285,7 +2361,9 @@ namespace MyApp.Api.Controllers
                 foreach (var p in target.Concat(moving)) lines.Add(Line(targetId, p, n++));
                 var rr = await RestateFifo(companyId, new FifoRestatementRequestDto
                 {
-                    SourceFile = $"split of item {req.SourceItemTypeId}", Commit = true, Lines = lines,
+                    SourceFile = $"split of item {req.SourceItemTypeId}",
+                    Commit = true,
+                    Lines = lines,
                 });
                 var res = (rr.Result as OkObjectResult)?.Value as FifoRestatementResultDto ?? rr.Value;
                 if (res == null || !res.Committed)
@@ -2297,8 +2375,12 @@ namespace MyApp.Api.Controllers
                 var targetName = await _context.ItemTypes.AsNoTracking().Where(i => i.Id == targetId).Select(i => i.Name).FirstAsync();
                 return Ok(new StockSplitResultDto
                 {
-                    SourceItemTypeId = req.SourceItemTypeId, TargetItemTypeId = targetId, TargetItemTypeName = targetName,
-                    LinesMoved = moving.Count, QuantityMoved = mQty, ValueMoved = mVal,
+                    SourceItemTypeId = req.SourceItemTypeId,
+                    TargetItemTypeId = targetId,
+                    TargetItemTypeName = targetName,
+                    LinesMoved = moving.Count,
+                    QuantityMoved = mQty,
+                    ValueMoved = mVal,
                 });
             }
             catch (InvalidOperationException ex)
@@ -2325,11 +2407,16 @@ namespace MyApp.Api.Controllers
                 .Select(l => new { l.Id, l.HsCode }).ToDictionaryAsync(l => l.Id, l => l.HsCode);
             return res.Pools.Where(p => p.Quantity > 0.00005m).Select(p => new StockSplitLineDto
             {
-                PoolKey = p.Key, GdNumber = p.GdNumber, GdDate = p.GdNumber != null ? p.OrderDate : null,
-                ClaimMonth = p.ClaimMonth, Description = p.Description,
+                PoolKey = p.Key,
+                GdNumber = p.GdNumber,
+                GdDate = p.GdNumber != null ? p.OrderDate : null,
+                ClaimMonth = p.ClaimMonth,
+                Description = p.Description,
                 HsCode = p.LotId is int l && lotHs.TryGetValue(l, out var a) ? a
                     : p.ConsignmentLineId is int c && lineHs.TryGetValue(c, out var b) ? b : itemHs,
-                Quantity = p.Quantity, ValueExcludingTax = Money(p.Value), ActualValueExcludingTax = Money(p.ActualValue),
+                Quantity = p.Quantity,
+                ValueExcludingTax = Money(p.Value),
+                ActualValueExcludingTax = Money(p.ActualValue),
                 SalesTaxRate = p.Rate,
             }).ToList();
         }

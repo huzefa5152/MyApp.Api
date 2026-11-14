@@ -66,8 +66,11 @@ namespace MyApp.Api.Services.Implementations
                 .GroupBy(o => o.ItemTypeId)
                 .Select(g => new
                 {
-                    ItemTypeId = g.Key, Qty = g.Sum(o => o.Quantity), Value = g.Sum(o => o.ValueExcludingTax),
-                    ActualCost = g.Sum(o => o.ActualCostExcludingTax), Rate = g.Max(o => o.SalesTaxRate),
+                    ItemTypeId = g.Key,
+                    Qty = g.Sum(o => o.Quantity),
+                    Value = g.Sum(o => o.ValueExcludingTax),
+                    ActualCost = g.Sum(o => o.ActualCostExcludingTax),
+                    Rate = g.Max(o => o.SalesTaxRate),
                 }).ToDictionaryAsync(x => x.ItemTypeId);
             // A restatement is dated on the day its sheet describes (2026-10-05).
             // Dated "today" it sat after the month it restated, so the month's
@@ -94,7 +97,8 @@ namespace MyApp.Api.Services.Implementations
                 var id = g.Key;
                 var item = new FifoRestatementItemDto
                 {
-                    ItemTypeId = id, LineCount = g.Count(),
+                    ItemTypeId = id,
+                    LineCount = g.Count(),
                     SheetQuantity = g.Sum(l => l.Quantity),
                     SheetValue = Money(g.Sum(l => l.ValueExcludingTax)),
                 };
@@ -128,8 +132,11 @@ namespace MyApp.Api.Services.Implementations
                 if (Math.Abs(p.Quantity) <= 0.0001m && Math.Abs(p.ValueExcludingTax) <= 0.005m) continue;
                 result.NotInSheet.Add(new FifoRestatementItemDto
                 {
-                    ItemTypeId = id, ItemTypeName = names.GetValueOrDefault(id)?.Name ?? "",
-                    HsCode = names.GetValueOrDefault(id)?.HSCode, OnHand = p.Quantity, FifoValue = p.ValueExcludingTax,
+                    ItemTypeId = id,
+                    ItemTypeName = names.GetValueOrDefault(id)?.Name ?? "",
+                    HsCode = names.GetValueOrDefault(id)?.HSCode,
+                    OnHand = p.Quantity,
+                    FifoValue = p.ValueExcludingTax,
                 });
             }
             result.FifoValueBefore = Money(result.Items.Sum(i => i.FifoValue) + result.NotInSheet.Sum(i => i.FifoValue));
@@ -149,9 +156,12 @@ namespace MyApp.Api.Services.Implementations
                     // total, so switching method back keeps the sheet's figure.
                     var movement = new StockMovement
                     {
-                        CompanyId = companyId, ItemTypeId = item.ItemTypeId,
-                        Direction = StockMovementDirection.In, Quantity = 0m,
-                        SourceType = StockMovementSourceType.Revaluation, MovementDate = restateOn,
+                        CompanyId = companyId,
+                        ItemTypeId = item.ItemTypeId,
+                        Direction = StockMovementDirection.In,
+                        Quantity = 0m,
+                        SourceType = StockMovementSourceType.Revaluation,
+                        MovementDate = restateOn,
                         ValueAdjustmentExcludingTax = Money(item.SheetValue - waValue) is var d && d != 0m ? d : null,
                         Notes = $"FIFO restatement to stock sheet{(file != null ? $" {file}" : "")}: {lines.Count} GD lines",
                         // Restating to the sheet's GD lines fixes the value the
@@ -173,11 +183,19 @@ namespace MyApp.Api.Services.Implementations
                         given += actual;
                         context.StockRestatementLines.Add(new StockRestatementLine
                         {
-                            CompanyId = companyId, ItemTypeId = item.ItemTypeId, StockMovementId = movement.Id,
-                            GdNumber = l.GdNumber.Trim(), GdDate = l.GdDate?.Date, ClaimMonth = l.ClaimMonth,
-                            SourceRow = l.SourceRow, Description = l.Description?.Trim() is { Length: > 300 } s ? s[..300] : l.Description?.Trim(),
-                            Quantity = l.Quantity, ValueExcludingTax = Money(l.ValueExcludingTax),
-                            ActualValueExcludingTax = actual, SalesTaxRate = l.SalesTaxRate, SourceFile = file,
+                            CompanyId = companyId,
+                            ItemTypeId = item.ItemTypeId,
+                            StockMovementId = movement.Id,
+                            GdNumber = l.GdNumber.Trim(),
+                            GdDate = l.GdDate?.Date,
+                            ClaimMonth = l.ClaimMonth,
+                            SourceRow = l.SourceRow,
+                            Description = l.Description?.Trim() is { Length: > 300 } s ? s[..300] : l.Description?.Trim(),
+                            Quantity = l.Quantity,
+                            ValueExcludingTax = Money(l.ValueExcludingTax),
+                            ActualValueExcludingTax = actual,
+                            SalesTaxRate = l.SalesTaxRate,
+                            SourceFile = file,
                         });
                     }
                     await context.SaveChangesAsync();
@@ -230,9 +248,15 @@ namespace MyApp.Api.Services.Implementations
                     .OrderBy(r => r.SourceRow).ThenBy(r => r.Id)
                     .Select(r => new FifoRestatementLineDto
                     {
-                        ItemTypeId = r.ItemTypeId, GdNumber = r.GdNumber, GdDate = r.GdDate, ClaimMonth = r.ClaimMonth,
-                        SourceRow = r.SourceRow, Description = r.Description, Quantity = r.Quantity,
-                        ValueExcludingTax = r.ValueExcludingTax, SalesTaxRate = r.SalesTaxRate,
+                        ItemTypeId = r.ItemTypeId,
+                        GdNumber = r.GdNumber,
+                        GdDate = r.GdDate,
+                        ClaimMonth = r.ClaimMonth,
+                        SourceRow = r.SourceRow,
+                        Description = r.Description,
+                        Quantity = r.Quantity,
+                        ValueExcludingTax = r.ValueExcludingTax,
+                        SalesTaxRate = r.SalesTaxRate,
                     }).ToList());
             // A value correction has no sheet: what it left the item holding is the
             // walk's pools on its date without the late GDs. An item holding stock
@@ -278,7 +302,8 @@ namespace MyApp.Api.Services.Implementations
                     a.ItemTypeId, g.Key, SheetOf(a), a.Lines, onHand.GetValueOrDefault(a.ItemTypeId)));
                 var full = await PreviewAsync(new FifoRestatementRequestDto
                 {
-                    AsOf = g.Key, Lines = lines.Values.SelectMany(l => l).ToList(),
+                    AsOf = g.Key,
+                    Lines = lines.Values.SelectMany(l => l).ToList(),
                 });
 
                 // Only what the update would change (or cannot do) is offered. A

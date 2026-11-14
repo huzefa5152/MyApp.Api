@@ -29,21 +29,35 @@ namespace MyApp.Api.Controllers
         {
             var purchaseLine = new
             {
-                type = "object", additionalProperties = false, required = new[] { "description", "quantity", "unitPrice" },
+                type = "object",
+                additionalProperties = false,
+                required = new[] { "description", "quantity", "unitPrice" },
                 properties = new { description = Str(500), quantity = new { type = "string" }, unit = Str(50), unitPrice = MoneyProp, itemTypeId = Int(), hsCode = Str(20), id = Int("When editing: the existing line's id.") },
             };
             var gdLine = new
             {
-                type = "object", additionalProperties = false,
+                type = "object",
+                additionalProperties = false,
                 required = new[] { "description", "hsCode", "quantity", "assessedValue" },
                 properties = new
                 {
-                    description = Str(500), hsCode = Str(20), quantity = new { type = "string" }, unit = Str(50),
+                    description = Str(500),
+                    hsCode = Str(20),
+                    quantity = new { type = "string" },
+                    unit = Str(50),
                     claimMonth = Str(10, "yyyy-MM, the month this line's input tax is claimed; omit if not known."),
-                    assessedValue = MoneyProp, customsDuty = MoneyProp, acd = MoneyProp, regulatoryDuty = MoneyProp, others = MoneyProp,
-                    salesTaxRate = new { type = "string", description = "Percent." }, astRate = new { type = "string", description = "Percent." },
-                    incomeTaxRate = new { type = "string", description = "Percent." }, addOnProfit = MoneyProp, sellingValue = MoneyProp,
-                    leaveOut = new { type = "boolean" }, chosenOpeningStockBalanceId = Int("Pick one of the line's candidates from a previous plan."),
+                    assessedValue = MoneyProp,
+                    customsDuty = MoneyProp,
+                    acd = MoneyProp,
+                    regulatoryDuty = MoneyProp,
+                    others = MoneyProp,
+                    salesTaxRate = new { type = "string", description = "Percent." },
+                    astRate = new { type = "string", description = "Percent." },
+                    incomeTaxRate = new { type = "string", description = "Percent." },
+                    addOnProfit = MoneyProp,
+                    sellingValue = MoneyProp,
+                    leaveOut = new { type = "boolean" },
+                    chosenOpeningStockBalanceId = Int("Pick one of the line's candidates from a previous plan."),
                     confirmNewStock = new { type = "boolean", description = "Required to create stock for a line that matches nothing on the books." },
                     asNewItem = new { type = "boolean" },
                 },
@@ -165,8 +179,10 @@ namespace MyApp.Api.Controllers
                 totalCount = plan.Affected.Count,
                 items = plan.Affected.Select(a => new
                 {
-                    a.ItemTypeId, itemTypeName = plan.Items.FirstOrDefault(i => i.ItemTypeId == a.ItemTypeId)?.ItemTypeName ?? "",
-                    anchor = a.Restatement.IsSheetMatch ? "stock-sheet match" : "value correction", anchorDate = Ymd(a.Restatement.Date),
+                    a.ItemTypeId,
+                    itemTypeName = plan.Items.FirstOrDefault(i => i.ItemTypeId == a.ItemTypeId)?.ItemTypeName ?? "",
+                    anchor = a.Restatement.IsSheetMatch ? "stock-sheet match" : "value correction",
+                    anchorDate = Ymd(a.Restatement.Date),
                     lateGds = a.Lines.Select(l => new { l.GdNumber, gdDate = Ymd(l.GdDate), l.Quantity, l.ValueExcludingTax }),
                 }),
                 currency = "PKR",
@@ -184,7 +200,10 @@ namespace MyApp.Api.Controllers
             var preview = new
             {
                 items = plan.Items.Select(i => new { i.ItemTypeId, i.ItemTypeName, i.OnHand, valueNow = i.FifoValue, valueAfter = i.SheetValue }),
-                valueBefore = plan.ValueBefore, valueAfter = plan.ValueAfter, quantitiesChange = false, currency = "PKR",
+                valueBefore = plan.ValueBefore,
+                valueAfter = plan.ValueAfter,
+                quantitiesChange = false,
+                currency = "PKR",
             };
             return new Built(preview,
                 $"Add late GDs to {plan.Items.Count} item(s) in company {companyId}: value {plan.ValueBefore:N2} -> {plan.ValueAfter:N2}",
@@ -217,22 +236,41 @@ namespace MyApp.Api.Controllers
                 lineIds.Add(OptId(it, "id"));
                 items.Add(new CreatePurchaseItemDto
                 {
-                    Description = desc, Quantity = ReqDec(it, "quantity", 0m, 999_999_999m, 4, minInclusive: false), UOM = OptText(it, "unit", 50),
-                    UnitPrice = ReqDec(it, "unitPrice", 0m, 999_999_999m, 4, minInclusive: false), ItemTypeId = await ItemInCompanyAsync(it, "itemTypeId", companyId),
+                    Description = desc,
+                    Quantity = ReqDec(it, "quantity", 0m, 999_999_999m, 4, minInclusive: false),
+                    UOM = OptText(it, "unit", 50),
+                    UnitPrice = ReqDec(it, "unitPrice", 0m, 999_999_999m, 4, minInclusive: false),
+                    ItemTypeId = await ItemInCompanyAsync(it, "itemTypeId", companyId),
                     HSCode = OptText(it, "hsCode", 20) is { Length: > 0 } hs ? hs : null,
                 });
             }
             if (items.Any(i => i.ItemTypeId == null)) throw new ToolError("Every purchase-bill line needs an itemTypeId (search_item_types).");
             var dto = new CreatePurchaseBillDto
             {
-                CompanyId = companyId, DivisionId = division, SupplierId = supplierId, Date = DateArg(args, "date") ?? PakistanClock.Today,
-                SupplierBillNumber = OptText(args, "supplierBillNumber", 100), SupplierIRN = OptText(args, "supplierIRN", 100),
-                GSTRate = Gst(args), PaymentTerms = OptText(args, "paymentTerms", 200), Items = items,
+                CompanyId = companyId,
+                DivisionId = division,
+                SupplierId = supplierId,
+                Date = DateArg(args, "date") ?? PakistanClock.Today,
+                SupplierBillNumber = OptText(args, "supplierBillNumber", 100),
+                SupplierIRN = OptText(args, "supplierIRN", 100),
+                GSTRate = Gst(args),
+                PaymentTerms = OptText(args, "paymentTerms", 200),
+                Items = items,
             };
             var name = await SupplierNameAsync(supplierId);
             var subtotal = Math.Round(items.Sum(i => i.Quantity * i.UnitPrice), 2, MidpointRounding.AwayFromZero);
-            var preview = new { supplierId, supplierName = name, divisionId = division, date = Ymd(dto.Date), dto.SupplierBillNumber, gstRate = dto.GSTRate,
-                items = items.Select(i => new { i.Description, i.Quantity, unit = i.UOM, i.UnitPrice, i.ItemTypeId, hsCode = i.HSCode }), subtotalAbout = subtotal, currency = "PKR" };
+            var preview = new
+            {
+                supplierId,
+                supplierName = name,
+                divisionId = division,
+                date = Ymd(dto.Date),
+                dto.SupplierBillNumber,
+                gstRate = dto.GSTRate,
+                items = items.Select(i => new { i.Description, i.Quantity, unit = i.UOM, i.UnitPrice, i.ItemTypeId, hsCode = i.HSCode }),
+                subtotalAbout = subtotal,
+                currency = "PKR"
+            };
             if (editId is int pbid) return await EditPurchaseBillAsync(companyId, pbid, dto, lineIds, preview, args);
             return new Built(preview, $"Record a purchase bill from \"{name}\" in company {companyId}: {items.Count} line(s), subtotal about {subtotal:0.00} PKR, GST {dto.GSTRate}%",
                 async () =>
@@ -265,12 +303,26 @@ namespace MyApp.Api.Controllers
             }
             var dto = new CreateGoodsReceiptDto
             {
-                CompanyId = companyId, DivisionId = division, SupplierId = supplierId, PurchaseBillId = billId, ReceiptDate = DateArg(args, "receiptDate") ?? PakistanClock.Today,
-                SupplierChallanNumber = OptText(args, "supplierChallanNumber", 100), Site = OptText(args, "site", 300), Items = items,
+                CompanyId = companyId,
+                DivisionId = division,
+                SupplierId = supplierId,
+                PurchaseBillId = billId,
+                ReceiptDate = DateArg(args, "receiptDate") ?? PakistanClock.Today,
+                SupplierChallanNumber = OptText(args, "supplierChallanNumber", 100),
+                Site = OptText(args, "site", 300),
+                Items = items,
             };
             var name = await SupplierNameAsync(supplierId);
-            var preview = new { supplierId, supplierName = name, divisionId = division, receiptDate = Ymd(dto.ReceiptDate), purchaseBillId = billId, dto.SupplierChallanNumber,
-                items = items.Select(i => new { i.Description, i.Quantity, i.Unit, i.ItemTypeId }) };
+            var preview = new
+            {
+                supplierId,
+                supplierName = name,
+                divisionId = division,
+                receiptDate = Ymd(dto.ReceiptDate),
+                purchaseBillId = billId,
+                dto.SupplierChallanNumber,
+                items = items.Select(i => new { i.Description, i.Quantity, i.Unit, i.ItemTypeId })
+            };
             if (editId is int grid) return await EditGoodsReceiptAsync(companyId, grid, dto, lineIds, preview, args);
             return new Built(preview, $"Record a goods receipt from \"{name}\" in company {companyId}: {items.Count} line(s)",
                 async () =>
@@ -330,14 +382,32 @@ namespace MyApp.Api.Controllers
             if (!receipt && onAccount > 0) allocations.Add(new CreatePaymentAllocationDto { Kind = "OnAccount", Amount = onAccount });
             var dto = new CreatePaymentDto
             {
-                Direction = receipt ? "Receipt" : "Payment", Date = DateArg(args, "date") ?? PakistanClock.Today,
-                ContactType = receipt ? "Client" : "Supplier", ContactId = partyId, DivisionId = division, BankAccountId = bank,
-                Method = OptText(args, "method", 50) is { Length: > 0 } m ? m : "Cash", Description = OptText(args, "description", 500),
-                Amount = amount, Allocations = allocations,
+                Direction = receipt ? "Receipt" : "Payment",
+                Date = DateArg(args, "date") ?? PakistanClock.Today,
+                ContactType = receipt ? "Client" : "Supplier",
+                ContactId = partyId,
+                DivisionId = division,
+                BankAccountId = bank,
+                Method = OptText(args, "method", 50) is { Length: > 0 } m ? m : "Cash",
+                Description = OptText(args, "description", 500),
+                Amount = amount,
+                Allocations = allocations,
             };
             var name = receipt ? await ClientNameAsync(partyId) : await SupplierNameAsync(partyId);
-            var preview = new { direction = dto.Direction, partyId, partyName = name, divisionId = division, date = Ymd(dto.Date), amount, dto.Method, bankAccountId = bank,
-                allocations = shown, onAccount, currency = "PKR" };
+            var preview = new
+            {
+                direction = dto.Direction,
+                partyId,
+                partyName = name,
+                divisionId = division,
+                date = Ymd(dto.Date),
+                amount,
+                dto.Method,
+                bankAccountId = bank,
+                allocations = shown,
+                onAccount,
+                currency = "PKR"
+            };
             if (editId is int mid) return await EditMoneyAsync(companyId, mid, dto, preview, receipt);
             var what = receipt ? "receipt from" : "payment to";
             return new Built(preview, $"Record a {what} \"{name}\" of {amount:0.00} PKR in company {companyId}: {shown.Count} document(s) settled, {onAccount:0.00} on account",
@@ -380,13 +450,28 @@ namespace MyApp.Api.Controllers
                     throw new ToolError($"Line {row}: that opening balance is not one of this company's.");
                 lines.Add(new GdCostingManualLineDto
                 {
-                    SourceRow = row, GdNumber = gdNumber, GdDate = gdDate, ClaimMonth = MonthArg(l, "claimMonth"),
-                    Description = OptText(l, "description", 500) ?? "", HsCode = OptText(l, "hsCode", 20) ?? "",
-                    Quantity = ReqDec(l, "quantity", 0m, 999_999_999m, 4), Unit = OptText(l, "unit", 50),
-                    AssessedValue = Money("assessedValue"), CustomsDuty = Money("customsDuty"), Acd = Money("acd"), RegulatoryDuty = Money("regulatoryDuty"),
-                    Others = Money("others"), SalesTaxRate = Rate("salesTaxRate"), AstRate = Rate("astRate"), IncomeTaxRate = Rate("incomeTaxRate"),
-                    AddOnProfit = Money("addOnProfit"), SellingValue = OptDec(l, "sellingValue", 0m, 99_999_999_999m, 2),
-                    LeaveOut = OptBool(l, "leaveOut"), ChosenOpeningStockBalanceId = chosen, ConfirmNewStock = OptBool(l, "confirmNewStock"), AsNewItem = OptBool(l, "asNewItem"),
+                    SourceRow = row,
+                    GdNumber = gdNumber,
+                    GdDate = gdDate,
+                    ClaimMonth = MonthArg(l, "claimMonth"),
+                    Description = OptText(l, "description", 500) ?? "",
+                    HsCode = OptText(l, "hsCode", 20) ?? "",
+                    Quantity = ReqDec(l, "quantity", 0m, 999_999_999m, 4),
+                    Unit = OptText(l, "unit", 50),
+                    AssessedValue = Money("assessedValue"),
+                    CustomsDuty = Money("customsDuty"),
+                    Acd = Money("acd"),
+                    RegulatoryDuty = Money("regulatoryDuty"),
+                    Others = Money("others"),
+                    SalesTaxRate = Rate("salesTaxRate"),
+                    AstRate = Rate("astRate"),
+                    IncomeTaxRate = Rate("incomeTaxRate"),
+                    AddOnProfit = Money("addOnProfit"),
+                    SellingValue = OptDec(l, "sellingValue", 0m, 99_999_999_999m, 2),
+                    LeaveOut = OptBool(l, "leaveOut"),
+                    ChosenOpeningStockBalanceId = chosen,
+                    ConfirmNewStock = OptBool(l, "confirmNewStock"),
+                    AsNewItem = OptBool(l, "asNewItem"),
                 });
             }
             var costing = Svc<IGdCostingImportService>();
@@ -406,14 +491,36 @@ namespace MyApp.Api.Controllers
             if (pv.Lines.Count > 0 && pv.Lines.All(l => l.LeaveOut)) problems.Add("Every line is left out: include at least one.");
             var preview = new
             {
-                gdNumber, gdDate = Ymd(gdDate), mode, canImport = problems.Count == 0 && pv.CanCommit, problems,
-                warnings = pv.Warnings, dispositions = pv.DispositionCounts,
+                gdNumber,
+                gdDate = Ymd(gdDate),
+                mode,
+                canImport = problems.Count == 0 && pv.CanCommit,
+                problems,
+                warnings = pv.Warnings,
+                dispositions = pv.DispositionCounts,
                 totals = pv.Consignments.Select(c => new { c.GdNumber, c.LineCount, c.TotalCostExcludingTax, c.TotalSalesTax, c.TotalAst, c.TotalIncomeTax, c.TotalInputTax, c.TotalSellingValue }),
                 lines = pv.Lines.Select(l => new
                 {
-                    l.SourceRow, l.Description, l.HsCode, l.Quantity, l.Unit, claimMonth = Ymd(l.ClaimMonth), l.Disposition, l.LeaveOut, l.ConfirmNewStock,
-                    l.ItemTypeId, l.ItemTypeName, l.OpeningStockBalanceId, l.Cost, l.SalesTax, l.InputTax, l.SellingValue,
-                    l.MatchNote, l.OverwriteWarning, l.CostPlausibilityWarning, l.RateWarning,
+                    l.SourceRow,
+                    l.Description,
+                    l.HsCode,
+                    l.Quantity,
+                    l.Unit,
+                    claimMonth = Ymd(l.ClaimMonth),
+                    l.Disposition,
+                    l.LeaveOut,
+                    l.ConfirmNewStock,
+                    l.ItemTypeId,
+                    l.ItemTypeName,
+                    l.OpeningStockBalanceId,
+                    l.Cost,
+                    l.SalesTax,
+                    l.InputTax,
+                    l.SellingValue,
+                    l.MatchNote,
+                    l.OverwriteWarning,
+                    l.CostPlausibilityWarning,
+                    l.RateWarning,
                     problems = l.Problems.Select(p => p.Message),
                     candidates = l.Candidates.Select(c => new { c.OpeningStockBalanceId, c.ItemTypeId, c.ItemTypeName, c.Quantity }),
                 }),
@@ -431,8 +538,15 @@ namespace MyApp.Api.Controllers
                 {
                     var r = await costing.CommitAsync(new GdCostingCommitDto
                     {
-                        CompanyId = companyId, FileSha256 = pv.FileSha256, FileName = pv.FileName, FileSizeBytes = pv.FileSizeBytes,
-                        ImportProfileId = pv.ImportProfileId, ProfileVersion = pv.ProfileVersion, Lines = pv.Lines, CreateMissingStock = true, Mode = mode,
+                        CompanyId = companyId,
+                        FileSha256 = pv.FileSha256,
+                        FileName = pv.FileName,
+                        FileSizeBytes = pv.FileSizeBytes,
+                        ImportProfileId = pv.ImportProfileId,
+                        ProfileVersion = pv.ProfileVersion,
+                        Lines = pv.Lines,
+                        CreateMissingStock = true,
+                        Mode = mode,
                     }, CurrentUserId);
                     var gdId = await _context.ImportConsignments.AsNoTracking().Where(c => c.CompanyId == companyId && c.GdNumber == gdNumber)
                         .OrderByDescending(c => c.Id).Select(c => c.Id).FirstOrDefaultAsync();
@@ -465,8 +579,11 @@ namespace MyApp.Api.Controllers
             var kind = ImportChargeKinds.Normalize(OptText(args, "kind", 20)) ?? throw new ToolError("kind must be one of: " + string.Join(", ", ImportChargeKinds.All) + ".");
             var dto = new CreateImportConsignmentChargeDto
             {
-                Kind = kind, Amount = ReqDec(args, "amount", 0m, 99_999_999_999m, 2, minInclusive: false), Description = OptText(args, "description", 300),
-                PaidTo = OptText(args, "paidTo", 200), ChargeDate = DateArg(args, "chargeDate"),
+                Kind = kind,
+                Amount = ReqDec(args, "amount", 0m, 99_999_999_999m, 2, minInclusive: false),
+                Description = OptText(args, "description", 300),
+                PaidTo = OptText(args, "paidTo", 200),
+                ChargeDate = DateArg(args, "chargeDate"),
             };
             var preview = new { gdId = gd.Id, gd.GdNumber, action, dto.Kind, dto.Amount, dto.Description, dto.PaidTo, chargeDate = Ymd(dto.ChargeDate), chargesNow = gd.TotalCharges, currency = "PKR" };
             return new Built(preview, $"Add a {kind} charge of {dto.Amount:0.00} PKR to GD {gd.GdNumber} in company {companyId}",
@@ -490,16 +607,26 @@ namespace MyApp.Api.Controllers
             var dto = new UpdateImportConsignmentLineDto
             {
                 Quantity = OptDec(args, "quantity", 0m, 999_999_999m, 4) ?? line.Quantity,
-                AssessedValue = Money("assessedValue", line.AssessedValue), CustomsDuty = Money("customsDuty", line.CustomsDuty), Acd = Money("acd", line.Acd),
-                RegulatoryDuty = Money("regulatoryDuty", line.RegulatoryDuty), Others = Money("others", line.Others),
-                SalesTaxRate = Rate("salesTaxRate", line.SalesTaxRate), AstRate = Rate("astRate", line.AstRate), IncomeTaxRate = Rate("incomeTaxRate", line.IncomeTaxRate),
+                AssessedValue = Money("assessedValue", line.AssessedValue),
+                CustomsDuty = Money("customsDuty", line.CustomsDuty),
+                Acd = Money("acd", line.Acd),
+                RegulatoryDuty = Money("regulatoryDuty", line.RegulatoryDuty),
+                Others = Money("others", line.Others),
+                SalesTaxRate = Rate("salesTaxRate", line.SalesTaxRate),
+                AstRate = Rate("astRate", line.AstRate),
+                IncomeTaxRate = Rate("incomeTaxRate", line.IncomeTaxRate),
                 AddOnProfit = Money("addOnProfit", line.AddOnProfit),
                 SellingValueExcludingTax = OptDec(args, "sellingValue", 0m, 99_999_999_999m, 2),
-                DescriptionOnSheet = OptText(args, "descriptionOnSheet", 500) ?? line.DescriptionOnSheet, Reason = reason,
+                DescriptionOnSheet = OptText(args, "descriptionOnSheet", 500) ?? line.DescriptionOnSheet,
+                Reason = reason,
             };
             var preview = new
             {
-                gdId = gd.Id, gd.GdNumber, lineId, line.SourceRow, reason,
+                gdId = gd.Id,
+                gd.GdNumber,
+                lineId,
+                line.SourceRow,
+                reason,
                 before = new { line.Quantity, line.AssessedValue, line.CustomsDuty, line.Acd, line.RegulatoryDuty, line.Others, line.SalesTaxRate, line.AstRate, line.IncomeTaxRate, line.AddOnProfit, line.CostExcludingTax, line.SellingValueExcludingTax, line.DescriptionOnSheet },
                 after = new { dto.Quantity, dto.AssessedValue, dto.CustomsDuty, dto.Acd, dto.RegulatoryDuty, dto.Others, dto.SalesTaxRate, dto.AstRate, dto.IncomeTaxRate, dto.AddOnProfit, sellingValue = dto.SellingValueExcludingTax, dto.DescriptionOnSheet },
                 note = "The ERP re-derives cost, the opening balances it fed and the GD's journal entry when committed.",
@@ -597,8 +724,21 @@ namespace MyApp.Api.Controllers
             if (OptText(args, "status", 10) is { Length: > 0 } st) dto.Status = st;
             if (OptText(args, "notes", 500) is { } nt) dto.Notes = nt;
             if (ImportLcService.Validate(dto) is { } error) throw new ToolError(error);
-            var preview = new { action, lcId = existingId, dto.LcNumber, dto.BankName, dto.SupplierName, dto.Currency, dto.ForeignAmount, dto.ExchangeRate,
-                openedOn = Ymd(dto.OpenedOn), expiresOn = Ymd(dto.ExpiresOn), dto.Status, dto.Notes };
+            var preview = new
+            {
+                action,
+                lcId = existingId,
+                dto.LcNumber,
+                dto.BankName,
+                dto.SupplierName,
+                dto.Currency,
+                dto.ForeignAmount,
+                dto.ExchangeRate,
+                openedOn = Ymd(dto.OpenedOn),
+                expiresOn = Ymd(dto.ExpiresOn),
+                dto.Status,
+                dto.Notes
+            };
             return new Built(preview, existingId == null ? $"Record LC {dto.LcNumber.Trim()} in company {companyId}" : $"Update LC #{existingId} ({dto.LcNumber.Trim()}) in company {companyId}",
                 async () =>
                 {
@@ -616,10 +756,14 @@ namespace MyApp.Api.Controllers
             var itemTypeId = (await ItemInCompanyAsync(args, "itemTypeId", companyId))!.Value;
             var dto = new UpsertOpeningBalanceDto
             {
-                CompanyId = companyId, ItemTypeId = itemTypeId,
-                Quantity = ReqDec(args, "quantity", 0m, 999_999_999m, 4), ValueExcludingTax = ReqDec(args, "valueExcludingTax", 0m, 99_999_999_999m, 2),
-                SalesTaxRate = ReqDec(args, "salesTaxRate", 0m, 100m, 2), ActualCostExcludingTax = OptDec(args, "actualCostExcludingTax", 0m, 99_999_999_999m, 2),
-                AsOfDate = DateArg(args, "asOfDate") ?? throw new ToolError("asOfDate is required."), Notes = OptText(args, "notes", 500),
+                CompanyId = companyId,
+                ItemTypeId = itemTypeId,
+                Quantity = ReqDec(args, "quantity", 0m, 999_999_999m, 4),
+                ValueExcludingTax = ReqDec(args, "valueExcludingTax", 0m, 99_999_999_999m, 2),
+                SalesTaxRate = ReqDec(args, "salesTaxRate", 0m, 100m, 2),
+                ActualCostExcludingTax = OptDec(args, "actualCostExcludingTax", 0m, 99_999_999_999m, 2),
+                AsOfDate = DateArg(args, "asOfDate") ?? throw new ToolError("asOfDate is required."),
+                Notes = OptText(args, "notes", 500),
             };
             var existing = await _context.OpeningStockBalances.AsNoTracking().Where(o => o.CompanyId == companyId && o.ItemTypeId == itemTypeId)
                 .Select(o => new { o.Id, o.Quantity, o.ValueExcludingTax, o.SalesTaxRate, o.ActualCostExcludingTax, o.AsOfDate }).FirstOrDefaultAsync();
@@ -627,10 +771,13 @@ namespace MyApp.Api.Controllers
             var itemName = CompanyItemNames.Pick(names, itemTypeId, await _context.ItemTypes.AsNoTracking().Where(i => i.Id == itemTypeId).Select(i => i.Name).FirstAsync());
             var preview = new
             {
-                itemTypeId, itemName, replaces = existing != null,
+                itemTypeId,
+                itemName,
+                replaces = existing != null,
                 before = existing == null ? null : new { existing.Quantity, existing.ValueExcludingTax, existing.SalesTaxRate, existing.ActualCostExcludingTax, asOfDate = Ymd(existing.AsOfDate) },
                 after = new { dto.Quantity, dto.ValueExcludingTax, dto.SalesTaxRate, dto.ActualCostExcludingTax, asOfDate = Ymd(dto.AsOfDate), dto.Notes },
-                inventoryChange = dto.ValueExcludingTax - (existing?.ValueExcludingTax ?? 0m), currency = "PKR",
+                inventoryChange = dto.ValueExcludingTax - (existing?.ValueExcludingTax ?? 0m),
+                currency = "PKR",
             };
             return new Built(preview, $"{(existing == null ? "Enter" : "Replace")} the opening balance of \"{itemName}\" in company {companyId}: {dto.Quantity} at {dto.ValueExcludingTax:0.00} PKR",
                 async () =>
@@ -665,9 +812,15 @@ namespace MyApp.Api.Controllers
                 throw new ToolError("Bank and cash accounts can't be posted via journal entries: use a receipt or payment.");
             if (lines.Sum(l => l.Debit) != lines.Sum(l => l.Credit)) throw new ToolError($"Debits ({lines.Sum(l => l.Debit):0.00}) must equal credits ({lines.Sum(l => l.Credit):0.00}).");
             var dto = new CreateJournalEntryDto { Date = DateArg(args, "date") ?? throw new ToolError("date is required."), Narration = OptText(args, "narration", 500), DivisionId = division, Lines = lines };
-            var preview = new { date = Ymd(dto.Date), dto.Narration, divisionId = division,
+            var preview = new
+            {
+                date = Ymd(dto.Date),
+                dto.Narration,
+                divisionId = division,
                 lines = lines.Select(l => new { l.AccountId, accounts[l.AccountId].Code, accounts[l.AccountId].Name, l.Debit, l.Credit, l.Description }),
-                total = lines.Sum(l => l.Debit), currency = "PKR" };
+                total = lines.Sum(l => l.Debit),
+                currency = "PKR"
+            };
             if (OptId(args, "journalEntryId") is int jeid) return await EditJournalAsync(companyId, jeid, dto, preview);
             return new Built(preview, $"Post a manual journal entry of {lines.Sum(l => l.Debit):0.00} PKR dated {Ymd(dto.Date)} in company {companyId}: {lines.Count} line(s)",
                 async () =>

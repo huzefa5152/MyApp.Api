@@ -51,9 +51,12 @@ List<string> Order(Result r, int movementId) => r.Takes[movementId].Select(t => 
 
 // 1. Claimed before unclaimed, whatever the GD dates.
 {
-    var book = new Book { Lots = {
+    var book = new Book
+    {
+        Lots = {
         Lot("A", "GD-A", D(2025, 1), null, 10, 1000),
-        Lot("B", "GD-B", D(2025, 6), D(2026, 3), 10, 1500) } };
+        Lot("B", "GD-B", D(2025, 6), D(2026, 3), 10, 1500) }
+    };
     var r = Run("claimed-first", 20, 2500, book, new[] { Out(1, D(2026, 4, 10), 5) });
     Check("claimed-first: sale takes the claimed GD", Order(r, 1).SequenceEqual(new[] { "B" }));
     Check("claimed-first: costed at the claimed GD's cost", r.Takes[1][0].Value == 750m);
@@ -61,9 +64,12 @@ List<string> Order(Result r, int movementId) => r.Takes[movementId].Select(t => 
 
 // 2. Invoice-month rule: a claim month AFTER the sale does not count.
 {
-    var book = new Book { Lots = {
+    var book = new Book
+    {
+        Lots = {
         Lot("A", "GD-A", D(2025, 1), null, 10, 1000),
-        Lot("B", "GD-B", D(2025, 6), D(2026, 6), 10, 1500) } };
+        Lot("B", "GD-B", D(2025, 6), D(2026, 6), 10, 1500) }
+    };
     var r = Run("invoice-month", 20, 2500, book, new[] {
         Out(1, D(2026, 4, 10), 5),     // B not claimed yet in April -> oldest (A)
         Out(2, D(2026, 6, 15), 5) });  // B claimed in June -> B
@@ -75,11 +81,14 @@ List<string> Order(Result r, int movementId) => r.Takes[movementId].Select(t => 
 
 // 3. Oldest GD date first within the claimed group, then within unclaimed.
 {
-    var book = new Book { Lots = {
+    var book = new Book
+    {
+        Lots = {
         Lot("C2", "GD-C2", D(2025, 9), D(2026, 1), 5, 500),
         Lot("C1", "GD-C1", D(2025, 2), D(2026, 1), 5, 400),
         Lot("U2", "GD-U2", D(2025, 8), null, 5, 600),
-        Lot("U1", "GD-U1", D(2025, 3), null, 5, 700) } };
+        Lot("U1", "GD-U1", D(2025, 3), null, 5, 700) }
+    };
     var r = Run("order", 20, 2200, book, new[] { Out(1, D(2026, 2), 20) });
     Check("order: claimed oldest, claimed newer, unclaimed oldest, unclaimed newer",
         Order(r, 1).SequenceEqual(new[] { "C1", "C2", "U1", "U2" }), string.Join(",", Order(r, 1)));
@@ -88,9 +97,12 @@ List<string> Order(Result r, int movementId) => r.Takes[movementId].Select(t => 
 
 // 4. A sale bigger than the claimed stock spills into the unclaimed GD.
 {
-    var book = new Book { Lots = {
+    var book = new Book
+    {
+        Lots = {
         Lot("C", "GD-C", D(2025, 5), D(2026, 1), 6, 600),
-        Lot("U", "GD-U", D(2025, 1), null, 10, 2000) } };
+        Lot("U", "GD-U", D(2025, 1), null, 10, 2000) }
+    };
     var r = Run("spill", 16, 2600, book, new[] { Out(1, D(2026, 3), 10) });
     Check("spill: claimed first, then unclaimed", Order(r, 1).SequenceEqual(new[] { "C", "U" }));
     Check("spill: 6 from claimed, 4 from unclaimed",
@@ -109,10 +121,13 @@ List<string> Order(Result r, int movementId) => r.Takes[movementId].Select(t => 
 
 // 6. Undated lots sort after dated ones, then by sheet row.
 {
-    var book = new Book { Lots = {
+    var book = new Book
+    {
+        Lots = {
         Lot("N2", "GD-N2", null, null, 5, 500, row: 9),
         Lot("N1", "GD-N1", null, null, 5, 500, row: 3),
-        Lot("D", "GD-D", D(2026, 1), null, 5, 500, row: 20) } };
+        Lot("D", "GD-D", D(2026, 1), null, 5, 500, row: 20) }
+    };
     var r = Run("undated", 15, 1500, book, new[] { Out(1, D(2026, 2), 15) });
     Check("undated: dated first, then by row", Order(r, 1).SequenceEqual(new[] { "D", "N1", "N2" }),
         string.Join(",", Order(r, 1)));
@@ -159,18 +174,24 @@ List<string> Order(Result r, int movementId) => r.Takes[movementId].Select(t => 
 
 // 9. A downward adjustment drains pools in the same order as a sale.
 {
-    var book = new Book { Lots = {
+    var book = new Book
+    {
+        Lots = {
         Lot("U", "GD-U", D(2025, 1), null, 10, 1000),
-        Lot("C", "GD-C", D(2025, 5), D(2026, 1), 10, 2000) } };
+        Lot("C", "GD-C", D(2025, 5), D(2026, 1), 10, 2000) }
+    };
     var r = Run("adjust-down", 20, 3000, book, new[] { Out(1, D(2026, 2), 12, type: "Adjustment") });
     Check("adjust-down: claimed first", Order(r, 1).SequenceEqual(new[] { "C", "U" }));
 }
 
 // 10. A sale return goes back into the pool that sale drained last.
 {
-    var book = new Book { Lots = {
+    var book = new Book
+    {
+        Lots = {
         Lot("A", "GD-A", D(2025, 1), D(2025, 12), 6, 600),
-        Lot("B", "GD-B", D(2025, 2), D(2025, 12), 10, 2000) } };
+        Lot("B", "GD-B", D(2025, 2), D(2025, 12), 10, 2000) }
+    };
     var r = Run("return", 16, 2600, book, new[] {
         Out(1, D(2026, 1), 10, src: 77),
         In(2, D(2026, 1, 5), 3, src: 77, type: "Invoice") });
@@ -182,9 +203,12 @@ List<string> Order(Result r, int movementId) => r.Takes[movementId].Select(t => 
 
 // 11. A revaluation is spread over what is held, in proportion to value.
 {
-    var book = new Book { Lots = {
+    var book = new Book
+    {
+        Lots = {
         Lot("A", "GD-A", D(2025, 1), null, 10, 600),
-        Lot("B", "GD-B", D(2025, 2), null, 10, 400) } };
+        Lot("B", "GD-B", D(2025, 2), null, 10, 400) }
+    };
     var r = Run("reval", 20, 1000, book, new[] { Reval(1, D(2026, 1), 100m) });
     Check("reval: 60 / 40 split", P(r, "A").Value == 660m && P(r, "B").Value == 440m);
     var down = Run("reval-down", 20, 1000, book, new[] { Reval(1, D(2026, 1), -1500m) });
@@ -206,9 +230,12 @@ List<string> Order(Result r, int movementId) => r.Takes[movementId].Select(t => 
         Out(3, D(2026, 2, 1), 11), Out(4, D(2026, 2, 7), 2) };
     var wa = StockValuation.Compute(40m, 733.33m, 500m, 18m, moves.Select(m => new StockMovement
     {
-        Id = m.Id, MovementDate = m.Date, Quantity = m.Quantity,
+        Id = m.Id,
+        MovementDate = m.Date,
+        Quantity = m.Quantity,
         Direction = m.IsIn ? StockMovementDirection.In : StockMovementDirection.Out,
-        SourceType = Enum.Parse<StockMovementSourceType>(m.SourceType), SourceId = m.SourceId,
+        SourceType = Enum.Parse<StockMovementSourceType>(m.SourceType),
+        SourceId = m.SourceId,
     }));
     var r = Run("single-pool", 40, 733.33m, new Book(), moves, oa: 500m);
     Check("single-pool: quantity equals weighted average", r.Position.Quantity == wa.Quantity);
@@ -221,9 +248,12 @@ List<string> Order(Result r, int movementId) => r.Takes[movementId].Select(t => 
 
 // 14. Pools open at exactly the opening balance's money.
 {
-    var book = new Book { Lots = {
+    var book = new Book
+    {
+        Lots = {
         Lot("A", "GD-A", D(2025, 1), null, 10, 1000.40m),
-        Lot("B", "GD-B", D(2025, 2), null, 10, 999.00m) } };
+        Lot("B", "GD-B", D(2025, 2), null, 10, 999.00m) }
+    };
     var r = Run("normalise", 20, 2000m, book, Array.Empty<Movement>());
     Check("normalise: pools total the opening value", r.Pools.Sum(p => p.Value) == 2000m);
     Check("normalise: no figure moves before anything is sold", r.Position.ValueExcludingTax == 2000m);
@@ -231,9 +261,12 @@ List<string> Order(Result r, int movementId) => r.Takes[movementId].Select(t => 
 
 // 15. Lots claiming more than the opening holds are scaled to it.
 {
-    var book = new Book { Lots = {
+    var book = new Book
+    {
+        Lots = {
         Lot("A", "GD-A", D(2025, 1), null, 30, 3000),
-        Lot("B", "GD-B", D(2025, 2), null, 10, 1000) } };
+        Lot("B", "GD-B", D(2025, 2), null, 10, 1000) }
+    };
     var r = Run("scale", 20, 2000m, book, Array.Empty<Movement>());
     Check("scale: quantity is the opening's", r.Position.Quantity == 20m);
     Check("scale: pools keep their proportions", P(r, "A").Quantity == 15m && P(r, "B").Quantity == 5m);
@@ -243,10 +276,13 @@ List<string> Order(Result r, int movementId) => r.Takes[movementId].Select(t => 
 // 160.9368) still scales to the opening exactly, and quantity after sales is
 // the weighted average's to the last decimal.
 {
-    var book = new Book { Lots = {
+    var book = new Book
+    {
+        Lots = {
         Lot("A", "GD-A", D(2025, 1), null, 55m, 5500),
         Lot("B", "GD-B", D(2025, 2), null, 55m, 5500),
-        Lot("C", "GD-C", D(2025, 3), null, 55m, 5500) } };
+        Lot("C", "GD-C", D(2025, 3), null, 55m, 5500) }
+    };
     var moves = new[] { Out(1, D(2026, 1), 33.3333m), Out(2, D(2026, 2), 100.0001m) };
     var r = Run("scale-exact", 160.9368m, 16093.68m, book, moves);
     Check("scale-exact: pools open at exactly the opening quantity",
@@ -257,9 +293,12 @@ List<string> Order(Result r, int movementId) => r.Takes[movementId].Select(t => 
 
 // 16. Landed cost leaves from exactly the pools the selling value left from.
 {
-    var book = new Book { Lots = {
+    var book = new Book
+    {
+        Lots = {
         Lot("C", "GD-C", D(2025, 5), D(2026, 1), 10, 1000, actual: 500),
-        Lot("U", "GD-U", D(2025, 1), null, 10, 1000, actual: 900) } };
+        Lot("U", "GD-U", D(2025, 1), null, 10, 1000, actual: 900) }
+    };
     var r = Run("actual", 20, 2000m, book, new[] { Out(1, D(2026, 2), 4) }, oa: 1400m);
     Check("actual: landed cost out = 4 x 50", r.Takes[1][0].ActualValue == 200m);
     Check("actual: landed cost held = 300 + 900", r.Position.ActualValueExcludingTax == 1200m);
@@ -267,9 +306,12 @@ List<string> Order(Result r, int movementId) => r.Takes[movementId].Select(t => 
 
 // 17. A 0% lot under a taxed item takes the item's rate; the item's rate is value-weighted.
 {
-    var book = new Book { Lots = {
+    var book = new Book
+    {
+        Lots = {
         Lot("Z", "GD-Z", D(2025, 1), null, 10, 1000, rate: 0m),
-        Lot("T", "GD-T", D(2025, 2), null, 10, 1000, rate: 25m) } };
+        Lot("T", "GD-T", D(2025, 2), null, 10, 1000, rate: 25m) }
+    };
     var r = Run("rate", 20, 2000m, book, Array.Empty<Movement>(), rate: 18m);
     Check("rate: 0% lot uses the item's 18%", P(r, "Z").Rate == 18m);
     Check("rate: item rate weighted 21.5%", r.Position.SalesTaxRate == 21.5m, $"{r.Position.SalesTaxRate}");
@@ -294,9 +336,12 @@ List<string> Order(Result r, int movementId) => r.Takes[movementId].Select(t => 
 
 // 19. What the NEXT sale would take, for pricing a bill line.
 {
-    var book = new Book { Lots = {
+    var book = new Book
+    {
+        Lots = {
         Lot("U", "GD-U", D(2025, 1), null, 5, 500),
-        Lot("C", "GD-C", D(2025, 6), D(2026, 5), 5, 700) } };
+        Lot("C", "GD-C", D(2025, 6), D(2026, 5), 5, 700) }
+    };
     var r = Run("next", 10, 1200, book, Array.Empty<Movement>());
     Check("next: in April the unclaimed older GD comes first",
         GdFifoValuation.NextConsumption(r, D(2026, 4, 20)).Select(p => p.Key).SequenceEqual(new[] { "U", "C" }));
