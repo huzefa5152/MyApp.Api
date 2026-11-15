@@ -1560,6 +1560,11 @@ namespace MyApp.Api.Controllers
             decimal? unitCost = null;
             decimal? actualUnitCost = null;
             decimal? rate = null;
+            // What each pool holds once the QUANTITY movement is in, which is
+            // what the money change is applied to. "set" predicts it; "delta"
+            // states its money change against the position as it stands.
+            var valueAfterMovement = current.ValueExcludingTax;
+            var actualAfterMovement = current.ActualValueExcludingTax;
 
             if (mode == StockAdjustmentModes.Set)
             {
@@ -1679,6 +1684,8 @@ namespace MyApp.Api.Controllers
                 }
 
                 actualValueDelta = Money(targetActualCost - Money(predictedActualValue));
+                valueAfterMovement = Money(predictedValue);
+                actualAfterMovement = Money(predictedActualValue);
 
                 // FIFO by GD: the quantity movement is NOT valued at the average
                 // -- stock leaves from the GD pools in claim order, and cost-less
@@ -1692,6 +1699,8 @@ namespace MyApp.Api.Controllers
                         dto.CompanyId, dto.ItemTypeId, qtyDelta, unitCost, actualUnitCost, dto.MovementDate.Date);
                     valueDelta = Money(targetValue - Money(fifoValue));
                     actualValueDelta = Money(targetActualCost - Money(fifoActual));
+                    valueAfterMovement = Money(fifoValue);
+                    actualAfterMovement = Money(fifoActual);
                 }
 
                 if (qtyDelta == 0m && valueDelta == 0m && actualValueDelta == 0m
@@ -1728,8 +1737,13 @@ namespace MyApp.Api.Controllers
                 });
             }
 
-            // Nor may a value change drive the stock value below zero.
-            if (valueDelta < 0m && current.ValueExcludingTax + valueDelta < -0.005m)
+            // Nor may a value change drive the stock value below zero. The floor
+            // is measured where the quantity movement leaves the pool: units
+            // added at the running cost bring money in, and the change that
+            // takes it back off is larger than the value held before them. A
+            // count raised from 330 to 1,000 at an unchanged value was refused
+            // while it ended exactly where it started.
+            if (valueDelta < 0m && valueAfterMovement + valueDelta < -0.005m)
             {
                 return BadRequest(new
                 {
@@ -1739,7 +1753,7 @@ namespace MyApp.Api.Controllers
             }
 
             // Same floor on the actual-cost pool, independently.
-            if (actualValueDelta < 0m && current.ActualValueExcludingTax + actualValueDelta < -0.005m)
+            if (actualValueDelta < 0m && actualAfterMovement + actualValueDelta < -0.005m)
             {
                 return BadRequest(new
                 {

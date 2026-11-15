@@ -655,6 +655,13 @@ walked in date order (then by id, so same-day rows apply in the order written).
 - **The revaluation's traced amount is POSITIVE and its Direction carries the
   sign**, as with every other movement. Signing it in both places made a
   write-down read as a write-up in the feed and in the reconciliation.
+- **The below-zero floor is measured AFTER the quantity movement** (2026-11-16).
+  Units added at the running cost bring money in, and the change that takes it
+  back off is larger than the value held before them; measured against the
+  current figure, a count raised at an unchanged value was refused (and took a
+  whole stock-sheet reconcile with it). `valueAfterMovement` /
+  `actualAfterMovement` in `AdjustStock`; "delta" mode still measures against the
+  position as it stands. Suite: `test_stock_valuation_flow.py` section 5c.
 - Two invariants a correction may not break: neither quantity nor value may go
   negative, and **zero quantity may not be left holding money** — the same rule
   the outward path keeps, refused with a message rather than silently dropped.

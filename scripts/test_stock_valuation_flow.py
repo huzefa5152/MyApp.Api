@@ -625,6 +625,60 @@ def suite_correction(api, h, cid, item, before):
     return d1
 
 
+def suite_count_up(api, h, cid, item, before):
+    """A count that was too LOW, on stock whose value is already right: the
+    quantity goes up and the money stays where it is. The added units come in
+    at the running cost and the correction takes that money back off, so the
+    floor has to be measured after the units are in -- measured against the
+    value held before them it refused a correction that ends exactly where it
+    started (a recount from 330 to 1,000 units at an unchanged value)."""
+    print("\n-- 5c. A count corrected upwards at an unchanged value --")
+    today = date.today().isoformat()
+    qty0 = float(before["onHand"])
+    val0 = float(before["valueExcludingTax"])
+    tq = round(qty0 * 3, 4)
+
+    r = api_call("POST", f"{api}/stock/adjust", h, json={
+        "companyId": cid, "itemTypeId": item["itemTypeId"], "mode": "set",
+        "targetQuantity": tq, "movementDate": today, "notes": "count was too low"})
+    check("a count tripled at an unchanged value is accepted", r.ok, f"http {r.status_code}: {r.text[:200]}")
+    a = onhand_row(api, h, cid, item["itemTypeId"])
+    check("the quantity becomes the new count", near(a["onHand"], tq, QTY_TOL), f"wanted {tq}, got {a['onHand']}")
+    check("the value is exactly where it was", near(a["valueExcludingTax"], val0, 0.02),
+          f"was {val0}, now {a['valueExcludingTax']}")
+
+    # The same with the value named as well, a little above where it stands.
+    tq2, tv2 = round(tq * 2, 4), round(val0 + 10, 2)
+    r = api_call("POST", f"{api}/stock/adjust", h, json={
+        "companyId": cid, "itemTypeId": item["itemTypeId"], "mode": "set",
+        "targetQuantity": tq2, "targetValueExcludingTax": tv2,
+        "movementDate": today, "notes": "count was too low, value named"})
+    check("a count doubled with the value named is accepted", r.ok, f"http {r.status_code}: {r.text[:200]}")
+    b = onhand_row(api, h, cid, item["itemTypeId"])
+    check("quantity and value both land on what was asked",
+          near(b["onHand"], tq2, QTY_TOL) and near(b["valueExcludingTax"], tv2, 0.05),
+          f"wanted {tq2} / {tv2}, got {b['onHand']} / {b['valueExcludingTax']}")
+
+    # The floor still holds: a value below zero is refused, whatever the count does.
+    r = api_call("POST", f"{api}/stock/adjust", h, json={
+        "companyId": cid, "itemTypeId": item["itemTypeId"], "mode": "delta",
+        "delta": 0, "valueDelta": -(tv2 + 1000), "movementDate": today, "notes": "too far"})
+    check("a change that would take the value below zero is still refused", r.status_code == 400,
+          f"http {r.status_code}: {r.text[:160]}")
+
+    # Back to the count and value this started from, so the cases after it
+    # run on the position they were written for.
+    r = api_call("POST", f"{api}/stock/adjust", h, json={
+        "companyId": cid, "itemTypeId": item["itemTypeId"], "mode": "set",
+        "targetQuantity": qty0, "targetValueExcludingTax": val0,
+        "movementDate": today, "notes": "back to the earlier count"})
+    c = onhand_row(api, h, cid, item["itemTypeId"])
+    check("the count and the value can be set back down together",
+          r.ok and near(c["onHand"], qty0, QTY_TOL) and near(c["valueExcludingTax"], val0, 0.05),
+          f"http {r.status_code}: wanted {qty0} / {val0}, got {c['onHand']} / {c['valueExcludingTax']}")
+    return c
+
+
 def suite_feed(api, h, cid, item, grid):
     print("\n-- 6. The movement feed carries the money, row by row --")
     rows = movements(api, h, cid, item["itemTypeId"])
@@ -804,6 +858,7 @@ def main():
             return report()
         after_adj = suite_adjustments(api, h, cid, item, after_sell)
         after_fix = suite_correction(api, h, cid, item, after_adj)
+        after_fix = suite_count_up(api, h, cid, item, after_fix)
         suite_feed(api, h, cid, item, after_fix)
         suite_rate_change(api, h, cid, supplier_id, item)
         suite_empty(api, h, cid, client_id, item,
