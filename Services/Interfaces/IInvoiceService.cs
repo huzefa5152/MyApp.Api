@@ -120,6 +120,7 @@ namespace MyApp.Api.Services.Interfaces
 
         /// <summary>Set the per-document print-grouping flags (display-only). Each applied only when non-null so Bill and Tax Invoice stay independent.</summary>
         Task<InvoiceDto?> SetPrintGroupingAsync(int id, bool? printGroupBillByItemType, bool? printGroupTaxInvoiceByItemType);
+        Task<InvoiceDto?> UpdateLineDescriptionsAsync(int id, IReadOnlyList<LineDescriptionDto> lines, string? actorUserName);
         Task<PrintBillDto?> GetPrintBillAsync(int invoiceId);
         Task<PrintTaxInvoiceDto?> GetPrintTaxInvoiceAsync(int invoiceId);
         Task<int> GetTotalCountAsync();

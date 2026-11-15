@@ -219,5 +219,25 @@ check("SRB bill keeps Edit, Print and Receipt", () => {
 });
 check("an FBR bill still offers Validate", () => assert.ok(keys({ ...unfiled, taxTreatment: "FBR" }, ctx()).includes("validate")));
 
+// A filed invoice offers only its line descriptions (2026-11-16).
+const filedLines = { ...filed, items: [{ id: 1, description: "Industrial Equipments" }] };
+check("a filed invoice offers Edit descriptions, not Edit", () => {
+  const k = keys(filedLines, ctx());
+  assert.ok(k.includes("editDescriptions") && !k.includes("edit"), k.join(","));
+});
+check("an unfiled invoice offers Edit, not Edit descriptions", () => {
+  const k = keys({ ...unfiled, items: filedLines.items }, ctx());
+  assert.ok(k.includes("edit") && !k.includes("editDescriptions"), k.join(","));
+});
+check("Edit descriptions needs the edit key, a live invoice and lines", () => {
+  assert.ok(!keys(filedLines, ctx({ perms: { ...all, canEdit: false } })).includes("editDescriptions"));
+  assert.ok(!keys({ ...filedLines, isCancelled: true }, ctx()).includes("editDescriptions"));
+  assert.ok(!keys({ ...filedLines, items: [] }, ctx()).includes("editDescriptions"));
+});
+check("a hand-filed invoice keeps its full Edit instead", () => {
+  const k = keys({ ...filedLines, fbrFiledManually: true, fbrIRN: null }, ctx());
+  assert.ok(k.includes("edit") && !k.includes("editDescriptions"), k.join(","));
+});
+
 console.log(`\n${pass}/${pass + failures.length} checks passed`);
 if (failures.length) process.exit(1);

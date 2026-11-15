@@ -44,6 +44,24 @@ export function buildInvoiceActions(inv, ctx) {
         ? "Correct this invoice here. It was filed by hand on FBR's portal; changes are not sent to FBR."
         : "Change the lines, prices and dates. Allowed until the invoice is filed with FBR.",
     });
+  // A filed invoice keeps one correction: its line wording. FBR is sent a blank
+  // description, so changing it does not touch the filing (2026-11-16).
+  if (
+    p.canEdit &&
+    filed &&
+    !inv.fbrFiledManually &&
+    live &&
+    !inv.isMigrated &&
+    (inv.items || []).length > 0
+  )
+    add({
+      key: "editDescriptions",
+      label: "Edit descriptions",
+      group: "primary",
+      primary: true,
+      title:
+        "Change only the line descriptions. FBR is not sent descriptions, so the filed invoice, its quantities, prices and totals stay as they are.",
+    });
   if (p.canPrint)
     add({
       key: "print",

@@ -52,6 +52,9 @@ export const updateInvoiceItemTypesAndQty = (id, items, writeMode = "bill", extr
 // no item / stock / FBR impact; this is how the Invoices tab persists the choice
 // (especially for FBR-off companies, where item/qty editing is blocked). Pass only
 // the flag(s) being changed, e.g. { printGroupTaxInvoiceByItemType: true }.
+// Only the line descriptions of an invoice filed with FBR (its Edit is closed).
+export const updateInvoiceLineDescriptions = (id, lines) =>
+  httpClient.patch(`/invoices/${id}/descriptions`, { lines });
 export const setPrintGrouping = (id, flags) =>
   httpClient.patch(`/invoices/${id}/print-grouping`, flags);
 

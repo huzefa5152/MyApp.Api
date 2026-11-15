@@ -573,6 +573,60 @@ def suite_filed_at_create(base, token):
     check("the same user still saves an ordinary invoice", st in (200, 201), f"{st} {str(body)[:200]}")
 
 
+def suite_descriptions_after_filing(base, token):
+    """A filed invoice's Edit is closed; only its line descriptions may change
+    (2026-11-16). FBR is sent no description, so nothing filed moves."""
+    print("\n== Line descriptions on a filed invoice ==")
+    co = make_company(base, token, f"_test_desc {SUFFIX}")
+    cl = make_client(base, token, co["id"])
+    it = make_item(base, token, co["id"], f"Desc Item {SUFFIX}")
+    lines = [{"itemTypeId": it["id"], "description": "Industrial Equipments", "quantity": 3, "uom": UNIT, "unitPrice": 250}]
+    st, inv = standalone(base, token, co, cl, lines)
+    st2, other = standalone(base, token, co, cl, lines)
+    if not check("two invoices", st in (200, 201) and st2 in (200, 201), f"{st} {inv} {st2} {other}"):
+        return
+    line_id = inv["items"][0]["id"]
+
+    st, body = http("PATCH", f"/api/invoices/{inv['id']}/descriptions", base, token=token,
+                    body={"lines": [{"invoiceItemId": line_id, "description": "New words"}]})
+    check("an invoice not yet filed is sent to Edit instead", st == 400 and "Use Edit" in str(body), f"{st} {body}")
+
+    st, body = http("POST", f"/api/fbr/{inv['id']}/reset-submission", base, token=token,
+                    body={"mode": "recordManual", "manualFbrInvoiceNumber": "DESC-1", "reason": "filed for the description test"})
+    if not check("the invoice is filed", st == 200, f"{st} {body}"):
+        return
+    st, before = http("GET", f"/api/invoices/{inv['id']}", base, token=token)
+
+    st, upd = http("PATCH", f"/api/invoices/{inv['id']}/descriptions", base, token=token,
+                   body={"lines": [{"invoiceItemId": line_id, "description": "  Cordless drill, 18V  "}]})
+    check("the description of a filed invoice changes", st == 200, f"{st} {str(upd)[:200]}")
+    st, after = http("GET", f"/api/invoices/{inv['id']}", base, token=token)
+    a, b = after["items"][0], before["items"][0]
+    check("it is saved trimmed", a["description"] == "Cordless drill, 18V", a["description"])
+    check("item, quantity, price, line and totals are unchanged",
+          (a["itemTypeId"], a["quantity"], a["unitPrice"], a["lineTotal"]) == (b["itemTypeId"], b["quantity"], b["unitPrice"], b["lineTotal"])
+          and (after["subtotal"], after["gstAmount"], after["grandTotal"]) == (before["subtotal"], before["gstAmount"], before["grandTotal"]),
+          (a, b))
+    check("it stays filed", after.get("fbrStatus") == "Submitted" and after.get("fbrInvoiceNumber") == "DESC-1",
+          {k: after.get(k) for k in ("fbrStatus", "fbrInvoiceNumber")})
+
+    st, _ = http("PATCH", f"/api/invoices/{inv['id']}/descriptions", base, token=token,
+                 body={"lines": [{"invoiceItemId": line_id, "description": ""}]})
+    st2, after = http("GET", f"/api/invoices/{inv['id']}", base, token=token)
+    check("a blank description shows the item's name", st == 200 and after["items"][0]["description"] == it["name"],
+          f"{st} {after['items'][0]['description']}")
+
+    st, body = http("PATCH", f"/api/invoices/{inv['id']}/descriptions", base, token=token,
+                    body={"lines": [{"invoiceItemId": other["items"][0]["id"], "description": "not mine"}]})
+    check("a line from another invoice is refused", st == 400, f"{st} {body}")
+    st, body = http("PATCH", f"/api/invoices/{inv['id']}/descriptions", base, token=token,
+                    body={"lines": [{"invoiceItemId": line_id, "description": "x" * 1001}]})
+    check("a description over 1,000 characters is refused", st == 400, f"{st} {body}")
+    st, body = http("PATCH", f"/api/invoices/999999999/descriptions", base, token=token,
+                    body={"lines": [{"invoiceItemId": line_id, "description": "x"}]})
+    check("an invoice that does not exist is 404", st == 404, f"{st} {body}")
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--base", default="http://localhost:5195")
@@ -585,6 +639,7 @@ def main():
     suite_mcp(a.base, token)
     suite_filed_manually(a.base, token)
     suite_filed_at_create(a.base, token)
+    suite_descriptions_after_filing(a.base, token)
     print(f"\n{PASSED}/{PASSED + FAILED} importer invoice screen checks passed")
     sys.exit(1 if FAILED else 0)
 

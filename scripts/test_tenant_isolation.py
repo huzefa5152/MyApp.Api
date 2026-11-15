@@ -1028,6 +1028,12 @@ check(suite13a, "admin auto-allocate 200 + the invoice is cleared",
       and abs(float(auto.get("unallocatedAmount", -1)) - 382000) < 0.01,
       f"status {s}, body {auto}")
 
+# PATCH /api/invoices/{id}/descriptions (2026-11-16) takes no company: the
+# guard on the stored invoice is the only wall around Beta's line wording.
+s, _ = request("PATCH", f"/api/invoices/{beta_invoice['id']}/descriptions", token=tokens["alice"],
+               body={"lines": [{"invoiceItemId": beta_invoice["items"][0]["id"], "description": "not yours"}]})
+status_check(suite13a, "alice PATCH /invoices/{betaInvoiceId}/descriptions", s, 403)
+
 # Cleanup (invoice/payment before the client — Restrict FKs).
 request("DELETE", f"/api/invoices/{beta_invoice['id']}", token=admin)
 request("DELETE", f"/api/payments/receipts/{beta_receipt['id']}", token=admin)

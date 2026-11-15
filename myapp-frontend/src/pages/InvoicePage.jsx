@@ -46,6 +46,7 @@ import InvoiceTable from "../Components/InvoiceTable";
 import CorrectionWizard from "../Components/CorrectionWizard";
 import FbrResetModal from "../Components/FbrResetModal";
 import FbrRecordManualModal from "../Components/FbrRecordManualModal";
+import InvoiceDescriptionsModal from "../Components/InvoiceDescriptionsModal";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import InvoiceActionBar, { InvoiceFbrChip } from "../Components/InvoiceActionBar";
 import { buildInvoiceActions, statusReason, fbrChip, isFiled } from "../utils/invoiceActions";
@@ -248,6 +249,7 @@ export default function InvoicePage({ mode = "invoices" }) {
   const [resetTarget, setResetTarget] = useState(null);
   // Invoice being recorded as filed by hand on FBR's portal (null when closed).
   const [manualTarget, setManualTarget] = useState(null);
+  const [descriptionsTarget, setDescriptionsTarget] = useState(null);
   const [showForm, setShowForm] = useState(false);
   // Separate visibility flag for the "Create Bill (No Challan)" modal so
   // it doesn't share state with the regular New Bill flow.
@@ -1029,6 +1031,7 @@ export default function InvoicePage({ mode = "invoices" }) {
   const runAction = (key, inv) =>
     ({
       edit: () => setEditingId(inv.id),
+      editDescriptions: () => setDescriptionsTarget(inv),
       print: () => handlePrintTax(inv),
       view: () => setViewingId(inv.id),
       pdf: () => handleExportTaxPdf(inv),
@@ -1960,6 +1963,23 @@ export default function InvoicePage({ mode = "invoices" }) {
                 "success",
               );
             }
+          }}
+        />
+      )}
+
+      {descriptionsTarget && (
+        <InvoiceDescriptionsModal
+          invoice={descriptionsTarget}
+          docName={docName}
+          onClose={() => setDescriptionsTarget(null)}
+          onDone={(n) => {
+            const done = descriptionsTarget;
+            setDescriptionsTarget(null);
+            if (selectedCompany) fetchInvoices(selectedCompany.id, page);
+            notify(
+              `${docName} #${done.invoiceNumber}: ${n} description${n === 1 ? "" : "s"} updated.`,
+              "success",
+            );
           }}
         />
       )}

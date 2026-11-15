@@ -756,6 +756,32 @@ namespace MyApp.Api.Controllers
             return Ok(updated);
         }
 
+        /// <summary>
+        /// Change only the line descriptions of an invoice filed with FBR (its
+        /// Edit is closed). FBR is sent a blank description, so nothing filed
+        /// changes. Same key as Edit: it is part of making invoices.
+        /// </summary>
+        [HttpPatch("{id}/descriptions")]
+        [HasPermission("bills.manage.update")]
+        public async Task<ActionResult<InvoiceDto>> UpdateLineDescriptions(
+            int id, [FromBody] UpdateLineDescriptionsDto dto)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound(new { error = "Invoice not found." });
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
+            try
+            {
+                var updated = await _service.UpdateLineDescriptionsAsync(id, dto?.Lines ?? new(), User.Identity?.Name);
+                if (updated == null) return NotFound(new { error = "Invoice not found." });
+                return Ok(updated);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
         [HttpDelete("{id}")]
         [HasPermission("bills.manage.delete")]
         public async Task<IActionResult> Delete(int id)

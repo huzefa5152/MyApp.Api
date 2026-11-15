@@ -3983,6 +3983,61 @@ namespace MyApp.Api.Services.Implementations
             return ToDto(invoice);
         }
 
+        /// <summary>Longest line description this edit accepts.</summary>
+        public const int MaxLineDescriptionLength = 1000;
+
+        /// <summary>
+        /// Change only the line descriptions of an invoice FILED with FBR, where
+        /// the full edit is closed. FBR is sent a blank description (FbrService,
+        /// 2026-10-06), so nothing filed changes; quantities, prices, items,
+        /// totals, stock and the ledger are not touched. A blank description is
+        /// filled from the item on save (AppDbContext.FillBlankLineDescriptions).
+        /// </summary>
+        public async Task<InvoiceDto?> UpdateLineDescriptionsAsync(
+            int id, IReadOnlyList<LineDescriptionDto> lines, string? actorUserName)
+        {
+            var invoice = await _invoiceRepo.GetByIdAsync(id);
+            if (invoice == null) return null;
+            AssertNotOpeningBalance(invoice);
+            if (invoice.IsCancelled)
+                throw new InvalidOperationException("A voided invoice cannot be changed.");
+            if (invoice.FbrStatus != FbrSubmissionStatus.Submitted)
+                throw new InvalidOperationException("Use Edit: this invoice is not filed with FBR yet.");
+            if (lines == null || lines.Count == 0)
+                throw new InvalidOperationException("Send at least one line.");
+
+            var byId = invoice.Items.ToDictionary(i => i.Id);
+            var changed = 0;
+            foreach (var l in lines)
+            {
+                if (!byId.TryGetValue(l.InvoiceItemId, out var item))
+                    throw new InvalidOperationException("A line does not belong to this invoice.");
+                var text = (l.Description ?? "").Trim();
+                if (text.Length > MaxLineDescriptionLength)
+                    throw new InvalidOperationException(
+                        $"A description may be at most {MaxLineDescriptionLength} characters.");
+                if (item.Description == text) continue;
+                item.Description = text;
+                changed++;
+            }
+            if (changed == 0) return ToDto(invoice);
+
+            await _context.SaveChangesAsync();
+            await _auditLog.LogAsync(new AuditLog
+            {
+                Level = "Info",
+                HttpMethod = "PATCH",
+                RequestPath = $"/api/invoices/{invoice.Id}/descriptions",
+                StatusCode = 200,
+                ExceptionType = "INVOICE_LINE_DESCRIPTIONS_EDIT",
+                CompanyId = invoice.CompanyId,
+                UserName = actorUserName,
+                Fingerprint = Guid.NewGuid().ToString("N"),
+                Message = $"Invoice #{invoice.InvoiceNumber}: {changed} line description(s) changed after filing with FBR.",
+            });
+            return ToDto(invoice);
+        }
+
         public async Task<PrintBillDto?> GetPrintBillAsync(int invoiceId)
         {
             var inv = await _invoiceRepo.GetForPrintAsync(invoiceId);

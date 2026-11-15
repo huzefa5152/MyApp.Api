@@ -767,6 +767,22 @@
     /// stay independent). Display-only: never touches items, totals, stock, or the
     /// FBR payload, so it is allowed regardless of FBR status or editability.
     /// </summary>
+    /// <summary>
+    /// New wording for some lines of an invoice already filed with FBR. Only the
+    /// description changes: FBR is sent a blank description (FbrService,
+    /// 2026-10-06), so the filing is untouched.
+    /// </summary>
+    public class UpdateLineDescriptionsDto
+    {
+        public List<LineDescriptionDto> Lines { get; set; } = new();
+    }
+
+    public class LineDescriptionDto
+    {
+        public int InvoiceItemId { get; set; }
+        public string? Description { get; set; }
+    }
+
     public class SetPrintGroupingDto
     {
         public bool? PrintGroupBillByItemType { get; set; }

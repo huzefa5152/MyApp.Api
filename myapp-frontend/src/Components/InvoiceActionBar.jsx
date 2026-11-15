@@ -1,5 +1,6 @@
 import {
   MdEdit,
+  MdEditNote,
   MdPrint,
   MdVisibility,
   MdPictureAsPdf,
@@ -33,6 +34,7 @@ import { colors } from "../theme";
  */
 const ICONS = {
   edit: MdEdit,
+  editDescriptions: MdEditNote,
   print: MdPrint,
   view: MdVisibility,
   pdf: MdPictureAsPdf,
@@ -56,7 +58,7 @@ export default function InvoiceActionBar({ inv, actions, onAction, busy, compact
   // A table row has room for three inline actions: the most used of the
   // primary ones (the FBR step, Edit, Print, then PDF / View); the rest go
   // into "More". A card shows every primary action.
-  const RANK = { validate: 0, submit: 0, edit: 1, print: 2, pdf: 3, view: 4 };
+  const RANK = { validate: 0, submit: 0, edit: 1, editDescriptions: 1, print: 2, pdf: 3, view: 4 };
   const keep = new Set(
     actions
       .filter((a) => a.primary)
