@@ -1618,6 +1618,12 @@ GD panel and Excel export all say which GDs it took.
   reconciling is for; every READING check still applies. The screen offers the
   shipped `opening-stock-template.xlsx` as its sample. Suite:
   `scripts/test_stock_reconcile.py` (20 checks); cross-company in tenant suite 21.
+- **A difference against a consultant's sheet is traced, then fixed at the
+  invoice, then reconciled** -- the `reconcile-stock-sheet` skill, with the
+  read-only tools in `scripts/stock_sheet_check` (sheet reader, stock reader,
+  comparer, and the copy the Reconcile screen can read). Never reconcile to a
+  sheet with a blank description, a negative row or an un-reduced quantity: it
+  writes stock off or adds sold stock back.
 - Suites: `cd scripts/stock_fifo_harness && dotnet run -c Release` (offline, links
   the real walk), `python scripts/test_stock_fifo.py`, `node scripts/test_fifo_pricing.mjs`,
   and the READ-ONLY production check `cd scripts/stock_fifo_prod_check && dotnet run -c Release`
