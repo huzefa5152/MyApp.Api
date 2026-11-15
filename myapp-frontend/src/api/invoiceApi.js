@@ -1,7 +1,6 @@
 import httpClient from "./httpClient";
 
-export const getInvoicesByCompany = (companyId) =>
-  httpClient.get(`/invoices/company/${companyId}`);
+export const getInvoicesByCompany = (companyId) => httpClient.get(`/invoices/company/${companyId}`);
 
 export const getPagedInvoicesByCompany = (companyId, params = {}) =>
   httpClient.get(`/invoices/company/${companyId}/paged`, { params });
@@ -15,11 +14,9 @@ export const getInvoicesForReceipt = (companyId, clientId) =>
 export const getInvoiceCountsByClient = (companyId) =>
   httpClient.get(`/invoices/company/${companyId}/counts-by-client`);
 
-export const getInvoiceById = (id) =>
-  httpClient.get(`/invoices/${id}`);
+export const getInvoiceById = (id) => httpClient.get(`/invoices/${id}`);
 
-export const createInvoice = (payload) =>
-  httpClient.post("/invoices", payload);
+export const createInvoice = (payload) => httpClient.post("/invoices", payload);
 
 // Create a bill WITHOUT a linked delivery challan — for FBR-only flows
 // (service invoices, retail walk-ins, ad-hoc billing) where no challan
@@ -29,8 +26,7 @@ export const createInvoice = (payload) =>
 export const createStandaloneInvoice = (payload) =>
   httpClient.post("/invoices/standalone", payload);
 
-export const updateInvoice = (id, payload) =>
-  httpClient.put(`/invoices/${id}`, payload);
+export const updateInvoice = (id, payload) => httpClient.put(`/invoices/${id}`, payload);
 
 // Narrow-permission edit path — only re-classifies each line by ItemType.
 // Server re-derives HS Code / UOM / Sale Type from the catalog and refuses
@@ -59,8 +55,7 @@ export const updateInvoiceItemTypesAndQty = (id, items, writeMode = "bill", extr
 export const setPrintGrouping = (id, flags) =>
   httpClient.patch(`/invoices/${id}/print-grouping`, flags);
 
-export const deleteInvoice = (id) =>
-  httpClient.delete(`/invoices/${id}`);
+export const deleteInvoice = (id) => httpClient.delete(`/invoices/${id}`);
 
 // Void (cancel) a non-FBR-submitted bill. Unlike delete (trailing bill only,
 // removes the row), cancel works on ANY non-submitted bill: it keeps the bill
@@ -87,8 +82,7 @@ export const reverseInvoice = (id, { reason, remarks, documentType } = {}) =>
 // payload: { originalInvoiceId, documentType (9|10), reason, remarks, date?,
 //            lines: [{ invoiceItemId, quantity }] }  (empty lines = full reversal)
 // Gated server-side by `invoices.note.create`.
-export const createNote = (payload) =>
-  httpClient.post("/invoices/notes", payload);
+export const createNote = (payload) => httpClient.post("/invoices/notes", payload);
 
 // Correction: bill quantity under-reported on a corrected original as a new
 // UNCLASSIFIED delta bill (+ optional cloned challan). Eligible when the

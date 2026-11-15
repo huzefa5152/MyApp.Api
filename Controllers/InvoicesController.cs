@@ -186,14 +186,26 @@ namespace MyApp.Api.Controllers
                 .FirstOrDefaultAsync();
             var items = result.Items.Select(i => new
             {
-                i.Id, i.InvoiceNumber, i.Date, i.GrandTotal, i.AmountPaid, i.BalanceDue, i.IsCancelled,
+                i.Id,
+                i.InvoiceNumber,
+                i.Date,
+                i.GrandTotal,
+                i.AmountPaid,
+                i.BalanceDue,
+                i.IsCancelled,
                 IsOpening = false,
             }).ToList();
             if (opening != null)
                 items.Insert(0, new
                 {
-                    opening.Id, opening.InvoiceNumber, opening.Date, opening.GrandTotal, opening.AmountPaid,
-                    BalanceDue = opening.GrandTotal - opening.AmountPaid, IsCancelled = false, IsOpening = true,
+                    opening.Id,
+                    opening.InvoiceNumber,
+                    opening.Date,
+                    opening.GrandTotal,
+                    opening.AmountPaid,
+                    BalanceDue = opening.GrandTotal - opening.AmountPaid,
+                    IsCancelled = false,
+                    IsOpening = true,
                 });
             return Ok(new { items });
         }

@@ -1,7 +1,22 @@
 import {
-  MdEdit, MdPrint, MdVisibility, MdPictureAsPdf, MdGridOn, MdCheckCircle, MdCloudUpload,
-  MdPreview, MdBlock, MdRestore, MdPayments, MdCopyAll, MdLocalShipping, MdUndo, MdPostAdd,
-  MdCancel, MdDelete, MdAssignmentTurnedIn,
+  MdEdit,
+  MdPrint,
+  MdVisibility,
+  MdPictureAsPdf,
+  MdGridOn,
+  MdCheckCircle,
+  MdCloudUpload,
+  MdPreview,
+  MdBlock,
+  MdRestore,
+  MdPayments,
+  MdCopyAll,
+  MdLocalShipping,
+  MdUndo,
+  MdPostAdd,
+  MdCancel,
+  MdDelete,
+  MdAssignmentTurnedIn,
 } from "react-icons/md";
 import CardActions from "./CardActions";
 import { colors } from "../theme";
@@ -17,10 +32,24 @@ import { colors } from "../theme";
  * actions are red and last.
  */
 const ICONS = {
-  edit: MdEdit, print: MdPrint, view: MdVisibility, pdf: MdPictureAsPdf, excel: MdGridOn,
-  validate: MdCheckCircle, submit: MdCloudUpload, preview: MdPreview, exclude: MdBlock, reset: MdRestore,
-  receipt: MdPayments, copy: MdCopyAll, challan: MdLocalShipping, creditNote: MdUndo, correct: MdPostAdd,
-  void: MdCancel, delete: MdDelete, recordManual: MdAssignmentTurnedIn,
+  edit: MdEdit,
+  print: MdPrint,
+  view: MdVisibility,
+  pdf: MdPictureAsPdf,
+  excel: MdGridOn,
+  validate: MdCheckCircle,
+  submit: MdCloudUpload,
+  preview: MdPreview,
+  exclude: MdBlock,
+  reset: MdRestore,
+  receipt: MdPayments,
+  copy: MdCopyAll,
+  challan: MdLocalShipping,
+  creditNote: MdUndo,
+  correct: MdPostAdd,
+  void: MdCancel,
+  delete: MdDelete,
+  recordManual: MdAssignmentTurnedIn,
 };
 
 export default function InvoiceActionBar({ inv, actions, onAction, busy, compact = false, style }) {
@@ -28,12 +57,20 @@ export default function InvoiceActionBar({ inv, actions, onAction, busy, compact
   // primary ones (the FBR step, Edit, Print, then PDF / View); the rest go
   // into "More". A card shows every primary action.
   const RANK = { validate: 0, submit: 0, edit: 1, print: 2, pdf: 3, view: 4 };
-  const keep = new Set(actions.filter((a) => a.primary)
-    .sort((x, y) => (RANK[x.key] ?? 9) - (RANK[y.key] ?? 9))
-    .slice(0, compact ? 3 : undefined).map((a) => a.key));
+  const keep = new Set(
+    actions
+      .filter((a) => a.primary)
+      .sort((x, y) => (RANK[x.key] ?? 9) - (RANK[y.key] ?? 9))
+      .slice(0, compact ? 3 : undefined)
+      .map((a) => a.key),
+  );
   const list = actions.map((a) => ({ ...a, primary: keep.has(a.key) }));
   return (
-    <CardActions nowrap={compact} label={`More actions for invoice ${inv.invoiceNumber}`} style={style}>
+    <CardActions
+      nowrap={compact}
+      label={`More actions for invoice ${inv.invoiceNumber}`}
+      style={style}
+    >
       {list.map((a) => {
         const Icon = a.key === "exclude" && inv.isFbrExcluded ? MdRestore : ICONS[a.key];
         const working = busy === a.key;
@@ -47,7 +84,11 @@ export default function InvoiceActionBar({ inv, actions, onAction, busy, compact
             onClick={() => onAction(a.key, inv)}
             style={{ ...btn(a, compact), ...(a.disabled ? disabledStyle : null) }}
           >
-            {working ? <span className="btn-spinner" /> : Icon ? <Icon size={15} aria-hidden="true" style={{ flexShrink: 0 }} /> : null}
+            {working ? (
+              <span className="btn-spinner" />
+            ) : Icon ? (
+              <Icon size={15} aria-hidden="true" style={{ flexShrink: 0 }} />
+            ) : null}
             <span>{a.label}</span>
           </button>
         );
@@ -66,13 +107,23 @@ const TONES = {
 const btn = (a, compact) => {
   const t = TONES[a.danger ? "danger" : a.group] || TONES.money;
   return {
-    display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5,
-    minHeight: compact ? 32 : 44, padding: compact ? "0 0.55rem" : "0 0.75rem",
-    borderRadius: 8, fontSize: compact ? "0.74rem" : "0.8rem", fontWeight: 600,
-    background: t.bg, color: t.fg, border: `1px solid ${t.line}`,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    minHeight: compact ? 32 : 44,
+    padding: compact ? "0 0.55rem" : "0 0.75rem",
+    borderRadius: 8,
+    fontSize: compact ? "0.74rem" : "0.8rem",
+    fontWeight: 600,
+    background: t.bg,
+    color: t.fg,
+    border: `1px solid ${t.line}`,
     // Inline buttons keep one line; in the "More" menu a long label wraps
     // instead of pushing the menu sideways (and squeezing its icon to nothing).
-    boxShadow: "none", cursor: "pointer", whiteSpace: a.primary ? "nowrap" : "normal",
+    boxShadow: "none",
+    cursor: "pointer",
+    whiteSpace: a.primary ? "nowrap" : "normal",
   };
 };
 const disabledStyle = { opacity: 0.5, cursor: "not-allowed" };
@@ -82,13 +133,28 @@ export function InvoiceFbrChip({ chip }) {
   if (!chip) return null;
   const t = CHIP_TONES[chip.tone] || CHIP_TONES.neutral;
   return (
-    <span title={chip.title} style={{
-      display: "inline-flex", alignItems: "center", gap: 4, flexWrap: "wrap",
-      padding: "2px 9px", borderRadius: 999, fontSize: "0.72rem", fontWeight: 700,
-      background: t.bg, color: t.fg, border: `1px solid ${t.line}`,
-    }}>
+    <span
+      title={chip.title}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        flexWrap: "wrap",
+        padding: "2px 9px",
+        borderRadius: 999,
+        fontSize: "0.72rem",
+        fontWeight: 700,
+        background: t.bg,
+        color: t.fg,
+        border: `1px solid ${t.line}`,
+      }}
+    >
       {chip.label}
-      {chip.irn && <span style={{ fontFamily: "monospace", fontWeight: 600, wordBreak: "break-all" }}>· {chip.irn}</span>}
+      {chip.irn && (
+        <span style={{ fontFamily: "monospace", fontWeight: 600, wordBreak: "break-all" }}>
+          · {chip.irn}
+        </span>
+      )}
     </span>
   );
 }
