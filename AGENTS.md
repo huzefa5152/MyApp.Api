@@ -66,6 +66,23 @@ edit the assertion in the same commit as the behaviour it guards. Assert the
 contract (the table renders, the totals appear, no `NaN`), never one
 implementation's shape (exactly eight `<th>`).
 
+## Runbooks for recurring jobs: `.claude/skills/`
+
+Each folder under `.claude/skills/` holds a `SKILL.md`: the tested procedure for
+one recurring job on this line, with the tools it uses. Claude Code loads them by
+itself; any other agent must open the matching `SKILL.md` and follow it before
+starting that job, instead of working the procedure out again.
+
+| When | Read |
+|---|---|
+| An importer's stock does not match the consultant's monthly stock sheet | `.claude/skills/reconcile-stock-sheet/SKILL.md` (tools: `scripts/stock_sheet_check`) |
+| GD costing backfill, or repairing a past GD import | `.claude/skills/gd-costing-backfill/SKILL.md` |
+| Creating and FBR-validating a new importer company | `.claude/skills/onboard-fbr-importer/SKILL.md` |
+| Matching a print template to a customer's document | `.claude/skills/myapp-importer-print-templates/SKILL.md` |
+| Preparing or showing the demo | `.claude/skills/setup-demo-environment/SKILL.md`, `.claude/skills/demo-walkthrough/SKILL.md` |
+
+List the folder for the rest. A new runbook goes there too, with a row here.
+
 ## Verify before you claim
 
 `CLAUDE.md` holds the full test table with the exact command and expected
