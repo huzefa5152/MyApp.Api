@@ -1303,6 +1303,8 @@ function getBreadcrumb(pathname) {
     "/fbr-import/purchase": "Purchases / FBR Purchase Import",
     "/item-types": "Configuration / Item Types",
     "/import-data": "Configuration / Import Data",
+    "/sales-quotes": "Sales / Sales Quotes",
+    "/sales-orders": "Sales / Sales Orders",
     "/challans": "Sales / Delivery Challans",
     "/email-workspace": "Email Workspace / Inbox",
     "/challans/import": "Sales / Import Challans",

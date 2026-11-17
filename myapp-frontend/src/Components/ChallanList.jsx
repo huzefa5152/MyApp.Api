@@ -2,6 +2,7 @@ import CostingStatus from "./CostingStatus";
 import { canEditBilledDelivery } from "../utils/billedChallanEdit";
 import { isBillableChallan } from "../utils/challanBilling";
 import CardActions from "./CardActions";
+import "../pages/InvoiceCardActions.css";
 import { useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -356,30 +357,33 @@ export default function ChallanList({
                       <strong>Site:</strong> {c.site}
                     </p>
                   )}
-                  {c.deliveryDate && (
-                    <p
-                      style={{
-                        ...cardStyles.text,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.4rem",
-                      }}
-                    >
-                      <MdCalendarToday
-                        size={14}
-                        style={{ color: colors.textSecondary, flexShrink: 0 }}
-                      />
-                      {new Date(c.deliveryDate).toLocaleDateString()}
-                    </p>
-                  )}
+                  {/* Date and item count share one line. */}
                   <p
-                    style={{ ...cardStyles.text, fontSize: "0.78rem", color: colors.textSecondary }}
+                    style={{
+                      ...cardStyles.text,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                      flexWrap: "wrap",
+                    }}
                   >
-                    {c.items?.length || 0} item{(c.items?.length || 0) !== 1 ? "s" : ""}
+                    {c.deliveryDate && (
+                      <>
+                        <MdCalendarToday
+                          size={14}
+                          style={{ color: colors.textSecondary, flexShrink: 0 }}
+                        />
+                        {new Date(c.deliveryDate).toLocaleDateString()}
+                        <span aria-hidden="true">·</span>
+                      </>
+                    )}
+                    <span style={{ fontSize: "0.78rem" }}>
+                      {c.items?.length || 0} item{(c.items?.length || 0) !== 1 ? "s" : ""}
+                    </span>
                   </p>
                 </div>
 
-                <CardActions style={cardStyles.buttonGroup}>
+                <CardActions className="invoice-card-actions" style={cardStyles.buttonGroup}>
                   <button
                     data-primary
                     style={{ ...styles.actionBtn, ...styles.viewBtn }}

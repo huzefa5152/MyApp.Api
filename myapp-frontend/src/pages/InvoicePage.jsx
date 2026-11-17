@@ -1,6 +1,8 @@
 import "./InvoiceCardActions.css";
+import HeaderCompanyPicker from "../Components/HeaderCompanyPicker";
 import { printWhenImagesReady } from "../utils/printDocument";
 import ListFilters from "../Components/ListFilters";
+import MoreFilters from "../Components/MoreFilters";
 import RecordsViewport from "../Components/RecordsViewport";
 import CostingStatus from "../Components/CostingStatus";
 import CommercialCostDialog from "../Components/CommercialCostDialog";
@@ -17,7 +19,6 @@ import {
   MdInfo,
   MdReceipt,
   MdAdd,
-  MdBusiness,
   MdPrint,
   MdDescription,
   MdSearch,
@@ -70,7 +71,7 @@ import {
 } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { submitInvoiceToFbr, validateInvoiceWithFbr } from "../api/fbrApi";
-import { dropdownStyles, cardStyles, cardHover } from "../theme";
+import { cardStyles, cardHover } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import TaxSheetImportDialog from "../Components/TaxSheetImportDialog";
@@ -1414,44 +1415,63 @@ export default function InvoicePage({ mode = "invoices" }) {
             </div>
             <DocumentLinesHeaderLink />
           </div>
-          {/* Creation buttons live on the Bills tab only — Invoices tab is
+          <div data-header-actions="">
+            {!loadingCompanies && (
+              <HeaderCompanyPicker
+                companies={companies}
+                selectedCompany={selectedCompany}
+                onChange={setSelectedCompany}
+              />
+            )}
+            {/* Creation buttons live on the Bills tab only — Invoices tab is
             for FBR classification & submission of existing records. */}
-          {isBillsMode && companies.length > 0 && (canCreate || canCreateStandalone) && (
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-              {canCreate && (
-                <button style={styles.addBtn} onClick={() => setShowForm(true)}>
-                  <MdAdd size={18} /> New Bill
-                </button>
-              )}
-              {canCreateStandalone && (
-                <button
-                  style={styles.addBtnSecondary}
-                  onClick={() => setShowStandaloneForm(true)}
-                  title="Create a bill directly without linking a delivery challan (FBR-only flow)"
-                >
-                  <MdAdd size={18} /> New Bill (No Challan)
-                </button>
-              )}
-            </div>
-          )}
-          {/* Note tabs: notes are generated from an existing submitted
+            {isBillsMode && companies.length > 0 && (canCreate || canCreateStandalone) && (
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                {canCreate && (
+                  <button style={styles.addBtn} onClick={() => setShowForm(true)}>
+                    <MdAdd size={18} /> New Bill
+                  </button>
+                )}
+                {canCreateStandalone && (
+                  <button
+                    style={styles.addBtnSecondary}
+                    onClick={() => setShowStandaloneForm(true)}
+                    title="Create a bill directly without linking a delivery challan (FBR-only flow)"
+                  >
+                    <MdAdd size={18} /> New Bill (No Challan)
+                  </button>
+                )}
+              </div>
+            )}
+            {/* Note tabs: notes are generated from an existing submitted
             invoice — the "New" button opens the note screen in this
             tab's mode. */}
-          {isNotesMode && companies.length > 0 && canReverse && (
-            <button
-              style={styles.addBtn}
-              onClick={() =>
-                navigate(`/credit-debit-notes?type=${noteDocType === 10 ? "credit" : "debit"}`)
-              }
-              title={
-                noteDocType === 10
-                  ? "Reverse a submitted invoice — fully or line-by-line — by generating a Credit Note"
-                  : "Record an upward adjustment (undercharge / rate change / extra goods) against a submitted invoice"
-              }
-            >
-              <MdAdd size={18} /> New {noteLabel}
-            </button>
-          )}
+            {isNotesMode && companies.length > 0 && canReverse && (
+              <button
+                style={styles.addBtn}
+                onClick={() =>
+                  navigate(`/credit-debit-notes?type=${noteDocType === 10 ? "credit" : "debit"}`)
+                }
+                title={
+                  noteDocType === 10
+                    ? "Reverse a submitted invoice — fully or line-by-line — by generating a Credit Note"
+                    : "Record an upward adjustment (undercharge / rate change / extra goods) against a submitted invoice"
+                }
+              >
+                <MdAdd size={18} /> New {noteLabel}
+              </button>
+            )}
+            {canImportTaxSheet && selectedCompany && (
+              <button
+                type="button"
+                style={styles.addBtnSecondary}
+                onClick={() => setTaxSheetOpen(true)}
+                title="Adjust many invoices at once from a filled-in Tax Sheet (Excel)"
+              >
+                Import tax sheet
+              </button>
+            )}
+          </div>
         </div>
 
         {loadingCompanies ? (
@@ -1460,57 +1480,6 @@ export default function InvoicePage({ mode = "invoices" }) {
           </div>
         ) : companies.length > 0 ? (
           <>
-            {companies.length > 1 && (
-              <div
-                style={{
-                  marginBottom: "1rem",
-                  display: "flex",
-                  alignItems: "center",
-                  flexWrap: "wrap",
-                  gap: "0.75rem",
-                  padding: "0.85rem 1rem",
-                  border: `1px solid ${colors.cardBorder}`,
-                  borderRadius: 12,
-                  background: "#fff",
-                }}
-              >
-                <label
-                  htmlFor="invoice-company"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    fontWeight: 600,
-                    color: colors.textSecondary,
-                  }}
-                >
-                  <MdBusiness aria-hidden="true" size={20} color={colors.blue} /> Company
-                </label>
-                <select
-                  id="invoice-company"
-                  style={{
-                    ...dropdownStyles.base,
-                    flex: "1 1 220px",
-                    minWidth: 0,
-                    maxWidth: 420,
-                    minHeight: 44,
-                  }}
-                  value={selectedCompany?.id || ""}
-                  onChange={(e) =>
-                    setSelectedCompany(
-                      companies.find((c) => parseInt(c.id) === parseInt(e.target.value)),
-                    )
-                  }
-                >
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.brandName || c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
             {/* FBR Bulk Actions — bar shows if caller has either FBR perm.
               Validate All is gated on canFbrValidate; Submit All on
               canFbrSubmit. Asymmetric grants render a partial bar.
@@ -1520,7 +1489,7 @@ export default function InvoicePage({ mode = "invoices" }) {
               canFbrAny &&
               selectedCompany?.hasFbrToken &&
               Math.max(readyTotal, unsubmittedInvoices.length) > 0 && (
-                <div style={styles.fbrBulkBar}>
+                <div className="invoice-bulk-bar" style={styles.fbrBulkBar}>
                   <div
                     style={{
                       display: "flex",
@@ -1616,7 +1585,7 @@ export default function InvoicePage({ mode = "invoices" }) {
               documents on the current page. "Mark delivered" acts on ALL
               pending rows matching the current filters (across pages). */}
             {!isBillsMode && canDocsDeliver && pendingHandoverCount > 0 && (
-              <div style={styles.fbrBulkBar}>
+              <div className="invoice-bulk-bar" style={styles.fbrBulkBar}>
                 <div
                   style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}
                 >
@@ -1671,51 +1640,55 @@ export default function InvoicePage({ mode = "invoices" }) {
                       ))}
                     </select>
                   )}
-                  {/* FBR workflow-status filter — Bills & Invoices tabs (not the
-                  immutable note tabs). Server-side, so it paginates correctly. */}
-                  {!isNotesMode && (
-                    <select
-                      className="filter-select"
-                      value={fbrFilter}
-                      onChange={handleFilterChange(setFbrFilter)}
-                      title="Filter by FBR status"
-                    >
-                      <option value="">All FBR statuses</option>
-                      <option value="notadjusted">Needs review / setup</option>
-                      <option value="ready">Ready to validate</option>
-                      <option value="submitted">Submitted to FBR</option>
-                      <option value="fbrcancelled">Cancelled at FBR</option>
-                      <option value="excluded">FBR excluded</option>
-                    </select>
-                  )}
-                  {/* Customer document-handover filter — Invoices + Notes views
-                  (not the pre-FBR Bills tab, where nearly every row is "—").
-                  Server-side, so it paginates correctly. */}
-                  {!isBillsMode && (
-                    <select
-                      className="filter-select"
-                      value={handoverFilter}
-                      onChange={handleFilterChange(setHandoverFilter)}
-                      title="Filter by customer document handover"
-                    >
-                      <option value="">All documents</option>
-                      <option value="pending">Docs pending</option>
-                      <option value="delivered">Docs delivered</option>
-                    </select>
-                  )}
-                  {isBillsMode && has("bills.costs.view") && (
-                    <select
-                      aria-label="Costing status"
-                      className="filter-select"
-                      value={costingStatus}
-                      onChange={handleFilterChange(setCostingStatus)}
-                    >
-                      <option value="">All costing statuses</option>
-                      <option value="not-costed">Not costed</option>
-                      <option value="partial">Partially costed</option>
-                      <option value="full">Fully costed</option>
-                    </select>
-                  )}
+                  <MoreFilters
+                    active={[fbrFilter, handoverFilter, costingStatus].filter(Boolean).length}
+                  >
+                    {/* FBR workflow-status filter — Bills & Invoices tabs (not the
+                    immutable note tabs). Server-side, so it paginates correctly. */}
+                    {!isNotesMode && (
+                      <select
+                        className="filter-select"
+                        value={fbrFilter}
+                        onChange={handleFilterChange(setFbrFilter)}
+                        title="Filter by FBR status"
+                      >
+                        <option value="">All FBR statuses</option>
+                        <option value="notadjusted">Needs review / setup</option>
+                        <option value="ready">Ready to validate</option>
+                        <option value="submitted">Submitted to FBR</option>
+                        <option value="fbrcancelled">Cancelled at FBR</option>
+                        <option value="excluded">FBR excluded</option>
+                      </select>
+                    )}
+                    {/* Customer document-handover filter — Invoices + Notes views
+                    (not the pre-FBR Bills tab, where nearly every row is "—").
+                    Server-side, so it paginates correctly. */}
+                    {!isBillsMode && (
+                      <select
+                        className="filter-select"
+                        value={handoverFilter}
+                        onChange={handleFilterChange(setHandoverFilter)}
+                        title="Filter by customer document handover"
+                      >
+                        <option value="">All documents</option>
+                        <option value="pending">Docs pending</option>
+                        <option value="delivered">Docs delivered</option>
+                      </select>
+                    )}
+                    {isBillsMode && has("bills.costs.view") && (
+                      <select
+                        aria-label="Costing status"
+                        className="filter-select"
+                        value={costingStatus}
+                        onChange={handleFilterChange(setCostingStatus)}
+                      >
+                        <option value="">All costing statuses</option>
+                        <option value="not-costed">Not costed</option>
+                        <option value="partial">Partially costed</option>
+                        <option value="full">Fully costed</option>
+                      </select>
+                    )}
+                  </MoreFilters>
                   <div className="filter-date-group">
                     <input
                       type="date"
@@ -1739,24 +1712,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                       Clear
                     </button>
                   )}
-                  <div
-                    style={{
-                      marginLeft: "auto",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.5rem",
-                    }}
-                  >
-                    {canImportTaxSheet && selectedCompany && (
-                      <button
-                        type="button"
-                        className="filter-clear-btn"
-                        onClick={() => setTaxSheetOpen(true)}
-                        title="Adjust many invoices at once from a filled-in Tax Sheet (Excel)"
-                      >
-                        Import tax sheet
-                      </button>
-                    )}
+                  <div className="filters-row-end">
                     {canPrint && <PrintTemplateSelect picker={tplPicker} />}
                     {isBigScreen && (
                       <ViewModeToggle
@@ -1910,7 +1866,12 @@ export default function InvoicePage({ mode = "invoices" }) {
                         stay clean. */}
                           <div style={cardStyles.metaGrid}>
                             {inv.poNumber && (
-                              <div>
+                              // A long PO takes two columns, so it reads on one line.
+                              <div
+                                style={
+                                  inv.poNumber.length > 12 ? { gridColumn: "span 2" } : undefined
+                                }
+                              >
                                 <span style={cardStyles.metaLabel}>PO</span>
                                 <span style={cardStyles.metaValue}>{inv.poNumber}</span>
                               </div>
@@ -2910,9 +2871,9 @@ const styles = {
     justifyContent: "space-between",
     alignItems: "center",
     flexWrap: "wrap",
-    gap: "0.75rem",
-    marginBottom: "1rem",
-    padding: "0.65rem 1rem",
+    gap: "0.5rem 0.75rem",
+    marginBottom: "0.6rem",
+    padding: "0.35rem 0.5rem 0.35rem 0.85rem",
     borderRadius: 10,
     border: "1px solid #e3f2fd",
     backgroundColor: "#f8faff",

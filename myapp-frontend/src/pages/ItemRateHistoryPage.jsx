@@ -1,4 +1,5 @@
 import ListFilters from "../Components/ListFilters";
+import HeaderCompanyPicker from "../Components/HeaderCompanyPicker";
 import RecordsViewport from "../Components/RecordsViewport";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import RichText from "../Components/RichText";
@@ -7,7 +8,6 @@ import { getItemRateHistory } from "../api/invoiceApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getClientsByCompany } from "../api/clientApi";
 import EditBillForm from "../Components/EditBillForm";
-import { dropdownStyles } from "../theme";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
 import Pagination from "../Components/Pagination";
 import { useCompany } from "../contexts/CompanyContext";
@@ -176,6 +176,15 @@ export default function ItemRateHistoryPage() {
             </p>
           </div>
         </div>
+        <div data-header-actions="">
+          {!loadingCompanies && (
+            <HeaderCompanyPicker
+              companies={companies}
+              selectedCompany={selectedCompany}
+              onChange={setSelectedCompany}
+            />
+          )}
+        </div>
       </div>
 
       {loadingCompanies ? (
@@ -184,35 +193,6 @@ export default function ItemRateHistoryPage() {
         </div>
       ) : companies.length > 0 ? (
         <>
-          {/* Company picker */}
-          {companies.length > 1 && (
-            <div
-              style={{
-                marginBottom: "1rem",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.75rem",
-              }}
-            >
-              <MdBusiness size={20} color={colors.blue} />
-              <select
-                style={dropdownStyles.base}
-                value={selectedCompany?.id || ""}
-                onChange={(e) =>
-                  setSelectedCompany(
-                    companies.find((c) => parseInt(c.id) === parseInt(e.target.value)),
-                  )
-                }
-              >
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.brandName || c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
           {/* Filters */}
           {selectedCompany && (
             <ListFilters>

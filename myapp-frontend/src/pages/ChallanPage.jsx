@@ -1,4 +1,6 @@
 import ListFilters from "../Components/ListFilters";
+import MoreFilters from "../Components/MoreFilters";
+import HeaderCompanyPicker from "../Components/HeaderCompanyPicker";
 import { printWhenImagesReady } from "../utils/printDocument";
 import RecordsViewport from "../Components/RecordsViewport";
 import CommercialCostDialog from "../Components/CommercialCostDialog";
@@ -41,7 +43,6 @@ import { mergeTemplate } from "../utils/templateEngine";
 import { defaultChallanTemplate } from "../utils/defaultTemplates";
 import { exportToPdf, prepareLetterheadPrint } from "../utils/exportUtils";
 import { saveAs } from "file-saver";
-import { dropdownStyles } from "../theme";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -517,23 +518,32 @@ export default function ChallanPage() {
             </div>
             <DocumentLinesHeaderLink />
           </div>
-          {companies.length > 0 && (
-            <div style={{ display: "flex", gap: "0.5rem" }}>
-              {canCreate && (
-                <button style={styles.addBtn} onClick={handleAddChallan}>
-                  <MdAdd size={18} /> New Challan
-                </button>
-              )}
-              {canCreate && has("poformats.import.create") && (
-                <button
-                  style={{ ...styles.addBtn, backgroundColor: "#00897b" }}
-                  onClick={() => selectedCompany && setShowImport(true)}
-                >
-                  <MdUploadFile size={18} /> Import PO
-                </button>
-              )}
-            </div>
-          )}
+          <div data-header-actions="">
+            {!loadingCompanies && (
+              <HeaderCompanyPicker
+                companies={companies}
+                selectedCompany={selectedCompany}
+                onChange={setSelectedCompany}
+              />
+            )}
+            {companies.length > 0 && (
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                {canCreate && (
+                  <button style={styles.addBtn} onClick={handleAddChallan}>
+                    <MdAdd size={18} /> New Challan
+                  </button>
+                )}
+                {canCreate && has("poformats.import.create") && (
+                  <button
+                    style={{ ...styles.addBtn, backgroundColor: "#00897b" }}
+                    onClick={() => selectedCompany && setShowImport(true)}
+                  >
+                    <MdUploadFile size={18} /> Import PO
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {loadingCompanies ? (
@@ -545,34 +555,6 @@ export default function ChallanPage() {
           </div>
         ) : companies.length > 0 ? (
           <>
-            {companies.length > 1 && (
-              <div
-                style={{
-                  marginBottom: "1rem",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.75rem",
-                }}
-              >
-                <MdBusiness size={20} color={colors.blue} />
-                <select
-                  style={dropdownStyles.base}
-                  value={selectedCompany?.id || ""}
-                  onChange={(e) =>
-                    setSelectedCompany(
-                      companies.find((c) => parseInt(c.id) === parseInt(e.target.value)),
-                    )
-                  }
-                >
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.brandName || c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
             {/* Filters + view-mode toggle */}
             {selectedCompany && (
               <ListFilters>
@@ -587,32 +569,6 @@ export default function ChallanPage() {
                       onChange={handleFilterChange(setSearch)}
                     />
                   </div>
-                  {has("bills.costs.view") && (
-                    <select
-                      aria-label="Costing status"
-                      className="filter-select"
-                      value={costingStatus}
-                      onChange={handleFilterChange(setCostingStatus)}
-                    >
-                      <option value="">All costing statuses</option>
-                      <option value="not-costed">Not costed</option>
-                      <option value="partial">Partially costed</option>
-                      <option value="full">Fully costed</option>
-                    </select>
-                  )}
-                  <select
-                    className="filter-select"
-                    value={statusFilter}
-                    onChange={handleFilterChange(setStatusFilter)}
-                  >
-                    <option value="">All Status</option>
-                    <option value="Pending">Pending</option>
-                    <option value="Imported">Imported</option>
-                    <option value="No PO">No PO</option>
-                    <option value="Setup Required">Setup Required</option>
-                    <option value="Invoiced">Billed</option>
-                    <option value="Cancelled">Cancelled</option>
-                  </select>
                   {canViewClients && (
                     <select
                       className="filter-select"
@@ -627,18 +583,48 @@ export default function ChallanPage() {
                       ))}
                     </select>
                   )}
-                  {has("salesorders.list.view") && (
-                    <div style={{ minWidth: 190, maxWidth: 240 }}>
-                      <SearchableSelect
-                        items={orderOptions}
-                        value={salesOrderFilter}
-                        onChange={(id) => handleSalesOrderFilter(id)}
-                        labelKey="label"
-                        searchKeys={["label"]}
-                        placeholder="All Sales Orders"
-                      />
-                    </div>
-                  )}
+                  <MoreFilters
+                    active={[costingStatus, statusFilter, salesOrderFilter].filter(Boolean).length}
+                  >
+                    {has("bills.costs.view") && (
+                      <select
+                        aria-label="Costing status"
+                        className="filter-select"
+                        value={costingStatus}
+                        onChange={handleFilterChange(setCostingStatus)}
+                      >
+                        <option value="">All costing statuses</option>
+                        <option value="not-costed">Not costed</option>
+                        <option value="partial">Partially costed</option>
+                        <option value="full">Fully costed</option>
+                      </select>
+                    )}
+                    <select
+                      className="filter-select"
+                      value={statusFilter}
+                      onChange={handleFilterChange(setStatusFilter)}
+                    >
+                      <option value="">All Status</option>
+                      <option value="Pending">Pending</option>
+                      <option value="Imported">Imported</option>
+                      <option value="No PO">No PO</option>
+                      <option value="Setup Required">Setup Required</option>
+                      <option value="Invoiced">Billed</option>
+                      <option value="Cancelled">Cancelled</option>
+                    </select>
+                    {has("salesorders.list.view") && (
+                      <div>
+                        <SearchableSelect
+                          items={orderOptions}
+                          value={salesOrderFilter}
+                          onChange={(id) => handleSalesOrderFilter(id)}
+                          labelKey="label"
+                          searchKeys={["label"]}
+                          placeholder="All Sales Orders"
+                        />
+                      </div>
+                    )}
+                  </MoreFilters>
                   <div className="filter-date-group">
                     <input
                       type="date"
@@ -661,14 +647,7 @@ export default function ChallanPage() {
                       Clear
                     </button>
                   )}
-                  <div
-                    style={{
-                      marginLeft: "auto",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.5rem",
-                    }}
-                  >
+                  <div className="filters-row-end">
                     <PrintTemplateSelect picker={tplPicker} />
                     {isBigScreen && (
                       <ViewModeToggle

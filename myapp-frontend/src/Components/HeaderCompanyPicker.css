@@ -1,0 +1,51 @@
+/* The right-hand side of a list screen's title row: company picker, then the page's own buttons. */
+[data-header-actions] {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.header-company-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.header-company-picker select {
+  width: 200px !important;
+  min-width: 0 !important;
+  max-width: 200px !important;
+  height: var(--admin-control-height, 36px);
+  padding-block: 0 !important;
+}
+/* Desktop: the title keeps its place and the actions wrap on their own side,
+   instead of the whole action group dropping below the title. */
+@media (min-width: 768px) {
+  [data-admin-page-header]:has(> [data-header-actions]) {
+    flex-wrap: nowrap !important;
+  }
+  [data-header-actions] {
+    flex: 0 1 auto;
+  }
+  [data-header-actions] button {
+    padding-inline: 14px !important;
+    white-space: nowrap;
+  }
+}
+@media (max-width: 767px) {
+  [data-header-actions] {
+    width: 100%;
+    justify-content: stretch;
+  }
+  [data-header-actions] > .header-company-picker {
+    flex: 1 1 100%;
+  }
+  .header-company-picker select {
+    flex: 1;
+    width: auto !important;
+    max-width: none !important;
+    height: 44px;
+  }
+}

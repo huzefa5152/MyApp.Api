@@ -164,7 +164,12 @@ export default function SearchableSelect({
       {open &&
         triggerRect &&
         createPortal(
-          <div ref={wrapperRef} style={styles.dropdown(triggerRect)} onKeyDown={onKeyDown}>
+          <div
+            ref={wrapperRef}
+            data-floating=""
+            style={styles.dropdown(triggerRect)}
+            onKeyDown={onKeyDown}
+          >
             <div style={styles.searchRow}>
               <MdSearch size={16} style={styles.searchIcon} />
               <input

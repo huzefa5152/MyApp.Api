@@ -1,4 +1,5 @@
 import ListFilters from "../Components/ListFilters";
+import HeaderCompanyPicker from "../Components/HeaderCompanyPicker";
 import RecordsViewport from "../Components/RecordsViewport";
 import DocumentLinesNavigation, {
   DocumentLinesHeaderLink,
@@ -7,7 +8,6 @@ import { useState, useEffect, useCallback } from "react";
 import {
   MdShoppingCart,
   MdAdd,
-  MdBusiness,
   MdSearch,
   MdEdit,
   MdDelete,
@@ -24,7 +24,7 @@ import {
 } from "../api/purchaseBillApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { getAwaitingPurchase } from "../api/invoiceApi";
-import { dropdownStyles, cardStyles, cardHover } from "../theme";
+import { cardStyles, cardHover } from "../theme";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
 import Pagination from "../Components/Pagination";
 import { useCompany } from "../contexts/CompanyContext";
@@ -255,53 +255,62 @@ export default function PurchaseBillsPage() {
             </div>
             <DocumentLinesHeaderLink />
           </div>
-          {companies.length > 0 && canCreate && (
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-              <button
-                style={styles.altBtn}
-                onClick={async () => {
-                  setShowSalePicker(true);
-                  setLoadingAwaiting(true);
-                  setPickerSearch("");
-                  try {
-                    const { data } = await getAwaitingPurchase(selectedCompany.id);
-                    setAwaitingBills(data || []);
-                  } catch {
-                    setAwaitingBills([]);
-                    notify("Failed to load sale bills awaiting procurement.", "error");
-                  } finally {
-                    setLoadingAwaiting(false);
-                  }
-                }}
-              >
-                <MdReceipt size={16} /> Purchase Against Sale Bill
-              </button>
-              <button
-                style={styles.addBtn}
-                onClick={() => {
-                  setEditingId(null);
-                  setPrefillFromInvoiceId(null);
-                  setStartLocal(true);
-                  setViewOnly(false);
-                  setShowForm(true);
-                }}
-              >
-                <MdAdd size={18} /> New Local Purchase
-              </button>
-              <button
-                style={styles.addBtn}
-                onClick={() => {
-                  setEditingId(null);
-                  setPrefillFromInvoiceId(null);
-                  setStartLocal(false);
-                  setViewOnly(false);
-                  setShowForm(true);
-                }}
-              >
-                <MdAdd size={18} /> New Purchase Bill
-              </button>
-            </div>
-          )}
+          <div data-header-actions="">
+            {!loadingCompanies && (
+              <HeaderCompanyPicker
+                companies={companies}
+                selectedCompany={selectedCompany}
+                onChange={setSelectedCompany}
+              />
+            )}
+            {companies.length > 0 && canCreate && (
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                <button
+                  style={styles.altBtn}
+                  onClick={async () => {
+                    setShowSalePicker(true);
+                    setLoadingAwaiting(true);
+                    setPickerSearch("");
+                    try {
+                      const { data } = await getAwaitingPurchase(selectedCompany.id);
+                      setAwaitingBills(data || []);
+                    } catch {
+                      setAwaitingBills([]);
+                      notify("Failed to load sale bills awaiting procurement.", "error");
+                    } finally {
+                      setLoadingAwaiting(false);
+                    }
+                  }}
+                >
+                  <MdReceipt size={16} /> Purchase Against Sale Bill
+                </button>
+                <button
+                  style={styles.addBtn}
+                  onClick={() => {
+                    setEditingId(null);
+                    setPrefillFromInvoiceId(null);
+                    setStartLocal(true);
+                    setViewOnly(false);
+                    setShowForm(true);
+                  }}
+                >
+                  <MdAdd size={18} /> New Local Purchase
+                </button>
+                <button
+                  style={styles.addBtn}
+                  onClick={() => {
+                    setEditingId(null);
+                    setPrefillFromInvoiceId(null);
+                    setStartLocal(false);
+                    setViewOnly(false);
+                    setShowForm(true);
+                  }}
+                >
+                  <MdAdd size={18} /> New Purchase Bill
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {loadingCompanies ? (
@@ -312,34 +321,6 @@ export default function PurchaseBillsPage() {
           <div style={styles.empty}>No companies available.</div>
         ) : (
           <>
-            {companies.length > 1 && (
-              <div
-                style={{
-                  marginBottom: "1rem",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.75rem",
-                }}
-              >
-                <MdBusiness size={20} color={colors.blue} />
-                <select
-                  style={dropdownStyles.base}
-                  value={selectedCompany?.id || ""}
-                  onChange={(e) =>
-                    setSelectedCompany(
-                      companies.find((c) => parseInt(c.id) === parseInt(e.target.value)),
-                    )
-                  }
-                >
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.brandName || c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
             {selectedCompany && (
               <ListFilters>
                 <div className="filters-row">
@@ -494,54 +475,72 @@ export default function PurchaseBillsPage() {
                                   onClick={() => setAttachTarget(b)}
                                 />
                               </div>
-                              <p style={cardStyles.text}>
-                                <strong>Supplier:</strong> {b.supplierName}
-                              </p>
-                              {
-                                <p style={cardStyles.text}>
-                                  <strong>Source:</strong>{" "}
-                                  {b.source === "auto-cost"
-                                    ? "From challan / bill costs"
-                                    : b.purchaseCategory === "LocalDirect"
-                                      ? "Local direct purchase"
-                                      : b.source === "fbr-import"
-                                        ? "FBR import"
-                                        : "Inventory purchase"}
-                                </p>
-                              }
-                              <p style={cardStyles.text}>
-                                <strong>Date:</strong> {new Date(b.date).toLocaleDateString()}
-                              </p>
-                              <p style={cardStyles.text}>
-                                <strong>Grand Total:</strong> Rs. {b.grandTotal?.toLocaleString()}
-                              </p>
-                              {b.supplierIRN && (
-                                <p
-                                  style={{
-                                    ...cardStyles.text,
-                                    fontFamily: "monospace",
-                                    fontSize: "0.74rem",
-                                    color: colors.textSecondary,
-                                    wordBreak: "break-all",
-                                  }}
-                                >
-                                  IRN: {b.supplierIRN}
-                                </p>
-                              )}
-                              <p style={{ ...cardStyles.text, fontSize: "0.74rem" }}>
-                                {b.items?.length || 0} items · Status: {b.reconciliationStatus}
-                              </p>
-                              {canViewPaymentStatus && b.paymentStatus && (
-                                <div style={{ marginTop: 6 }}>
+                              <p style={cardStyles.cardLead}>{b.supplierName || "—"}</p>
+                              <div style={cardStyles.metaGrid}>
+                                <div>
+                                  <span style={cardStyles.metaLabel}>Date</span>
+                                  <span style={cardStyles.metaValue}>
+                                    {new Date(b.date).toLocaleDateString()}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span style={cardStyles.metaLabel}>Lines</span>
+                                  <span style={cardStyles.metaValue}>
+                                    {b.items?.length || 0} item{b.items?.length === 1 ? "" : "s"}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span style={cardStyles.metaLabel}>Status</span>
+                                  <span style={cardStyles.metaValue}>{b.reconciliationStatus}</span>
+                                </div>
+                                <div>
+                                  <span style={cardStyles.metaLabel}>Source</span>
+                                  <span style={cardStyles.metaValue}>
+                                    {b.source === "auto-cost"
+                                      ? "From challan / bill costs"
+                                      : b.purchaseCategory === "LocalDirect"
+                                        ? "Local direct purchase"
+                                        : b.source === "fbr-import"
+                                          ? "FBR import"
+                                          : "Inventory purchase"}
+                                  </span>
+                                </div>
+                                {b.supplierIRN && (
+                                  <div style={{ gridColumn: "1 / -1" }}>
+                                    <span style={cardStyles.metaLabel}>IRN</span>
+                                    <span
+                                      style={{
+                                        ...cardStyles.metaValue,
+                                        fontFamily: "monospace",
+                                        fontSize: "0.74rem",
+                                        wordBreak: "break-all",
+                                      }}
+                                    >
+                                      {b.supplierIRN}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                              <div style={{ ...cardStyles.amountBox, alignItems: "center" }}>
+                                <span style={{ display: "flex", flexDirection: "column" }}>
+                                  <span style={cardStyles.amountLabel}>Grand Total</span>
+                                  <span style={cardStyles.amount}>
+                                    Rs. {b.grandTotal?.toLocaleString()}
+                                  </span>
+                                </span>
+                                {canViewPaymentStatus && b.paymentStatus && (
                                   <PaymentStatusBadge
                                     status={b.paymentStatus}
                                     balanceDue={b.balanceDue}
                                     daysOverdue={b.daysOverdue}
                                   />
-                                </div>
-                              )}
+                                )}
+                              </div>
                             </div>
-                            <div style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}>
+                            <div
+                              className="pb-card-actions"
+                              style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}
+                            >
                               <button
                                 style={btnView}
                                 onClick={() => {

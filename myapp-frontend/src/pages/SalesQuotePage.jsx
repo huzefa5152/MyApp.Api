@@ -7,7 +7,6 @@ import { useState, useEffect, useCallback } from "react";
 import {
   MdRequestQuote,
   MdAdd,
-  MdBusiness,
   MdSearch,
   MdPrint,
   MdPictureAsPdf,
@@ -42,7 +41,7 @@ import { exportToPdf } from "../utils/exportUtils";
 import { defaultQuoteTemplate } from "../utils/salesDocTemplates";
 import { usePrintTemplates } from "../hooks/usePrintTemplates";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
-import { dropdownStyles } from "../theme";
+import HeaderCompanyPicker from "../Components/HeaderCompanyPicker";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -279,64 +278,45 @@ export default function SalesQuotePage() {
             </div>
             <DocumentLinesHeaderLink />
           </div>
-          {companies.length > 0 && (canCreate || canImportPo) && (
-            <div style={{ display: "flex", gap: "0.5rem" }}>
-              {canCreate && (
-                <button
-                  style={st.addBtn}
-                  onClick={() => selectedCompany && (setEditQuote(null), setShowForm(true))}
-                >
-                  <MdAdd size={18} /> New Quote
-                </button>
-              )}
-              {canImportPo && (
-                <button
-                  style={{
-                    ...st.addBtn,
-                    background: colors.teal,
-                    boxShadow: "0 4px 14px rgba(0,137,123,0.25)",
-                  }}
-                  onClick={() => selectedCompany && setShowImport(true)}
-                >
-                  <MdUploadFile size={18} /> Import Enquiry / Demand
-                </button>
-              )}
-            </div>
-          )}
+          <div data-header-actions="">
+            {!loadingCompanies && (
+              <HeaderCompanyPicker
+                companies={companies}
+                selectedCompany={selectedCompany}
+                onChange={setSelectedCompany}
+              />
+            )}
+            {companies.length > 0 && (canCreate || canImportPo) && (
+              <>
+                {canCreate && (
+                  <button
+                    style={st.addBtn}
+                    onClick={() => selectedCompany && (setEditQuote(null), setShowForm(true))}
+                  >
+                    <MdAdd size={18} /> New Quote
+                  </button>
+                )}
+                {canImportPo && (
+                  <button
+                    style={{
+                      ...st.addBtn,
+                      background: colors.teal,
+                      boxShadow: "0 4px 14px rgba(0,137,123,0.25)",
+                    }}
+                    onClick={() => selectedCompany && setShowImport(true)}
+                  >
+                    <MdUploadFile size={18} /> Import Enquiry / Demand
+                  </button>
+                )}
+              </>
+            )}
+          </div>
         </div>
 
         {loadingCompanies ? (
           <Spinner label="Loading companies..." />
         ) : companies.length > 0 ? (
           <>
-            {companies.length > 1 && (
-              <div
-                style={{
-                  marginBottom: "1rem",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.75rem",
-                  flexWrap: "wrap",
-                }}
-              >
-                <MdBusiness size={20} color={colors.blue} />
-                <select
-                  style={dropdownStyles.base}
-                  value={selectedCompany?.id || ""}
-                  onChange={(e) =>
-                    setSelectedCompany(
-                      companies.find((c) => parseInt(c.id) === parseInt(e.target.value)),
-                    )
-                  }
-                >
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.brandName || c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
             {selectedCompany && (
               <ListFilters>
                 <div className="filters-row">
@@ -662,7 +642,7 @@ const st = {
   },
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(290px, 100%), 1fr))",
     gap: "1rem",
   },
   card: {

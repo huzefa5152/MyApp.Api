@@ -23,3 +23,19 @@
   height: auto !important;
   margin-left: 0 !important;
 }
+/* Phones: less air above the action row, so more cards fit a screen. */
+@media (max-width: 767px) {
+  .invoice-card-actions {
+    margin-top: 10px !important;
+    padding-top: 10px !important;
+  }
+}
+
+/* The FBR and documents bulk bars are one slim strip: their buttons are
+   compact on a pointer screen, full-size on touch. */
+@media (pointer: fine) {
+  .invoice-bulk-bar button {
+    min-height: 32px !important;
+    padding-block: 0.3rem !important;
+  }
+}

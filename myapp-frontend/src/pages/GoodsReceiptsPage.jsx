@@ -1,4 +1,5 @@
 import ListFilters from "../Components/ListFilters";
+import HeaderCompanyPicker from "../Components/HeaderCompanyPicker";
 import RecordsViewport from "../Components/RecordsViewport";
 import DocumentLinesNavigation, {
   DocumentLinesHeaderLink,
@@ -7,7 +8,6 @@ import { useState, useEffect, useCallback } from "react";
 import {
   MdInventory2,
   MdAdd,
-  MdBusiness,
   MdSearch,
   MdEdit,
   MdDelete,
@@ -21,7 +21,7 @@ import {
   getGoodsReceiptPrintData,
 } from "../api/goodsReceiptApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
-import { dropdownStyles, cardStyles, cardHover } from "../theme";
+import { cardStyles, cardHover } from "../theme";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
 import Pagination from "../Components/Pagination";
 import { useCompany } from "../contexts/CompanyContext";
@@ -210,17 +210,26 @@ export default function GoodsReceiptsPage() {
             </div>
             <DocumentLinesHeaderLink />
           </div>
-          {companies.length > 0 && canCreate && (
-            <button
-              style={styles.addBtn}
-              onClick={() => {
-                setEditingId(null);
-                setShowForm(true);
-              }}
-            >
-              <MdAdd size={18} /> New Receipt
-            </button>
-          )}
+          <div data-header-actions="">
+            {!loadingCompanies && (
+              <HeaderCompanyPicker
+                companies={companies}
+                selectedCompany={selectedCompany}
+                onChange={setSelectedCompany}
+              />
+            )}
+            {companies.length > 0 && canCreate && (
+              <button
+                style={styles.addBtn}
+                onClick={() => {
+                  setEditingId(null);
+                  setShowForm(true);
+                }}
+              >
+                <MdAdd size={18} /> New Receipt
+              </button>
+            )}
+          </div>
         </div>
 
         {loadingCompanies ? (
@@ -231,34 +240,6 @@ export default function GoodsReceiptsPage() {
           <div style={styles.empty}>No companies available.</div>
         ) : (
           <>
-            {companies.length > 1 && (
-              <div
-                style={{
-                  marginBottom: "1rem",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.75rem",
-                }}
-              >
-                <MdBusiness size={20} color={colors.blue} />
-                <select
-                  style={dropdownStyles.base}
-                  value={selectedCompany?.id || ""}
-                  onChange={(e) =>
-                    setSelectedCompany(
-                      companies.find((c) => parseInt(c.id) === parseInt(e.target.value)),
-                    )
-                  }
-                >
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.brandName || c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
             {selectedCompany && (
               <ListFilters>
                 <div className="filters-row">
