@@ -763,6 +763,12 @@ body.dl-body--locked {
   }
 }
 
+/* List screens: as many record cards per row as the width allows. */
+.records-viewport .card-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(290px, 100%), 1fr));
+  gap: 0.85rem;
+}
+
 /* ---------- User Cards Grid ---------- */
 .user-cards-grid {
   display: grid;
@@ -777,23 +783,36 @@ body.dl-body--locked {
 }
 
 /* ---------- Page Filters ---------- */
+/* One filter bar for every list screen: a white strip of equal-height
+   controls. A filter that is set shows in the brand blue, so the operator
+   can see at a glance why a list is shorter than expected. */
 .filters-row {
+  --filter-h: var(--admin-control-height, 36px);
+  --filter-line: var(--k-line-strong);
+  --filter-line-hover: var(--k-muted);
+  --filter-ink: var(--k-ink);
+  --filter-muted: var(--k-muted);
+  --filter-accent: var(--k-blue);
+  --filter-ring: color-mix(in srgb, var(--k-blue) 16%, transparent);
+  --filter-active-bg: var(--k-info-bg);
+  --filter-active-line: var(--k-info-line);
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 8px;
   align-items: center;
-  margin-bottom: 1.25rem;
-  padding: 0.5rem 0.75rem;
-  background-color: var(--k-surface-2);
-  border-radius: var(--k-radius);
+  margin-bottom: 12px;
+  padding: 8px;
+  background-color: var(--k-surface);
+  border-radius: 10px;
   border: 1px solid var(--k-line);
+  box-shadow: 0 1px 2px rgba(16, 32, 64, 0.04);
 }
 
 .filter-search-wrap {
   position: relative;
   flex: 1 1 160px;
-  min-width: 120px;
-  max-width: 240px;
+  min-width: 140px;
+  max-width: 340px;
 }
 
 /* Wider search variant for pages where free-text is the primary filter
@@ -801,74 +820,153 @@ body.dl-body--locked {
    flex value — so the mobile column-flex media query can correctly
    collapse it back to 100% width without an !important fight. */
 .filter-search-wrap--wide {
-  flex: 1.6 1 220px;
-  max-width: 320px;
+  flex: 1.6 1 240px;
+  max-width: 340px;
 }
 
 .filter-search-icon {
   position: absolute;
-  left: 8px;
+  left: 10px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--k-muted);
+  color: var(--filter-muted, #6b7a8c);
   pointer-events: none;
+}
+
+.filter-search-input,
+.filter-select,
+.filter-date-input {
+  height: var(--filter-h, 36px);
+  box-sizing: border-box;
+  border-radius: 8px;
+  border: 1px solid var(--filter-line, #d5dde8);
+  font-size: 0.8rem;
+  color: var(--filter-ink, #1a2332);
+  background-color: var(--k-surface);
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .filter-search-input {
   width: 100%;
-  box-sizing: border-box;
-  padding: 0.4rem 0.6rem 0.4rem 1.8rem;
-  border-radius: var(--k-r-sm);
-  border: 1px solid var(--k-line-strong);
-  font-size: var(--k-fs-sm);
-  color: var(--k-ink);
-  background-color: var(--k-surface);
-  outline: none;
+  padding: 0 0.7rem 0 2rem;
+  background-color: var(--k-input-bg, var(--k-surface-2));
+}
+.filter-search-input::placeholder {
+  color: var(--filter-muted, #6b7a8c);
 }
 
 .filter-select {
-  padding: 0.4rem 0.6rem;
-  border-radius: var(--k-r-sm);
-  border: 1px solid var(--k-line-strong);
-  font-size: var(--k-fs-sm);
-  color: var(--k-ink);
-  background-color: var(--k-surface);
-  outline: none;
+  padding: 0 1.9rem 0 0.7rem;
   cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7a8c' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.65rem center;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+/* Beats the admin-wide select width rule, so filters stay on one row. */
+body.admin-ui .filters-row .filter-select {
+  max-width: 190px !important;
+}
+/* Template picker and view switch sit at the end of the same row. */
+.filters-row-end {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  margin-left: auto;
+}
+body.admin-ui .filters-row .print-template-picker .filter-select {
+  max-width: 170px !important;
 }
 
+.filter-search-input:hover,
+.filter-select:hover,
+.filter-date-group:hover {
+  border-color: var(--filter-line-hover, #aebdd1);
+}
+
+body.admin-ui .filter-search-input:focus-visible,
+body.admin-ui .filter-select:focus-visible,
+body.admin-ui .filter-date-input:focus-visible,
+.filter-search-input:focus,
+.filter-select:focus {
+  outline: none !important;
+  border-color: var(--filter-accent, #0d47a1);
+  box-shadow: 0 0 0 3px var(--filter-ring, rgba(13, 71, 161, 0.14));
+  background-color: var(--k-surface);
+}
+
+/* A filter that is set: the operator sees which ones are narrowing the list. */
+.filter-search-input:not(:placeholder-shown),
+.filter-select:has(option:checked:not([value=""])) {
+  border-color: var(--filter-active-line, #8fb3e8);
+  background-color: var(--filter-active-bg, #f2f7ff);
+  color: var(--filter-accent, #0d47a1);
+  font-weight: 600;
+}
+
+/* From and To read as one field. */
 .filter-date-group {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
-}
-
-.filter-date-input {
-  padding: 0.4rem 0.4rem;
-  border-radius: var(--k-r-sm);
-  border: 1px solid var(--k-line-strong);
-  font-size: var(--k-fs-xs);
-  color: var(--k-ink);
+  height: var(--filter-h, 36px);
+  box-sizing: border-box;
+  padding: 0 4px;
+  border: 1px solid var(--filter-line, #d5dde8);
+  border-radius: 8px;
   background-color: var(--k-surface);
-  outline: none;
-  width: 130px;
+  transition: border-color 0.15s ease;
+}
+.filter-date-group:focus-within {
+  border-color: var(--filter-accent, #0d47a1);
+  box-shadow: 0 0 0 3px var(--filter-ring, rgba(13, 71, 161, 0.14));
+}
+.filter-date-input {
+  height: calc(var(--filter-h, 36px) - 2px);
+  min-height: 0 !important;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 0.3rem;
+  width: 114px;
+  font-size: 0.78rem;
+  background-color: transparent;
+}
+body.admin-ui .filter-date-input:focus-visible {
+  box-shadow: none;
 }
 
 .filter-date-sep {
-  color: var(--k-muted);
-  font-size: var(--k-fs-sm);
+  color: var(--filter-muted, #6b7a8c);
+  font-size: 0.8rem;
+  padding: 0 2px;
 }
 
 .filter-clear-btn {
-  padding: 0.35rem 0.7rem;
-  border-radius: var(--k-r-sm);
-  border: none;
-  background-color: var(--k-danger-bg-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--filter-h, 36px);
+  padding: 0 0.75rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background-color: transparent;
   color: var(--k-danger-ink);
-  font-size: var(--k-fs-xs);
+  font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  box-shadow: none;
+}
+.filter-clear-btn:hover {
+  background-color: var(--k-danger-bg-2);
+  border-color: var(--k-danger-line);
 }
 
 /* Mobile: stack filters vertically */
@@ -876,8 +974,8 @@ body.dl-body--locked {
   .filters-row {
     flex-direction: column;
     align-items: stretch;
-    gap: 0.4rem;
-    padding: 0.5rem;
+    gap: 8px;
+    padding: 8px;
   }
 
   .filter-search-wrap {
@@ -885,12 +983,16 @@ body.dl-body--locked {
     flex: 1 1 auto;
   }
 
-  .filter-select {
+  .filter-select,
+  body.admin-ui .filters-row .filter-select {
     width: 100%;
+    max-width: none !important;
   }
 
   .filter-date-group {
     width: 100%;
+    height: auto;
+    min-height: var(--filter-h, 36px);
   }
 
   .filter-date-input {
@@ -901,6 +1003,13 @@ body.dl-body--locked {
 
   .filter-clear-btn {
     align-self: flex-end;
+  }
+}
+
+/* Touch screens: every filter control is a full 44px target. */
+@media (pointer: coarse) {
+  .filters-row {
+    --filter-h: 44px;
   }
 }
 

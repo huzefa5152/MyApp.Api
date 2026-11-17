@@ -22,7 +22,9 @@ public partial class ReportService
             .Select(c => new { Name = c.BrandName ?? c.Name, c.InvoiceNumberPrefix })
             .FirstOrDefaultAsync();
         var invoiceQuery = _context.Invoices.AsNoTracking().AsSplitQuery()
-            .Include(i => i.Client).Include(i => i.Items)
+            .Include(i => i.Client)
+            .Include(i => i.Items).ThenInclude(it => it.ItemType)
+            .Include(i => i.Items).ThenInclude(it => it.Adjustment)
             .Where(i => i.CompanyId == companyId && i.Date >= from && i.Date < until
                 && i.NoteKind == 0 && !i.IsDemo);
         var inPeriod = await invoiceQuery.OrderBy(i => i.Date).ThenBy(i => i.Id).ToListAsync();
@@ -42,7 +44,8 @@ public partial class ReportService
         var invoices = inPeriod
             .Where(i => query.ClientId == null || i.ClientId == query.ClientId.Value)
             .Where(i => fbrStatus == null
-                || IsSubmittedToFbr(i) == (fbrStatus == InvoiceSalesDetailFilter.Submitted))
+                || (fbrStatus == InvoiceSalesDetailFilter.Ready ? IsReadyForFbr(i)
+                    : IsSubmittedToFbr(i) == (fbrStatus == InvoiceSalesDetailFilter.Submitted)))
             .ToList();
         var invoiceIds = invoices.Select(i => i.Id).ToList();
         var challans = await _context.DeliveryChallans.AsNoTracking()
@@ -68,6 +71,9 @@ public partial class ReportService
         {
             var rows = new List<InvoiceSalesDetailRowDto>();
             var items = inv.Items.OrderBy(i => i.Id).ToList();
+            // A bill line usually carries no HS code: the consultant classifies it on the
+            // Invoices screen. Show the code the line is filed under, else the line's own.
+            var filedHs = TaxFilingProjection.HsCodeByLine(inv);
             challansByInvoice.TryGetValue(inv.Id, out var challanNumbers);
             var status = inv.FbrCancelledAt.HasValue ? "FBR cancelled"
                 : BillTaxTreatment.IsOutsideFbr(inv.TaxTreatment) ? inv.TaxTreatment + " · Outside FBR"
@@ -101,7 +107,7 @@ public partial class ReportService
                     Buyer = inv.Client?.Name ?? "",
                     BuyerAddress = inv.Client?.Address ?? "",
                     BuyerNtn = inv.Client?.NTN ?? "",
-                    HsCode = item?.HSCode ?? "",
+                    HsCode = item == null ? "" : filedHs.GetValueOrDefault(item.Id) ?? item.HSCode ?? "",
                     Description = item == null ? "Imported bill — line detail unavailable"
                         : string.IsNullOrWhiteSpace(item.Description) ? item.ItemTypeName : item.Description,
                     Unit = item?.UOM ?? "",
@@ -138,6 +144,17 @@ public partial class ReportService
     /// <summary>The one split the report's counts and its FBR status filter share.</summary>
     private static bool IsSubmittedToFbr(Invoice i) =>
         i.FbrStatus == "Submitted" && i.FbrCancelledAt == null;
+
+    /// <summary>
+    /// Waiting for FBR: an FBR bill not yet sent, not excluded or cancelled, whose every
+    /// line is classified and still current. The Tax Sheet's test, inverted: a bill the
+    /// Tax Sheet lists is not ready, and a ready bill is not on the Tax Sheet.
+    /// </summary>
+    private bool IsReadyForFbr(Invoice i) =>
+        i.FbrSubmittedAt == null && i.FbrStatus != "Submitted" && !i.IsCancelled && i.FbrCancelledAt == null
+        && !i.IsFbrExcluded && !BillTaxTreatment.IsOutsideFbr(i.TaxTreatment) && i.Items.Any()
+        && !IsAdjustmentOutOfDate(i)
+        && TaxFilingProjection.Lines(i).All(item => !string.IsNullOrWhiteSpace(EffectiveHs(item)));
 
     public async Task<byte[]> GetInvoiceSalesDetailExcelAsync(int companyId,
         InvoiceSalesDetailQueryDto query)

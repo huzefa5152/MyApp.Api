@@ -12,6 +12,10 @@ export const getSalesReportExcel = (companyId, params = {}) =>
 // Original bill lines; identical filters for JSON and workbook output.
 export const getInvoiceSalesDetail = (companyId, params = {}, config = {}) =>
   http.get(`/reports/company/${companyId}/invoice-sales-detail`, { ...config, params });
+export const getReadyForFbr = (companyId, params = {}, config = {}) =>
+  http.get(`/reports/company/${companyId}/ready-for-fbr`, { ...config, params });
+export const getReadyForFbrExcel = (companyId, params = {}) =>
+  http.get(`/reports/company/${companyId}/ready-for-fbr/excel`, { params, responseType: "blob" });
 export const getInvoiceSalesDetailExcel = (companyId, params = {}) =>
   http.get(`/reports/company/${companyId}/invoice-sales-detail/excel`, {
     params,

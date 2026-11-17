@@ -82,6 +82,29 @@
   .records-viewport .card-grid {
     align-content: start;
   }
+  /* Compact list head: title row, one slim filter bar, then the records.
+     Spacing and sizes only; colours and controls are the page's own. */
+  body.admin-ui
+    .dl-main:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *))
+    [data-admin-page-header] {
+    margin-bottom: 10px !important;
+    gap: 8px 12px !important;
+  }
+  body.admin-ui
+    .dl-main:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *))
+    [data-admin-page-header]
+    :is(h1, h2) {
+    font-size: 1.3rem !important;
+    line-height: 1.2;
+  }
+  body.admin-ui
+    .dl-main:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *))
+    [data-admin-page-header]
+    :is(h1, h2)
+    + p {
+    font-size: 0.8rem !important;
+    margin-top: 1px !important;
+  }
 }
 @media screen and (max-width: 767px) {
   .dl-main:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *)) {
@@ -101,6 +124,78 @@
   .records-viewport {
     padding-right: 2px;
   }
+  /* Phone list header: title and its links wrap on one block, the page
+     actions share one row of equal buttons, so the first record starts
+     higher. Spacing only: colours, icons and buttons are the page's own. */
+  .dl-main:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *))
+    [data-admin-page-header]
+    > div:first-child {
+    flex-wrap: wrap;
+    gap: 6px 10px !important;
+    min-width: 0;
+  }
+  .dl-main:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *))
+    [data-admin-page-header]
+    > div:first-child
+    > div:not([data-admin-page-icon]) {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .dl-main:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *))
+    [data-admin-page-icon] {
+    width: 36px !important;
+    height: 36px !important;
+    border-radius: 10px !important;
+  }
+  .dl-main:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *))
+    [data-admin-page-icon]
+    svg {
+    width: 20px;
+    height: 20px;
+  }
+  .dl-main:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *))
+    [data-admin-page-header]
+    > div:last-child:not(:first-child) {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .dl-main:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *))
+    [data-admin-page-header]
+    > div:last-child:not(:first-child)
+    > :is(button, div) {
+    flex: 1 1 0;
+    min-width: max-content;
+  }
+  .dl-main:has([data-records-viewport]:not([data-admin-dialog] *):not([data-admin-backdrop] *))
+    [data-admin-page-header]
+    > div:last-child:not(:first-child)
+    button {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+    padding-inline: 12px !important;
+  }
+  .pb-card-actions > button {
+    min-height: 48px;
+  }
+}
+/* Purchase bill card: every action on one row of equal buttons, icon above
+   its label, instead of wrapping onto a second row. */
+.pb-card-actions {
+  display: grid !important;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 6px !important;
+}
+.pb-card-actions > button {
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px !important;
+  min-width: 0;
+  min-height: 42px;
+  padding: 5px 2px !important;
+  font-size: 0.72rem !important;
+  white-space: nowrap;
 }
 @media print {
   .records-viewport {

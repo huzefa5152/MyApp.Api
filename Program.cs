@@ -2010,6 +2010,33 @@ try
         END
     ");
 
+        // ── One-time copy (2026-11-13): reports.invoicedetail.* -> reports.readyforfbr.* ──
+        // Ready for FBR shipped under the Invoice Sales Detail keys and now has its own, so
+        // every role that could open it keeps it. Runs once, like the copy above.
+        db.Database.ExecuteSqlRaw(@"
+        IF NOT EXISTS (SELECT 1 FROM AuditLogs WHERE ExceptionType = 'PERM_COPY_READY_FOR_FBR_V1')
+        BEGIN
+            DECLARE @isdView INT = (SELECT Id FROM Permissions WHERE [Key] = 'reports.invoicedetail.view');
+            DECLARE @isdExport INT = (SELECT Id FROM Permissions WHERE [Key] = 'reports.invoicedetail.export');
+            DECLARE @rffView INT = (SELECT Id FROM Permissions WHERE [Key] = 'reports.readyforfbr.view');
+            DECLARE @rffExport INT = (SELECT Id FROM Permissions WHERE [Key] = 'reports.readyforfbr.export');
+            IF @isdView IS NOT NULL AND @isdExport IS NOT NULL AND @rffView IS NOT NULL AND @rffExport IS NOT NULL
+            BEGIN
+                INSERT INTO RolePermissions (RoleId, PermissionId)
+                SELECT rp.RoleId, @rffView FROM RolePermissions rp
+                WHERE rp.PermissionId = @isdView
+                  AND NOT EXISTS (SELECT 1 FROM RolePermissions x WHERE x.RoleId = rp.RoleId AND x.PermissionId = @rffView);
+                INSERT INTO RolePermissions (RoleId, PermissionId)
+                SELECT rp.RoleId, @rffExport FROM RolePermissions rp
+                WHERE rp.PermissionId = @isdExport
+                  AND NOT EXISTS (SELECT 1 FROM RolePermissions x WHERE x.RoleId = rp.RoleId AND x.PermissionId = @rffExport);
+                INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp])
+                VALUES ('Info', 'PERM_COPY_READY_FOR_FBR_V1', 'Permission grant copy applied once; an administrator''s later removal is kept.',
+                        'STARTUP', '/migrations/perm-copy-ready-for-fbr', 200, SYSUTCDATETIME());
+            END
+        END
+    ");
+
         // ── One-time perm grant: tenantaccess.manage.* → Administrator role ──
         // The new keys are inserted by RbacSeeder (it walks PermissionCatalog),
         // but RolePermissions is empty for them by default. Grant them to the

@@ -2,6 +2,7 @@ import CostingStatus from "./CostingStatus";
 import { canEditBilledDelivery } from "../utils/billedChallanEdit";
 import { isBillableChallan } from "../utils/challanBilling";
 import CardActions from "./CardActions";
+import "../pages/InvoiceCardActions.css";
 import { useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -316,23 +317,25 @@ export default function ChallanList({
                       <strong>Site:</strong> {c.site}
                     </p>
                   )}
-                  {c.deliveryDate && (
-                    <p style={styles.line}>
-                      <MdCalendarToday
-                        size={14}
-                        style={{ color: "var(--k-muted)", flexShrink: 0 }}
-                      />
-                      {new Date(c.deliveryDate).toLocaleDateString()}
-                    </p>
-                  )}
-                  <p
-                    style={{ ...styles.text, fontSize: "var(--k-fs-xs)", color: "var(--k-muted)" }}
-                  >
-                    {c.items?.length || 0} item{(c.items?.length || 0) !== 1 ? "s" : ""}
+                  {/* Date and item count share one line. */}
+                  <p style={{ ...styles.line, flexWrap: "wrap" }}>
+                    {c.deliveryDate && (
+                      <>
+                        <MdCalendarToday
+                          size={14}
+                          style={{ color: "var(--k-muted)", flexShrink: 0 }}
+                        />
+                        {new Date(c.deliveryDate).toLocaleDateString()}
+                        <span aria-hidden="true">·</span>
+                      </>
+                    )}
+                    <span style={{ fontSize: "var(--k-fs-xs)", color: "var(--k-muted)" }}>
+                      {c.items?.length || 0} item{(c.items?.length || 0) !== 1 ? "s" : ""}
+                    </span>
                   </p>
                 </div>
 
-                <CardActions style={styles.buttonGroup}>
+                <CardActions className="invoice-card-actions" style={styles.buttonGroup}>
                   <Button
                     data-primary
                     size="sm"

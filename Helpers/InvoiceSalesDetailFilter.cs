@@ -19,6 +19,8 @@ namespace MyApp.Api.Helpers
         public const int MaxSearchLength = 100;
         public const string Submitted = "submitted";
         public const string NotSubmitted = "notSubmitted";
+        /// <summary>Every line classified by the consultant and not yet sent: the work left to validate and submit.</summary>
+        public const string Ready = "ready";
 
         /// <summary>An operator-worded reason the query cannot run, or null.</summary>
         public static string? Validate(InvoiceSalesDetailQueryDto q)
@@ -60,7 +62,7 @@ namespace MyApp.Api.Helpers
             return ReportPeriod.Resolve(preset, q.From, q.To);
         }
 
-        /// <summary>"submitted" / "notSubmitted"; empty or "all" = no filter. False = not a status.</summary>
+        /// <summary>"submitted" / "notSubmitted" / "ready"; empty or "all" = no filter. False = not a status.</summary>
         public static bool TryParseFbrStatus(string? raw, out string? status)
         {
             status = null;
@@ -68,6 +70,7 @@ namespace MyApp.Api.Helpers
             if (v.Length == 0 || v.Equals("all", StringComparison.OrdinalIgnoreCase)) return true;
             if (v.Equals(Submitted, StringComparison.OrdinalIgnoreCase)) { status = Submitted; return true; }
             if (v.Equals(NotSubmitted, StringComparison.OrdinalIgnoreCase)) { status = NotSubmitted; return true; }
+            if (v.Equals(Ready, StringComparison.OrdinalIgnoreCase)) { status = Ready; return true; }
             return false;
         }
 

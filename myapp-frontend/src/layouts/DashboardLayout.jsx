@@ -250,6 +250,7 @@ export default function DashboardLayout() {
   const reportsKeys = [
     "reports.sales.view",
     "reports.invoicedetail.view",
+    "reports.readyforfbr.view",
     "reports.taxsheet.view",
     "reports.outstanding.view",
   ];
@@ -894,6 +895,17 @@ export default function DashboardLayout() {
                   <span>Invoice Sales Detail</span>
                 </NavLink>
               </Can>
+              <Can permission="reports.readyforfbr.view">
+                <NavLink
+                  to="/reports/ready-for-fbr"
+                  className={({ isActive }) =>
+                    "dl-subitem" + (isActive ? " dl-subitem--active" : "")
+                  }
+                >
+                  <MdFactCheck className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Ready for FBR</span>
+                </NavLink>
+              </Can>
               <Can permission="reports.taxsheet.view">
                 <NavLink
                   to="/reports/tax-sheet"
@@ -1316,6 +1328,8 @@ function getBreadcrumb(pathname) {
     "/fbr-import/purchase": "Purchases / FBR Purchase Import",
     "/item-types": "Configuration / Item Types",
     "/import-data": "Configuration / Import Data",
+    "/sales-quotes": "Sales / Sales Quotes",
+    "/sales-orders": "Sales / Sales Orders",
     "/challans": "Sales / Delivery Challans",
     "/email-workspace": "Email Workspace / Inbox",
     "/challans/import": "Sales / Import Challans",

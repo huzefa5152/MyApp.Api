@@ -14,10 +14,10 @@ export default function ViewModeToggle({ mode, onChange, ariaLabel = "View mode"
         aria-selected={mode === "card"}
         onClick={() => onChange("card")}
         className="sc-seg__btn"
+        aria-label="Cards"
         title="Card view — visual cards with full details per record"
       >
-        <MdViewModule size={16} />
-        <span>Cards</span>
+        <MdViewModule size={18} />
       </button>
       <button
         type="button"
@@ -25,10 +25,10 @@ export default function ViewModeToggle({ mode, onChange, ariaLabel = "View mode"
         aria-selected={mode === "table"}
         onClick={() => onChange("table")}
         className="sc-seg__btn"
+        aria-label="Table"
         title="Table view — dense rows for fast scanning of many records"
       >
-        <MdViewList size={16} />
-        <span>Table</span>
+        <MdViewList size={18} />
       </button>
     </div>
   );

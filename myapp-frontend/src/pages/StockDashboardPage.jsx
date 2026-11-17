@@ -532,15 +532,23 @@ function CompanyStockDashboard() {
                                 </span>
                               </div>
                             </div>
-                            {canViewMovements && (
-                              <Button
-                                variant="ghost"
-                                icon={isOpen ? MdExpandMore : MdChevronRight}
-                                style={cardWideBtn}
-                                onClick={() => toggleDrill(r.itemTypeId)}
-                              >
-                                {isOpen ? "Hide movements" : "View movements"}
-                              </Button>
+                            {(canViewMovements || canAdjust) && (
+                              <div className="stock-card__actions">
+                                {canViewMovements && (
+                                  <Button
+                                    variant="ghost"
+                                    icon={isOpen ? MdExpandMore : MdChevronRight}
+                                    onClick={() => toggleDrill(r.itemTypeId)}
+                                  >
+                                    {isOpen ? "Hide movements" : "View movements"}
+                                  </Button>
+                                )}
+                                {canAdjust && (
+                                  <Button icon={MdSwapHoriz} onClick={() => openAdjustForRow(r)}>
+                                    Adjustment
+                                  </Button>
+                                )}
+                              </div>
                             )}
                             {isOpen && canViewMovements && (
                               <DrillPanel
@@ -548,15 +556,6 @@ function CompanyStockDashboard() {
                                 loading={drillLoading === r.itemTypeId}
                                 uom={r.uom}
                               />
-                            )}
-                            {canAdjust && (
-                              <Button
-                                icon={MdSwapHoriz}
-                                style={cardWideBtn}
-                                onClick={() => openAdjustForRow(r)}
-                              >
-                                Adjustment
-                              </Button>
                             )}
                           </div>
                         );
@@ -806,7 +805,6 @@ const OUT_COLOR = "var(--k-danger-ink)";
 const BAND_BG = "#f0f7ff";
 
 const smallCell = { fontSize: "var(--k-font-sm)" };
-const cardWideBtn = { width: "100%" };
 
 const drillStyles = {
   wrap: { padding: "0.6rem 0.85rem 0.85rem" },

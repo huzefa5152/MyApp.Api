@@ -389,6 +389,8 @@ namespace MyApp.Api.Helpers
             new("reports.sales.printinvoice","Reports", "Sales", "Print Invoice", "Download Tax Invoice PDFs from the Sales report (single row, or every invoice in the period)"),
             new("reports.invoicedetail.view", "Reports", "Invoice Sales Detail", "View", "View original bill lines and their saved tax and FBR status"),
             new("reports.invoicedetail.export", "Reports", "Invoice Sales Detail", "Export", "Export Invoice Sales Detail to Excel"),
+            new("reports.readyforfbr.view",   "Reports", "Ready for FBR", "View",   "View the Ready for FBR report (classified bills not yet sent: the original bill beside what will be filed)"),
+            new("reports.readyforfbr.export", "Reports", "Ready for FBR", "Export", "Export the Ready for FBR report to Excel"),
             new("reports.taxsheet.view",    "Reports", "Tax Sheet", "View",   "View the Tax Sheet (invoice lines still missing a valid HS code, for the tax consultant)"),
             new("reports.taxsheet.export",  "Reports", "Tax Sheet", "Export", "Export the Tax Sheet to Excel"),
             new("reports.taxsheet.transfer","Reports", "Tax Sheet", "Transfer", "Move the still-unclassified invoices of a period to a new date (defer to next month); changes invoice dates"),

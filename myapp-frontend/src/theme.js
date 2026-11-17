@@ -80,7 +80,7 @@ export const cardStyles = {
     alignItems: "center",
     justifyContent: "space-between",
     gap: 8,
-    marginBottom: "0.55rem",
+    marginBottom: "0.4rem",
   },
   cardLead: {
     fontSize: "var(--k-fs-md)",
@@ -95,9 +95,9 @@ export const cardStyles = {
   },
   metaGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(120px, 100%), 1fr))",
-    gap: "0.5rem 1rem",
-    marginBottom: "0.7rem",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(104px, 100%), 1fr))",
+    gap: "0.35rem 0.85rem",
+    marginBottom: "0.5rem",
   },
   metaLabel: {
     display: "block",

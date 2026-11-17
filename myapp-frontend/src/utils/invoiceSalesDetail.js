@@ -23,6 +23,8 @@ export const ISD_PERIOD_OPTIONS = PERIOD_OPTIONS.filter((o) => o.value !== "allP
 export const FBR_STATUS_OPTIONS = [
   { id: "submitted", name: "Submitted to FBR" },
   { id: "notSubmitted", name: "Not submitted to FBR" },
+  // Classified by the consultant, not yet sent: what is left to validate and submit.
+  { id: "ready", name: "Ready for FBR (classified)" },
 ];
 
 export const DEFAULT_PAGE_SIZE = 50;
