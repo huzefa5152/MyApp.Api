@@ -2591,27 +2591,27 @@ body.admin-ui .filter-date-input:focus-visible {
   align-items: center;
   gap: 2px 0;
   margin: 0 0 0.4rem;
-  color: #5f6d7e;
-  font-size: 0.8rem;
+  color: var(--k-muted);
+  font-size: var(--k-fs-xs);
 }
 .inv-card-meta > span + span::before {
   content: "·";
   margin: 0 0.45rem;
-  color: #b0bccb;
+  color: var(--k-faint);
 }
 .inv-card-refs {
   display: flex;
   flex-wrap: wrap;
   gap: 3px 12px;
   margin: 0 0 0.5rem;
-  color: #1a2332;
-  font-size: 0.8rem;
+  color: var(--k-ink);
+  font-size: var(--k-fs-xs);
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 .inv-card-refs b {
   margin-right: 3px;
-  color: #8a97a8;
+  color: var(--k-faint);
   font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.04em;
