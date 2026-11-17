@@ -182,42 +182,39 @@ function Banner({ tone = "warn", children }) {
   );
 }
 
-// The two import modes, said in full: which act is being performed is the most
-// consequential choice on the screen (GD_IMPORT_COSTING_GUIDE.md §3).
-function ModeCard({ active, title, body, onPick, disabled, tone = colors.blue }) {
+// What this screen does, said in full: New arrivals is its only mode (Backfill
+// left the screen on 2026-10-03), so it is a statement, not a choice.
+function ModeNote({ title, body }) {
   return (
-    <label
+    <div
+      role="note"
       style={{
         display: "flex",
         gap: 10,
         alignItems: "flex-start",
         padding: "0.7rem 0.8rem",
         borderRadius: 10,
-        border: `1px solid ${active ? tone : colors.cardBorder}`,
-        background: active ? `${tone}0f` : "#fff",
-        cursor: disabled ? "not-allowed" : "pointer",
-        minHeight: 44,
+        border: `1px solid ${colors.successLine}`,
+        background: colors.successTint,
         boxSizing: "border-box",
       }}
     >
-      <input
-        type="radio"
-        name="gdCostingMode"
-        checked={active}
-        disabled={disabled}
-        onChange={onPick}
-        aria-label={title}
-        style={{ width: 18, height: 18, marginTop: 2, flexShrink: 0 }}
+      <MdInfoOutline
+        size={18}
+        aria-hidden="true"
+        style={{ color: colors.successDark, marginTop: 1, flexShrink: 0 }}
       />
       <span>
-        <span style={{ display: "block", fontWeight: 800, fontSize: 14 }}>{title}</span>
+        <span style={{ display: "block", fontWeight: 800, fontSize: 14, color: colors.successInk }}>
+          {title}
+        </span>
         <span
           style={{ display: "block", fontSize: 12.5, color: colors.textSecondary, marginTop: 2 }}
         >
           {body}
         </span>
       </span>
-    </label>
+    </div>
   );
 }
 
@@ -236,7 +233,7 @@ export default function GdCostingImportPage() {
     isSeedAdmin || [...(permissions || [])].some((k) => String(k).startsWith("stock."));
 
   const [companyId, setCompanyId] = useState(selectedCompany?.id ? String(selectedCompany.id) : "");
-  const [mode, setMode] = useState(MODE_NEW_ARRIVALS);
+  const [mode] = useState(MODE_NEW_ARRIVALS);
   const [entry, setEntry] = useState("file");
 
   const [file, setFile] = useState(null);
@@ -494,22 +491,6 @@ export default function GdCostingImportPage() {
   const onRemoveStaged = (i) => {
     setStaged((s) => s.filter((_, x) => x !== i));
     if (preview) setStale(true);
-  };
-
-  const onMode = (next) => {
-    if (next === mode) return;
-    setMode(next);
-    if (preview && !stale)
-      run("recheck", () =>
-        recheck({
-          base: preview,
-          modeNow: next,
-          leave: leaveOutChoice,
-          chosen: chosenItem,
-          src: source,
-          confirm: confirmNew,
-        }),
-      );
   };
 
   const onToggleLeaveOut = (line, value) => {
@@ -890,11 +871,7 @@ export default function GdCostingImportPage() {
             </select>
           </div>
 
-          <ModeCard
-            active={mode === MODE_NEW_ARRIVALS}
-            disabled={!!busy}
-            onPick={() => onMode(MODE_NEW_ARRIVALS)}
-            tone={colors.successDark}
+          <ModeNote
             title="New goods arrived on this GD"
             body="The monthly case. Each line adds its quantity, landed cost and selling value to the item it matches; a line that matches nothing becomes a new item."
           />
