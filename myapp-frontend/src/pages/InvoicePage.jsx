@@ -1864,62 +1864,47 @@ export default function InvoicePage({ mode = "invoices" }) {
                           </div>
                           {/* Client is the card's primary line. */}
                           <p style={cardStyles.cardLead}>{inv.clientName || "—"}</p>
-                          {/* PO / Indent / Site / Date / Lines / Challan — compact
-                        labelled meta grid; the challan-sourced fields (PO /
-                        Indent / Site) render only when present so sparse bills
-                        stay clean. */}
-                          <div style={cardStyles.metaGrid}>
-                            {inv.poNumber && (
-                              // A long PO takes two columns, so it reads on one line.
-                              <div
-                                style={
-                                  inv.poNumber.length > 12 ? { gridColumn: "span 2" } : undefined
-                                }
-                              >
-                                <span style={cardStyles.metaLabel}>PO</span>
-                                <span style={cardStyles.metaValue}>{inv.poNumber}</span>
-                              </div>
-                            )}
-                            {inv.indentNo && (
-                              <div>
-                                <span style={cardStyles.metaLabel}>Indent</span>
-                                <span style={cardStyles.metaValue}>{inv.indentNo}</span>
-                              </div>
-                            )}
-                            {inv.site && (
-                              <div>
-                                <span style={cardStyles.metaLabel}>Site</span>
-                                <span style={cardStyles.metaValue}>{inv.site}</span>
-                              </div>
-                            )}
-                            <div>
-                              <span style={cardStyles.metaLabel}>Date</span>
-                              <span style={cardStyles.metaValue}>
-                                {new Date(inv.date).toLocaleDateString()}
-                              </span>
-                            </div>
-                            {isBillsMode && has("bills.costs.view") && (
-                              <div>
-                                <CostingStatus document={inv} onOpen={() => setCostTarget(inv)} />
-                              </div>
-                            )}
-                            <div>
-                              <span style={cardStyles.metaLabel}>Lines</span>
-                              <span style={cardStyles.metaValue}>
-                                {inv.items?.length || 0} item{inv.items?.length === 1 ? "" : "s"}
-                              </span>
-                            </div>
+                          {/* Date, lines and challan on one quiet line; the
+                        challan-sourced references (PO / Indent / Site) on a
+                        second only when present, so sparse bills stay short. */}
+                          <div className="inv-card-meta">
+                            <span>{new Date(inv.date).toLocaleDateString()}</span>
+                            <span>
+                              {inv.items?.length || 0} item{inv.items?.length === 1 ? "" : "s"}
+                            </span>
                             {inv.challanNumbers?.length > 0 && (
-                              <div>
-                                <span style={cardStyles.metaLabel}>Challan</span>
-                                <span style={cardStyles.metaValue}>
-                                  #{inv.challanNumbers.join(", #")}
-                                </span>
-                              </div>
+                              <span>Challan #{inv.challanNumbers.join(", #")}</span>
                             )}
                           </div>
-                          <div style={{ ...cardStyles.amountBox, alignItems: "center" }}>
-                            <span style={{ display: "flex", flexDirection: "column" }}>
+                          {(inv.poNumber || inv.indentNo || inv.site) && (
+                            <div className="inv-card-refs">
+                              {inv.poNumber && (
+                                <span>
+                                  <b>PO</b> {inv.poNumber}
+                                </span>
+                              )}
+                              {inv.indentNo && (
+                                <span>
+                                  <b>Indent</b> {inv.indentNo}
+                                </span>
+                              )}
+                              {inv.site && (
+                                <span>
+                                  <b>Site</b> {inv.site}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {isBillsMode && has("bills.costs.view") && (
+                            <div className="inv-card-costing">
+                              <CostingStatus document={inv} onOpen={() => setCostTarget(inv)} />
+                            </div>
+                          )}
+                          <div
+                            className="inv-card-total"
+                            style={{ ...cardStyles.amountBox, alignItems: "center" }}
+                          >
+                            <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
                               <span style={cardStyles.amountLabel}>Grand Total</span>
                               {isBillsMode && Number(inv.freightCharges) > 0 && (
                                 <span style={cardStyles.amountLabel}>
