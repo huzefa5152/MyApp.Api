@@ -279,7 +279,12 @@ function CompanyStockDashboard() {
             </p>
           )}
           <section className="inventory-panel" aria-label="Inventory records">
-            <div className="inventory-tabs" role="tablist" aria-label="Inventory views">
+            <div
+              className="inventory-tabs"
+              role="tablist"
+              data-scroll-tabs=""
+              aria-label="Inventory views"
+            >
               <TabBtn active={tab === "onhand"} onClick={() => setTab("onhand")}>
                 Stock on hand
               </TabBtn>
@@ -588,15 +593,32 @@ function CompanyStockDashboard() {
                                 </span>
                               </div>
                             </div>
-                            {canViewMovements && (
-                              <button
-                                type="button"
-                                style={cardDrillBtn}
-                                onClick={() => toggleDrill(r.itemTypeId)}
-                              >
-                                {isOpen ? <MdExpandMore size={16} /> : <MdChevronRight size={16} />}
-                                {isOpen ? "Hide movements" : "View movements"}
-                              </button>
+                            {(canViewMovements || canAdjust) && (
+                              <div className="stock-card__actions">
+                                {canViewMovements && (
+                                  <button
+                                    type="button"
+                                    style={cardDrillBtn}
+                                    onClick={() => toggleDrill(r.itemTypeId)}
+                                  >
+                                    {isOpen ? (
+                                      <MdExpandMore size={16} />
+                                    ) : (
+                                      <MdChevronRight size={16} />
+                                    )}
+                                    {isOpen ? "Hide movements" : "View movements"}
+                                  </button>
+                                )}
+                                {canAdjust && (
+                                  <button
+                                    type="button"
+                                    style={cardAdjustBtn}
+                                    onClick={() => openAdjustForRow(r)}
+                                  >
+                                    <MdSwapHoriz size={15} /> Adjustment
+                                  </button>
+                                )}
+                              </div>
                             )}
                             {isOpen && canViewMovements && (
                               <DrillPanel
@@ -604,15 +626,6 @@ function CompanyStockDashboard() {
                                 loading={drillLoading === r.itemTypeId}
                                 uom={r.uom}
                               />
-                            )}
-                            {canAdjust && (
-                              <button
-                                type="button"
-                                style={cardAdjustBtn}
-                                onClick={() => openAdjustForRow(r)}
-                              >
-                                <MdSwapHoriz size={15} /> Adjustment
-                              </button>
                             )}
                           </div>
                         );

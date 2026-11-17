@@ -316,10 +316,9 @@
 .inventory-entry-columns,
 .inventory-entry-row {
   display: grid;
-  grid-template-columns: minmax(85px, 0.8fr) minmax(160px, 2fr) minmax(95px, 1fr) minmax(
-      100px,
-      1fr
-    ) minmax(90px, 0.9fr) minmax(90px, 0.9fr) 70px 85px;
+  grid-template-columns:
+    minmax(85px, 0.8fr) minmax(160px, 2fr) minmax(95px, 1fr) minmax(100px, 1fr)
+    minmax(90px, 0.9fr) minmax(90px, 0.9fr) 70px 85px;
   gap: 12px;
   align-items: center;
   padding: 14px 18px;
@@ -490,14 +489,21 @@
   .inventory-summary strong {
     font-size: 18px;
   }
-  .inventory-tabs {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0;
-    padding: 0 12px;
+  .inventory-page .inventory-tabs {
+    flex-wrap: nowrap;
+    gap: 4px;
+    padding: 0 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .inventory-page .inventory-tabs::-webkit-scrollbar {
+    display: none;
   }
   .inventory-page .inventory-tabs button {
+    flex: none;
     min-height: 44px;
+    padding: 10px 10px;
+    white-space: nowrap;
   }
   .inventory-toolbar {
     padding: 12px;
@@ -539,6 +545,15 @@
     min-height: 44px;
   }
 }
+.inventory-page .stock-card__actions {
+  display: flex;
+  gap: 8px;
+}
+.inventory-page .stock-card__actions > button {
+  flex: 1 1 0;
+  min-width: 0;
+  white-space: nowrap;
+}
 .inventory-page .inventory-item-link {
   background: transparent;
   border: 0;
@@ -556,10 +571,9 @@
 }
 .inventory-entry-columns,
 .inventory-entry-row {
-  grid-template-columns: 80px minmax(130px, 2fr) minmax(80px, 1fr) minmax(90px, 1fr) minmax(
-      70px,
-      0.8fr
-    ) minmax(70px, 0.8fr) 65px 75px;
+  grid-template-columns:
+    80px minmax(130px, 2fr) minmax(80px, 1fr) minmax(90px, 1fr) minmax(70px, 0.8fr)
+    minmax(70px, 0.8fr) 65px 75px;
   gap: 10px;
 }
 @media (max-width: 1199px) {
@@ -568,74 +582,80 @@
   }
 }
 
-/* Keep navigation and filters outside the single scrolling records region. */
-.dl-shell:has(.inventory-page) {
-  height: 100dvh;
-  min-height: 0;
-  overflow: hidden;
-}
-.dl-content-wrapper:has(.inventory-page) {
-  height: 100dvh;
-  min-height: 0;
-}
-.dl-content-wrapper:has(.inventory-page) > .dl-topbar {
-  flex-shrink: 0;
-}
-.dl-main:has(> .inventory-page) {
-  display: flex;
-  height: calc(100dvh - var(--topbar-height, 0px));
-  box-sizing: border-box;
-  min-height: 0;
-  overflow: hidden;
-}
-.inventory-page {
-  display: flex;
-  flex-direction: column;
-  height: calc(100dvh - 32px);
-  min-height: 0;
-}
-.dl-main > .inventory-page {
-  flex: 1;
-  height: auto;
-}
-.inventory-heading,
-.inventory-summary,
-.inventory-warning,
-.inventory-tabs,
-.inventory-toolbar,
-.inventory-pagination,
-.inventory-panel > .pagination-bar {
-  flex-shrink: 0;
-}
-.inventory-panel {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-.inventory-entry-history {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-}
-.inventory-record-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+/* Keep navigation and filters outside the single scrolling records region,
+   on tablets and laptops only. On a phone, or a screen too short for it, the
+   heading, totals, tabs and toolbar left the list a strip at the bottom of a
+   locked page, so there the whole page scrolls instead. Same breakpoint as
+   RecordsViewport.css. */
+@media screen and (min-width: 768px) and (min-height: 520px) {
+  .dl-shell:has(.inventory-page) {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .dl-content-wrapper:has(.inventory-page) {
+    height: 100dvh;
+    min-height: 0;
+  }
+  .dl-content-wrapper:has(.inventory-page) > .dl-topbar {
+    flex-shrink: 0;
+  }
+  .dl-main:has(> .inventory-page) {
+    display: flex;
+    height: calc(100dvh - var(--topbar-height, 0px));
+    box-sizing: border-box;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .inventory-page {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - 32px);
+    min-height: 0;
+  }
+  .dl-main > .inventory-page {
+    flex: 1;
+    height: auto;
+  }
+  .inventory-heading,
+  .inventory-summary,
+  .inventory-warning,
+  .inventory-tabs,
+  .inventory-toolbar,
+  .inventory-pagination,
+  .inventory-panel > .pagination-bar {
+    flex-shrink: 0;
+  }
+  .inventory-panel {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .inventory-entry-history {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+  .inventory-record-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+  .inventory-record-scroll .stock-table thead th,
+  .inventory-record-scroll .inventory-entry-columns {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
 }
 .inventory-record-scroll:focus-visible {
   outline: 2px solid #0d47a1;
   outline-offset: -2px;
-}
-.inventory-record-scroll .stock-table thead th,
-.inventory-record-scroll .inventory-entry-columns {
-  position: sticky;
-  top: 0;
-  z-index: 2;
 }
 @media (max-height: 700px) {
   .inventory-page .inventory-heading {
