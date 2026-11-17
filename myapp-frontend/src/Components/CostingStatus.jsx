@@ -23,8 +23,16 @@ export default function CostingStatus({ document, onOpen }) {
         borderRadius: "var(--k-r-sm)",
         fontSize: "var(--k-fs-xs)",
         lineHeight: 1.5,
-        background: complete ? "var(--k-success-bg)" : count > 0 ? "var(--k-warn-bg)" : "#f1f5f9",
-        color: complete ? "#256029" : count > 0 ? "#92400e" : "#475569",
+        background: complete
+          ? "var(--k-success-bg)"
+          : count > 0
+            ? "var(--k-warn-bg)"
+            : "var(--k-surface-3)",
+        color: complete
+          ? "var(--k-success-strong)"
+          : count > 0
+            ? "var(--k-warn-ink)"
+            : "var(--k-muted)",
       }}
     >
       <strong>{label}</strong>

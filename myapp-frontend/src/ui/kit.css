@@ -566,6 +566,13 @@
     white-space: nowrap;
   }
 }
+/* Wide screens: the title and its subtitle keep one line each; the actions take
+   what is left and wrap on their own side. */
+@media (min-width: 1200px) {
+  .k-header:has(> .k-header__actions) > .k-header__lead {
+    flex: 0 0 auto;
+  }
+}
 /* The company picker in a list screen's title row. */
 .k-header__actions .k-company {
   margin: 0;

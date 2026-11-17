@@ -1,3 +1,6 @@
+import { cardStyles } from "../theme";
+import CardActions from "../Components/CardActions";
+import "./InvoiceCardActions.css";
 import ListFilters from "../Components/ListFilters";
 import RecordsViewport from "../Components/RecordsViewport";
 import DocumentLinesNavigation, {
@@ -48,7 +51,6 @@ import {
   ToolbarSpacer,
   SearchBox,
   Card,
-  Facts,
   EmptyState,
   Loading,
 } from "../ui/Kit";
@@ -303,18 +305,34 @@ export default function GoodsReceiptsPage() {
                           }
                           style={docCard}
                         >
-                          <Facts
-                            facts={[
-                              ["Supplier", gr.supplierName],
-                              ["Date", new Date(gr.receiptDate).toLocaleDateString()],
-                              gr.purchaseBillNumber && ["Linked PB", `#${gr.purchaseBillNumber}`],
-                              gr.supplierChallanNumber && ["Supplier DC", gr.supplierChallanNumber],
-                              ["Items", gr.items?.length || 0],
-                              ["Status", gr.status],
-                            ]}
-                          />
-                          <div style={cardActions}>
+                          <p className="doc-card-lead">{gr.supplierName}</p>
+                          <div className="inv-card-meta">
+                            <span>{new Date(gr.receiptDate).toLocaleDateString()}</span>
+                            <span>
+                              {gr.items?.length || 0} item{gr.items?.length === 1 ? "" : "s"}
+                            </span>
+                            <span>{gr.status}</span>
+                          </div>
+                          {(gr.purchaseBillNumber || gr.supplierChallanNumber) && (
+                            <div className="inv-card-refs">
+                              {gr.purchaseBillNumber && (
+                                <span>
+                                  <b>Linked PB</b> #{gr.purchaseBillNumber}
+                                </span>
+                              )}
+                              {gr.supplierChallanNumber && (
+                                <span>
+                                  <b>Supplier DC</b> {gr.supplierChallanNumber}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          <CardActions
+                            className="invoice-card-actions"
+                            style={cardStyles.buttonGroup}
+                          >
                             <Button
+                              data-primary
                               size="sm"
                               icon={MdVisibility}
                               onClick={() => {
@@ -326,6 +344,7 @@ export default function GoodsReceiptsPage() {
                             </Button>
                             {canUpdate && (
                               <Button
+                                data-primary
                                 size="sm"
                                 icon={MdEdit}
                                 onClick={() => {
@@ -338,6 +357,7 @@ export default function GoodsReceiptsPage() {
                             )}
                             {canPrint && (
                               <Button
+                                data-primary
                                 size="sm"
                                 icon={MdPrint}
                                 disabled={tplPicker.noTemplate}
@@ -370,7 +390,7 @@ export default function GoodsReceiptsPage() {
                                 Delete
                               </Button>
                             )}
-                          </div>
+                          </CardActions>
                         </Card>
                       ))}
                     </div>
@@ -432,11 +452,3 @@ export default function GoodsReceiptsPage() {
 // Page-specific layout only — every themed role comes from the kit.
 const filterBox = { flex: "1 1 200px", minWidth: 0, maxWidth: 260 };
 const docCard = { margin: 0 };
-const cardActions = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: "0.4rem",
-  marginTop: "0.9rem",
-  paddingTop: "0.75rem",
-  borderTop: "1px solid var(--k-line)",
-};

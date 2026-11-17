@@ -764,8 +764,8 @@ body.dl-body--locked {
 }
 
 /* List screens: as many record cards per row as the width allows. */
-.records-viewport .card-grid {
-  grid-template-columns: repeat(auto-fill, minmax(min(290px, 100%), 1fr));
+.records-viewport :is(.card-grid, .k-grid-cards) {
+  grid-template-columns: repeat(auto-fill, minmax(min(330px, 100%), 1fr));
   gap: 0.85rem;
 }
 
@@ -2624,4 +2624,50 @@ body.admin-ui .filter-date-input:focus-visible {
   align-items: center;
   flex-wrap: wrap;
   gap: 6px 10px;
+}
+/* Card title row: the number never breaks; the status pills sit on the right
+   and, when there is no room, drop to their own line instead of stacking. */
+.doc-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-bottom: 0.45rem;
+}
+.doc-card-head > h5 {
+  margin: 0 !important;
+  white-space: nowrap;
+}
+.doc-card-pills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-left: auto;
+}
+.doc-card-lead {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0 0 0.3rem;
+  color: var(--k-ink);
+  font-size: var(--k-fs-md);
+  font-weight: 700;
+  line-height: 1.3;
+}
+/* Every card in a row is the same height, with its buttons pinned to the
+   bottom, so a row of cards always lines up whatever tags a card carries. */
+.records-viewport :is(.card-grid, .k-grid-cards) > .k-card {
+  display: flex;
+  flex-direction: column;
+}
+.records-viewport :is(.card-grid, .k-grid-cards) > .k-card > .k-card__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+.records-viewport :is(.card-grid, .k-grid-cards) .invoice-card-actions {
+  margin-top: auto !important;
 }

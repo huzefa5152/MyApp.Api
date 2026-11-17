@@ -7,8 +7,6 @@ import { useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
   MdReceipt,
-  MdPerson,
-  MdCalendarToday,
   MdVisibility,
   MdEdit,
   MdCancel,
@@ -18,10 +16,8 @@ import {
   MdGridOn,
   MdWarning,
   MdRequestQuote,
-  MdLocationOn,
   MdContentCopy,
   MdLink,
-  MdAssignment,
 } from "react-icons/md";
 import ChallanModal from "./ChallanModal";
 import AttachmentBadge from "./AttachmentBadge";
@@ -196,22 +192,14 @@ export default function ChallanList({
             <Card key={c.id} style={styles.card}>
               <div style={styles.cardContent}>
                 <div>
-                  <div style={styles.cardTopRow}>
+                  <div className="doc-card-head">
                     <h5 style={styles.title}>
                       <MdReceipt
                         style={{ color: "var(--k-blue)", marginRight: 6, verticalAlign: "middle" }}
                       />
                       Challan #{c.challanNumber}
                     </h5>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.35rem",
-                        flexWrap: "wrap",
-                        justifyContent: "flex-end",
-                      }}
-                    >
+                    <div className="doc-card-pills">
                       <AttachmentBadge count={attachCounts?.[c.id]} onClick={() => onAttach?.(c)} />
                       {hasWarnings && <WarningTooltip warnings={c.warnings} />}
                       {/* DUPLICATE pill — shown when this row was created via
@@ -267,72 +255,40 @@ export default function ChallanList({
                       <CostingStatus document={c} onOpen={() => onCosts(c)} />
                     </div>
                   )}
-                  {isDuplicate && c.duplicatedFromChallanNumber && (
-                    <p
-                      style={{
-                        ...styles.text,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.35rem",
-                        color: "var(--k-purple-3)",
-                        fontWeight: 600,
-                        fontSize: "var(--k-fs-xs)",
-                        marginTop: "-0.15rem",
-                      }}
-                    >
-                      <MdContentCopy size={13} style={{ flexShrink: 0 }} />
-                      Duplicate of Challan #{c.duplicatedFromChallanNumber}
-                    </p>
-                  )}
-                  <p style={styles.line}>
-                    <MdPerson style={{ color: "var(--k-teal)", flexShrink: 0 }} />
-                    <span style={styles.clamp}>
-                      <strong>Client:</strong> {c.clientName}
-                    </span>
-                  </p>
-                  <p style={styles.line}>
-                    <MdReceipt style={{ color: "var(--k-muted)", flexShrink: 0 }} />
-                    <strong>PO:</strong> {c.poNumber || "—"}
-                  </p>
-                  {c.salesOrderNumber && (
-                    <p style={{ ...styles.line, color: "var(--k-blue)", fontWeight: 600 }}>
-                      <MdAssignment size={14} style={{ flexShrink: 0 }} />
-                      <strong>SO #{c.salesOrderNumber}</strong>
-                    </p>
-                  )}
-                  {/* Indent No + Site — surfaced on the card so the
-                      operator can scan a list and see "is this the
-                      Soorty PO for Unit-2?" without having to open the
-                      view modal. Both fields are optional; only render
-                      when set so unfilled cards don't get noise. */}
-                  {c.indentNo && (
-                    <p style={styles.line}>
-                      <MdReceipt style={{ color: "var(--k-muted)", flexShrink: 0, opacity: 0.7 }} />
-                      <strong>Indent:</strong> {c.indentNo}
-                    </p>
-                  )}
-                  {c.site && (
-                    <p style={styles.line}>
-                      <MdLocationOn size={14} style={{ color: "var(--k-muted)", flexShrink: 0 }} />
-                      <strong>Site:</strong> {c.site}
-                    </p>
-                  )}
-                  {/* Date and item count share one line. */}
-                  <p style={{ ...styles.line, flexWrap: "wrap" }}>
-                    {c.deliveryDate && (
-                      <>
-                        <MdCalendarToday
-                          size={14}
-                          style={{ color: "var(--k-muted)", flexShrink: 0 }}
-                        />
-                        {new Date(c.deliveryDate).toLocaleDateString()}
-                        <span aria-hidden="true">·</span>
-                      </>
-                    )}
-                    <span style={{ fontSize: "var(--k-fs-xs)", color: "var(--k-muted)" }}>
+                  {/* Client first, then one quiet line for date and items, then the
+                      references the operator scans for (PO, order, indent, site). */}
+                  <p className="doc-card-lead">{c.clientName}</p>
+                  <div className="inv-card-meta">
+                    {c.deliveryDate && <span>{new Date(c.deliveryDate).toLocaleDateString()}</span>}
+                    <span>
                       {c.items?.length || 0} item{(c.items?.length || 0) !== 1 ? "s" : ""}
                     </span>
-                  </p>
+                    {isDuplicate && c.duplicatedFromChallanNumber && (
+                      <span style={{ color: "var(--k-purple-3)", fontWeight: 600 }}>
+                        Copy of #{c.duplicatedFromChallanNumber}
+                      </span>
+                    )}
+                  </div>
+                  <div className="inv-card-refs">
+                    <span>
+                      <b>PO</b> {c.poNumber || "—"}
+                    </span>
+                    {c.salesOrderNumber && (
+                      <span style={{ color: "var(--k-blue)" }}>
+                        <b>SO</b> #{c.salesOrderNumber}
+                      </span>
+                    )}
+                    {c.indentNo && (
+                      <span>
+                        <b>Indent</b> {c.indentNo}
+                      </span>
+                    )}
+                    {c.site && (
+                      <span>
+                        <b>Site</b> {c.site}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <CardActions className="invoice-card-actions" style={styles.buttonGroup}>
@@ -517,37 +473,7 @@ const styles = {
     color: "var(--k-ink)",
     letterSpacing: "-0.01em",
   },
-  text: {
-    fontSize: "var(--k-font)",
-    color: "var(--k-muted)",
-    margin: "0 0 0.2rem",
-    lineHeight: 1.5,
-  },
-  line: {
-    fontSize: "var(--k-font)",
-    color: "var(--k-muted)",
-    margin: "0 0 0.2rem",
-    lineHeight: 1.5,
-    display: "flex",
-    alignItems: "center",
-    gap: "0.4rem",
-  },
   // Client names are user-supplied — clamp to two lines, never nowrap+ellipsis.
-  clamp: {
-    display: "-webkit-box",
-    WebkitLineClamp: 2,
-    WebkitBoxOrient: "vertical",
-    overflow: "hidden",
-    minWidth: 0,
-  },
-  cardTopRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-    gap: "0.5rem",
-    marginBottom: "0.5rem",
-  },
   statusBadge: {
     display: "inline-flex",
     alignItems: "center",

@@ -1839,7 +1839,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                     >
                       <div style={styles.cardContent}>
                         <div>
-                          <div style={cardStyles.cardHeader}>
+                          <div className="doc-card-head">
                             <h5 style={styles.cardTitle}>
                               <MdReceipt style={{ color: "var(--k-blue)", marginRight: 6 }} />
                               {isNotesMode ? noteLabel : isBillsMode ? "Bill" : "Invoice"} #
@@ -1847,15 +1847,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                             </h5>
                             {/* FBR lifecycle + note relationship as compact pills;
                           detail on hover. Payment status is in the total row. */}
-                            <div
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 5,
-                                flexWrap: "wrap",
-                                justifyContent: "flex-end",
-                              }}
-                            >
+                            <div className="doc-card-pills">
                               {renderNotePill(inv)}
                               {renderFbrPill(inv, isBillsMode)}
                               {!isBillsMode && renderHandoverPill(inv)}

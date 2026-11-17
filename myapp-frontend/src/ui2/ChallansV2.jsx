@@ -57,7 +57,7 @@ const STATUSES = [
   ["Cancelled", "Cancelled"],
 ];
 const COSTING = { "not-costed": "Not costed", partial: "Partially costed", full: "Fully costed" };
-const CARD_BTN = ["view", "bill", "print", "pdf", "xlsx"]; // labelled buttons on a card; everything else lives in the ⋯ menu
+const CARD_BTN = ["view", "bill", "print"]; // labelled buttons on a card (one row); everything else lives in the ⋯ menu
 const CARD_LABEL = { view: "View", bill: "Bill", print: "Print", pdf: "PDF", xlsx: "Excel" };
 const statusLabel = (s) => (s === "Invoiced" ? "Billed" : s);
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : "—");
@@ -650,7 +650,7 @@ export default function ChallansV2(p) {
                       {c.clientName || "—"}
                     </div>
                     <dl className="u2-facts2">
-                      <div>
+                      <div style={{ gridColumn: "1 / -1" }}>
                         <MdReceipt size={14} aria-hidden="true" />
                         <dt>PO</dt>
                         <dd>{c.poNumber || "—"}</dd>

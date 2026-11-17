@@ -1683,7 +1683,7 @@
 }
 .u2-card__foot {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 0.4rem;
   border-top: none;

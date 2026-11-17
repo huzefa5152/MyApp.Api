@@ -1,18 +1,34 @@
+/* One row of card actions whose labels never break or spill: each button is
+   as wide as its label, they share what is left, and on a narrow card the
+   icon goes above the label instead. */
 .invoice-card-actions {
   flex-wrap: nowrap !important;
-  gap: 8px !important;
+  gap: 6px !important;
   align-items: stretch !important;
 }
-.invoice-card-actions > button {
+.invoice-card-actions > button:not(.card-actions-more) {
   min-width: 0 !important;
   min-height: var(--k-btn-h);
   flex: 1 1 auto;
   justify-content: center;
-  padding: 8px !important;
+  gap: 5px !important;
+  padding: 6px 10px !important;
   font-size: var(--k-fs-xs) !important;
-  line-height: 1.25;
-  white-space: normal !important;
+  line-height: 1.2;
+  white-space: nowrap !important;
+  overflow: hidden;
   box-shadow: none;
+}
+:is(.card-grid, .k-grid-cards) > * {
+  container-type: inline-size;
+}
+@container (max-width: 370px) {
+  .invoice-card-actions > button:not(.card-actions-more) {
+    flex-direction: column;
+    gap: 2px !important;
+    padding: 5px 4px !important;
+    font-size: var(--k-fs-2xs) !important;
+  }
 }
 .invoice-card-actions > button svg {
   flex-shrink: 0;
@@ -20,6 +36,8 @@
 .invoice-card-actions > .card-actions-more {
   flex: 0 0 var(--k-btn-h);
   width: var(--k-btn-h) !important;
+  min-height: var(--k-btn-h);
+  padding: 0 !important;
   height: auto !important;
   margin-left: 0 !important;
 }

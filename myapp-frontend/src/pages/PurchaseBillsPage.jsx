@@ -23,7 +23,9 @@ import {
 } from "../api/purchaseBillApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { getAwaitingPurchase } from "../api/invoiceApi";
-import { formStyles, modalSizes } from "../theme";
+import { cardStyles, formStyles, modalSizes } from "../theme";
+import CardActions from "../Components/CardActions";
+import "./InvoiceCardActions.css";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
 import Pagination from "../Components/Pagination";
 import { useCompany } from "../contexts/CompanyContext";
@@ -53,7 +55,6 @@ import {
   ToolbarSpacer,
   SearchBox,
   Card,
-  Facts,
   EmptyState,
   Loading,
   FilterMenu,
@@ -431,40 +432,56 @@ export default function PurchaseBillsPage() {
                           }
                           style={docCard}
                         >
-                          <Facts
-                            facts={[
-                              ["Supplier", b.supplierName],
-                              [
-                                "Source",
-                                b.source === "auto-cost"
-                                  ? "From challan / bill costs"
-                                  : b.purchaseCategory === "LocalDirect"
-                                    ? "Local direct purchase"
-                                    : b.source === "fbr-import"
-                                      ? "FBR import"
-                                      : "Inventory purchase",
-                              ],
-                              ["Date", new Date(b.date).toLocaleDateString()],
-                              ["Grand Total", `Rs. ${b.grandTotal?.toLocaleString()}`],
-                              ["Items", b.items?.length || 0],
-                              ["Status", b.reconciliationStatus],
-                              b.supplierIRN && [
-                                "IRN",
-                                <span style={irnText}>{b.supplierIRN}</span>,
-                              ],
-                            ]}
-                          />
-                          {canViewPaymentStatus && b.paymentStatus && (
-                            <div style={{ marginTop: "0.6rem" }}>
+                          <p className="doc-card-lead">{b.supplierName}</p>
+                          <div className="inv-card-meta">
+                            <span>{new Date(b.date).toLocaleDateString()}</span>
+                            <span>
+                              {b.items?.length || 0} item{b.items?.length === 1 ? "" : "s"}
+                            </span>
+                            <span>
+                              {b.source === "auto-cost"
+                                ? "From challan / bill costs"
+                                : b.purchaseCategory === "LocalDirect"
+                                  ? "Local direct purchase"
+                                  : b.source === "fbr-import"
+                                    ? "FBR import"
+                                    : "Inventory purchase"}
+                            </span>
+                          </div>
+                          <div className="inv-card-refs">
+                            <span>
+                              <b>Status</b> {b.reconciliationStatus}
+                            </span>
+                            {b.supplierIRN && (
+                              <span>
+                                <b>IRN</b> <span style={irnText}>{b.supplierIRN}</span>
+                              </span>
+                            )}
+                          </div>
+                          <div
+                            className="inv-card-total"
+                            style={{ ...cardStyles.amountBox, alignItems: "center" }}
+                          >
+                            <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                              <span style={cardStyles.amountLabel}>Grand Total</span>
+                              <span style={cardStyles.amount}>
+                                Rs. {b.grandTotal?.toLocaleString()}
+                              </span>
+                            </span>
+                            {canViewPaymentStatus && b.paymentStatus && (
                               <PaymentStatusBadge
                                 status={b.paymentStatus}
                                 balanceDue={b.balanceDue}
                                 daysOverdue={b.daysOverdue}
                               />
-                            </div>
-                          )}
-                          <div style={cardActions}>
+                            )}
+                          </div>
+                          <CardActions
+                            className="invoice-card-actions"
+                            style={cardStyles.buttonGroup}
+                          >
                             <Button
+                              data-primary
                               size="sm"
                               icon={MdVisibility}
                               onClick={() => {
@@ -479,6 +496,7 @@ export default function PurchaseBillsPage() {
                               (!["local-direct", "auto-cost"].includes(b.source) ||
                                 !(b.amountPaid > 0 || b.amountCredited > 0)) && (
                                 <Button
+                                  data-primary
                                   size="sm"
                                   icon={MdEdit}
                                   onClick={() => {
@@ -492,6 +510,7 @@ export default function PurchaseBillsPage() {
                               )}
                             {canPrint && (
                               <Button
+                                data-primary
                                 size="sm"
                                 icon={MdPrint}
                                 disabled={tplPicker.noTemplate}
@@ -524,7 +543,7 @@ export default function PurchaseBillsPage() {
                                 Delete
                               </Button>
                             )}
-                          </div>
+                          </CardActions>
                         </Card>
                       ))}
                     </div>
@@ -703,14 +722,6 @@ const dateGroup = {
 const dateInput = { width: "auto", minWidth: 0, maxWidth: 165 };
 const dateSep = { color: "var(--k-faint)" };
 const docCard = { margin: 0 };
-const cardActions = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: "0.4rem",
-  marginTop: "0.9rem",
-  paddingTop: "0.75rem",
-  borderTop: "1px solid var(--k-line)",
-};
 const irnText = {
   fontFamily: "monospace",
   fontSize: "var(--k-fs-xs)",
