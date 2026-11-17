@@ -25,14 +25,14 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { Button, Card } from "../ui/Kit";
 
 const statusColors = {
-  Pending: { bg: "var(--k-warn-bg)", color: "var(--k-warn)", border: "#e6510030" },
+  Pending: { bg: "var(--k-warn-bg)", color: "var(--k-warn)" },
   // Imported = historical back-fill, billable same as Pending.
   // Purple tint so operators can tell at a glance which rows came from import.
-  Imported: { bg: "var(--k-purple-bg-2)", color: "var(--k-purple-3)", border: "#6a1b9a30" },
-  "No PO": { bg: "var(--k-info-bg)", color: "var(--k-blue)", border: "#0d47a130" },
-  Invoiced: { bg: "var(--k-success-bg)", color: "var(--k-success)", border: "#2e7d3230" },
-  Cancelled: { bg: "var(--k-danger-bg-2)", color: "var(--k-danger)", border: "#c6282830" },
-  "Setup Required": { bg: "#fce4ec", color: "#880e4f", border: "#880e4f30" },
+  Imported: { bg: "var(--k-purple-bg-2)", color: "var(--k-purple-3)" },
+  "No PO": { bg: "var(--k-info-bg)", color: "var(--k-blue)" },
+  Invoiced: { bg: "var(--k-success-bg)", color: "var(--k-success)" },
+  Cancelled: { bg: "var(--k-danger-bg-2)", color: "var(--k-danger)" },
+  "Setup Required": { bg: "var(--k-danger-bg-2)", color: "var(--k-danger-ink)" },
 };
 
 function WarningTooltip({ warnings }) {
@@ -68,10 +68,10 @@ function WarningTooltip({ warnings }) {
               maxWidth: 320,
               padding: "0.6rem 0.75rem",
               background: "var(--k-surface)",
-              border: "1px solid #e65100",
+              border: "1px solid var(--k-warn)",
               borderRadius: "var(--k-radius)",
               boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
-              color: "#333",
+              color: "var(--k-ink)",
               pointerEvents: "none",
             }}
           >
@@ -150,7 +150,7 @@ export default function ChallanList({
           const restOf = c.isPartiallyBilled && c.status !== "Invoiced";
           const sc =
             partlyBilled || restOf
-              ? { bg: "var(--k-warn-bg-2)", color: "var(--k-warn-ink-3)", border: "#b26a0030" }
+              ? { bg: "var(--k-warn-bg-2)", color: "var(--k-warn-ink-3)" }
               : statusColors[c.status] || statusColors.Pending;
           // Backend now sends `isEditable` — use it so billed-but-not-FBR-submitted challans can also be edited
           const isEditable =
@@ -224,7 +224,8 @@ export default function ChallanList({
                           ...styles.statusBadge,
                           backgroundColor: sc.bg,
                           color: sc.color,
-                          border: `1px solid ${sc.border}`,
+                          // The border is the tag's own colour, faded, so it follows every theme.
+                          border: `1px solid color-mix(in srgb, ${sc.color} 25%, transparent)`,
                         }}
                       >
                         {partlyBilled
@@ -498,7 +499,7 @@ const styles = {
   pdfBtn: tint("var(--k-danger-bg-2)", "var(--k-danger-ink)"),
   excelBtn: tint("var(--k-success-bg)", "var(--k-success)"),
   editBtn: tint("var(--k-warn-bg)", "var(--k-warn)"),
-  cancelBtn: tint("#fce4ec", "var(--k-danger-ink)"),
+  cancelBtn: tint("var(--k-danger-bg-2)", "var(--k-danger-ink)"),
   deleteBtn: tint("var(--k-danger-bg-2)", "var(--k-danger-ink-2)"),
   generateBillBtn: tint("var(--k-teal-bg)", "var(--k-teal-ink)"),
   linkBtn: tint("var(--k-info-bg)", "var(--k-blue)"),
@@ -508,6 +509,6 @@ const styles = {
   duplicateBadge: {
     backgroundColor: "var(--k-purple-bg)",
     color: "var(--k-purple)",
-    border: "1px solid #4527a040",
+    border: "1px solid color-mix(in srgb, var(--k-purple) 25%, transparent)",
   },
 };

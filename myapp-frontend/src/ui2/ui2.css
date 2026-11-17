@@ -1711,21 +1711,23 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+/* Each action's tint is drawn from a theme colour, so it follows every theme;
+   a quarter of the theme's ink keeps the label readable on a bright accent. */
 .u2-abtn--bill {
-  background: #e3f4f1;
-  color: #00695c;
+  background: color-mix(in srgb, var(--k-teal) 12%, var(--k-surface));
+  color: color-mix(in srgb, var(--k-teal) 75%, var(--k-ink));
 }
 .u2-abtn--print {
-  background: #f1eaf8;
-  color: #6a2c91;
+  background: color-mix(in srgb, var(--k-purple-3) 12%, var(--k-surface));
+  color: color-mix(in srgb, var(--k-purple-3) 75%, var(--k-ink));
 }
 .u2-abtn--pdf {
-  background: #fdecee;
-  color: #b3261e;
+  background: color-mix(in srgb, var(--k-danger-ink) 12%, var(--k-surface));
+  color: color-mix(in srgb, var(--k-danger-ink) 75%, var(--k-ink));
 }
 .u2-abtn--xlsx {
-  background: #e6f4ea;
-  color: #1e7a3a;
+  background: color-mix(in srgb, var(--k-success) 12%, var(--k-surface));
+  color: color-mix(in srgb, var(--k-success) 75%, var(--k-ink));
 }
 
 /* Column menu and other popovers must not be clipped by the list card */
