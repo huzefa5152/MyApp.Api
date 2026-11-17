@@ -48,7 +48,10 @@ namespace MyApp.Api.Helpers
             if (row == null)
                 db.SystemSettings.Add(new SystemSetting
                 {
-                    Key = key, Value = method, UpdatedAt = DateTime.UtcNow, UpdatedByUserId = userId,
+                    Key = key,
+                    Value = method,
+                    UpdatedAt = DateTime.UtcNow,
+                    UpdatedByUserId = userId,
                 });
             else
             {
@@ -143,7 +146,11 @@ namespace MyApp.Api.Helpers
             if (ids != null) balancesQ = balancesQ.Where(b => ids.Contains(b.ItemTypeId));
             var balances = await balancesQ.Select(b => new
             {
-                b.Id, b.ItemTypeId, b.Quantity, b.ValueExcludingTax, b.ActualCostExcludingTax,
+                b.Id,
+                b.ItemTypeId,
+                b.Quantity,
+                b.ValueExcludingTax,
+                b.ActualCostExcludingTax,
             }).ToListAsync();
             var balanceIds = balances.Select(b => b.Id).ToList();
 
@@ -152,8 +159,15 @@ namespace MyApp.Api.Helpers
                     .Where(l => balanceIds.Contains(l.OpeningStockBalanceId))
                     .Select(l => new
                     {
-                        l.Id, l.OpeningStockBalanceId, l.LotRef, l.LotDate, l.ClaimMonth, l.SourceRow,
-                        l.ItemNameOnSheet, l.BalanceQuantity, l.BalanceValueExcludingTax,
+                        l.Id,
+                        l.OpeningStockBalanceId,
+                        l.LotRef,
+                        l.LotDate,
+                        l.ClaimMonth,
+                        l.SourceRow,
+                        l.ItemNameOnSheet,
+                        l.BalanceQuantity,
+                        l.BalanceValueExcludingTax,
                         l.BalanceSalesTaxRate,
                     }).ToListAsync();
 
@@ -167,7 +181,8 @@ namespace MyApp.Api.Helpers
                     .Select(l => new
                     {
                         BalanceId = l.OpeningStockBalanceId!.Value,
-                        l.ImportConsignment.GdNumber, l.CostExcludingTax,
+                        l.ImportConsignment.GdNumber,
+                        l.CostExcludingTax,
                     }).ToListAsync();
             var gdDates = (await db.ImportConsignments.AsNoTracking()
                     .Where(c => c.CompanyId == companyId)
@@ -249,8 +264,13 @@ namespace MyApp.Api.Helpers
             if (ids != null) arrivalsQ = arrivalsQ.Where(l => ids.Contains(l.ItemTypeId!.Value));
             var arrivals = await arrivalsQ.Select(l => new
             {
-                l.Id, ItemTypeId = l.ItemTypeId!.Value, MovementId = l.StockMovementId!.Value,
-                l.ImportConsignment.GdNumber, l.ImportConsignment.GdDate, l.ClaimMonth, l.DescriptionOnSheet,
+                l.Id,
+                ItemTypeId = l.ItemTypeId!.Value,
+                MovementId = l.StockMovementId!.Value,
+                l.ImportConsignment.GdNumber,
+                l.ImportConsignment.GdDate,
+                l.ClaimMonth,
+                l.DescriptionOnSheet,
             }).ToListAsync();
             foreach (var a in arrivals)
             {

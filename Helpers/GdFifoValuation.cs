@@ -170,12 +170,21 @@ namespace MyApp.Api.Helpers
                 lotQty += l.Quantity; lotValue += l.Value; lotActual += l.ActualValue;
                 pools.Add(new Pool
                 {
-                    Key = l.Key, Kind = PoolKind.GdLot, GdNumber = l.GdNumber,
-                    OrderDate = l.OrderDate, ClaimMonth = l.ClaimMonth, Tiebreak = l.Tiebreak,
-                    LotId = l.LotId, Description = l.Description,
+                    Key = l.Key,
+                    Kind = PoolKind.GdLot,
+                    GdNumber = l.GdNumber,
+                    OrderDate = l.OrderDate,
+                    ClaimMonth = l.ClaimMonth,
+                    Tiebreak = l.Tiebreak,
+                    LotId = l.LotId,
+                    Description = l.Description,
                     Rate = l.Rate > 0m ? l.Rate : openingRate,
-                    InQuantity = l.Quantity, InValue = l.Value, InActualValue = l.ActualValue,
-                    Quantity = l.Quantity, Value = l.Value, ActualValue = l.ActualValue,
+                    InQuantity = l.Quantity,
+                    InValue = l.Value,
+                    InActualValue = l.ActualValue,
+                    Quantity = l.Quantity,
+                    Value = l.Value,
+                    ActualValue = l.ActualValue,
                 });
             }
             // Lots claiming MORE than the opening holds: the opening balance is
@@ -207,10 +216,16 @@ namespace MyApp.Api.Helpers
                 var a = Math.Max(0m, openingActualValue - lotActual);
                 pools.Add(new Pool
                 {
-                    Key = UntracedKey, Kind = PoolKind.OpeningUntraced, Rate = openingRate,
+                    Key = UntracedKey,
+                    Kind = PoolKind.OpeningUntraced,
+                    Rate = openingRate,
                     Tiebreak = int.MaxValue,
-                    InQuantity = untracedQty, InValue = v, InActualValue = a,
-                    Quantity = untracedQty, Value = v, ActualValue = a,
+                    InQuantity = untracedQty,
+                    InValue = v,
+                    InActualValue = a,
+                    Quantity = untracedQty,
+                    Value = v,
+                    ActualValue = a,
                 });
             }
             // The pools must open at EXACTLY the opening balance's money, or
@@ -304,12 +319,21 @@ namespace MyApp.Api.Helpers
                         var a = !scaleUp ? l.ActualValue : Round(l.ActualValue * f);
                         var pool = new Pool
                         {
-                            Key = l.Key, Kind = PoolKind.Restated, GdNumber = l.GdNumber,
-                            OrderDate = l.OrderDate, ClaimMonth = l.ClaimMonth, Tiebreak = l.Tiebreak,
-                            MovementId = m.Id, Description = l.Description,
+                            Key = l.Key,
+                            Kind = PoolKind.Restated,
+                            GdNumber = l.GdNumber,
+                            OrderDate = l.OrderDate,
+                            ClaimMonth = l.ClaimMonth,
+                            Tiebreak = l.Tiebreak,
+                            MovementId = m.Id,
+                            Description = l.Description,
                             Rate = l.Rate > 0m ? l.Rate : displayRate,
-                            InQuantity = q, InValue = v, InActualValue = a,
-                            Quantity = q, Value = v, ActualValue = a,
+                            InQuantity = q,
+                            InValue = v,
+                            InActualValue = a,
+                            Quantity = q,
+                            Value = v,
+                            ActualValue = a,
                         };
                         pools.Add(pool);
                         restatedPools.Add(pool);
@@ -440,13 +464,20 @@ namespace MyApp.Api.Helpers
                             {
                                 Key = arr != null ? $"arrival-{arr.ConsignmentLineId}" : $"move-{m.Id}",
                                 Kind = arr != null ? PoolKind.GdArrival : PoolKind.Inward,
-                                GdNumber = arr?.GdNumber, OrderDate = arr?.GdDate ?? m.Date,
-                                ClaimMonth = arr?.ClaimMonth, Tiebreak = m.Id,
-                                ConsignmentLineId = arr?.ConsignmentLineId, MovementId = m.Id,
+                                GdNumber = arr?.GdNumber,
+                                OrderDate = arr?.GdDate ?? m.Date,
+                                ClaimMonth = arr?.ClaimMonth,
+                                Tiebreak = m.Id,
+                                ConsignmentLineId = arr?.ConsignmentLineId,
+                                MovementId = m.Id,
                                 Description = arr?.Description,
                                 Rate = m.Rate is > 0m ? m.Rate.Value : displayRate,
-                                InQuantity = poolQty, InValue = pv, InActualValue = pa,
-                                Quantity = poolQty, Value = pv, ActualValue = pa,
+                                InQuantity = poolQty,
+                                InValue = pv,
+                                InActualValue = pa,
+                                Quantity = poolQty,
+                                Value = pv,
+                                ActualValue = pa,
                             };
                             pools.Add(pool);
                             list.Add(new Take(pool.Key, poolQty, pv, pa));
@@ -529,8 +560,11 @@ namespace MyApp.Api.Helpers
 
             return new Result
             {
-                Position = position, Pools = pools, Takes = takes,
-                ShortfallQuantity = shortQty, ShortfallValue = Round(shortValue),
+                Position = position,
+                Pools = pools,
+                Takes = takes,
+                ShortfallQuantity = shortQty,
+                ShortfallValue = Round(shortValue),
             };
         }
 
