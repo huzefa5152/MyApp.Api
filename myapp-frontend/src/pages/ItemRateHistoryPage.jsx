@@ -168,15 +168,13 @@ export default function ItemRateHistoryPage() {
             ? `Search past bills to see the rate you've billed for an item`
             : "Select a company"
         }
+        actions={!loadingCompanies && <CompanyPicker />}
       />
 
       {loadingCompanies ? (
         <Loading>Loading companies…</Loading>
       ) : companies.length > 0 ? (
         <>
-          {/* Company picker */}
-          <CompanyPicker />
-
           {/* Filters */}
           {selectedCompany && (
             <ListFilters>

@@ -552,6 +552,108 @@
   max-width: 100%;
 }
 
+/* Desktop: the title keeps its place and the actions wrap on their own side,
+   instead of the whole action group dropping below the title. */
+@media (min-width: 768px) {
+  .k-header:has(> .k-header__actions) {
+    flex-wrap: nowrap;
+  }
+  .k-header__actions {
+    flex: 0 1 auto;
+    justify-content: flex-end;
+  }
+  .k-header__actions .k-btn {
+    white-space: nowrap;
+  }
+}
+/* The company picker in a list screen's title row. */
+.k-header__actions .k-company {
+  margin: 0;
+}
+.k-header__actions .k-company .k-select {
+  min-width: 0;
+  width: 200px;
+}
+
+/* ---------- Filter menu (secondary list filters) ---------- */
+.k-filter-menu {
+  position: relative;
+  flex: none;
+}
+.k-filter-menu__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--k-h);
+  padding: 0 0.75rem;
+  border: 1px solid var(--k-line-strong);
+  border-radius: var(--k-r-sm);
+  background: var(--k-surface);
+  color: var(--k-ink);
+  font: inherit;
+  font-size: var(--k-fs-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.k-filter-menu__btn:hover {
+  border-color: var(--k-muted);
+}
+.k-filter-menu__btn:focus-visible {
+  outline: 2px solid var(--k-focus);
+  outline-offset: 1px;
+}
+.k-filter-menu__btn[aria-expanded="true"],
+.k-filter-menu__btn.is-active {
+  border-color: var(--k-info-line);
+  background: var(--k-info-bg);
+  color: var(--k-blue);
+}
+.k-filter-menu__count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--k-blue);
+  color: #fff;
+  font-size: var(--k-fs-2xs);
+  font-weight: 700;
+}
+.k-filter-menu__panel {
+  display: none;
+}
+.k-filter-menu__panel.is-open {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  display: grid;
+  gap: 8px;
+  width: 260px;
+  padding: 10px;
+  background: var(--k-surface);
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-radius);
+  box-shadow: 0 10px 28px rgba(16, 42, 67, 0.16);
+}
+.k-filter-menu__panel > * {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+}
+@media (max-width: 767px) {
+  .k-filter-menu,
+  .k-filter-menu__panel,
+  .k-filter-menu__panel.is-open {
+    display: contents;
+  }
+  .k-filter-menu__btn {
+    display: none;
+  }
+}
+
 /* ---------- Fields (forms) ---------- */
 .k-field {
   display: flex;

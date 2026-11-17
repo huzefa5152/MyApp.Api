@@ -204,6 +204,7 @@ export default function GoodsReceiptsPage() {
           actions={
             <>
               <DocumentLinesHeaderLink />
+              {!loadingCompanies && <CompanyPicker />}
               {companies.length > 0 && canCreate && (
                 <Button
                   variant="primary"
@@ -226,8 +227,6 @@ export default function GoodsReceiptsPage() {
           <EmptyState icon={MdBusiness}>No companies available.</EmptyState>
         ) : (
           <>
-            <CompanyPicker />
-
             {selectedCompany && (
               <ListFilters>
                 <Toolbar>

@@ -1,4 +1,5 @@
-import { MdBusiness, MdSearch } from "react-icons/md";
+import { useEffect, useRef, useState } from "react";
+import { MdBusiness, MdSearch, MdTune } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import useUi2 from "../ui2/useUi2";
 import "./kit.css";
@@ -128,6 +129,50 @@ export function Toolbar({ children, className, ...rest }) {
   );
 }
 export const ToolbarSpacer = () => <span className="k-toolbar__spacer" />;
+
+/**
+ * The secondary filters of a list toolbar behind one "Filters" button, so the toolbar stays on
+ * a single line. `active` is how many of them are set; the button shows it. On a phone they
+ * render inline, because the whole filter panel already folds there.
+ */
+export function FilterMenu({ active = 0, children, label = "Filters" }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (event) => {
+      if (event.type === "keydown") {
+        if (event.key === "Escape") setOpen(false);
+        return;
+      }
+      // Portalled pickers (ComboBox) live outside this element.
+      if (ref.current?.contains(event.target) || event.target.closest?.("[data-admin-popup]"))
+        return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+  return (
+    <div className="k-filter-menu" ref={ref}>
+      <button
+        type="button"
+        className={cx("k-filter-menu__btn", active > 0 && "is-active")}
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <MdTune size={16} aria-hidden="true" />
+        {label}
+        {active > 0 && <span className="k-filter-menu__count">{active}</span>}
+      </button>
+      <div className={cx("k-filter-menu__panel", open && "is-open")}>{children}</div>
+    </div>
+  );
+}
 
 export function SearchBox({ value, onChange, placeholder = "Search…", label, className, ...rest }) {
   return (

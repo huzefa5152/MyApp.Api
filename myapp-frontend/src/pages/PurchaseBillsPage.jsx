@@ -56,6 +56,7 @@ import {
   Facts,
   EmptyState,
   Loading,
+  FilterMenu,
 } from "../ui/Kit";
 import useQueryAction from "../hooks/useQueryAction";
 
@@ -264,6 +265,7 @@ export default function PurchaseBillsPage() {
           actions={
             <>
               <DocumentLinesHeaderLink />
+              {!loadingCompanies && <CompanyPicker />}
               {companies.length > 0 && canCreate && (
                 <>
                   <Button variant="secondary" icon={MdReceipt} onClick={openSalePicker}>
@@ -307,8 +309,6 @@ export default function PurchaseBillsPage() {
           <EmptyState icon={MdBusiness}>No companies available.</EmptyState>
         ) : (
           <>
-            <CompanyPicker />
-
             {selectedCompany && (
               <ListFilters>
                 <Toolbar>
@@ -349,17 +349,19 @@ export default function PurchaseBillsPage() {
                       aria-label="To date"
                     />
                   </div>
-                  <select
-                    className="k-select"
-                    aria-label="Purchase source"
-                    value={sourceFilter}
-                    onChange={onFilterChange(setSourceFilter)}
-                  >
-                    <option value="">All purchase sources</option>
-                    <option value="challan">Local direct purchases</option>
-                    <option value="other">Inventory purchases (manual)</option>
-                    <option value="fbr">FBR imported purchases</option>
-                  </select>
+                  <FilterMenu active={sourceFilter ? 1 : 0}>
+                    <select
+                      className="k-select"
+                      aria-label="Purchase source"
+                      value={sourceFilter}
+                      onChange={onFilterChange(setSourceFilter)}
+                    >
+                      <option value="">All purchase sources</option>
+                      <option value="challan">Local direct purchases</option>
+                      <option value="other">Inventory purchases (manual)</option>
+                      <option value="fbr">FBR imported purchases</option>
+                    </select>
+                  </FilterMenu>
                   {hasFilters && (
                     <Button variant="ghost" size="sm" onClick={resetFilters}>
                       Clear

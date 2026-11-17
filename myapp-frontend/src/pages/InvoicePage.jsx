@@ -79,6 +79,7 @@ import {
   SearchBox,
   Loading,
   EmptyState,
+  FilterMenu,
 } from "../ui/Kit";
 import SearchableClientSelect from "../Components/SearchableClientSelect";
 import { useCompany } from "../contexts/CompanyContext";
@@ -1453,6 +1454,7 @@ export default function InvoicePage({ mode = "invoices" }) {
           actions={
             <>
               <DocumentLinesHeaderLink />
+              {!loadingCompanies && <CompanyPicker />}
               {/* Creation buttons live on the Bills tab only — Invoices tab is
                 for FBR classification & submission of existing records. */}
               {isBillsMode && companies.length > 0 && canCreate && (
@@ -1489,6 +1491,14 @@ export default function InvoicePage({ mode = "invoices" }) {
                   New {noteLabel}
                 </Button>
               )}
+              {canImportTaxSheet && selectedCompany && (
+                <Button
+                  onClick={() => setTaxSheetOpen(true)}
+                  title="Adjust many invoices at once from a filled-in Tax Sheet (Excel)"
+                >
+                  Import tax sheet
+                </Button>
+              )}
             </>
           }
         />
@@ -1497,8 +1507,6 @@ export default function InvoicePage({ mode = "invoices" }) {
           <Loading />
         ) : companies.length > 0 ? (
           <>
-            <CompanyPicker />
-
             {/* FBR Bulk Actions — bar shows if caller has either FBR perm.
               Validate All is gated on canFbrValidate; Submit All on
               canFbrSubmit. Asymmetric grants render a partial bar.
@@ -1636,52 +1644,56 @@ export default function InvoicePage({ mode = "invoices" }) {
                       style={styles.clientPicker}
                     />
                   )}
-                  {/* FBR workflow-status filter — Bills & Invoices tabs (not the
-                  immutable note tabs). Server-side, so it paginates correctly. */}
-                  {!isNotesMode && (
-                    <select
-                      className="k-select"
-                      value={fbrFilter}
-                      onChange={handleFilterChange(setFbrFilter)}
-                      title="Filter by FBR status"
-                    >
-                      <option value="">All FBR statuses</option>
-                      <option value="notadjusted">Needs review / setup</option>
-                      <option value="ready">Ready to validate</option>
-                      <option value="submitted">Submitted to FBR</option>
-                      <option value="fbrcancelled">Cancelled at FBR</option>
-                      <option value="excluded">FBR excluded</option>
-                    </select>
-                  )}
-                  {/* Customer document-handover filter — Invoices + Notes views
-                  (not the pre-FBR Bills tab, where nearly every row is "—").
-                  Server-side, so it paginates correctly. */}
-                  {!isBillsMode && (
-                    <select
-                      className="k-select"
-                      value={handoverFilter}
-                      onChange={handleFilterChange(setHandoverFilter)}
-                      title="Filter by customer document handover"
-                    >
-                      <option value="">All documents</option>
-                      <option value="pending">Docs pending</option>
-                      <option value="delivered">Docs delivered</option>
-                    </select>
-                  )}
-                  {isBillsMode && has("bills.costs.view") && (
-                    <select
-                      aria-label="Costing status"
-                      className="k-select"
-                      value={costingStatus}
-                      onChange={handleFilterChange(setCostingStatus)}
-                      title="Filter by costing status"
-                    >
-                      <option value="">All costing statuses</option>
-                      <option value="not-costed">Not costed</option>
-                      <option value="partial">Partially costed</option>
-                      <option value="full">Fully costed</option>
-                    </select>
-                  )}
+                  <FilterMenu
+                    active={[fbrFilter, handoverFilter, costingStatus].filter(Boolean).length}
+                  >
+                    {/* FBR workflow-status filter — Bills & Invoices tabs (not the
+                    immutable note tabs). Server-side, so it paginates correctly. */}
+                    {!isNotesMode && (
+                      <select
+                        className="k-select"
+                        value={fbrFilter}
+                        onChange={handleFilterChange(setFbrFilter)}
+                        title="Filter by FBR status"
+                      >
+                        <option value="">All FBR statuses</option>
+                        <option value="notadjusted">Needs review / setup</option>
+                        <option value="ready">Ready to validate</option>
+                        <option value="submitted">Submitted to FBR</option>
+                        <option value="fbrcancelled">Cancelled at FBR</option>
+                        <option value="excluded">FBR excluded</option>
+                      </select>
+                    )}
+                    {/* Customer document-handover filter — Invoices + Notes views
+                    (not the pre-FBR Bills tab, where nearly every row is "—").
+                    Server-side, so it paginates correctly. */}
+                    {!isBillsMode && (
+                      <select
+                        className="k-select"
+                        value={handoverFilter}
+                        onChange={handleFilterChange(setHandoverFilter)}
+                        title="Filter by customer document handover"
+                      >
+                        <option value="">All documents</option>
+                        <option value="pending">Docs pending</option>
+                        <option value="delivered">Docs delivered</option>
+                      </select>
+                    )}
+                    {isBillsMode && has("bills.costs.view") && (
+                      <select
+                        aria-label="Costing status"
+                        className="k-select"
+                        value={costingStatus}
+                        onChange={handleFilterChange(setCostingStatus)}
+                        title="Filter by costing status"
+                      >
+                        <option value="">All costing statuses</option>
+                        <option value="not-costed">Not costed</option>
+                        <option value="partial">Partially costed</option>
+                        <option value="full">Fully costed</option>
+                      </select>
+                    )}
+                  </FilterMenu>
                   <div style={styles.dateGroup}>
                     <input
                       type="date"
@@ -1717,15 +1729,6 @@ export default function InvoicePage({ mode = "invoices" }) {
                       flexWrap: "wrap",
                     }}
                   >
-                    {canImportTaxSheet && selectedCompany && (
-                      <Button
-                        size="sm"
-                        onClick={() => setTaxSheetOpen(true)}
-                        title="Adjust many invoices at once from a filled-in Tax Sheet (Excel)"
-                      >
-                        Import tax sheet
-                      </Button>
-                    )}
                     {canPrint && <PrintTemplateSelect picker={tplPicker} />}
                     {isBigScreen && (
                       <ViewModeToggle

@@ -50,6 +50,7 @@ import {
   SearchBox,
   EmptyState,
   Loading,
+  FilterMenu,
 } from "../ui/Kit";
 import SearchableClientSelect from "../Components/SearchableClientSelect";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
@@ -587,6 +588,7 @@ export default function ChallanPage() {
               actions={
                 <>
                   <DocumentLinesHeaderLink />
+                  {!loadingCompanies && <CompanyPicker />}
                   {companies.length > 0 && canCreate && (
                     <Button variant="primary" icon={MdAdd} onClick={handleAddChallan}>
                       New Challan
@@ -609,8 +611,6 @@ export default function ChallanPage() {
               <Loading>Loading companies…</Loading>
             ) : companies.length > 0 ? (
               <>
-                <CompanyPicker />
-
                 {/* Filters + view-mode toggle */}
                 {selectedCompany && (
                   <ListFilters>
@@ -622,33 +622,6 @@ export default function ChallanPage() {
                         }
                         placeholder="Search DC#, Client, PO..."
                       />
-                      {has("bills.costs.view") && (
-                        <select
-                          aria-label="Costing status"
-                          className="k-select"
-                          value={costingStatus}
-                          onChange={handleFilterChange(setCostingStatus)}
-                        >
-                          <option value="">All costing statuses</option>
-                          <option value="not-costed">Not costed</option>
-                          <option value="partial">Partially costed</option>
-                          <option value="full">Fully costed</option>
-                        </select>
-                      )}
-                      <select
-                        className="k-select"
-                        aria-label="Status"
-                        value={statusFilter}
-                        onChange={handleFilterChange(setStatusFilter)}
-                      >
-                        <option value="">All Status</option>
-                        <option value="Pending">Pending</option>
-                        <option value="Imported">Imported</option>
-                        <option value="No PO">No PO</option>
-                        <option value="Setup Required">Setup Required</option>
-                        <option value="Invoiced">Billed</option>
-                        <option value="Cancelled">Cancelled</option>
-                      </select>
                       {canViewClients && (
                         <div style={{ flex: "1 1 190px", maxWidth: 240 }}>
                           <SearchableClientSelect
@@ -659,18 +632,51 @@ export default function ChallanPage() {
                           />
                         </div>
                       )}
-                      {has("salesorders.list.view") && (
-                        <div style={{ flex: "1 1 190px", maxWidth: 240 }}>
-                          <SearchableSelect
-                            items={orderOptions}
-                            value={salesOrderFilter}
-                            onChange={(id) => handleSalesOrderFilter(id)}
-                            labelKey="label"
-                            searchKeys={["label"]}
-                            placeholder="All Sales Orders"
-                          />
-                        </div>
-                      )}
+                      <FilterMenu
+                        active={
+                          [costingStatus, statusFilter, salesOrderFilter].filter(Boolean).length
+                        }
+                      >
+                        {has("bills.costs.view") && (
+                          <select
+                            aria-label="Costing status"
+                            className="k-select"
+                            value={costingStatus}
+                            onChange={handleFilterChange(setCostingStatus)}
+                          >
+                            <option value="">All costing statuses</option>
+                            <option value="not-costed">Not costed</option>
+                            <option value="partial">Partially costed</option>
+                            <option value="full">Fully costed</option>
+                          </select>
+                        )}
+                        <select
+                          className="k-select"
+                          aria-label="Status"
+                          value={statusFilter}
+                          onChange={handleFilterChange(setStatusFilter)}
+                        >
+                          <option value="">All Status</option>
+                          <option value="Pending">Pending</option>
+                          <option value="Imported">Imported</option>
+                          <option value="No PO">No PO</option>
+                          <option value="Setup Required">Setup Required</option>
+                          <option value="Invoiced">Billed</option>
+                          <option value="Cancelled">Cancelled</option>
+                        </select>
+                        {has("salesorders.list.view") && (
+                          <div>
+                            <SearchableSelect
+                              items={orderOptions}
+                              value={salesOrderFilter}
+                              onChange={(id) => handleSalesOrderFilter(id)}
+                              labelKey="label"
+                              searchKeys={["label"]}
+                              placeholder="All Sales Orders"
+                            />
+                          </div>
+                        )}
+                      </FilterMenu>
                       <input
                         type="date"
                         className="k-input"

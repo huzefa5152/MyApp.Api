@@ -276,6 +276,7 @@ export default function SalesQuotePage() {
           actions={
             <>
               <DocumentLinesHeaderLink />
+              {!loadingCompanies && <CompanyPicker />}
               {companies.length > 0 && canCreate && (
                 <Button
                   variant="primary"
@@ -302,7 +303,6 @@ export default function SalesQuotePage() {
           <Loading>Loading companies...</Loading>
         ) : companies.length > 0 ? (
           <>
-            <CompanyPicker />
             {selectedCompany && (
               <ListFilters>
                 <Toolbar>

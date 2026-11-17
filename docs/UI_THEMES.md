@@ -119,7 +119,9 @@ Trader integration (2026-10-09): includes the current Trader security and busine
 `PageHeader` (icon tile + title + count + subtitle + actions; `className="k-header--hero"`
 keeps the dashboard gradient banner in Classic) · `CompanyPicker` (renders nothing in
 Workspace — the topbar switcher drives the same CompanyContext) · `Button`,
-`IconButton` · `Toolbar`, `ToolbarSpacer`, `SearchBox` · `Field` + `k-input` /
+`IconButton` · `Toolbar`, `ToolbarSpacer`, `SearchBox`, `FilterMenu` (secondary list filters
+behind one Filters button with a count, inline on a phone; list screens put `CompanyPicker` in
+the `PageHeader` actions so the toolbar stays one line) · `Field` + `k-input` /
 `k-select` / `k-textarea`, `k-form-grid` · `Card` · `TableWrap` + `<table className="k-table">`
 (`k-num`, `k-actions`, `k-muted`) · `Tabs` · `StatGrid` / `StatCard` · `Facts` ·
 `EmptyState`, `Loading`, `Alert`. Dialogs keep `formStyles` from `theme.js`.
