@@ -1,8 +1,17 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  MdAdd, MdCheckCircle, MdClose, MdCloudUpload, MdDelete, MdEdit, MdError, MdInfoOutline,
-  MdMenuBook, MdRestartAlt, MdWarning,
+  MdAdd,
+  MdCheckCircle,
+  MdClose,
+  MdCloudUpload,
+  MdDelete,
+  MdEdit,
+  MdError,
+  MdInfoOutline,
+  MdMenuBook,
+  MdRestartAlt,
+  MdWarning,
 } from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useCompany } from "../contexts/CompanyContext";
@@ -10,7 +19,11 @@ import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { formStyles, modalSizes, colors } from "../theme";
 import {
-  previewGdCosting, previewGdCostingManual, commitGdCosting, getImportProfiles, setGdCustomsUnit,
+  previewGdCosting,
+  previewGdCostingManual,
+  commitGdCosting,
+  getImportProfiles,
+  setGdCustomsUnit,
 } from "../api/spreadsheetImportApi";
 import BillStep from "../Components/bill/BillStep";
 import BillChecklist from "../Components/bill/BillChecklist";
@@ -18,9 +31,23 @@ import GdLineEditor from "../Components/costing/GdLineEditor";
 import LateGdMatchPanel from "../Components/stock/LateGdMatchPanel";
 import GdReviewLines from "../Components/costing/GdReviewLines";
 import {
-  MODE_NEW_ARRIVALS, COSTING_ANCHORS, lineProblems, blankLine, nextLineFrom,
-  editorLineFrom, toLinePayload, previewLineToPayload, effectiveLeaveOut, entryChecklist,
-  commitSummary, summarySentences, commitLabel, moneyText, qtyText, computeCosting, bulkActions,
+  MODE_NEW_ARRIVALS,
+  COSTING_ANCHORS,
+  lineProblems,
+  blankLine,
+  nextLineFrom,
+  editorLineFrom,
+  toLinePayload,
+  previewLineToPayload,
+  effectiveLeaveOut,
+  entryChecklist,
+  commitSummary,
+  summarySentences,
+  commitLabel,
+  moneyText,
+  qtyText,
+  computeCosting,
+  bulkActions,
 } from "../utils/gdCostingEntry";
 
 /**
@@ -45,38 +72,85 @@ import {
  */
 
 const card = {
-  background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 12,
-  padding: "0.9rem 1rem", marginBottom: "0.85rem",
+  background: "#fff",
+  border: `1px solid ${colors.cardBorder}`,
+  borderRadius: 12,
+  padding: "0.9rem 1rem",
+  marginBottom: "0.85rem",
 };
 
 const btn = (color, disabled) => ({
-  display: "inline-flex", alignItems: "center", gap: 8, minHeight: 44, padding: "0.55rem 1rem",
-  borderRadius: 9, border: "none", background: disabled ? "#c8d1de" : color, color: "#fff",
-  fontWeight: 700, fontSize: 14, cursor: disabled ? "not-allowed" : "pointer", boxShadow: "none",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  minHeight: 44,
+  padding: "0.55rem 1rem",
+  borderRadius: 9,
+  border: "none",
+  background: disabled ? "#c8d1de" : color,
+  color: "#fff",
+  fontWeight: 700,
+  fontSize: 14,
+  cursor: disabled ? "not-allowed" : "pointer",
+  boxShadow: "none",
 });
 
 const ghostBtn = (color) => ({
-  display: "inline-flex", alignItems: "center", gap: 6, minHeight: 44, padding: "0.5rem 0.9rem",
-  borderRadius: 9, border: `1px solid ${color}55`, background: "#fff", color,
-  fontWeight: 700, fontSize: 13.5, cursor: "pointer", boxShadow: "none",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  minHeight: 44,
+  padding: "0.5rem 0.9rem",
+  borderRadius: 9,
+  border: `1px solid ${color}55`,
+  background: "#fff",
+  color,
+  fontWeight: 700,
+  fontSize: 13.5,
+  cursor: "pointer",
+  boxShadow: "none",
 });
 
 const segBtn = (active) => ({
-  display: "inline-flex", alignItems: "center", gap: 6, minHeight: 44, padding: "0.55rem 0.95rem",
-  borderRadius: 9, border: `1px solid ${active ? colors.blue : colors.cardBorder}`,
-  background: active ? colors.blue : "#fff", color: active ? "#fff" : colors.textPrimary,
-  fontWeight: 700, fontSize: 13.5, cursor: "pointer", boxShadow: "none",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  minHeight: 44,
+  padding: "0.55rem 0.95rem",
+  borderRadius: 9,
+  border: `1px solid ${active ? colors.blue : colors.cardBorder}`,
+  background: active ? colors.blue : "#fff",
+  color: active ? "#fff" : colors.textPrimary,
+  fontWeight: 700,
+  fontSize: 13.5,
+  cursor: "pointer",
+  boxShadow: "none",
 });
 
 const selectStyle = {
-  width: "100%", maxWidth: 420, minHeight: 44, padding: "0.5rem 0.65rem", borderRadius: 8,
-  border: `1px solid ${colors.inputBorder}`, background: colors.inputBg, fontSize: 14,
+  width: "100%",
+  maxWidth: 420,
+  minHeight: 44,
+  padding: "0.5rem 0.65rem",
+  borderRadius: 8,
+  border: `1px solid ${colors.inputBorder}`,
+  background: colors.inputBg,
+  fontSize: 14,
 };
 
 const bulkBtn = (color) => ({
-  display: "inline-flex", alignItems: "center", gap: 6, minHeight: 44, padding: "0.45rem 0.9rem",
-  borderRadius: 8, border: `1px solid ${color}`, background: "#fff", color, fontWeight: 700,
-  fontSize: 13.5, cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  minHeight: 44,
+  padding: "0.45rem 0.9rem",
+  borderRadius: 8,
+  border: `1px solid ${color}`,
+  background: "#fff",
+  color,
+  fontWeight: 700,
+  fontSize: 13.5,
+  cursor: "pointer",
 });
 
 function Banner({ tone = "warn", children }) {
@@ -88,10 +162,20 @@ function Banner({ tone = "warn", children }) {
   }[tone];
   const Icon = c[2];
   return (
-    <div role={tone === "error" ? "alert" : undefined} style={{
-      display: "flex", gap: 9, padding: "0.65rem 0.8rem", borderRadius: 9, background: c[1],
-      borderLeft: `3px solid ${c[0]}`, marginBottom: "0.55rem", fontSize: 13.5, lineHeight: 1.45,
-    }}>
+    <div
+      role={tone === "error" ? "alert" : undefined}
+      style={{
+        display: "flex",
+        gap: 9,
+        padding: "0.65rem 0.8rem",
+        borderRadius: 9,
+        background: c[1],
+        borderLeft: `3px solid ${c[0]}`,
+        marginBottom: "0.55rem",
+        fontSize: 13.5,
+        lineHeight: 1.45,
+      }}
+    >
       <Icon size={18} style={{ color: c[0], flexShrink: 0, marginTop: 1 }} />
       <div style={{ minWidth: 0 }}>{children}</div>
     </div>
@@ -102,23 +186,45 @@ function Banner({ tone = "warn", children }) {
 // consequential choice on the screen (GD_IMPORT_COSTING_GUIDE.md §3).
 function ModeCard({ active, title, body, onPick, disabled, tone = colors.blue }) {
   return (
-    <label style={{
-      display: "flex", gap: 10, alignItems: "flex-start", padding: "0.7rem 0.8rem", borderRadius: 10,
-      border: `1px solid ${active ? tone : colors.cardBorder}`, background: active ? `${tone}0f` : "#fff",
-      cursor: disabled ? "not-allowed" : "pointer", minHeight: 44, boxSizing: "border-box",
-    }}>
-      <input type="radio" name="gdCostingMode" checked={active} disabled={disabled} onChange={onPick}
-        aria-label={title} style={{ width: 18, height: 18, marginTop: 2, flexShrink: 0 }} />
+    <label
+      style={{
+        display: "flex",
+        gap: 10,
+        alignItems: "flex-start",
+        padding: "0.7rem 0.8rem",
+        borderRadius: 10,
+        border: `1px solid ${active ? tone : colors.cardBorder}`,
+        background: active ? `${tone}0f` : "#fff",
+        cursor: disabled ? "not-allowed" : "pointer",
+        minHeight: 44,
+        boxSizing: "border-box",
+      }}
+    >
+      <input
+        type="radio"
+        name="gdCostingMode"
+        checked={active}
+        disabled={disabled}
+        onChange={onPick}
+        aria-label={title}
+        style={{ width: 18, height: 18, marginTop: 2, flexShrink: 0 }}
+      />
       <span>
         <span style={{ display: "block", fontWeight: 800, fontSize: 14 }}>{title}</span>
-        <span style={{ display: "block", fontSize: 12.5, color: colors.textSecondary, marginTop: 2 }}>{body}</span>
+        <span
+          style={{ display: "block", fontSize: 12.5, color: colors.textSecondary, marginTop: 2 }}
+        >
+          {body}
+        </span>
       </span>
     </label>
   );
 }
 
 const hasContent = (m) =>
-  ["description", "hsCode", "quantity", "assessedValue"].some((k) => String(m?.[k] ?? "").trim() !== "");
+  ["description", "hsCode", "quantity", "assessedValue"].some(
+    (k) => String(m?.[k] ?? "").trim() !== "",
+  );
 
 export default function GdCostingImportPage() {
   const { has, isSeedAdmin, permissions } = usePermissions();
@@ -126,7 +232,8 @@ export default function GdCostingImportPage() {
   const { companies, selectedCompany } = useCompany();
   const canRun = has("importcosting.sheet.run");
   const canSeeConsignments = has("importcosting.consignments.view");
-  const canSeeStock = isSeedAdmin || [...(permissions || [])].some((k) => String(k).startsWith("stock."));
+  const canSeeStock =
+    isSeedAdmin || [...(permissions || [])].some((k) => String(k).startsWith("stock."));
 
   const [companyId, setCompanyId] = useState(selectedCompany?.id ? String(selectedCompany.id) : "");
   const [mode, setMode] = useState(MODE_NEW_ARRIVALS);
@@ -172,13 +279,18 @@ export default function GdCostingImportPage() {
     if (!el) return undefined;
     const measure = () => {
       const r = el.getBoundingClientRect();
-      setBarBox((b) => (b && b.left === r.left && b.width === r.width ? b : { left: r.left, width: r.width }));
+      setBarBox((b) =>
+        b && b.left === r.left && b.width === r.width ? b : { left: r.left, width: r.width },
+      );
     };
     measure();
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
     ro?.observe(el);
     window.addEventListener("resize", measure);
-    return () => { ro?.disconnect(); window.removeEventListener("resize", measure); };
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
   }, []);
   // And after every render: cheap, and it catches a sidebar that opened or
   // folded without the page itself changing size.
@@ -186,7 +298,9 @@ export default function GdCostingImportPage() {
     const el = pageRef.current?.closest("main") || pageRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    setBarBox((b) => (b && b.left === r.left && b.width === r.width ? b : { left: r.left, width: r.width }));
+    setBarBox((b) =>
+      b && b.left === r.left && b.width === r.width ? b : { left: r.left, width: r.width },
+    );
   });
 
   useEffect(() => {
@@ -194,31 +308,54 @@ export default function GdCostingImportPage() {
   }, [selectedCompany, companyId]);
 
   const clearReview = useCallback(() => {
-    setPreview(null); setSource(null); setSheetNotes([]); setLeaveOutChoice({}); setChosenItem({});
-    setConfirmNew({}); setAsNew({}); setStale(false); setFixing(null);
+    setPreview(null);
+    setSource(null);
+    setSheetNotes([]);
+    setLeaveOutChoice({});
+    setChosenItem({});
+    setConfirmNew({});
+    setAsNew({});
+    setStale(false);
+    setFixing(null);
   }, []);
 
   const resetAll = useCallback(() => {
-    clearReview(); setResult(null); setFile(null); setFileKey((k) => k + 1);
-    setTyped(blankLine()); setTypedShowAll(false); setStaged([]);
+    clearReview();
+    setResult(null);
+    setFile(null);
+    setFileKey((k) => k + 1);
+    setTyped(blankLine());
+    setTypedShowAll(false);
+    setStaged([]);
   }, [clearReview]);
 
-  useEffect(() => { resetAll(); }, [companyId, resetAll]);
+  useEffect(() => {
+    resetAll();
+  }, [companyId, resetAll]);
 
   // The one built-in workbook layout, resolved quietly -- nothing to choose.
   useEffect(() => {
     let cancelled = false;
-    setProfile(null); setProfileError("");
+    setProfile(null);
+    setProfileError("");
     if (!companyId) return undefined;
     getImportProfiles({ kind: "GdCosting", companyId })
       .then(({ data }) => {
         if (cancelled) return;
         const chosen = (data || []).find((p) => p.isDefault) || (data || [])[0] || null;
         setProfile(chosen);
-        if (!chosen) setProfileError("No GD costing layout is set up yet. Ask an administrator to check the import profiles.");
+        if (!chosen)
+          setProfileError(
+            "No GD costing layout is set up yet. Ask an administrator to check the import profiles.",
+          );
       })
-      .catch(() => { if (!cancelled) setProfileError("Could not load the GD costing layout. Reload the page and try again."); });
-    return () => { cancelled = true; };
+      .catch(() => {
+        if (!cancelled)
+          setProfileError("Could not load the GD costing layout. Reload the page and try again.");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [companyId]);
 
   /**
@@ -227,29 +364,41 @@ export default function GdCostingImportPage() {
    * depends on the server's answer (Backfill leaves a line with nothing to
    * price out), so when an answer changes it, the server is asked once more.
    */
-  const recheck = useCallback(async ({ base, edits = {}, modeNow, leave, chosen, src, confirm = {}, fresh = asNew }) => {
-    const build = (pv, withEdits) => (pv.lines || []).map((l) => {
-      const extra = {
-        sourceRow: l.sourceRow,
-        leaveOut: effectiveLeaveOut(l, modeNow, leave),
-        chosenOpeningStockBalanceId: chosen[l.sourceRow] ?? null,
-        // Unset = the server's default: New Arrivals brings a code that is not
-        // on the books in as a new item without a tick per line.
-        confirmNewStock: confirm[l.sourceRow] ?? null,
-        asNewItem: fresh[l.sourceRow] ?? false,
-      };
-      return withEdits[l.sourceRow] ? toLinePayload(withEdits[l.sourceRow], extra) : previewLineToPayload(l, extra);
-    });
-    let pv = base;
-    let pending = edits;
-    for (let pass = 0; pass < 2; pass++) {
-      const { data } = await previewGdCostingManual({ companyId, lines: build(pv, pending), mode: modeNow, source: src });
-      pv = data;
-      pending = {};
-      if ((pv.lines || []).every((l) => l.leaveOut === effectiveLeaveOut(l, modeNow, leave))) break;
-    }
-    return pv;
-  }, [companyId, asNew]);
+  const recheck = useCallback(
+    async ({ base, edits = {}, modeNow, leave, chosen, src, confirm = {}, fresh = asNew }) => {
+      const build = (pv, withEdits) =>
+        (pv.lines || []).map((l) => {
+          const extra = {
+            sourceRow: l.sourceRow,
+            leaveOut: effectiveLeaveOut(l, modeNow, leave),
+            chosenOpeningStockBalanceId: chosen[l.sourceRow] ?? null,
+            // Unset = the server's default: New Arrivals brings a code that is not
+            // on the books in as a new item without a tick per line.
+            confirmNewStock: confirm[l.sourceRow] ?? null,
+            asNewItem: fresh[l.sourceRow] ?? false,
+          };
+          return withEdits[l.sourceRow]
+            ? toLinePayload(withEdits[l.sourceRow], extra)
+            : previewLineToPayload(l, extra);
+        });
+      let pv = base;
+      let pending = edits;
+      for (let pass = 0; pass < 2; pass++) {
+        const { data } = await previewGdCostingManual({
+          companyId,
+          lines: build(pv, pending),
+          mode: modeNow,
+          source: src,
+        });
+        pv = data;
+        pending = {};
+        if ((pv.lines || []).every((l) => l.leaveOut === effectiveLeaveOut(l, modeNow, leave)))
+          break;
+      }
+      return pv;
+    },
+    [companyId, asNew],
+  );
 
   // One wrapper for every server round trip from the review: the preview on
   // screen is replaced only by a complete answer.
@@ -271,38 +420,62 @@ export default function GdCostingImportPage() {
       ? recheck({ base: data, modeNow, leave: {}, chosen: {}, src })
       : data;
 
-  const onCheckFile = () => run("preview", async () => {
-    setResult(null);
-    const { data } = await previewGdCosting({ file, companyId, profileId: profile?.id, mode });
-    const src = {
-      fileName: data.fileName, fileSha256: data.fileSha256, fileSizeBytes: data.fileSizeBytes,
-      importProfileId: data.importProfileId, profileVersion: data.profileVersion,
-    };
-    setSource(src); setSheetNotes(data.warnings || []); setLeaveOutChoice({}); setChosenItem({});
-    setConfirmNew({}); setAsNew({}); setStale(false);
-    return settleDefaults(data, src, mode);
-  });
+  const onCheckFile = () =>
+    run("preview", async () => {
+      setResult(null);
+      const { data } = await previewGdCosting({ file, companyId, profileId: profile?.id, mode });
+      const src = {
+        fileName: data.fileName,
+        fileSha256: data.fileSha256,
+        fileSizeBytes: data.fileSizeBytes,
+        importProfileId: data.importProfileId,
+        profileVersion: data.profileVersion,
+      };
+      setSource(src);
+      setSheetNotes(data.warnings || []);
+      setLeaveOutChoice({});
+      setChosenItem({});
+      setConfirmNew({});
+      setAsNew({});
+      setStale(false);
+      return settleDefaults(data, src, mode);
+    });
 
   const typedLines = () => [...staged, ...(hasContent(typed) ? [typed] : [])];
 
   const onCheckTyped = () => {
     const lines = typedLines();
-    if (lines.length === 0) { setTypedShowAll(true); return Promise.resolve(false); }
+    if (lines.length === 0) {
+      setTypedShowAll(true);
+      return Promise.resolve(false);
+    }
     return run("preview", async () => {
       setResult(null);
       const payload = lines.map((m, i) => toLinePayload(m, { sourceRow: i + 1 }));
       const { data } = await previewGdCostingManual({ companyId, lines: payload, mode });
       // What was in the form is now line N of the list, so the list and the
       // review describe the same lines.
-      if (hasContent(typed)) { setStaged(lines); setTyped(nextLineFrom(typed)); setTypedShowAll(false); }
-      setSource(null); setSheetNotes([]); setLeaveOutChoice({}); setChosenItem({});
-      setConfirmNew({}); setAsNew({}); setStale(false);
+      if (hasContent(typed)) {
+        setStaged(lines);
+        setTyped(nextLineFrom(typed));
+        setTypedShowAll(false);
+      }
+      setSource(null);
+      setSheetNotes([]);
+      setLeaveOutChoice({});
+      setChosenItem({});
+      setConfirmNew({});
+      setAsNew({});
+      setStale(false);
       return settleDefaults(data, null, mode);
     });
   };
 
   const onAddLine = () => {
-    if (lineProblems(typed).length > 0) { setTypedShowAll(true); return; }
+    if (lineProblems(typed).length > 0) {
+      setTypedShowAll(true);
+      return;
+    }
     setStaged((s) => [...s, typed]);
     setTyped(nextLineFrom(typed));
     setTypedShowAll(false);
@@ -327,42 +500,102 @@ export default function GdCostingImportPage() {
     if (next === mode) return;
     setMode(next);
     if (preview && !stale)
-      run("recheck", () => recheck({ base: preview, modeNow: next, leave: leaveOutChoice, chosen: chosenItem, src: source, confirm: confirmNew }));
+      run("recheck", () =>
+        recheck({
+          base: preview,
+          modeNow: next,
+          leave: leaveOutChoice,
+          chosen: chosenItem,
+          src: source,
+          confirm: confirmNew,
+        }),
+      );
   };
 
   const onToggleLeaveOut = (line, value) => {
     const leave = { ...leaveOutChoice, [line.sourceRow]: value };
     setLeaveOutChoice(leave);
-    run("recheck", () => recheck({ base: preview, modeNow: mode, leave, chosen: chosenItem, src: source, confirm: confirmNew }));
+    run("recheck", () =>
+      recheck({
+        base: preview,
+        modeNow: mode,
+        leave,
+        chosen: chosenItem,
+        src: source,
+        confirm: confirmNew,
+      }),
+    );
   };
 
   const onConfirmNew = (line, value) => {
     const confirm = { ...confirmNew, [line.sourceRow]: value };
     setConfirmNew(confirm);
-    run("recheck", () => recheck({ base: preview, modeNow: mode, leave: leaveOutChoice, chosen: chosenItem, src: source, confirm }));
+    run("recheck", () =>
+      recheck({
+        base: preview,
+        modeNow: mode,
+        leave: leaveOutChoice,
+        chosen: chosenItem,
+        src: source,
+        confirm,
+      }),
+    );
   };
 
   // Customs unit -> item unit, saved per company; the re-check then converts
   // the line (and every later GD for that item) on the server.
   const onSetCustomsUnit = (line, factor) =>
     run("recheck", async () => {
-      await setGdCustomsUnit(companyId, { itemTypeId: line.itemTypeId, customsUnit: line.unit, factor });
-      return recheck({ base: preview, modeNow: mode, leave: leaveOutChoice, chosen: chosenItem, src: source, confirm: confirmNew });
+      await setGdCustomsUnit(companyId, {
+        itemTypeId: line.itemTypeId,
+        customsUnit: line.unit,
+        factor,
+      });
+      return recheck({
+        base: preview,
+        modeNow: mode,
+        leave: leaveOutChoice,
+        chosen: chosenItem,
+        src: source,
+        confirm: confirmNew,
+      });
     });
 
   // One click for a whole set of lines, and ONE re-check for all of them.
   const onBulkLeaveOut = (rows) => {
     const leave = { ...leaveOutChoice };
-    rows.forEach((r) => { leave[r] = true; });
+    rows.forEach((r) => {
+      leave[r] = true;
+    });
     setLeaveOutChoice(leave);
-    run("recheck", () => recheck({ base: preview, modeNow: mode, leave, chosen: chosenItem, src: source, confirm: confirmNew }));
+    run("recheck", () =>
+      recheck({
+        base: preview,
+        modeNow: mode,
+        leave,
+        chosen: chosenItem,
+        src: source,
+        confirm: confirmNew,
+      }),
+    );
   };
 
   const onBulkConfirm = (rows) => {
     const confirm = { ...confirmNew };
-    rows.forEach((r) => { confirm[r] = true; });
+    rows.forEach((r) => {
+      confirm[r] = true;
+    });
     setConfirmNew(confirm);
-    run("recheck", () => recheck({ base: preview, modeNow: mode, leave: leaveOutChoice, chosen: chosenItem, src: source, confirm }));
+    run("recheck", () =>
+      recheck({
+        base: preview,
+        modeNow: mode,
+        leave: leaveOutChoice,
+        chosen: chosenItem,
+        src: source,
+        confirm,
+      }),
+    );
   };
 
   const onChoose = (line, balanceId) => {
@@ -376,22 +609,45 @@ export default function GdCostingImportPage() {
       confirm = { ...confirmNew, [line.sourceRow]: true };
     } else {
       delete fresh[line.sourceRow];
-      if (balanceId) chosen[line.sourceRow] = balanceId; else delete chosen[line.sourceRow];
+      if (balanceId) chosen[line.sourceRow] = balanceId;
+      else delete chosen[line.sourceRow];
     }
     setChosenItem(chosen);
     setAsNew(fresh);
     setConfirmNew(confirm);
-    run("recheck", () => recheck({ base: preview, modeNow: mode, leave: leaveOutChoice, chosen, src: source, confirm, fresh }));
+    run("recheck", () =>
+      recheck({
+        base: preview,
+        modeNow: mode,
+        leave: leaveOutChoice,
+        chosen,
+        src: source,
+        confirm,
+        fresh,
+      }),
+    );
   };
 
-  const onFix = (line) => setFixing({ sourceRow: line.sourceRow, draft: editorLineFrom(line), problems: line.problems || [] });
+  const onFix = (line) =>
+    setFixing({
+      sourceRow: line.sourceRow,
+      draft: editorLineFrom(line),
+      problems: line.problems || [],
+    });
 
   const onSaveFix = async () => {
     const { sourceRow, draft } = fixing;
-    const ok = await run("recheck", () => recheck({
-      base: preview, edits: { [sourceRow]: draft }, modeNow: mode, leave: leaveOutChoice, chosen: chosenItem, src: source,
-      confirm: confirmNew,
-    }));
+    const ok = await run("recheck", () =>
+      recheck({
+        base: preview,
+        edits: { [sourceRow]: draft },
+        modeNow: mode,
+        leave: leaveOutChoice,
+        chosen: chosenItem,
+        src: source,
+        confirm: confirmNew,
+      }),
+    );
     if (!ok) return;
     // A typed GD's list follows the fix, so going back to it shows the same line.
     if (!source) setStaged((s) => s.map((m, i) => (i + 1 === sourceRow ? { ...draft } : m)));
@@ -404,11 +660,12 @@ export default function GdCostingImportPage() {
     if (summary?.newItems > 0) {
       const ok = await confirm({
         title: "Create new stock?",
-        message: `${summary.newItems} item${summary.newItems === 1 ? " is" : "s are"} not on your books and will be created `
-          + `with ${qtyText(summary.newUnits)} units of opening stock worth ${moneyText(summary.newSelling)}, `
-          + `added to the Inventory account: ${summary.newNames.slice(0, 6).join(", ")}`
-          + `${summary.newNames.length > 6 ? ` and ${summary.newNames.length - 6} more` : ""}. `
-          + "Only continue if these goods are really in stock.",
+        message:
+          `${summary.newItems} item${summary.newItems === 1 ? " is" : "s are"} not on your books and will be created ` +
+          `with ${qtyText(summary.newUnits)} units of opening stock worth ${moneyText(summary.newSelling)}, ` +
+          `added to the Inventory account: ${summary.newNames.slice(0, 6).join(", ")}` +
+          `${summary.newNames.length > 6 ? ` and ${summary.newNames.length - 6} more` : ""}. ` +
+          "Only continue if these goods are really in stock.",
         confirmText: "Create new stock",
         variant: "danger",
       });
@@ -417,24 +674,29 @@ export default function GdCostingImportPage() {
     return doCommit();
   };
 
-  const doCommit = () => run("commit", async () => {
-    const { data } = await commitGdCosting({
-      companyId: Number(companyId),
-      importProfileId: preview.importProfileId,
-      profileVersion: preview.profileVersion,
-      fileSha256: preview.fileSha256,
-      fileName: preview.fileName,
-      fileSizeBytes: preview.fileSizeBytes,
-      lines: preview.lines,
-      createMissingStock: true,
-      mode,
+  const doCommit = () =>
+    run("commit", async () => {
+      const { data } = await commitGdCosting({
+        companyId: Number(companyId),
+        importProfileId: preview.importProfileId,
+        profileVersion: preview.profileVersion,
+        fileSha256: preview.fileSha256,
+        fileName: preview.fileName,
+        fileSizeBytes: preview.fileSizeBytes,
+        lines: preview.lines,
+        createMissingStock: true,
+        mode,
+      });
+      setResult(data);
+      clearReview();
+      setFile(null);
+      setFileKey((k) => k + 1);
+      setTyped(blankLine());
+      setStaged([]);
+      setTypedShowAll(false);
+      notify("Imported.", "success");
+      return null;
     });
-    setResult(data);
-    clearReview(); setFile(null); setFileKey((k) => k + 1);
-    setTyped(blankLine()); setStaged([]); setTypedShowAll(false);
-    notify("Imported.", "success");
-    return null;
-  });
 
   const checklist = useMemo(
     () => entryChecklist({ companyId, preview, stale }),
@@ -453,35 +715,72 @@ export default function GdCostingImportPage() {
   }
 
   // ── step statuses and summaries ─────────────────────────────────────────
-  const modeText = mode === MODE_NEW_ARRIVALS ? "New goods arrived" : "One-off: pricing stock already on the books";
+  const modeText =
+    mode === MODE_NEW_ARRIVALS
+      ? "New goods arrived"
+      : "One-off: pricing stock already on the books";
   const step1 = companyId ? "done" : "todo";
   const step2 = preview && !stale ? "done" : stale ? "warn" : "todo";
-  const lineIssues = checklist.filter((i) => i.key.startsWith("line-") || i.key.startsWith("blocking-") || i.key === "all-out");
+  const lineIssues = checklist.filter(
+    (i) => i.key.startsWith("line-") || i.key.startsWith("blocking-") || i.key === "all-out",
+  );
   const step3 = !preview ? "todo" : lineIssues.length > 0 ? "warn" : "done";
   const typedCount = typedLines().length;
   const lines = preview?.lines || [];
   const fixCount = lines.filter((l) => !l.leaveOut && (l.problems || []).length > 0).length;
   const leftCount = lines.filter((l) => l.leaveOut).length;
-  const notes = source ? sheetNotes : (preview?.warnings || []);
+  const notes = source ? sheetNotes : preview?.warnings || [];
 
   return (
     <div ref={pageRef} style={{ padding: "0 0 7.5rem", maxWidth: 1100, margin: "0 auto" }}>
-      <h1 className="page-title" style={{ fontSize: 22, margin: "0 0 0.25rem", color: colors.textPrimary }}>Import Costing</h1>
-      <p className="page-subtitle" style={{ margin: "0 0 0.35rem", color: colors.textSecondary, fontSize: 14, maxWidth: "68ch" }}>
-        Bring a customs GD's goods and their landed cost onto the books. Every line is checked first,
-        and nothing is saved until you press the button at the bottom.
+      <h1
+        className="page-title"
+        style={{ fontSize: 22, margin: "0 0 0.25rem", color: colors.textPrimary }}
+      >
+        Import Costing
+      </h1>
+      <p
+        className="page-subtitle"
+        style={{
+          margin: "0 0 0.35rem",
+          color: colors.textSecondary,
+          fontSize: 14,
+          maxWidth: "68ch",
+        }}
+      >
+        Bring a customs GD's goods and their landed cost onto the books. Every line is checked
+        first, and nothing is saved until you press the button at the bottom.
       </p>
-      <Link to="/guides/import" style={{
-        display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700,
-        color: colors.blue, textDecoration: "none", marginBottom: "0.8rem", minHeight: 44,
-      }}>
+      <Link
+        to="/guides/import"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          fontSize: 13,
+          fontWeight: 700,
+          color: colors.blue,
+          textDecoration: "none",
+          marginBottom: "0.8rem",
+          minHeight: 44,
+        }}
+      >
         <MdMenuBook size={16} aria-hidden="true" /> How to use this
       </Link>
 
       {result && (
         <div style={card}>
-          <Banner tone="ok"><strong>Imported.</strong> The GD is recorded and its stock is on the books.</Banner>
-          <div style={{ display: "grid", gap: "0.6rem", gridTemplateColumns: "repeat(auto-fit, minmax(min(160px, 100%), 1fr))", margin: "0.3rem 0 0.6rem" }}>
+          <Banner tone="ok">
+            <strong>Imported.</strong> The GD is recorded and its stock is on the books.
+          </Banner>
+          <div
+            style={{
+              display: "grid",
+              gap: "0.6rem",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(160px, 100%), 1fr))",
+              margin: "0.3rem 0 0.6rem",
+            }}
+          >
             {[
               ["GDs recorded", result.consignmentsWritten],
               ["Lines recorded", result.linesWritten],
@@ -492,21 +791,28 @@ export default function GdCostingImportPage() {
             ].map(([k, v]) => (
               <div key={k}>
                 <div style={{ fontSize: 12, color: colors.textSecondary }}>{k}</div>
-                <div style={{ fontSize: 17, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{v}</div>
+                <div style={{ fontSize: 17, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
+                  {v}
+                </div>
               </div>
             ))}
           </div>
           {(result.messages || []).length > 0 && (
-            <ul style={{ margin: "0.2rem 0 0", paddingLeft: "1.2rem", fontSize: 13, lineHeight: 1.6 }}>
-              {result.messages.map((m, i) => <li key={i}>{m}</li>)}
+            <ul
+              style={{ margin: "0.2rem 0 0", paddingLeft: "1.2rem", fontSize: 13, lineHeight: 1.6 }}
+            >
+              {result.messages.map((m, i) => (
+                <li key={i}>{m}</li>
+              ))}
             </ul>
           )}
           {result.stockSheetMatchesUpdated > 0 && (
             <div style={{ marginTop: "0.7rem" }}>
               <Banner tone="ok">
-                <strong>Stock value kept in line.</strong> This GD is dated before your last stock-sheet match or value
-                correction for {result.stockSheetMatchesUpdated} item{result.stockSheetMatchesUpdated === 1 ? "" : "s"}, so it
-                was added to it. Nothing for you to do.
+                <strong>Stock value kept in line.</strong> This GD is dated before your last
+                stock-sheet match or value correction for {result.stockSheetMatchesUpdated} item
+                {result.stockSheetMatchesUpdated === 1 ? "" : "s"}, so it was added to it. Nothing
+                for you to do.
               </Banner>
             </div>
           )}
@@ -519,32 +825,79 @@ export default function GdCostingImportPage() {
             <button type="button" onClick={resetAll} style={btn(colors.teal, false)}>
               <MdRestartAlt size={18} /> Import another GD
             </button>
-            {canSeeConsignments && <Link to="/imports/consignments" style={{ ...ghostBtn(colors.blue), textDecoration: "none" }}>Open Consignments</Link>}
-            {canSeeStock && <Link to="/stock" style={{ ...ghostBtn(colors.blue), textDecoration: "none" }}>See stock on hand</Link>}
+            {canSeeConsignments && (
+              <Link
+                to="/imports/consignments"
+                style={{ ...ghostBtn(colors.blue), textDecoration: "none" }}
+              >
+                Open Consignments
+              </Link>
+            )}
+            {canSeeStock && (
+              <Link to="/stock" style={{ ...ghostBtn(colors.blue), textDecoration: "none" }}>
+                See stock on hand
+              </Link>
+            )}
           </div>
         </div>
       )}
 
       {/* 1 ── Company and what arrived ─────────────────────────────────── */}
-      <BillStep id={COSTING_ANCHORS.company} n={1} title="Company & what arrived" status={step1}
-        summary={company ? <><strong>{company.name}</strong><span>· {modeText}</span></> : null}
-        help="Choose whose books this GD goes on, and say what the GD is. Almost every GD is new goods arriving.">
+      <BillStep
+        id={COSTING_ANCHORS.company}
+        n={1}
+        title="Company & what arrived"
+        status={step1}
+        summary={
+          company ? (
+            <>
+              <strong>{company.name}</strong>
+              <span>· {modeText}</span>
+            </>
+          ) : null
+        }
+        help="Choose whose books this GD goes on, and say what the GD is. Almost every GD is new goods arriving."
+      >
         <div style={{ display: "grid", gap: "0.8rem" }}>
           <div>
-            <label htmlFor="costing-company" style={{ display: "block", fontSize: 13, color: colors.textSecondary, marginBottom: 4 }}>
-              Company<span aria-hidden="true" style={{ color: colors.danger, marginLeft: 3 }}>*</span>
+            <label
+              htmlFor="costing-company"
+              style={{
+                display: "block",
+                fontSize: 13,
+                color: colors.textSecondary,
+                marginBottom: 4,
+              }}
+            >
+              Company
+              <span aria-hidden="true" style={{ color: colors.danger, marginLeft: 3 }}>
+                *
+              </span>
             </label>
-            <select id="costing-company" value={companyId} onChange={(e) => setCompanyId(e.target.value)}
-              disabled={!!busy} style={selectStyle}>
+            <select
+              id="costing-company"
+              value={companyId}
+              onChange={(e) => setCompanyId(e.target.value)}
+              disabled={!!busy}
+              style={selectStyle}
+            >
               <option value="">Choose a company…</option>
-              {(companies || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {(companies || []).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
             </select>
           </div>
 
-          <ModeCard active={mode === MODE_NEW_ARRIVALS} disabled={!!busy} onPick={() => onMode(MODE_NEW_ARRIVALS)}
+          <ModeCard
+            active={mode === MODE_NEW_ARRIVALS}
+            disabled={!!busy}
+            onPick={() => onMode(MODE_NEW_ARRIVALS)}
             tone={colors.successDark}
             title="New goods arrived on this GD"
-            body="The monthly case. Each line adds its quantity, landed cost and selling value to the item it matches; a line that matches nothing becomes a new item." />
+            body="The monthly case. Each line adds its quantity, landed cost and selling value to the item it matches; a line that matches nothing becomes a new item."
+          />
 
           {/* Backfill (pricing stock already on the books) is no longer offered
               here (2026-10-03, maintainer's decision): it was used once, to load
@@ -555,95 +908,229 @@ export default function GdCostingImportPage() {
       </BillStep>
 
       {/* 2 ── The GD ───────────────────────────────────────────────────── */}
-      <BillStep id={COSTING_ANCHORS.gd} n={2} title="The GD" status={step2}
-        summary={preview && !stale
-          ? <span>{source ? source.fileName : `${lines.length} typed line${lines.length === 1 ? "" : "s"}`} · checked</span>
-          : null}
-        notice={stale ? <Banner tone="warn">You changed the lines after checking them. Press <strong>Check</strong> again before bringing them in.</Banner> : null}
-        help="Upload the GD costing sheet your accountant keeps, or type the GD's lines off the paper. Either way, Check shows what will happen before anything is saved.">
+      <BillStep
+        id={COSTING_ANCHORS.gd}
+        n={2}
+        title="The GD"
+        status={step2}
+        summary={
+          preview && !stale ? (
+            <span>
+              {source
+                ? source.fileName
+                : `${lines.length} typed line${lines.length === 1 ? "" : "s"}`}{" "}
+              · checked
+            </span>
+          ) : null
+        }
+        notice={
+          stale ? (
+            <Banner tone="warn">
+              You changed the lines after checking them. Press <strong>Check</strong> again before
+              bringing them in.
+            </Banner>
+          ) : null
+        }
+        help="Upload the GD costing sheet your accountant keeps, or type the GD's lines off the paper. Either way, Check shows what will happen before anything is saved."
+      >
         {!companyId ? (
           <Banner tone="info">Choose the company first.</Banner>
         ) : (
           <>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: "0.8rem" }}>
-              <button type="button" onClick={() => { setEntry("file"); clearReview(); }} disabled={!!busy} style={segBtn(entry === "file")}>
+              <button
+                type="button"
+                onClick={() => {
+                  setEntry("file");
+                  clearReview();
+                }}
+                disabled={!!busy}
+                style={segBtn(entry === "file")}
+              >
                 <MdCloudUpload size={17} /> Upload the costing sheet
               </button>
-              <button type="button" onClick={() => { setEntry("type"); clearReview(); }} disabled={!!busy} style={segBtn(entry === "type")}>
+              <button
+                type="button"
+                onClick={() => {
+                  setEntry("type");
+                  clearReview();
+                }}
+                disabled={!!busy}
+                style={segBtn(entry === "type")}
+              >
                 <MdEdit size={17} /> Type the GD
               </button>
             </div>
 
             {entry === "file" ? (
               <div>
-                <label htmlFor="costing-file" style={{ display: "block", fontSize: 13, color: colors.textSecondary, marginBottom: 4 }}>
+                <label
+                  htmlFor="costing-file"
+                  style={{
+                    display: "block",
+                    fontSize: 13,
+                    color: colors.textSecondary,
+                    marginBottom: 4,
+                  }}
+                >
                   GD costing workbook (.xls, .xlsx, .xlsm)
                 </label>
-                <input id="costing-file" key={fileKey} type="file" accept=".xls,.xlsx,.xlsm" disabled={!!busy}
-                  onChange={(e) => { setFile(e.target.files?.[0] || null); clearReview(); }}
-                  style={{ ...selectStyle, padding: "0.5rem", maxWidth: 520 }} />
+                <input
+                  id="costing-file"
+                  key={fileKey}
+                  type="file"
+                  accept=".xls,.xlsx,.xlsm"
+                  disabled={!!busy}
+                  onChange={(e) => {
+                    setFile(e.target.files?.[0] || null);
+                    clearReview();
+                  }}
+                  style={{ ...selectStyle, padding: "0.5rem", maxWidth: 520 }}
+                />
                 <p style={{ margin: "0.45rem 0 0", fontSize: 12.5, color: colors.textSecondary }}>
-                  Close the file in Excel first. Every line needs its GD number and date, item name, HS code,
-                  quantity, unit and assessed value.{" "}
-                  <a href={`${import.meta.env.BASE_URL || "/"}templates/gd-costing-template.xlsx`} download
-                    style={{ color: colors.blue, fontWeight: 700 }}>
+                  Close the file in Excel first. Every line needs its GD number and date, item name,
+                  HS code, quantity, unit and assessed value.{" "}
+                  <a
+                    href={`${import.meta.env.BASE_URL || "/"}templates/gd-costing-template.xlsx`}
+                    download
+                    style={{ color: colors.blue, fontWeight: 700 }}
+                  >
                     Download the sample sheet
-                  </a>{" "}(filled-in rows and a sheet explaining every column).
+                  </a>{" "}
+                  (filled-in rows and a sheet explaining every column).
                 </p>
-                {profileError && <div style={{ marginTop: "0.5rem" }}><Banner tone="error">{profileError}</Banner></div>}
+                {profileError && (
+                  <div style={{ marginTop: "0.5rem" }}>
+                    <Banner tone="error">{profileError}</Banner>
+                  </div>
+                )}
                 {profile && (
                   <p style={{ margin: "0.35rem 0 0", fontSize: 12, color: colors.textSecondary }}>
                     Layout: {profile.name} (v{profile.currentVersion})
                   </p>
                 )}
                 <div style={{ marginTop: "0.8rem" }}>
-                  <button type="button" onClick={onCheckFile}
+                  <button
+                    type="button"
+                    onClick={onCheckFile}
                     disabled={!file || !profile || !!busy}
-                    style={btn(colors.blue, !file || !profile || !!busy)}>
-                    <MdCloudUpload size={18} /> {busy === "preview" ? "Checking…" : "Check the sheet"}
+                    style={btn(colors.blue, !file || !profile || !!busy)}
+                  >
+                    <MdCloudUpload size={18} />{" "}
+                    {busy === "preview" ? "Checking…" : "Check the sheet"}
                   </button>
-                  {!file && <span style={{ marginLeft: 10, fontSize: 12.5, color: colors.textSecondary }}>Choose the workbook first.</span>}
+                  {!file && (
+                    <span style={{ marginLeft: 10, fontSize: 12.5, color: colors.textSecondary }}>
+                      Choose the workbook first.
+                    </span>
+                  )}
                 </div>
               </div>
             ) : (
               <div>
-                <GdLineEditor companyId={companyId} line={typed} showAll={typedShowAll} disabled={!!busy}
-                  onChange={(patch) => { setTyped((m) => ({ ...m, ...patch })); if (preview) setStale(true); }}
-                  idPrefix="typed" />
+                <GdLineEditor
+                  companyId={companyId}
+                  line={typed}
+                  showAll={typedShowAll}
+                  disabled={!!busy}
+                  onChange={(patch) => {
+                    setTyped((m) => ({ ...m, ...patch }));
+                    if (preview) setStale(true);
+                  }}
+                  idPrefix="typed"
+                />
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: "0.8rem" }}>
-                  <button type="button" onClick={onAddLine} disabled={!!busy} style={ghostBtn(colors.blue)}>
+                  <button
+                    type="button"
+                    onClick={onAddLine}
+                    disabled={!!busy}
+                    style={ghostBtn(colors.blue)}
+                  >
                     <MdAdd size={18} /> Add line and type the next
                   </button>
-                  <button type="button" onClick={onCheckTyped} disabled={!!busy || typedCount === 0}
-                    style={btn(colors.blue, !!busy || typedCount === 0)}>
+                  <button
+                    type="button"
+                    onClick={onCheckTyped}
+                    disabled={!!busy || typedCount === 0}
+                    style={btn(colors.blue, !!busy || typedCount === 0)}
+                  >
                     <MdCloudUpload size={18} />
-                    {busy === "preview" ? "Checking…" : typedCount > 0 ? `Check ${typedCount} line${typedCount === 1 ? "" : "s"}` : "Check"}
+                    {busy === "preview"
+                      ? "Checking…"
+                      : typedCount > 0
+                        ? `Check ${typedCount} line${typedCount === 1 ? "" : "s"}`
+                        : "Check"}
                   </button>
                 </div>
                 {staged.length > 0 && (
                   <div style={{ marginTop: "0.9rem" }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary, marginBottom: 6 }}>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 800,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                        color: colors.textSecondary,
+                        marginBottom: 6,
+                      }}
+                    >
                       Lines added ({staged.length})
                     </div>
                     {staged.map((m, i) => (
-                      <div key={i} style={{
-                        display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.4rem 0.8rem",
-                        padding: "0.45rem 0.6rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 9, marginBottom: 6,
-                      }}>
-                        <span style={{ fontWeight: 800, color: colors.textSecondary, minWidth: 28 }}>{i + 1}</span>
-                        <span style={{ flex: "1 1 200px", minWidth: 0, fontWeight: 600, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                      <div
+                        key={i}
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          alignItems: "center",
+                          gap: "0.4rem 0.8rem",
+                          padding: "0.45rem 0.6rem",
+                          border: `1px solid ${colors.cardBorder}`,
+                          borderRadius: 9,
+                          marginBottom: 6,
+                        }}
+                      >
+                        <span
+                          style={{ fontWeight: 800, color: colors.textSecondary, minWidth: 28 }}
+                        >
+                          {i + 1}
+                        </span>
+                        <span
+                          style={{
+                            flex: "1 1 200px",
+                            minWidth: 0,
+                            fontWeight: 600,
+                            display: "-webkit-box",
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: "vertical",
+                            overflow: "hidden",
+                          }}
+                        >
                           {m.description || "(no item name)"}
                         </span>
                         <span style={{ fontSize: 12.5, color: colors.textSecondary }}>
-                          {m.gdNumber || "no GD"} · HS {m.hsCode || "—"} · {qtyText(m.quantity)} {m.unit}
+                          {m.gdNumber || "no GD"} · HS {m.hsCode || "—"} · {qtyText(m.quantity)}{" "}
+                          {m.unit}
                         </span>
-                        <span style={{ fontSize: 12.5, fontVariantNumeric: "tabular-nums" }}>{moneyText(computeCosting(m).cost)}</span>
+                        <span style={{ fontSize: 12.5, fontVariantNumeric: "tabular-nums" }}>
+                          {moneyText(computeCosting(m).cost)}
+                        </span>
                         <span style={{ display: "flex", gap: 6 }}>
-                          <button type="button" onClick={() => onEditStaged(i)} disabled={!!busy} style={ghostBtn(colors.blue)}>
+                          <button
+                            type="button"
+                            onClick={() => onEditStaged(i)}
+                            disabled={!!busy}
+                            style={ghostBtn(colors.blue)}
+                          >
                             <MdEdit size={16} /> Edit
                           </button>
-                          <button type="button" onClick={() => onRemoveStaged(i)} disabled={!!busy} style={ghostBtn(colors.danger)}
-                            aria-label={`Remove line ${i + 1}`}>
+                          <button
+                            type="button"
+                            onClick={() => onRemoveStaged(i)}
+                            disabled={!!busy}
+                            style={ghostBtn(colors.danger)}
+                            aria-label={`Remove line ${i + 1}`}
+                          >
                             <MdDelete size={16} />
                           </button>
                         </span>
@@ -658,114 +1145,238 @@ export default function GdCostingImportPage() {
       </BillStep>
 
       {/* 3 ── Check the lines ──────────────────────────────────────────── */}
-      <BillStep id={COSTING_ANCHORS.review} n={3} title="Check the lines" status={step3}
-        summary={preview ? (
-          <span>
-            {lines.length} line{lines.length === 1 ? "" : "s"}
-            {fixCount > 0 && <strong style={{ color: colors.danger }}> · {fixCount} to fix</strong>}
-            {leftCount > 0 && <span> · {leftCount} left out</span>}
-          </span>
-        ) : <span style={{ color: colors.textSecondary }}>Opens when the GD is checked</span>}
-        help={preview
-          ? "Each line says what will happen to your stock. Fix anything in red, choose the item where several share a code, or leave a line out: its goods then will not come in."
-          : null}>
+      <BillStep
+        id={COSTING_ANCHORS.review}
+        n={3}
+        title="Check the lines"
+        status={step3}
+        summary={
+          preview ? (
+            <span>
+              {lines.length} line{lines.length === 1 ? "" : "s"}
+              {fixCount > 0 && (
+                <strong style={{ color: colors.danger }}> · {fixCount} to fix</strong>
+              )}
+              {leftCount > 0 && <span> · {leftCount} left out</span>}
+            </span>
+          ) : (
+            <span style={{ color: colors.textSecondary }}>Opens when the GD is checked</span>
+          )
+        }
+        help={
+          preview
+            ? "Each line says what will happen to your stock. Fix anything in red, choose the item where several share a code, or leave a line out: its goods then will not come in."
+            : null
+        }
+      >
         {preview && (
           <>
-            {(preview.blockingErrors || []).map((e, i) => <Banner key={i} tone="error">{e}</Banner>)}
+            {(preview.blockingErrors || []).map((e, i) => (
+              <Banner key={i} tone="error">
+                {e}
+              </Banner>
+            ))}
             {preview.stockSheetMatchCount > 0 && (
               <Banner tone="warn">
-                {preview.stockSheetMatchCount} line{preview.stockSheetMatchCount === 1 ? " is" : "s are"} dated before the
-                item's last stock-sheet match. Save as usual, then use "Add these GDs to the stock-sheet match" on the
-                result (or on the Stock page) so the value of those items stays right.
+                {preview.stockSheetMatchCount} line
+                {preview.stockSheetMatchCount === 1 ? " is" : "s are"} dated before the item's last
+                stock-sheet match. Save as usual, then use "Add these GDs to the stock-sheet match"
+                on the result (or on the Stock page) so the value of those items stays right.
               </Banner>
             )}
-            {(preview.overwriteWarningCount > 0 || preview.costPlausibilityWarningCount > 0 || preview.rateWarningCount > 0) && (
+            {(preview.overwriteWarningCount > 0 ||
+              preview.costPlausibilityWarningCount > 0 ||
+              preview.rateWarningCount > 0) && (
               <Banner tone="warn">
                 Worth a look before bringing it in (the lines say why):
-                {preview.overwriteWarningCount > 0 && <> {preview.overwriteWarningCount} will REPLACE an actual cost recorded earlier.</>}
-                {preview.costPlausibilityWarningCount > 0 && <> {preview.costPlausibilityWarningCount} would write a cost that does not fit the stock it lands on.</>}
-                {preview.rateWarningCount > 0 && <> {preview.rateWarningCount} carry a rate above 50%, usually a "1" meant as 1%.</>}
+                {preview.overwriteWarningCount > 0 && (
+                  <>
+                    {" "}
+                    {preview.overwriteWarningCount} will REPLACE an actual cost recorded earlier.
+                  </>
+                )}
+                {preview.costPlausibilityWarningCount > 0 && (
+                  <>
+                    {" "}
+                    {preview.costPlausibilityWarningCount} would write a cost that does not fit the
+                    stock it lands on.
+                  </>
+                )}
+                {preview.rateWarningCount > 0 && (
+                  <>
+                    {" "}
+                    {preview.rateWarningCount} carry a rate above 50%, usually a "1" meant as 1%.
+                  </>
+                )}
               </Banner>
             )}
             {notes.length > 0 && (
               <details style={{ marginBottom: "0.7rem" }}>
-                <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 700, color: colors.textSecondary, minHeight: 32 }}>
+                <summary
+                  style={{
+                    cursor: "pointer",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: colors.textSecondary,
+                    minHeight: 32,
+                  }}
+                >
                   Notes from reading the sheet ({notes.length})
                 </summary>
-                <ul style={{ margin: "0.4rem 0 0", paddingLeft: "1.2rem", fontSize: 12.5, color: colors.textSecondary }}>
-                  {notes.map((w, i) => <li key={i}>{w}</li>)}
+                <ul
+                  style={{
+                    margin: "0.4rem 0 0",
+                    paddingLeft: "1.2rem",
+                    fontSize: 12.5,
+                    color: colors.textSecondary,
+                  }}
+                >
+                  {notes.map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
                 </ul>
               </details>
             )}
             {busy === "recheck" && <Banner tone="info">Checking again…</Banner>}
             {/* A stale review describes lines that no longer exist as typed:
                 acting on it would re-check the old ones. */}
-            {(bulk.problems.length > 0 || bulk.unconfirmed.length > 0 || bulk.undecided.length > 0) && (
+            {(bulk.problems.length > 0 ||
+              bulk.unconfirmed.length > 0 ||
+              bulk.undecided.length > 0) && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, margin: "0 0 0.8rem" }}>
                 {bulk.unconfirmed.length > 0 && (
-                  <button type="button" disabled={!!busy || stale} onClick={() => onBulkConfirm(bulk.unconfirmed)}
-                    style={bulkBtn(colors.successDark)}>
-                    <MdCheckCircle size={17} style={{ flexShrink: 0 }} /> Bring in all {bulk.unconfirmed.length} new item{bulk.unconfirmed.length === 1 ? "" : "s"}
+                  <button
+                    type="button"
+                    disabled={!!busy || stale}
+                    onClick={() => onBulkConfirm(bulk.unconfirmed)}
+                    style={bulkBtn(colors.successDark)}
+                  >
+                    <MdCheckCircle size={17} style={{ flexShrink: 0 }} /> Bring in all{" "}
+                    {bulk.unconfirmed.length} new item{bulk.unconfirmed.length === 1 ? "" : "s"}
                   </button>
                 )}
                 {bulk.problems.length > 0 && (
-                  <button type="button" disabled={!!busy || stale} onClick={() => onBulkLeaveOut(bulk.problems)}
-                    style={bulkBtn(colors.textSecondary)}>
-                    <MdClose size={17} style={{ flexShrink: 0 }} /> Leave out {bulk.problems.length} line{bulk.problems.length === 1 ? "" : "s"} that need fixing
+                  <button
+                    type="button"
+                    disabled={!!busy || stale}
+                    onClick={() => onBulkLeaveOut(bulk.problems)}
+                    style={bulkBtn(colors.textSecondary)}
+                  >
+                    <MdClose size={17} style={{ flexShrink: 0 }} /> Leave out {bulk.problems.length}{" "}
+                    line{bulk.problems.length === 1 ? "" : "s"} that need fixing
                   </button>
                 )}
                 {bulk.undecided.length > 0 && (
-                  <button type="button" disabled={!!busy || stale} onClick={() => onBulkLeaveOut(bulk.undecided)}
-                    style={bulkBtn(colors.textSecondary)}>
-                    <MdClose size={17} style={{ flexShrink: 0 }} /> Leave out {bulk.undecided.length} undecided line{bulk.undecided.length === 1 ? "" : "s"}
+                  <button
+                    type="button"
+                    disabled={!!busy || stale}
+                    onClick={() => onBulkLeaveOut(bulk.undecided)}
+                    style={bulkBtn(colors.textSecondary)}
+                  >
+                    <MdClose size={17} style={{ flexShrink: 0 }} /> Leave out{" "}
+                    {bulk.undecided.length} undecided line{bulk.undecided.length === 1 ? "" : "s"}
                   </button>
                 )}
               </div>
             )}
-            <GdReviewLines preview={preview} mode={mode} busy={!!busy || stale}
-              onFix={onFix} onToggleLeaveOut={onToggleLeaveOut} onChoose={onChoose} onConfirmNew={onConfirmNew}
-              onSetCustomsUnit={onSetCustomsUnit} />
+            <GdReviewLines
+              preview={preview}
+              mode={mode}
+              busy={!!busy || stale}
+              onFix={onFix}
+              onToggleLeaveOut={onToggleLeaveOut}
+              onChoose={onChoose}
+              onConfirmNew={onConfirmNew}
+              onSetCustomsUnit={onSetCustomsUnit}
+            />
           </>
         )}
       </BillStep>
 
       {/* 4 ── Bring it in ──────────────────────────────────────────────── */}
-      <BillStep id={COSTING_ANCHORS.commit} n={4} title="Bring it in" status={ready ? "done" : "todo"}
-        summary={summary ? <span>{moneyText(summary.totalCost)} landed cost</span> : <span style={{ color: colors.textSecondary }}>After the check</span>}>
+      <BillStep
+        id={COSTING_ANCHORS.commit}
+        n={4}
+        title="Bring it in"
+        status={ready ? "done" : "todo"}
+        summary={
+          summary ? (
+            <span>{moneyText(summary.totalCost)} landed cost</span>
+          ) : (
+            <span style={{ color: colors.textSecondary }}>After the check</span>
+          )
+        }
+      >
         {summary ? (
           <div>
-            <ul style={{ margin: "0 0 0.6rem", paddingLeft: "1.2rem", fontSize: 14, lineHeight: 1.6 }}>
-              {summarySentences(summary).map((s, i) => <li key={i}>{s}</li>)}
+            <ul
+              style={{ margin: "0 0 0.6rem", paddingLeft: "1.2rem", fontSize: 14, lineHeight: 1.6 }}
+            >
+              {summarySentences(summary).map((s, i) => (
+                <li key={i}>{s}</li>
+              ))}
             </ul>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "1.2rem", fontSize: 13.5 }}>
-              <span>Landed cost <strong style={{ fontVariantNumeric: "tabular-nums" }}>{moneyText(summary.totalCost)}</strong></span>
-              <span>Selling value <strong style={{ fontVariantNumeric: "tabular-nums" }}>{moneyText(summary.totalSelling)}</strong></span>
+              <span>
+                Landed cost{" "}
+                <strong style={{ fontVariantNumeric: "tabular-nums" }}>
+                  {moneyText(summary.totalCost)}
+                </strong>
+              </span>
+              <span>
+                Selling value{" "}
+                <strong style={{ fontVariantNumeric: "tabular-nums" }}>
+                  {moneyText(summary.totalSelling)}
+                </strong>
+              </span>
             </div>
             {mode === MODE_NEW_ARRIVALS && (
               <p style={{ margin: "0.5rem 0 0", fontSize: 12.5, color: colors.textSecondary }}>
-                When the company keeps its ledger here, each GD also posts one journal entry, dated the GD's own date.
+                When the company keeps its ledger here, each GD also posts one journal entry, dated
+                the GD's own date.
               </p>
             )}
           </div>
         ) : (
-          <p style={{ margin: 0, fontSize: 13, color: colors.textSecondary }}>Check the GD first: this step then says exactly what will be saved.</p>
+          <p style={{ margin: 0, fontSize: 13, color: colors.textSecondary }}>
+            Check the GD first: this step then says exactly what will be saved.
+          </p>
         )}
       </BillStep>
 
       {/* The footer: what is left, and the one button that saves. */}
-      <div data-costing-footer style={{
-        position: "fixed", bottom: 0, zIndex: 30,
-        left: barBox ? barBox.left : 0, width: barBox ? barBox.width : "100%", boxSizing: "border-box",
-        padding: "0.6rem clamp(0.75rem, 2vw, 1.25rem) 0.7rem", background: "#fff",
-        borderTop: `1px solid ${colors.cardBorder}`, boxShadow: "0 -6px 18px rgba(13,71,161,0.08)",
-      }}>
-        <div style={{
-          maxWidth: 1100, margin: "0 auto", display: "flex", flexWrap: "wrap", alignItems: "center",
-          gap: "0.5rem 0.8rem",
-        }}>
+      <div
+        data-costing-footer
+        style={{
+          position: "fixed",
+          bottom: 0,
+          zIndex: 30,
+          left: barBox ? barBox.left : 0,
+          width: barBox ? barBox.width : "100%",
+          boxSizing: "border-box",
+          padding: "0.6rem clamp(0.75rem, 2vw, 1.25rem) 0.7rem",
+          background: "#fff",
+          borderTop: `1px solid ${colors.cardBorder}`,
+          boxShadow: "0 -6px 18px rgba(13,71,161,0.08)",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 1100,
+            margin: "0 auto",
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: "0.5rem 0.8rem",
+          }}
+        >
           <BillChecklist items={checklist} readyText="Ready to bring in" />
-          <button type="button" onClick={onCommit} disabled={!ready}
-            style={{ ...btn(colors.successDark, !ready), marginLeft: "auto" }}>
+          <button
+            type="button"
+            onClick={onCommit}
+            disabled={!ready}
+            style={{ ...btn(colors.successDark, !ready), marginLeft: "auto" }}
+          >
             <MdCheckCircle size={18} />
             {busy === "commit" ? "Saving…" : summary ? commitLabel(summary) : "Bring into stock"}
           </button>
@@ -773,28 +1384,56 @@ export default function GdCostingImportPage() {
       </div>
 
       {fixing && (
-        <div style={formStyles.backdrop} role="dialog" aria-modal="true" aria-labelledby="fix-title">
+        <div
+          style={formStyles.backdrop}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="fix-title"
+        >
           <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }}>
             <div style={formStyles.header}>
-              <h2 id="fix-title" style={formStyles.title}>Fix row {fixing.sourceRow}</h2>
-              <button type="button" onClick={() => setFixing(null)} style={formStyles.closeButton} aria-label="Close">
+              <h2 id="fix-title" style={formStyles.title}>
+                Fix row {fixing.sourceRow}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setFixing(null)}
+                style={formStyles.closeButton}
+                aria-label="Close"
+              >
                 <MdClose size={18} />
               </button>
             </div>
             <div style={formStyles.body}>
-              <GdLineEditor companyId={companyId} line={fixing.draft} showAll serverProblems={fixing.problems}
-                disabled={busy === "recheck"} idPrefix={`fix-${fixing.sourceRow}`}
-                onChange={(patch) => setFixing((f) => ({ ...f, draft: { ...f.draft, ...patch }, problems: [] }))} />
+              <GdLineEditor
+                companyId={companyId}
+                line={fixing.draft}
+                showAll
+                serverProblems={fixing.problems}
+                disabled={busy === "recheck"}
+                idPrefix={`fix-${fixing.sourceRow}`}
+                onChange={(patch) =>
+                  setFixing((f) => ({ ...f, draft: { ...f.draft, ...patch }, problems: [] }))
+                }
+              />
             </div>
             <div style={formStyles.footer}>
               <span style={{ marginRight: "auto", fontSize: 12.5, color: colors.textSecondary }}>
                 {lineProblems(fixing.draft).length > 0
-                  ? `Still needed: ${lineProblems(fixing.draft).map((p) => p.message.replace(/\.$/, "")).join("; ")}.`
+                  ? `Still needed: ${lineProblems(fixing.draft)
+                      .map((p) => p.message.replace(/\.$/, ""))
+                      .join("; ")}.`
                   : "The line is complete. Saving checks it on the server again."}
               </span>
-              <button type="button" onClick={() => setFixing(null)} style={formStyles.cancel}>Cancel</button>
-              <button type="button" onClick={onSaveFix} disabled={busy === "recheck"}
-                style={{ ...formStyles.button, minHeight: 44 }}>
+              <button type="button" onClick={() => setFixing(null)} style={formStyles.cancel}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={onSaveFix}
+                disabled={busy === "recheck"}
+                style={{ ...formStyles.button, minHeight: 44 }}
+              >
                 {busy === "recheck" ? "Checking…" : "Save and check again"}
               </button>
             </div>
