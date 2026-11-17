@@ -204,6 +204,14 @@ def setup(base: str, admin_user: str, admin_pw: str):
         sys.exit(2)
     cid = company["id"]
     print(f"  company id={cid}")
+    # This suite pins QUANTITY reflow. A FIFO-by-GD company (every new one)
+    # takes an invoice's AMOUNT out of stock (CLAUDE.md 5b-24), so run it on
+    # the weighted average, which a company that never held stock may choose.
+    st, _ = http("PUT", f"/api/stock/company/{cid}/costing-method", base, token=token,
+                 body={"method": "WeightedAverage"})
+    if st != 200:
+        print(f"FATAL: could not put the company on the weighted average ({st})")
+        sys.exit(2)
 
     status, client = http("POST", "/api/clients", base, token=token, body={
         "name": f"Reflow Client {suffix}",
@@ -864,10 +872,6 @@ def suite_amount_stock_quantity(base, token, cid, client, supplier, suffix):
     def put(iid, item):
         return http("PUT", f"/api/invoices/{iid}", base, token=token, body={"gstRate": 18, "items": [item]})
 
-    def cost_check():
-        return http("GET", f"/api/stock/company/{cid}/bill-cost-check?from={TODAY}&to={TODAY}&minGap=1",
-                    base, token=token)
-
     # 9.1 an amount of 4 against a unit that costs 10: 1 Pcs billed, 0.4 leaves
     st, inv = create_standalone(base, token, cid, client["id"], [
         {"itemTypeId": A["id"], "description": "part of a unit", "quantity": 1, "uom": "Pcs",
@@ -889,10 +893,10 @@ def suite_amount_stock_quantity(base, token, cid, client, supplier, suffix):
     check(s, "9.2 stock quantity 3 on a 1 Pcs line is refused", st == 400, f"{st} {str(bad)[:160]}")
     check(s, "9.2 and moved no stock", approx(oa(), 99.6), f"got {oa()}")
 
-    # 9.3 the check names nothing while cost out equals the amount ...
-    st, chk = cost_check()
-    mine = [r for r in (chk or {}).get("rows", []) if r.get("invoiceId") == iid] if st == 200 else None
-    check(s, "9.3 cost check: the amount-priced line shows no gap", st == 200 and mine == [], f"{st} {str(chk)[:200]}")
+    # 9.3 (the bill cost check) left this suite on 2026-11-17: it is FIFO-only
+    # and this company runs on the weighted average; on FIFO every invoice now
+    # takes out its amount (CLAUDE.md 5b-24), so test_stock_sale_by_value.py
+    # covers the check there.
 
     # 9.4 an edit that leaves the line alone keeps the stock quantity
     lid = line(inv)["id"]
@@ -908,15 +912,7 @@ def suite_amount_stock_quantity(base, token, cid, client, supplier, suffix):
     check(s, "9.5 the line carries no stock quantity", st == 200 and line(upd).get("stockQuantity") is None,
           f"{line(upd).get('stockQuantity') if st == 200 else ''}")
 
-    # 9.6 ... and the check now names the hand-typed line: 2 units (20) left for 8
-    st, chk = cost_check()
-    mine = [r for r in (chk or {}).get("rows", []) if r.get("invoiceId") == iid] if st == 200 else []
-    check(s, "9.6 cost check lists the line with its gap of 12",
-          len(mine) == 1 and approx(float(mine[0]["gap"]), 12, 0.01) and approx(float(mine[0]["billedAmount"]), 8, 0.01),
-          f"{mine}")
-    check(s, "9.6 the totals cover every line",
-          st == 200 and approx(float(chk["gap"]), float(chk["stockCostOut"]) - float(chk["billedExcludingTax"]), 0.01),
-          f"{str(chk)[:200]}")
+    # 9.6: the cost check left with 9.3 (above).
 
     # 9.7 re-priced from an amount: a new stock quantity replaces it
     st, upd = put(iid, {**base_item, "quantity": 2, "unitPrice": 11.5, "stockQuantity": 2.3})
@@ -957,6 +953,8 @@ def suite_amount_stock_quantity(base, token, cid, client, supplier, suffix):
     if st not in (200, 201):
         return
     nid = co["id"]
+    http("PUT", f"/api/stock/company/{nid}/costing-method", base, token=token,
+         body={"method": "WeightedAverage"})   # quantity semantics, as above
     try:
         _, ncl = http("POST", "/api/clients", base, token=token, body={
             "name": f"Note Client {suffix}", "address": "1 Test Road, Karachi", "phone": "021-1234567",

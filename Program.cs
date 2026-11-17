@@ -944,6 +944,22 @@ try
             await db.SaveChangesAsync();
         }
 
+        // Invoices take their amount out of stock (CLAUDE.md 5b-24, 2026-11-17):
+        // only invoices ENTERED from now on, so every figure already matched to a
+        // stock sheet stays as it is. Write the boundary once: the highest
+        // invoice id there is. Never rewrite it -- moving it re-values invoices.
+        if (!await db.SystemSettings.AnyAsync(s => s.Key == MyApp.Api.Helpers.StockCosting.SaleByValueAfterKey))
+        {
+            var lastInvoiceId = await db.Invoices.MaxAsync(i => (int?)i.Id) ?? 0;
+            db.SystemSettings.Add(new MyApp.Api.Models.SystemSetting
+            {
+                Key = MyApp.Api.Helpers.StockCosting.SaleByValueAfterKey,
+                Value = lastInvoiceId.ToString(),
+                UpdatedAt = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
         // FIFO by GD (2026-09-28): the relief now counts the cost a purchase
         // settles on an earlier oversale (StockValuation.Step.SettledValue). The
         // relief of FIFO companies posted before that left the Inventory account

@@ -150,9 +150,18 @@ namespace MyApp.Api.Services.Implementations
         /// line total IS the bin's value to the paisa. Anything else is left to
         /// the oversell guard.
         /// </summary>
+        /// <summary>Whether an invoice being CREATED now for this company takes
+        /// its amount out of stock (CLAUDE.md 5b-24): FIFO by GD, once the
+        /// watermark exists (a new invoice's id is always above it).</summary>
+        private async Task<bool> SellsByValueAsync(int companyId)
+            => await StockCosting.SaleByValueAfterAsync(_context) != null
+               && await StockCostingMethod.IsGdFifoAsync(_context, companyId);
+
         private async Task RoundUpCloseOutBinsAsync(Company company, int companyId, IEnumerable<InvoiceItem> items, DateTime date)
         {
             if (!company.InventoryTrackingEnabled) return;
+            // A sale by value takes its amount, never a whole bin (5b-24).
+            if (await SellsByValueAsync(companyId)) return;
             // A line carrying its own stock quantity already takes out exactly
             // what its amount buys, so it is never rounded up.
             var lines = items.Where(i => i.ItemTypeId.HasValue && i.Quantity > 0 && i.StockQuantity == null).ToList();
@@ -637,6 +646,26 @@ namespace MyApp.Api.Services.Implementations
         {
             if (!(company.InventoryTrackingEnabled && company.StockGuardHardBlock)) return;
             await MyApp.Api.Helpers.StockLock.AcquireCompanyAsync(_context, companyId);
+
+            // A sale by value (5b-24) takes its amount out, so what it needs is
+            // that much stock VALUE; the quantity typed on the line is free.
+            if (await SellsByValueAsync(companyId))
+            {
+                var need = items.Where(i => i.ItemTypeId.HasValue && !i.KeepInStock && i.LineTotal > 0m)
+                    .GroupBy(i => i.ItemTypeId!.Value)
+                    .ToDictionary(g => g.Key, g => (Name: g.First().ItemTypeName ?? "", Value: g.Sum(i => i.LineTotal)));
+                if (need.Count == 0) return;
+                var held = await _stock.GetValuationsAsync(companyId, need.Keys);
+                var short_ = need.Where(kv => kv.Value.Value > held.GetValueOrDefault(kv.Key).ValueExcludingTax + 0.005m)
+                    .Select(kv => $"{kv.Value.Name} (amount {kv.Value.Value:N2}, stock value {held.GetValueOrDefault(kv.Key).ValueExcludingTax:N2})")
+                    .ToList();
+                if (short_.Count > 0)
+                    throw new StockShortageException(
+                        "Not enough stock value to issue this invoice: " + string.Join(", ", short_)
+                        + ". Enter the GD these goods came in on first.",
+                        new List<StockShortageDetail>());
+                return;
+            }
 
             var requirements = items
                 .Where(i => i.ItemTypeId.HasValue && !i.KeepInStock)

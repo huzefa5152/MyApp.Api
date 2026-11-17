@@ -72,6 +72,12 @@ namespace MyApp.Api.Helpers
             /// <summary>Keyed by the StockMovement id of a restatement: from that
             /// movement on, the item holds exactly these GD lines (CLAUDE.md 5b-17).</summary>
             public Dictionary<int, List<OpeningLot>> Restatements { get; init; } = new();
+            /// <summary>Keyed by StockMovement id: the sale VALUE (excluding
+            /// tax) an invoice movement takes out, or a note movement puts
+            /// back (CLAUDE.md 5b-24). Such a movement is walked by value and
+            /// its stored quantity is ignored: the quantity is what the value
+            /// buys.</summary>
+            public Dictionary<int, decimal> SaleValues { get; init; } = new();
         }
 
         /// <summary>The fields of a StockMovement the walk reads.</summary>
@@ -140,7 +146,12 @@ namespace MyApp.Api.Helpers
             /// movement has settled yet.</summary>
             public decimal ShortfallQuantity { get; init; }
             public decimal ShortfallValue { get; init; }
+            /// <summary>Keyed by movement id: the quantity a sale by value
+            /// took out, including what a later arrival settled for it.</summary>
+            public Dictionary<int, decimal> SaleQuantities { get; init; } = new();
         }
+
+        private readonly record struct Owed(int MovementId, decimal Value, decimal Quantity, decimal Actual);
 
         public const string ShortfallKey = "shortfall";
         public const string UntracedKey = "opening-untraced";
@@ -242,6 +253,13 @@ namespace MyApp.Api.Helpers
 
             decimal totalIn = 0m, totalOut = 0m, valueIn = 0m, valueOut = 0m;
             decimal shortQty = 0m, shortValue = 0m, shortActual = 0m; // shortQty > 0 = owed
+            // A sale by VALUE that no pool covered: the value is owed, the
+            // quantity only estimated until the next inward settles it.
+            // Kept per sale, oldest first, so each sale ends up knowing the
+            // quantity its value really bought (SaleQuantities).
+            var owed = new List<Owed>();
+            decimal owedValue = 0m, owedQty = 0m, owedActual = 0m;
+            var saleQty = new Dictionary<int, decimal>();
             decimal lastUnit = pools.Count > 0 ? pools[0].UnitValue : 0m;
             decimal lastUnitActual = pools.Count > 0 ? pools[0].UnitActual : 0m;
             decimal displayRate = openingRate;
@@ -257,10 +275,10 @@ namespace MyApp.Api.Helpers
             decimal HeldValue() => pools.Sum(p => p.Value);
             decimal HeldActual() => pools.Sum(p => p.ActualValue);
             decimal RunQty() => exactQty;
-            decimal RunValue() => HeldValue() - shortValue;
-            decimal RunActual() => HeldActual() - shortActual;
+            decimal RunValue() => HeldValue() - shortValue - owedValue;
+            decimal RunActual() => HeldActual() - shortActual - owedActual;
 
-            foreach (var m in movements.OrderBy(m => m.Date).ThenBy(m => m.Id))
+            foreach (var m in WalkOrder(movements, book))
             {
                 // ── Restatement: the item holds exactly these GD lines from here.
                 // Whatever the pools held is replaced (not consumed -- nothing
@@ -296,6 +314,7 @@ namespace MyApp.Api.Helpers
                         if (p.Quantity <= 0m) { p.Quantity = 0m; p.Value = 0m; p.ActualValue = 0m; }
                     }
                     shortQty = 0m; shortValue = 0m; shortActual = 0m;
+                    owedValue = 0m; owedQty = 0m; owedActual = 0m; owed.Clear();
                     var kept = pools.Sum(p => p.Quantity);
                     // Lines holding MORE than is on hand: a sale dated before
                     // the restatement was entered after it. Those units leave
@@ -407,7 +426,8 @@ namespace MyApp.Api.Helpers
                     // A sale return goes back into the pools that sale drained,
                     // most recently taken first, at their own cost.
                     var returned = 0m;
-                    if (IsSaleSide(m.SourceType) && sourceKey != null
+                    var saleValue = book.SaleValues.TryGetValue(m.Id, out var sv0) && sv0 > 0m ? sv0 : (decimal?)null;
+                    if (saleValue == null && IsSaleSide(m.SourceType) && sourceKey != null
                         && takenBySource.TryGetValue(sourceKey, out var taken))
                     {
                         for (var i = taken.Count - 1; i >= 0 && returned < q; i--)
@@ -430,11 +450,34 @@ namespace MyApp.Api.Helpers
                     {
                         var avg = CurrentAverage(pools, lastUnit, p => p.Value);
                         var avgActual = CurrentAverage(pools, lastUnitActual, p => p.ActualValue);
-                        var unit = m.UnitCost ?? avg;
+                        // A note by value puts back exactly its value.
+                        var unit = saleValue is decimal nv ? nv / rest : m.UnitCost ?? avg;
                         var unitActual = m.ActualUnitCost ?? avgActual;
-                        var restValue = Round(rest * unit);
+                        var restValue = saleValue ?? Round(rest * unit);
                         var restActual = Round(rest * unitActual);
                         amount += restValue; actualAmount += restActual;
+
+                        // Settle a sale by value first: it already took its
+                        // value out, so this stock hands over exactly that
+                        // value and the sale's quantity becomes what it buys.
+                        while (owed.Count > 0 && restValue > 0m && rest > 0m)
+                        {
+                            var o = owed[0];
+                            var ov = Math.Min(o.Value, restValue);
+                            var oq = ov >= restValue ? rest : rest * ov / restValue;
+                            var oa = ov >= restValue ? restActual : Round(restActual * ov / restValue);
+                            var estQ = ov >= o.Value ? o.Quantity : o.Quantity * ov / o.Value;
+                            var estA = ov >= o.Value ? o.Actual : Round(o.Actual * ov / o.Value);
+                            if (ov >= o.Value) owed.RemoveAt(0);
+                            else owed[0] = o with { Value = o.Value - ov, Quantity = o.Quantity - estQ, Actual = o.Actual - estA };
+                            owedValue -= ov; owedQty -= estQ; owedActual -= estA;
+                            saleQty[o.MovementId] = saleQty.GetValueOrDefault(o.MovementId) + oq - estQ;
+                            exactQty += estQ - oq; totalOut += oq - estQ;
+                            settledActual += oa - estA;
+                            list.Add(new Take(ShortfallKey, oq, ov, oa));
+                            rest -= oq; restValue -= ov; restActual -= oa;
+                        }
+                        if (owed.Count == 0) { owedValue = 0m; owedQty = 0m; owedActual = 0m; }
 
                         // Settle a shortfall first: those units were already sold.
                         var settle = Math.Min(rest, shortQty);
@@ -457,8 +500,8 @@ namespace MyApp.Api.Helpers
                         var poolQty = rest - settle;
                         if (poolQty > 0m)
                         {
-                            var pv = restValue - (settle > 0m ? Round(settle * unit) : 0m);
-                            var pa = restActual - (settle > 0m ? Round(settle * unitActual) : 0m);
+                            var pv = Math.Max(0m, restValue - (settle > 0m ? Round(settle * unit) : 0m));
+                            var pa = Math.Max(0m, restActual - (settle > 0m ? Round(settle * unitActual) : 0m));
                             book.Arrivals.TryGetValue(m.Id, out var arr);
                             var pool = new Pool
                             {
@@ -489,6 +532,69 @@ namespace MyApp.Api.Helpers
                     trace?.Add(new StockValuation.Step(m.Id, q > 0m ? amount / q : 0m, amount,
                         RunQty(), Round(RunValue()), q > 0m ? actualAmount / q : 0m, Round(RunActual()),
                         settledValue, settledActual));
+                }
+                else if (book.SaleValues.TryGetValue(m.Id, out var saleOut) && saleOut > 0m)
+                {
+                    // ── A sale by VALUE (CLAUDE.md 5b-24): the invoice amount
+                    // leaves, drawn from the pools in the usual order; the
+                    // quantity is what it buys. So an item's value is always
+                    // what came in less what was billed, whatever order the
+                    // GDs and invoices were typed in.
+                    var left = saleOut;
+                    var list = new List<Take>();
+                    decimal qtyOut = 0m, actualAmount = 0m;
+                    var monthStart = new DateTime(m.Date.Year, m.Date.Month, 1);
+                    var sourceKey = SourceKey(m);
+                    // Stock entered BEFORE this sale first: a GD typed in later
+                    // must not change what an earlier sale took, so it lands
+                    // whole, as the consultant's sheet adds a late GD. Only what
+                    // that stock cannot cover comes from stock entered since.
+                    var ranked = Ranked(pools, monthStart).ToList();
+                    bool EnteredBefore(Pool p) => p.MovementId is not int pid || pid < m.Id;
+                    foreach (var p in ranked.Where(EnteredBefore).Concat(ranked.Where(p => !EnteredBefore(p))))
+                    {
+                        if (left <= 0m) break;
+                        if (p.Value <= 0m) continue;   // nothing to sell from a worthless pool
+                        decimal take, tv, ta;
+                        if (left >= p.Value) { take = p.Quantity; tv = p.Value; ta = p.ActualValue; }
+                        else
+                        {
+                            tv = left; take = p.Quantity * left / p.Value;
+                            ta = Round(p.ActualValue * left / p.Value);
+                        }
+                        lastUnit = tv / take; lastUnitActual = ta / take;
+                        p.Quantity -= take; p.Value -= tv; p.ActualValue -= ta;
+                        if (p.Quantity <= 0m || p.Value <= 0m) { p.Quantity = 0m; p.Value = 0m; p.ActualValue = 0m; }
+                        p.ConsumedQuantity += take; p.ConsumedValue += tv; p.ConsumedActualValue += ta;
+                        left -= tv; qtyOut += take; actualAmount += ta;
+                        list.Add(new Take(p.Key, take, tv, ta));
+                        if (sourceKey != null)
+                        {
+                            if (!takenBySource.TryGetValue(sourceKey, out var tl))
+                                takenBySource[sourceKey] = tl = new();
+                            tl.Add((p, take, tv / take, ta / take));
+                        }
+                    }
+                    if (left > 0m)
+                    {
+                        // Sold past every pool: the value is owed by the next
+                        // arrival; the quantity is estimated until then.
+                        var eq = lastUnit > 0m ? left / lastUnit : m.Quantity * left / saleOut;
+                        var ea = Round(eq * lastUnitActual);
+                        owedValue += left; owedQty += eq; owedActual += ea;
+                        owed.Add(new Owed(m.Id, left, eq, ea));
+                        qtyOut += eq; actualAmount += ea;
+                        list.Add(new Take(ShortfallKey, eq, left, ea));
+                    }
+                    // Counted at the movement column's 4dp, so the stored
+                    // quantity (RederiveSaleQuantitiesAsync) adds up the same.
+                    qtyOut = Math.Round(qtyOut, 4);
+                    totalOut += qtyOut; valueOut += saleOut; exactQty -= qtyOut;
+                    saleQty[m.Id] = qtyOut;
+                    takes[m.Id] = list;
+                    trace?.Add(new StockValuation.Step(m.Id, qtyOut > 0m ? saleOut / qtyOut : 0m,
+                        saleOut, RunQty(), Round(RunValue()),
+                        qtyOut > 0m ? actualAmount / qtyOut : 0m, Round(RunActual())));
                 }
                 else
                 {
@@ -563,9 +669,33 @@ namespace MyApp.Api.Helpers
                 Position = position,
                 Pools = pools,
                 Takes = takes,
-                ShortfallQuantity = shortQty,
-                ShortfallValue = Round(shortValue),
+                ShortfallQuantity = shortQty + owedQty,
+                ShortfallValue = Round(shortValue + owedValue),
+                SaleQuantities = saleQty,
             };
+        }
+
+        /// <summary>
+        /// Date then id, except that a sale by value dated BEFORE a stock-sheet
+        /// match but entered AFTER it is walked right after that match: the sheet
+        /// already describes the stock on its date without that sale, so the
+        /// sale's amount comes off the sheet's lines (CLAUDE.md 5b-24).
+        /// </summary>
+        private static IEnumerable<Movement> WalkOrder(IEnumerable<Movement> movements, Book book)
+        {
+            var list = movements.ToList();
+            var matches = list.Where(m => book.Restatements.ContainsKey(m.Id)).ToList();
+            if (matches.Count == 0 || book.SaleValues.Count == 0)
+                return list.OrderBy(m => m.Date).ThenBy(m => m.Id);
+            return list.Select(m =>
+                {
+                    if (!book.SaleValues.ContainsKey(m.Id)) return (m, m.Date, m.Id, 0);
+                    var after = matches.Where(r => r.Id < m.Id && r.Date > m.Date)
+                        .OrderByDescending(r => r.Date).ThenByDescending(r => r.Id).FirstOrDefault();
+                    return after.Id == 0 ? (m, m.Date, m.Id, 0) : (m, after.Date, after.Id, 1);
+                })
+                .OrderBy(x => x.Item2).ThenBy(x => x.Item3).ThenBy(x => x.Item4).ThenBy(x => x.m.Id)
+                .Select(x => x.m);
         }
 
         /// <summary>

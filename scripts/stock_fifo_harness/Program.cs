@@ -577,5 +577,127 @@ List<string> Order(Result r, int movementId) => r.Takes[movementId].Select(t => 
     Check("stock-qty note: a line without one returns its own quantity", MyApp.Api.Helpers.StockOutQuantity.Share(null, 15m, 3m) == null);
 }
 
+// 26. Sales by VALUE (CLAUDE.md 5b-24, from 1 Nov 2026): an invoice takes its
+//     amount out of stock; the quantity is what the amount buys. So an item's
+//     value is what came in less what was billed, whatever order the GDs and
+//     invoices were typed in -- the consultant's own arithmetic.
+{
+    Result V(string name, decimal oq, decimal ov, Book book, IEnumerable<Movement> moves)
+    {
+        var r = GdFifoValuation.Compute(oq, ov, 0m, 18m, book, moves.ToList());
+        var p = r.Position;
+        Check($"{name}: value = opening + in - out", Near(p.ValueExcludingTax, ov + p.ValueIn - p.ValueOut, 0.03m),
+            $"{p.ValueExcludingTax} vs {ov + p.ValueIn - p.ValueOut}");
+        Check($"{name}: value = pools - shortfall",
+            Near(p.ValueExcludingTax, r.Pools.Sum(x => x.Value) - r.ShortfallValue, 0.03m));
+        Check($"{name}: quantity = opening + in - what the sales bought",
+            Near(p.Quantity, oq + moves.Where(m => m.IsIn).Sum(m => m.Quantity)
+                - moves.Where(m => !m.IsIn).Sum(m => r.SaleQuantities.TryGetValue(m.Id, out var q) ? q : m.Quantity), 0.0005m),
+            $"{p.Quantity}");
+        return r;
+    }
+    Book Two() => new() { Lots = { Lot("A", "GD-A", D(2026, 8), D(2026, 9), 10, 1000), Lot("B", "GD-B", D(2026, 9), null, 20, 1000) } };
+
+    // a. The amount leaves, across GDs in FIFO order; the typed quantity is ignored.
+    var b1 = Two(); b1.SaleValues[1] = 1260m;
+    var r1 = V("by-value", 30, 2000, b1, new[] { Out(1, D(2026, 11, 5), 1) });
+    Check("by-value: exactly the amount leaves", r1.Position.ValueOut == 1260m && r1.Position.ValueExcludingTax == 740m,
+        $"{r1.Position.ValueOut} / {r1.Position.ValueExcludingTax}");
+    Check("by-value: claimed GD first, then the next", Order(r1, 1).SequenceEqual(new[] { "A", "B" }));
+    Check("by-value: quantity is what the amount buys (10 + 260/50)", r1.SaleQuantities[1] == 15.2m && r1.Position.Quantity == 14.8m,
+        $"{r1.SaleQuantities[1]} / {r1.Position.Quantity}");
+    var b2 = Two(); b2.SaleValues[1] = 1260m;
+    var r2 = V("by-value-qty999", 30, 2000, b2, new[] { Out(1, D(2026, 11, 5), 999) });
+    Check("by-value: any typed quantity gives the same stock", r2.Position == r1.Position);
+
+    // b. A sale billed BEFORE its GD exists (GD dated after the sale, or typed later):
+    //    the value is owed, then the GD hands it over. The result equals typing the GD first.
+    Book Empty() => new();
+    var late = Empty(); late.SaleValues[1] = 600m;
+    late.Arrivals[2] = new GdFifoValuation.Arrival("GD-L", D(2026, 11, 12), null, 77, "late");
+    var rl = V("late-gd", 0, 0, late, new[] { Out(1, D(2026, 11, 10), 3), In(2, D(2026, 11, 12), 10, 100m, type: "ImportConsignment") });
+    var first = Empty(); first.SaleValues[1] = 600m;
+    first.Arrivals[2] = new GdFifoValuation.Arrival("GD-L", D(2026, 11, 2), null, 77, "late");
+    var rf = V("gd-first", 0, 0, first, new[] { Out(1, D(2026, 11, 10), 3), In(2, D(2026, 11, 2), 10, 100m, type: "ImportConsignment") });
+    Check("late-gd: value = GD - amount", rl.Position.ValueExcludingTax == 400m, $"{rl.Position.ValueExcludingTax}");
+    Check("late-gd: same value and quantity as entering the GD first",
+        rl.Position.ValueExcludingTax == rf.Position.ValueExcludingTax && rl.Position.Quantity == rf.Position.Quantity,
+        $"{rl.Position.Quantity} vs {rf.Position.Quantity}");
+    Check("late-gd: the sale's quantity is settled at the GD's cost", rl.SaleQuantities[1] == 6m && rl.ShortfallValue == 0m,
+        $"{rl.SaleQuantities[1]}");
+    Check("late-gd: the GD pool holds the rest", P(rl, "arrival-77").Quantity == 4m && P(rl, "arrival-77").Value == 400m);
+
+    // c. Sold past everything, even after the GD: the rest stays owed.
+    var over = Empty(); over.SaleValues[1] = 1500m;
+    var ro = V("owed", 0, 0, over, new[] { Out(1, D(2026, 11, 10), 1), In(2, D(2026, 11, 12), 10, 100m) });
+    Check("owed: value goes below zero by what is still owed", ro.Position.ValueExcludingTax == -500m && ro.ShortfallValue == 500m,
+        $"{ro.Position.ValueExcludingTax}");
+
+    // d. Two late sales are settled oldest first.
+    var two = Empty(); two.SaleValues[1] = 300m; two.SaleValues[2] = 500m;
+    var rt = V("two-owed", 0, 0, two, new[] { Out(1, D(2026, 11, 3), 1), Out(2, D(2026, 11, 4), 1), In(3, D(2026, 11, 9), 10, 100m) });
+    Check("two-owed: each sale gets the quantity its value bought", rt.SaleQuantities[1] == 3m && rt.SaleQuantities[2] == 5m
+        && rt.Position.Quantity == 2m && rt.Position.ValueExcludingTax == 200m);
+
+    // e. A credit note by value puts back exactly its value.
+    var cn = Two(); cn.SaleValues[1] = 1000m; cn.SaleValues[2] = 250m;
+    var rc = V("note", 30, 2000, cn, new[] { Out(1, D(2026, 11, 5), 1, src: 1), In(2, D(2026, 11, 6), 1, src: 2, type: "Invoice") });
+    Check("note: value = opening - sale + note", rc.Position.ValueExcludingTax == 1250m, $"{rc.Position.ValueExcludingTax}");
+
+    // f. A worthless pool is never sold from by value.
+    var zero = new Book { Lots = { Lot("Z", "GD-Z", D(2026, 1), D(2026, 1), 5, 0), Lot("A", "GD-A", D(2026, 2), D(2026, 1), 10, 1000) } };
+    zero.SaleValues[1] = 300m;
+    var rz = V("zero-pool", 15, 1000, zero, new[] { Out(1, D(2026, 11, 5), 1) });
+    Check("zero-pool: skipped", Order(rz, 1).SequenceEqual(new[] { "A" }) && P(rz, "Z").Quantity == 5m);
+
+    // g. A movement with no sale value (before 1 Nov) still leaves by quantity.
+    var mix = Two(); mix.SaleValues[2] = 500m;
+    var rm = V("mixed", 30, 2000, mix, new[] { Out(1, D(2026, 10, 5), 5), Out(2, D(2026, 11, 5), 1) });
+    Check("mixed: October by quantity, November by amount", rm.Takes[1].Sum(t => t.Value) == 500m && rm.SaleQuantities[2] == 5m
+        && rm.Position.ValueExcludingTax == 1000m, $"{rm.Position.ValueExcludingTax}");
+
+    // i. A late GD (dated before a sale, typed after it) does not change what
+    //    the sale took: the sale keeps its pools, the GD lands whole.
+    var st = Two(); st.SaleValues[1] = 1260m;
+    st.Arrivals[2] = new GdFifoValuation.Arrival("GD-LATE", D(2026, 8, 1), D(2026, 9), 88, "late");
+    var rs1 = V("stable", 30, 2000, st, new[] { Out(1, D(2026, 11, 5), 1), In(2, D(2026, 8, 1), 4, 500m, type: "ImportConsignment") });
+    Check("stable: the sale still took A then B", Order(rs1, 1).SequenceEqual(new[] { "A", "B" }) && rs1.SaleQuantities[1] == 15.2m,
+        string.Join(",", Order(rs1, 1)));
+    Check("stable: the late GD is held whole", P(rs1, "arrival-88").Quantity == 4m && P(rs1, "arrival-88").Value == 2000m);
+    Check("stable: value = in - invoiced", rs1.Position.ValueExcludingTax == 2740m);
+
+    // j. A sale dated before a stock-sheet match but typed after it comes off
+    //    the sheet's lines, after the match: sheet - amount. (A sheet always
+    //    holds what is on hand on its date; Reconcile refuses anything else.)
+    var sm = new Book { Lots = { Lot("A", "GD-A", D(2026, 8), D(2026, 9), 4, 400) } };
+    sm.SaleValues[3] = 300m;
+    sm.Restatements[2] = new() { Lot("S1", "GD-S1", D(2026, 9), D(2026, 10), 4, 600) };
+    var rj = V("after-match", 4, 400, sm, new[] {
+        new Movement(2, D(2026, 11, 30), true, 0m, null, null, null, 0m, null, "Revaluation", null),
+        Out(3, D(2026, 11, 20), 1) });
+    Check("after-match: the sheet's 600 less the 300 invoiced", rj.Position.ValueExcludingTax == 300m && rj.SaleQuantities[3] == 2m,
+        $"{rj.Position.ValueExcludingTax} / {rj.SaleQuantities[3]}");
+
+    // k. A sale typed before a match, then a GD dated before both typed after
+    //    them: the sale keeps its pools, so the GD lands whole beside the sheet.
+    var sk = Two(); sk.SaleValues[1] = 1500m;
+    sk.Restatements[2] = new() { Lot("S2", "GD-S2", D(2026, 9), D(2026, 10), 10, 500) };
+    sk.Arrivals[3] = new GdFifoValuation.Arrival("GD-K", D(2026, 11, 1), D(2026, 11), 99, "late");
+    var rk = V("match-late-gd", 30, 2000, sk, new[] { Out(1, D(2026, 11, 10), 1),
+        new Movement(2, D(2026, 11, 30), true, 0m, null, null, null, 0m, null, "Revaluation", null),
+        In(3, D(2026, 11, 1), 4, 500m, type: "ImportConsignment") });
+    Check("match-late-gd: the sale kept A + B", Order(rk, 1).SequenceEqual(new[] { "A", "B" }), string.Join(",", Order(rk, 1)));
+    Check("match-late-gd: value = the sheet's 500 + the GD's 2,000", rk.Position.ValueExcludingTax == 2500m,
+        $"{rk.Position.ValueExcludingTax}");
+
+    // h. A restatement clears what is owed (the sheet is the truth from there).
+    var rs = Empty(); rs.SaleValues[1] = 600m;
+    rs.Restatements[2] = new() { Lot("S", "GD-S", D(2026, 10), null, 4, 400) };
+    var rr = GdFifoValuation.Compute(4, 0, 0, 18, rs, new[] { Out(1, D(2026, 11, 3), 1),
+        new Movement(2, D(2026, 11, 30), true, 0m, null, null, null, 0m, null, "Revaluation", null) });
+    Check("restated: owed cleared; the sheet holds what is left after the sale", rr.ShortfallValue == 0m && rr.Position.ValueExcludingTax == 300m,
+        $"{rr.ShortfallValue} / {rr.Position.ValueExcludingTax}");
+}
+
 Console.WriteLine($"{passed + failed} checks, {failed} failed");
 return failed == 0 ? 0 : 1;

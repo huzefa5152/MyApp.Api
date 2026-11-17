@@ -775,6 +775,10 @@ namespace MyApp.Api.Services.Implementations
         /// </summary>
         public async Task PostInventoryPeriodsAsync(int companyId, DateTime? changedFrom = null)
         {
+            // Every stock change lands here, so this is where sales by value
+            // (CLAUDE.md 5b-24) get the quantity they now buy -- before, and
+            // whether or not, the ledger is on.
+            await StockCosting.RederiveSaleQuantitiesAsync(_context, companyId, null);
             if (!await IsEnabledAsync(companyId)) return;
 
             var openingRows = await _context.OpeningStockBalances.AsNoTracking()

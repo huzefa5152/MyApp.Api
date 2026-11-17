@@ -75,6 +75,27 @@ namespace MyApp.Api.Helpers
     {
         public static readonly StockCosting None = new(false, new());
 
+        /// <summary>
+        /// Invoices ENTERED after this feature shipped take their AMOUNT out of
+        /// stock, not their quantity (CLAUDE.md 5b-24) -- every FIFO-by-GD
+        /// company, old and new. Every invoice that existed before keeps the
+        /// quantity rule it was reconciled under, whatever its date, so no
+        /// matched figure moves (maintainer's decision, 2026-11-17). The
+        /// boundary is the highest invoice id at the first start of this code,
+        /// written once by Program.cs under this key; no row = nothing sells by
+        /// value yet.
+        /// </summary>
+        public const string SaleByValueAfterKey = "Stock.SaleByValueAfterInvoiceId";
+
+        /// <summary>The last invoice id that still takes out its quantity; null
+        /// before the watermark is written.</summary>
+        public static async Task<int?> SaleByValueAfterAsync(AppDbContext db)
+        {
+            var v = await db.SystemSettings.AsNoTracking()
+                .Where(s => s.Key == SaleByValueAfterKey).Select(s => s.Value).FirstOrDefaultAsync();
+            return int.TryParse(v, out var id) ? id : null;
+        }
+
         public bool IsFifo { get; }
         private readonly Dictionary<int, GdFifoValuation.Book> _books;
 
@@ -119,7 +140,7 @@ namespace MyApp.Api.Helpers
 
         /// <summary>
         /// Loads what the FIFO walk needs for <paramref name="itemTypeIds"/>
-        /// (null = every item the company holds lots or GD arrivals for). A
+        /// (null = every item the company holds lots, GD arrivals or sales by value for). A
         /// weighted-average company costs one settings lookup and nothing else.
         /// </summary>
         public static async Task<StockCosting> LoadAsync(
@@ -301,7 +322,97 @@ namespace MyApp.Api.Helpers
                     Tiebreak: l.SourceRow, LotId: null, Description: l.Description));
             }
 
+            // Invoices entered after the watermark take out their AMOUNT
+            // (CLAUDE.md 5b-24): each movement's share of its lines' amount, by
+            // quantity. A note follows the invoice it adjusts, so a return on
+            // an invoice that took out its quantity puts back quantity.
+            var after = await SaleByValueAfterAsync(db) ?? int.MaxValue;
+            var saleQ = db.StockMovements.AsNoTracking()
+                .Where(m => m.CompanyId == companyId
+                    && m.SourceType == StockMovementSourceType.Invoice
+                    && m.SourceId != null && m.SourceId > after
+                    && db.Invoices.Any(i => i.Id == m.SourceId
+                        && (i.OriginalInvoiceId == null || i.OriginalInvoiceId > after)));
+            if (ids != null) saleQ = saleQ.Where(m => ids.Contains(m.ItemTypeId));
+            var saleMoves = await saleQ.Select(m => new { m.Id, InvoiceId = m.SourceId!.Value, m.ItemTypeId, m.Quantity })
+                .ToListAsync();
+            if (saleMoves.Count > 0)
+            {
+                var invoiceIds = saleMoves.Select(m => m.InvoiceId).Distinct().ToList();
+                var amounts = (await db.InvoiceItems.AsNoTracking()
+                        .Where(i => invoiceIds.Contains(i.InvoiceId) && i.ItemTypeId != null && !i.KeepInStock)
+                        .Select(i => new { i.InvoiceId, ItemTypeId = i.ItemTypeId!.Value, i.LineTotal })
+                        .ToListAsync())
+                    .GroupBy(i => (i.InvoiceId, i.ItemTypeId))
+                    .ToDictionary(g => g.Key, g => g.Sum(i => i.LineTotal));
+                foreach (var g in saleMoves.GroupBy(m => (m.InvoiceId, m.ItemTypeId)))
+                {
+                    if (!amounts.TryGetValue(g.Key, out var total) || total <= 0m) continue;
+                    var book = books.TryGetValue(g.Key.ItemTypeId, out var existing) ? existing
+                        : books[g.Key.ItemTypeId] = new GdFifoValuation.Book();
+                    var list = g.OrderBy(m => m.Id).ToList();
+                    var qty = list.Sum(m => m.Quantity);
+                    var left = total;
+                    for (var i = 0; i < list.Count; i++)
+                    {
+                        var share = i == list.Count - 1 ? left
+                            : qty > 0m ? Math.Round(total * list[i].Quantity / qty, 2) : 0m;
+                        left -= share;
+                        if (share > 0m) book.SaleValues[list[i].Id] = share;
+                    }
+                }
+            }
+
             return new StockCosting(true, books);
         }
+
+        /// <summary>
+        /// Stores on each sale-by-value movement (CLAUDE.md 5b-24) the quantity
+        /// its amount bought in the FIFO walk, so every screen that adds up
+        /// movement quantities agrees with the walk. The walk itself ignores
+        /// the stored quantity of such a movement, so this is idempotent.
+        /// Call after anything that changes what an item's sales draw on.
+        /// </summary>
+        public static async Task RederiveSaleQuantitiesAsync(AppDbContext db, int companyId, IEnumerable<int>? itemTypeIds)
+        {
+            var ids = itemTypeIds?.Distinct().ToList();
+            if (ids is { Count: 0 }) return;
+            var costing = await LoadAsync(db, companyId, ids);
+            if (!costing.IsFifo) return;
+            ids = costing._books.Where(kv => kv.Value.SaleValues.Count > 0 && (ids == null || ids.Contains(kv.Key)))
+                .Select(kv => kv.Key).ToList();
+            if (ids.Count == 0) return;
+
+            var openings = await db.OpeningStockBalances.AsNoTracking()
+                .Where(o => o.CompanyId == companyId && ids.Contains(o.ItemTypeId))
+                .GroupBy(o => o.ItemTypeId)
+                .Select(g => new
+                {
+                    ItemTypeId = g.Key,
+                    Qty = g.Sum(o => o.Quantity),
+                    Value = g.Sum(o => o.ValueExcludingTax),
+                    ActualCost = g.Sum(o => o.ActualCostExcludingTax),
+                    Rate = g.Max(o => o.SalesTaxRate),
+                })
+                .ToDictionaryAsync(x => x.ItemTypeId, x => x);
+            var movements = await db.StockMovements
+                .Where(m => m.CompanyId == companyId && ids.Contains(m.ItemTypeId))
+                .ToListAsync();
+            var changed = false;
+            foreach (var g in movements.GroupBy(m => m.ItemTypeId))
+            {
+                var open = openings.GetValueOrDefault(g.Key);
+                var walk = costing.Detailed(g.Key,
+                    open?.Qty ?? 0m, open?.Value ?? 0m, open?.ActualCost ?? 0m, open?.Rate ?? 0m, g);
+                foreach (var m in g)
+                {
+                    if (!walk.SaleQuantities.TryGetValue(m.Id, out var q)) continue;
+                    q = Math.Round(q, 4);   // StockMovement.Quantity is decimal(18,4)
+                    if (q > 0m && q != m.Quantity) { m.Quantity = q; changed = true; }
+                }
+            }
+            if (changed) await db.SaveChangesAsync();
+        }
+
     }
 }

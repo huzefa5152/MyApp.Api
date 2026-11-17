@@ -1858,6 +1858,8 @@ that is not its billed `Quantity`. `Helpers/StockOutQuantity.cs` is the ONE rule
   (400) a value a whole unit or more from `Quantity`; equal or non-positive
   stores null. Never widen that bound: a free second quantity is an unchecked
   second book.
+  (A company selling by value -- 5b-24 -- is different: there the quantity is
+  the FIFO walk's, never a caller's.)
 - **Set only by pricing from an amount**: the two invoice forms
   (`utils/fifoPricing.js` `amountStock` / `rowStockQuantity`) and MCP
   `prepare_bill` lines that give `amount` (`StockOutQuantity.PriceFromAmount`,
@@ -1880,6 +1882,72 @@ that is not its billed `Quantity`. `Helpers/StockOutQuantity.cs` is the ONE rule
   sheet that deducts invoice amounts.
 - Suites: reflow gate suite 9, harness case 25, `test_fifo_pricing.mjs`,
   `test_mcp_parity.py` (bill by amount, `check_bill_stock_cost`), tenant route list.
+
+### 5b-24. Invoices take their AMOUNT out of stock, from a company's date (2026-11-17)
+
+The consultant's GD stock sheet deducts each invoice's amount and derives
+quantity from value. Operators type invoices and GDs 7-26 days late and in any
+order, and type quantities by hand (127 of 133 importer lines Sep-Oct), so a
+quantity-driven FIFO walk drained different GDs at different costs and the
+sheet and the software drifted every month.
+
+- **Every FIFO-by-GD company, old and new, for invoices ENTERED after it
+  shipped** (maintainer's decision 2026-11-17: no setting, and no matched figure
+  may move). The boundary is a watermark, not a date: `SystemSettings`
+  `Stock.SaleByValueAfterInvoiceId` = the highest invoice id at the first start
+  of this code (Program.cs writes it once). Invoices at or below it keep the
+  quantity rule whatever their date -- a date would have re-valued R & R's and
+  Vertex's November invoices already entered. **Never rewrite the watermark**:
+  moving it re-values every invoice in between. A note follows the invoice it
+  adjusts (`OriginalInvoiceId`). A weighted-average company has no FIFO walk
+  and is unaffected.
+- **The rule**: an invoice movement past the watermark takes out its lines'
+  `LineTotal` (excluding tax), drained from the pools in the usual FIFO order;
+  the quantity that leaves is what that value buys. A note puts back its value.
+  So per item: **value = GDs in - invoiced**, whatever order things were typed
+  in. The quantity typed on the invoice, its print and the FBR filing are free.
+- **The walk does it** (`GdFifoValuation`, `Book.SaleValues` keyed by movement,
+  filled by `StockCosting.BuildAsync` from `InvoiceItems`, split over an
+  invoice's movements of one item by quantity). A sale past every pool OWES its
+  value; the next inward hands over exactly that value, oldest owed first, and
+  the sale's quantity becomes what it bought (`Result.SaleQuantities`). A
+  worthless pool is never sold from. A restatement clears what is owed.
+- **A sale draws on stock ENTERED BEFORE it first** (pool `MovementId` below
+  the sale's id; opening lots always qualify). A GD typed in later never
+  changes what an earlier sale took, so it lands whole beside it -- as the
+  consultant adds a late GD -- and a late GD cannot ripple through the
+  quantities of every sale dated after it. Only what that stock cannot cover
+  comes from stock entered since.
+- **A sale dated BEFORE a stock-sheet match but entered AFTER it is walked
+  right after the match** (`GdFifoValuation.WalkOrder`): the sheet already
+  describes the stock on its date without it, so its amount comes off the
+  sheet's lines. Harness cases 26 i-k.
+- **The stored quantity follows the walk.** `StockCosting.RederiveSaleQuantitiesAsync`
+  writes each sale's bought quantity onto its movement (4dp) so every SQL
+  on-hand sum agrees with the walk. It runs at the top of
+  `PostingService.PostInventoryPeriodsAsync`, which every stock change already
+  calls -- so a late GD re-prices the earlier sales' quantities by itself. The
+  walk ignores the stored quantity of a sale by value, so this is idempotent.
+- **The hard block measures VALUE** for these invoices
+  (`InvoiceService.AssertBillStockAvailabilityAsync`): refused when the amount
+  is more than the item's stock value, with "enter the GD first". The close-out
+  round-up is skipped (a sale by value never takes a whole bin).
+- **5b-23's one-unit bound does not apply here**: the stored quantity is the
+  walk's, not a caller's. Lines before the date keep 5b-23 exactly.
+- Remaining differences against the sheet are real ones: an invoice on the wrong
+  item, a sheet typo, or the consultant drawing a different GD row (per-HS
+  totals still agree).
+- Suites: harness case 26 (`scripts/stock_fifo_harness`),
+  `python scripts/test_stock_sale_by_value.py --base <url>` (GD first, any
+  typed quantity, the late GD, value refusal, edit, delete, a back-dated
+  invoice, cost check, MCP `prepare_bill`). Because every new invoice on a
+  FIFO company sells by value, the suites that pin QUANTITY behaviour run
+  their test company on the weighted average (the stock gate,
+  `test_stock_itemtype_reflow.py`, whose 5b-23 cost checks therefore left it),
+  price each bill at its exact FIFO cost (`test_stock_fifo.py` 5-11b), or sell
+  by stock adjustment (`test_stock_fifo.py` 12d-12f, on their own item where
+  needed). The late-GD re-match those sections pin exists for the quantity
+  invoices entered before the watermark.
 
 ### 5c. Customer Portal — the only anonymous surface
 
@@ -2400,9 +2468,10 @@ them can be resolved from FBR.
 | Invoice screen decisions (offline): description fill, stock before save, card/table actions, FBR chip | `node scripts/test_invoice_screen.mjs` | `51/51 checks passed` |
 | GD costing import: line rules on both paths, leave-out, choose item, file identity | `python scripts/test_gd_import_costing.py`; `node scripts/test_gd_costing_entry.mjs`; `cd scripts/gd_costing_harness && dotnet run -c Release` | `476 passed, 0 failed`; `54/54 checks passed`; `145 checks, 0 failed` |
 | Invoice Sales Detail: periods, filters, Excel = screen, Excel format pinned, access | `python scripts/test_invoice_sales_detail.py` (add `--db "<conn>"` for the FBR-submitted cases); `node scripts/test_invoice_sales_detail.mjs` | `64/64 checks passed` (with `--db`; 61 + 3 skipped without); `45/45 checks passed` |
-| FIFO by GD (claimed first, never blocks, WA unchanged) | `cd scripts/stock_fifo_harness && dotnet run -c Release`; `python scripts/test_stock_fifo.py`; `node scripts/test_fifo_pricing.mjs` | `192 checks, 0 failed`; `94/94 checks passed`; `26/26 checks passed` |
+| FIFO by GD (claimed first, never blocks, WA unchanged) | `cd scripts/stock_fifo_harness && dotnet run -c Release`; `python scripts/test_stock_fifo.py`; `node scripts/test_fifo_pricing.mjs` | `248 checks, 0 failed`; `95/95 checks passed`; `26/26 checks passed` |
 | Import Tax Desk (register, input-tax worksheet, tie-out) | `python scripts/test_import_tax_desk.py` | `27/27 checks passed` |
 | Dashboards (shared sale filter, receivables, landed margin, tax position, drills tie, permissions) | `python scripts/test_dashboard_kpis.py` (add `--db "<conn>"` for the DB-backed cases); `node scripts/test_dashboard_ui.mjs` | `197/197 checks passed` (with `--db`); `20 passed, 0 failed` |
+| Invoices take their amount out of stock (5b-24): GD first, any quantity, late GD, value refusal, edit, delete, back-dated, MCP | `python scripts/test_stock_sale_by_value.py --base <url>` | `all sale-by-value checks passed` |
 | GD charges, customs units, letters of credit | `python scripts/test_import_charges_units_lcs.py` | `24/24 checks passed` |
 | Inventory Overlay (two books, one total; normal mode unchanged) | `python scripts/test_inventory_overlay.py` (add `--db <branch db>` for the submitted-lock case) | `71/71 checks passed` (1 skipped without `--db`) |
 | Hosted MCP: door, premium grant, company / division isolation, catalog, activity | `python scripts/test_mcp_isolation.py --base <url> --db <local db>` | `45/45 isolation checks passed` |

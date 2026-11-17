@@ -139,7 +139,11 @@ def pk_today():
     return (datetime.now(timezone.utc) + timedelta(hours=5)).date()
 
 
-def bill(api, h, cid, client_id, item, qty, price=3000, on=None):
+# Invoices take their AMOUNT out of stock under FIFO by GD (CLAUDE.md 5b-24),
+# so each bill here is priced at exactly the FIFO cost of the quantity it sells:
+# the amount then buys that quantity, and every FIFO-order check below still
+# says which GDs a sale of that size drains.
+def bill(api, h, cid, client_id, item, qty, price, on=None):
     return call("POST", f"{api}/invoices/standalone", h, json={
         "date": (on or pk_today()).strftime("%Y-%m-%dT00:00:00Z"),
         "companyId": cid, "clientId": client_id, "gstRate": 18,
@@ -267,7 +271,10 @@ def main():
 
         # ── 5. First bill ────────────────────────────────────────────────
         print("\n-- 5. A bill of 15 takes A (10) then C (5) --")
-        r = bill(api, h, cid, client_id, item, 15)
+        # Dated three days back: the late GDs of 12c-12e are dated yesterday, and
+        # a sale by amount dated after them would draw on them (5b-24).
+        early = pk_today() - timedelta(days=3)
+        r = bill(api, h, cid, client_id, item, 15, 20000 / 15, on=early)   # A 10 x 1,000 + C 5 x 2,000
         if not check("the bill is created", r.ok, f"http {r.status_code}: {r.text[:300]}"):
             return report()
         after = onhand(api, h, cid, iid)
@@ -342,7 +349,7 @@ def main():
 
         # ── 9. Second bill crosses into the unclaimed GD ─────────────────
         print("\n-- 9. A bill of 10 takes C (5) then the unclaimed B (5) --")
-        r = bill(api, h, cid, client_id, item, 10)
+        r = bill(api, h, cid, client_id, item, 10, 1250, on=early)   # C 5 x 2,000 + B 5 x 500
         check("the second bill is created", r.ok, r.text[:200])
         after = onhand(api, h, cid, iid)
         check("5 left worth 2,500 (B 5 x 500)",
@@ -351,7 +358,7 @@ def main():
 
         # ── 10. Past everything ─────────────────────────────────────────
         print("\n-- 10. Selling past every GD is never refused --")
-        r = bill(api, h, cid, client_id, item, 8)
+        r = bill(api, h, cid, client_id, item, 8, 500, on=early)   # B 5 x 500 + 3 uncovered at B's cost
         check("the bill is created (no oversell block)", r.ok, f"http {r.status_code}: {r.text[:200]}")
         third_id = r.json().get("id") if r.ok else None
         after = onhand(api, h, cid, iid)
@@ -410,7 +417,7 @@ def main():
               set(g) == {"SHEET-R1", "SHEET-R2"}, str(list(g)))
         check("each sheet line holds its own balance",
               near(g["SHEET-R1"]["remainingValueExcludingTax"], 3000) and near(g["SHEET-R2"]["remainingQuantity"], 2, 1e-4))
-        r = bill(api, h, cid, client_id, item, 4)
+        r = bill(api, h, cid, client_id, item, 4, 800)   # R1 3 x 1,000 + R2 1 x 200
         check("a bill after the restatement is created", r.ok, r.text[:200])
         mv = movements(api, h, cid, iid)
         out = next((m for m in mv if m["direction"] == "Out"), None)
@@ -515,6 +522,25 @@ def main():
         # write-down. The walk spent the write-down on the GD's units and valued
         # them at nil. The correction is an anchor like a sheet match.
         print("\n-- 12d. A late GD dated before a value correction --")
+        # Its own item, never invoiced: the re-match it tests is for the
+        # quantity sales entered before invoices took out their amount (5b-24).
+        name3 = f"FIFO GATE VALVE {tag}"
+        r = requests.post(f"{api}/spreadsheet-import/gd-costing/preview-manual", headers=h, timeout=60,
+                          params={"companyId": cid, "mode": "new-arrivals"}, json={"lines": [{
+                              "gdNumber": f"BASE3-{tag}", "gdDate": "2025-09-01", "description": name3,
+                              "hsCode": "8481.8090", "quantity": 5, "unit": unit, "assessedValue": 250,
+                              "customsDuty": 0, "acd": 0, "regulatoryDuty": 0, "others": 0, "salesTaxRate": 18,
+                              "astRate": 3, "incomeTaxRate": 6, "addOnProfit": 0, "sellingValue": 500}]})
+        pv = r.json() if r.ok else {}
+        r = call("POST", f"{api}/spreadsheet-import/gd-costing/commit", h, json={
+            "companyId": cid, "fileSha256": pv.get("fileSha256"), "fileName": pv.get("fileName"),
+            "fileSizeBytes": pv.get("fileSizeBytes"), "lines": pv.get("lines", []),
+            "createMissingStock": True, "mode": "new-arrivals"})
+        it3 = next((x for x in call("GET", f"{api}/stock/company/{cid}/onhand", h).json()
+                    if x["itemTypeName"].upper() == name3.upper()), None)
+        check("setup: a third item arrives, 5 worth 500", r.ok and it3 and near(it3["onHand"], 5, 1e-4), r.text[:300])
+        iid_main, name_main = iid, name
+        iid, name = (it3 or {}).get("itemTypeId"), name3
         r = call("POST", f"{api}/stock/adjust", h, json={
             "companyId": cid, "itemTypeId": iid, "mode": "set",
             "targetQuantity": 5, "targetValueExcludingTax": 0,
@@ -532,7 +558,7 @@ def main():
         r = requests.post(f"{api}/spreadsheet-import/gd-costing/preview-manual", headers=h, timeout=60,
                           params={"companyId": cid, "mode": "new-arrivals"}, json={"lines": [{
                               "gdNumber": late_gd2, "gdDate": yesterday, "description": name,
-                              "hsCode": "8481.1000", "quantity": 4, "unit": unit, "assessedValue": 1000,
+                              "hsCode": "8481.8090", "quantity": 4, "unit": unit, "assessedValue": 1000,
                               "customsDuty": 0, "acd": 0, "regulatoryDuty": 0, "others": 0, "salesTaxRate": 18,
                               "astRate": 3, "incomeTaxRate": 6, "addOnProfit": 0, "sellingValue": 2000}]})
         prev = r.json() if r.ok else {}
@@ -555,6 +581,8 @@ def main():
         check("the GD panel holds the late GD", late_gd2 in set(g), str(list(g)))
         r = call("GET", f"{api}/stock/company/{cid}/backdated-gds", h)
         check("nothing is left for the Stock panel", r.ok and r.json() == [], r.text[:300])
+
+        iid, name = iid_main, name_main
 
         # ── 12e. One late GD, one item fine and one oversold ────────────
         # (AY, 2026-11-15, GD KAPW-HC-65465): the GD is added WHOLE, as the
@@ -590,14 +618,23 @@ def main():
             r = call("POST", f"{api}/stock/company/{cid}/fifo-restatement", h, json={
                 "sourceFile": "sheet-sold.xlsx", "commit": True, "asOf": today_d.isoformat(), "lines": [
                     {"itemTypeId": iid, "gdNumber": "SHEET-R5", "gdDate": "2025-07-01", "claimMonth": None,
-                     "sourceRow": 7, "description": "sheet line", "quantity": 4, "valueExcludingTax": 400, "salesTaxRate": 18},
+                     "sourceRow": 7, "description": "sheet line", "quantity": 5, "valueExcludingTax": 500, "salesTaxRate": 18},
                     {"itemTypeId": iid2, "gdNumber": f"BASE2-{tag}", "gdDate": "2025-08-01", "claimMonth": None,
                      "sourceRow": 8, "description": "sheet line", "quantity": 10, "valueExcludingTax": 1000, "salesTaxRate": 18}]})
-            check("setup: today's match holds 4 worth 400 and 10 worth 1,000", r.ok and r.json().get("committed"), r.text[:300])
+            check("setup: today's match holds 5 worth 500 and 10 worth 1,000", r.ok and r.json().get("committed"), r.text[:300])
             two_days = today_d - timedelta(days=2)
-            r1 = bill(api, h, cid, client_id, item, 6, on=two_days)
-            r2 = bill(api, h, cid, client_id, item2, 3, on=two_days)
-            check("setup: bills of 6 and 3 dated two days ago, entered after the match", r1.ok and r2.ok,
+            # The late sales are stock adjustments (quantity): an invoice entered
+            # now takes out its AMOUNT (5b-24), while this re-match exists for
+            # the quantity sales entered before that rule shipped.
+            def sold(it_id, qty):
+                return call("POST", f"{api}/stock/adjust", h, json={
+                    "companyId": cid, "itemTypeId": it_id, "mode": "delta", "delta": -qty,
+                    "movementDate": two_days.isoformat(), "notes": "sale entered after the match"})
+            # An adjustment may not take stock below zero, so the oversold
+            # item's sale is an invoice: 700 against the sheet's 500.
+            r1 = bill(api, h, cid, client_id, item, 7, 100, on=two_days)
+            r2 = sold(iid2, 3)
+            check("setup: sales of 6 and 3 dated two days ago, entered after the match", r1.ok and r2.ok,
                   (r1.text + r2.text)[:300])
 
             late_gd3 = f"LATE3-{tag}"
@@ -624,8 +661,12 @@ def main():
             # leave the sold units' value on the item.
             print("\n-- 12f. A sale entered after the match, dated before it --")
             before = onhand(api, h, cid, iid2)
-            r = bill(api, h, cid, client_id, item2, 3, on=today_d - timedelta(days=1))
-            check("setup: a bill of 3 dated yesterday", r.ok, r.text[:200])
+            # A quantity sale (an adjustment): what this section pins is that 3
+            # units leave at FIFO cost, whichever GD goes first.
+            r = call("POST", f"{api}/stock/adjust", h, json={
+                "companyId": cid, "itemTypeId": iid2, "mode": "delta", "delta": -3,
+                "movementDate": (today_d - timedelta(days=1)).isoformat(), "notes": "sale entered after the match"})
+            check("setup: a sale of 3 dated yesterday", r.ok, r.text[:200])
             after = onhand(api, h, cid, iid2)
             check("6 left", near(after["onHand"], 6, 1e-4), f"{before['onHand']} -> {after['onHand']}")
             check("the sold units' value comes off at FIFO cost",

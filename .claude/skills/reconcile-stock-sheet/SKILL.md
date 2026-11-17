@@ -18,7 +18,10 @@ installation). Read `CLAUDE.md` sections 5b-17 (FIFO by GD, Reconcile) and 5b-23
 | One row is | a product on a GD | a GD line of an **item**; several products under one HS code can share an item |
 
 So the two agree while every sale leaves stock at about what it was billed for, and
-drift when it does not. The difference is almost never spread thinly: one or two
+drift when it does not. Every invoice entered after 17 Nov 2026 takes its AMOUNT out
+(CLAUDE.md 5b-24), so for those the two can only differ by an invoice on the
+wrong item, a sheet slip, or which GD row the consultant drew from (per-HS
+totals agree). The difference is almost never spread thinly: one or two
 invoices explain nearly all of it. Find them before touching anything.
 
 ## Rules
