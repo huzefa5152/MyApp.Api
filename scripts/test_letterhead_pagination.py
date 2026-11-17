@@ -59,7 +59,25 @@ def main():
         printed.pdf(path=str(Path(directory)/'browser-print.pdf'),prefer_css_page_size=True,print_background=True)
         with pymupdf.open(Path(directory)/'browser-print.pdf') as pdf:
             assert len(pdf)==prepared.count('<section>')
-        print('PASS browser Print uses the same complete letterhead pages',flush=True)
+            # Printed as real text, not as a picture of the page (2026-11-18): a
+            # printed picture is what made A.M Traders' letterhead invoices blurry.
+            mm = 72 / 25.4
+            seen = []
+            for index, pdf_page in enumerate(pdf):
+                assert not pdf_page.get_images(), ('page printed as an image', index)
+                words = pdf_page.get_text('words')
+                assert words, ('page has no text', index)
+                for word in words:
+                    assert 59 * mm - 1 <= word[1] and word[3] <= (297 - 60) * mm + 1, ('text in the letterhead margin', index, word[4])
+                text = pdf_page.get_text()
+                seen += [int(n) for n in __import__('re').findall(r'Sample row (\d+)', text)]
+                if index:
+                    assert 'Sample headings' in text, ('heading not repeated', index)
+            assert sorted(seen) == list(range(20)), ('rows lost or printed twice', sorted(seen))
+            last = pdf[-1]
+            sign = [w for w in last.get_text('words') if w[4] == 'signature']
+            assert sign and sign[0][3] > (297 - 60 - 22) * mm, ('signature is not at the foot of the last page', sign)
+        print('PASS browser Print uses the same complete letterhead pages, as sharp text',flush=True)
         bulk = page.evaluate("""async()=>{
           const {prepareLetterheadPrint,buildMergedPrintDocument}=await import('/src/utils/exportUtils.js');
           const doc='<html><head><style>body{padding:8mm}.closing{height:20mm}</style></head><body><div data-print-letterhead-top="59" data-print-letterhead-bottom="60"><h1>Sample bulk document</h1><div class="closing" data-print-final-block>Sample signature</div></div></body></html>';

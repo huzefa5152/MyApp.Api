@@ -762,10 +762,7 @@ export async function prepareLetterheadPrint(html, singleDocument = false) {
       return buildMergedPrintDocument(prepared);
     }
   }
-  const [{ default: html2canvas }, { default: JsPDF }] = await Promise.all([
-    import("html2canvas"),
-    import("jspdf"),
-  ]);
+  const { default: JsPDF } = await import("jspdf");
   const { css, bodyHtml } = parseHtml(html);
   const { wrapper, content } = createStyledContainer(css, bodyHtml);
   try {
@@ -773,26 +770,56 @@ export async function prepareLetterheadPrint(html, singleDocument = false) {
     await Promise.all(
       Array.from(content.querySelectorAll("img")).map((image) => image.decode().catch(() => {})),
     );
-    const canvas = await html2canvas(content, {
-      scale: 2,
-      useCORS: true,
-      letterRendering: true,
-      windowWidth: 796,
+    // The page plan is the PDF export's own (paginateOntoPdf): the same cuts,
+    // repeated table heading and signature pinned to the foot of the last page.
+    // It only needs the geometry, so it runs against a blank canvas at one
+    // canvas pixel per CSS pixel instead of a painted picture of the document.
+    const rect = content.getBoundingClientRect();
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(rect.width);
+    canvas.height = Math.ceil(rect.height);
+    const layout = paginateOntoPdf(new JsPDF({ unit: "mm", format: "a4" }), canvas, content);
+
+    // Each printed page then shows the REAL document through windows cut to
+    // that plan, so text, lines and logos print sharp instead of as a picture.
+    const stationery = content.querySelector("[data-print-letterhead-top]");
+    const pxPerMm = canvas.width / PAGE_W_MM;
+    const topPx = Number(stationery.getAttribute("data-print-letterhead-top")) * pxPerMm;
+    const bottomPx = Number(stationery.getAttribute("data-print-letterhead-bottom")) * pxPerMm;
+    const pageHeightPx = canvas.width * (PAGE_H_MM / PAGE_W_MM);
+    const usablePx = pageHeightPx - topPx - bottomPx;
+    const finalEl = content.querySelector("[data-print-final-block]");
+    const finalRect = finalEl?.getBoundingClientRect();
+    const finalBand =
+      finalRect && finalRect.height > 0
+        ? { start: finalRect.top - rect.top, end: finalRect.bottom - rect.top }
+        : null;
+    const view = (top, height, srcTop, left = 0, width = canvas.width) =>
+      `<div class="lh-window" style="top:${top}px;left:${left}px;width:${width}px;height:${height}px">` +
+      `<div class="pdf-content" style="top:${-srcTop}px;left:${-left}px">${bodyHtml}</div></div>`;
+    const pages = layout.pageSlices.map((slice, index) => {
+      const isLast = index === layout.pageSlices.length - 1;
+      const header = slice.repeatedHeader;
+      const headerHeight = header?.height || 0;
+      const windows = [];
+      if (header) windows.push(view(topPx, header.height, header.start, header.left, header.width));
+      const pinFinal =
+        isLast && finalBand && finalBand.start >= slice.start && finalBand.end <= slice.end + 1;
+      const bodyEnd = pinFinal ? finalBand.start : slice.end;
+      windows.push(view(topPx + headerHeight, bodyEnd - slice.start, slice.start));
+      if (pinFinal) {
+        const height = finalBand.end - finalBand.start;
+        windows.push(view(topPx + usablePx - height, height, finalBand.start));
+      }
+      return `<section><div class="lh-page">${windows.join("")}</div></section>`;
     });
-    const pages = [];
-    paginateOntoPdf(new JsPDF({ unit: "mm", format: "a4" }), canvas, content, (slice, top) => {
-      const page = document.createElement("canvas");
-      page.width = canvas.width;
-      page.height = Math.ceil((canvas.width * PAGE_H_MM) / PAGE_W_MM);
-      const ctx = page.getContext("2d");
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, page.width, page.height);
-      ctx.drawImage(slice, 0, (top * canvas.width) / PAGE_W_MM);
-      pages.push(
-        `<section><img alt="Document page ${pages.length + 1}" src="${page.toDataURL("image/png")}"></section>`,
-      );
-    });
-    return `<!doctype html><html><head><meta charset="utf-8">${PRINT_CSP_META}<style>@page{size:A4;margin:0}html,body{margin:0;padding:0}section{width:210mm;height:297mm;break-after:page;page-break-after:always}section:last-child{break-after:auto;page-break-after:auto}img{display:block;width:210mm;height:297mm}</style></head><body>${pages.join("")}</body></html>`;
+    const scopedCss = unwrapPrintMedia(css)
+      .replace(/@page\s*\{[^}]*\}/gi, "")
+      .replace(/@media\s+screen\b/gi, "@media all")
+      .replace(/\bbody\b/g, ".pdf-content")
+      .replace(/min-height\s*:\s*100vh\s*;?/g, "");
+    const scale = ((PAGE_W_MM / 25.4) * 96) / canvas.width;
+    return `<!doctype html><html><head><meta charset="utf-8">${PRINT_CSP_META}<style>${scopedCss}</style><style>@page{size:A4;margin:0}html,body{margin:0;padding:0;background:#fff}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}section{position:relative;width:210mm;height:297mm;overflow:hidden;break-after:page;page-break-after:always}section:last-child{break-after:auto;page-break-after:auto}.lh-page{position:absolute;left:0;top:0;width:${canvas.width}px;height:${pageHeightPx}px;transform:scale(${scale});transform-origin:0 0}.lh-window{position:absolute;overflow:hidden}.lh-window>.pdf-content{position:absolute;box-sizing:border-box;width:${canvas.width}px;margin:0}</style></head><body>${pages.join("")}</body></html>`;
   } finally {
     wrapper.remove();
   }
