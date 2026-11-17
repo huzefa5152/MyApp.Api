@@ -1095,8 +1095,12 @@ use the `create-ui-theme` skill to add a theme.
   field, column or action to fit a layout.
 - Every client/supplier picker is `SearchableClientSelect`, every GL-account picker
   `AccountSelect`, other long lists `SearchableSelect` — all on `Components/ComboBox.jsx`.
-- Classic must keep looking like the product users know; check both themes at
-  375 / 768 / 1280 before calling a UI change done.
+- Classic must keep looking like the product users know. **Every UI change is checked
+  in EVERY theme (Classic, Workspace, Aurora, Midnight) at 375 / 768 / 1280 before it
+  is called done** (maintainer's rule, 2026-11-18): no error, no sideways scroll, no
+  clipped or wrapping button labels, and every colour taken from a theme token so it
+  follows the theme. A fixed hex on a pill or box reads fine in Classic and becomes a
+  bright patch on Midnight's dark cards (the costing pill, 2026-11-18).
 
 ## Anti-patterns I keep finding (don't repeat them)
 

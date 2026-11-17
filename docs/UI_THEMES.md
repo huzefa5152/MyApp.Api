@@ -152,20 +152,26 @@ step-by-step. In short:
 - Print / PDF output, print templates, `exportUtils.js`, `printDocument.js` are
   out of scope for themes.
 
-## Verification checklist (both themes)
+## Verification checklist (every theme)
 
 1. `cd myapp-frontend && npm run build` → 0 errors.
-2. Run the backend locally (CLAUDE.md "Running locally"), sign in, switch to each
-   theme from the account menu.
+2. Run the backend locally (CLAUDE.md "Running locally"), sign in, switch to EACH
+   theme -- Classic, Workspace, Aurora and Midnight -- from the account menu. A UI
+   change is not done until it has been seen in all of them (maintainer's rule,
+   2026-11-18), because the Workspace layouts render some screens differently
+   (Delivery Challans has its own grid) and Midnight shows every fixed colour.
 3. Every route renders with no error and no horizontal page scroll at 375px.
    A quick way used on 2026-10-03: in the browser console, load each route in a
    hidden 375px-wide same-origin iframe per theme (set `localStorage["ui.theme:<id>"]`)
    and assert `scrollWidth <= clientWidth` and no error-boundary text — all 45
    routes × 2 themes passed.
-4. Look at, in both themes: dashboard, a list (filters, table, cards, pager, row
+4. Measure, per theme, on the screens the change touches: equal card heights per
+   row, no button whose label is clipped or wraps, and text contrast of at least
+   4.5:1 against its own background (a fixed hex colour is the usual failure).
+5. Look at, in every theme: dashboard, a list (filters, table, cards, pager, row
    menu), a form dialog, a confirm dialog, each picker (client, supplier, GL
    account), the user menu, a phone width.
-5. `node scripts/test_line_amount.mjs`, `node scripts/test_group_quantity_split.mjs`,
+6. `node scripts/test_line_amount.mjs`, `node scripts/test_group_quantity_split.mjs`,
    `python scripts/test_pdf_pagination.py`,
    `cd myapp-frontend && npx vitest run src/pages/POFormatsPage.test.jsx`,
    `python scripts/verify_no_production_identifiers.py`.
