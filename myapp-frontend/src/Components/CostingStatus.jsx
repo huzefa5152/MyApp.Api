@@ -9,11 +9,11 @@ export default function CostingStatus({ document, onOpen }) {
     <Tag
       type={onOpen ? "button" : undefined}
       onClick={onOpen}
+      className="costing-status"
       aria-label={onOpen ? `Edit costing: ${label}, ${count} of ${total} lines` : undefined}
       style={{
         border: "none",
         cursor: onOpen ? "pointer" : "default",
-        minHeight: onOpen ? 44 : undefined,
         textAlign: "left",
         display: "inline-flex",
         flexWrap: "wrap",
