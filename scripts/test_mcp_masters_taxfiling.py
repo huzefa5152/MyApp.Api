@@ -390,15 +390,22 @@ crow = [{"sourceLineIds": r["sourceLineIds"], "itemTypeId": item_c1, "quantity":
 cbase = {"companyId": C["id"], "invoiceId": ob["id"], "version": tfc["version"]}
 
 def commit_rows(rows):
-    e, plan = tool(TC, "prepare_bill_tax_filing", {**cbase, "rows": rows})
+    # Each save changes the bill's filing version, so every attempt reads the current one.
+    _, now = tool(TC, "get_bill_tax_filing", {"companyId": C["id"], "invoiceId": ob["id"]})
+    e, plan = tool(TC, "prepare_bill_tax_filing", {**cbase, "version": now["version"], "rows": rows})
     return tool(TC, "commit_action", {"planId": plan["planId"]}) if not e else (True, plan)
 
 merged = {"sourceLineIds": sorted(i for r in crow for i in r["sourceLineIds"]), "itemTypeId": item_c1,
           "quantity": str(sum(float(r["quantity"]) for r in crow)), "valueExclTax": str(sum(float(r["valueExclTax"]) for r in crow))}
+# Since 2026-11-02 an original-lines company may combine lines that share an HS code (10feab23);
+# the printed invoice still shows each bill line.
 err, m = commit_rows([merged])
-check("combining two bill lines is refused", err and "own row" in str(m), m)
+check("combining two bill lines with one HS code saves", not err, m)
+err, tfm = tool(TC, "get_bill_tax_filing", {"companyId": C["id"], "invoiceId": ob["id"]})
+check("…as one filing row covering both lines",
+      not err and len(tfm["rows"]) == 1 and sorted(tfm["rows"][0]["sourceLineIds"]) == merged["sourceLineIds"], tfm.get("rows"))
 err, m = commit_rows(crow)
-check("one HS code on two bill lines is refused as already in use", err and "already in use" in str(m), m)
+check("one HS code on two separate bill lines saves", not err, m)
 err, _, item_c2 = new_item("8204.1200")
 err, m = commit_rows([crow[0], {**crow[1], "itemTypeId": item_c2}])
 check("one HS code per line saves", not err, m)
