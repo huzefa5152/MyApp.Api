@@ -251,7 +251,7 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
   const save = async (event) => {
     event.preventDefault();
     if (!editable || saving) return;
-    const issues = filingErrors(rows, data.bill);
+    const issues = filingErrors(rows, data.bill, data.totalTolerancePkr);
     if (issues.length) return showError(issues.join("\n"));
     setSaving(true);
     setError("");
@@ -277,6 +277,9 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
   };
   const total = rows.reduce((n, r) => n + amount(r.valueExclTax), 0);
   const difference = data ? amount(data.bill.subtotal) - total : 0;
+  // The server saves a filing total within its rounding allowance of the subtotal (Rs. 10 by default).
+  const allowance = amount(data?.totalTolerancePkr);
+  const withinAllowance = Math.abs(difference) <= allowance;
   // A company that prints its original bill lines keeps each line on the printed invoice; the FBR rows are
   // separate from that, so several lines may share one HS code and be combined into one row.
   const perLine = !!data?.bill?.taxInvoiceUseOriginalBillLines;
@@ -389,7 +392,7 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
                 <div>
                   Filing total<strong>Rs. {money(total / 100)}</strong>
                 </div>
-                <div className={difference ? "tf-mismatch" : "tf-match"}>
+                <div className={withinAllowance ? "tf-match" : "tf-mismatch"}>
                   {difference === 0
                     ? "Matched"
                     : difference > 0
@@ -651,7 +654,7 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
                   <b>
                     {difference === 0
                       ? "Total matched"
-                      : `Rs. ${money(Math.abs(difference) / 100)} ${difference > 0 ? "remaining" : "over the bill"}`}{" "}
+                      : `Rs. ${money(Math.abs(difference) / 100)} ${difference > 0 ? "remaining" : "over the bill"}${withinAllowance ? ` (within the Rs. ${money(allowance / 100)} rounding allowance)` : ""}`}{" "}
                     ·{" "}
                   </b>
                 )}
@@ -671,7 +674,7 @@ export default function TaxFilingRowsEditor({ invoiceId, onClose, onSaved, readO
             <button
               type="submit"
               style={{ ...formStyles.button, ...formStyles.submit }}
-              disabled={saving || difference !== 0 || unitPending}
+              disabled={saving || !withinAllowance || unitPending}
             >
               {saving
                 ? "Saving…"

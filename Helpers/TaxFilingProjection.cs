@@ -206,7 +206,7 @@ public static class TaxFilingProjection
             FixedNotifiedValueOrRetailPrice = r.RetailPrice
         }).ToList() : bill.Items.Select(LegacyLine).ToList();
 
-    public static void ValidateCoverage(Invoice bill, List<TaxFilingRowDto> rows)
+    public static void ValidateCoverage(Invoice bill, List<TaxFilingRowDto> rows, decimal tolerancePkr)
     {
         if (rows == null || rows.Count == 0 || rows.Count > 500 || rows.Any(r => r == null))
             throw new InvalidOperationException("Use between 1 and 500 filing rows.");
@@ -217,8 +217,11 @@ public static class TaxFilingProjection
         if (rows.Any(r => r.Quantity <= 0 || r.Quantity > 99999999999999m || decimal.Round(r.Quantity, 4) != r.Quantity
             || r.ValueExclTax <= 0 || r.ValueExclTax > 9999999999999999m || decimal.Round(r.ValueExclTax, 2) != r.ValueExclTax))
             throw new InvalidOperationException("Each row needs a positive quantity (up to 4 decimals) and amount (up to 2 decimals).");
-        if (rows.Sum(r => r.ValueExclTax) != bill.Subtotal)
-            throw new InvalidOperationException("Filing amounts must equal the bill subtotal exactly. Adjust the amounts before saving.");
+        // Rounding a combined row's amount can leave a few paisa or rupees; within the configured
+        // allowance (Invoice:NarrowEditTotalTolerancePkr) the rows save, as the other adjustment paths do.
+        var gap = Math.Abs(rows.Sum(r => r.ValueExclTax) - bill.Subtotal);
+        if (gap > tolerancePkr)
+            throw new InvalidOperationException($"Filing amounts must match the bill subtotal within Rs. {tolerancePkr:N0} (off by Rs. {gap:N2}). Adjust the amounts before saving.");
         foreach (var row in rows)
         {
             var sources = bill.Items.Where(i => row.SourceLineIds.Contains(i.Id)).Select(LegacyLine).ToList();

@@ -43,4 +43,7 @@ public class TaxFilingEditorDto
     public string? ReviewReason { get; set; }
     public List<TaxFilingRowDto> Rows { get; set; } = new();
     public List<TaxFilingRowDto> InitialRows { get; set; } = new();
+    /// <summary>How far, in rupees, the filing total may sit from the bill subtotal and still save
+    /// (Invoice:NarrowEditTotalTolerancePkr, the same rounding allowance as the other adjustment paths).</summary>
+    public decimal TotalTolerancePkr { get; set; }
 }

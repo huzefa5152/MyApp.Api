@@ -89,6 +89,16 @@ check("one paisa mismatch is refused", () =>
     filingErrors(rows, { items: sources, subtotal: 30000.01 }).some((e) => e.includes("exactly")),
   ),
 );
+check("a gap inside the rounding allowance saves (Rs. 0.08 of Rs. 10)", () =>
+  assert.deepEqual(filingErrors(rows, { items: sources, subtotal: 30000.08 }, 10), []),
+);
+check("a gap beyond the rounding allowance is refused", () =>
+  assert.ok(
+    filingErrors(rows, { items: sources, subtotal: 30010.01 }, 10).some((e) =>
+      e.includes("within Rs. 10"),
+    ),
+  ),
+);
 check("zero quantity is refused", () =>
   assert.ok(
     filingErrors([{ ...rows[0], quantity: 0 }, rows[1]], { items: sources, subtotal: 30000 }).some(

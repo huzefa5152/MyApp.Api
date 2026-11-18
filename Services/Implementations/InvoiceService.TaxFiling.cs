@@ -65,7 +65,8 @@ public partial class InvoiceService
         RequiresReview = TaxFilingProjection.NeedsReReview(bill),
         ReviewReason = TaxFilingProjection.ReviewReason(bill),
         Rows = TaxFilingProjection.Plan(bill)?.Rows ?? TaxFilingProjection.InitialRows(bill, perLine: OriginalLinesOnly(bill)),
-        InitialRows = TaxFilingProjection.InitialRows(bill, commercial: true, perLine: OriginalLinesOnly(bill))
+        InitialRows = TaxFilingProjection.InitialRows(bill, commercial: true, perLine: OriginalLinesOnly(bill)),
+        TotalTolerancePkr = _totalTolerancePkr
     };
 
     public async Task<TaxFilingEditorDto?> GetTaxFilingAsync(int id)
@@ -148,7 +149,7 @@ public partial class InvoiceService
             throw new InvalidOperationException("Tax filing rows cannot be changed on a cancelled invoice, note or after submission has started.");
         if (dto.Version != TaxFilingProjection.EditVersion(bill))
             throw new InvalidOperationException("The bill or filing rows changed while you were editing. Reload and review the latest values.");
-        TaxFilingProjection.ValidateCoverage(bill, dto.Rows);
+        TaxFilingProjection.ValidateCoverage(bill, dto.Rows, _totalTolerancePkr);
         if (!allowNumericalChanges)
         {
             var baseline = TaxFilingProjection.Plan(bill)?.Rows ?? TaxFilingProjection.InitialRows(bill, perLine: OriginalLinesOnly(bill));
@@ -245,8 +246,10 @@ public partial class InvoiceService
             n + 1, r.HSCode, bill.Company?.FbrOmitProductDescription == true ? "" : r.Description,
             r.SaleType, r.FbrUOMId is int uom ? uom.ToString() : r.UOM, r.SroScheduleNo, r.SroItemSerialNo)));
         if (duplicate != null) throw new InvalidOperationException(duplicate);
+        // The rows may sit within the rounding allowance of the subtotal (ValidateCoverage); that
+        // difference is added back so only a real change of tax treatment is refused here.
         var taxBase = dto.Rows.Sum(r => r.SaleType!.Contains("3rd", StringComparison.OrdinalIgnoreCase)
-            ? r.RetailPrice ?? 0m : r.ValueExclTax);
+            ? r.RetailPrice ?? 0m : r.ValueExclTax) + (bill.Subtotal - dto.Rows.Sum(r => r.ValueExclTax));
         if (Math.Round(taxBase * bill.GSTRate / 100m, 2, MidpointRounding.AwayFromZero) != bill.GSTAmount)
             throw new InvalidOperationException("The selected classifications change the bill's sales tax. Keep incompatible tax treatments separate and reconcile the tax before saving.");
         var before = bill.TaxFilingRowsJson;

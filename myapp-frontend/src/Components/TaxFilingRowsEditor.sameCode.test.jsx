@@ -142,3 +142,29 @@ it("leaves a grouping company's Save button as it was", async () => {
     false,
   );
 });
+
+// A combined row's rounding can leave a few paisa: inside the server's allowance Save stays open
+// (Hakimi, invoice 4026, Rs. 0.08 short, 2026-11-18); beyond it Save is held.
+const gap = (rupees, tolerance) => {
+  const p = coded(false, "Pcs");
+  p.data.rows[0].valueExclTax = 400 - rupees;
+  p.data.totalTolerancePkr = tolerance;
+  return p;
+};
+it("saves a filing total within the rounding allowance", async () => {
+  getTaxFiling.mockResolvedValueOnce(gap(0.08, 10));
+  render(<TaxFilingRowsEditor invoiceId={7} onClose={() => {}} />);
+  await screen.findByTestId("hs-0");
+  expect(screen.getByText(/within the Rs. 10.00 rounding allowance/)).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Save filing rows & complete review" }).disabled).toBe(
+    false,
+  );
+});
+it("holds Save beyond the rounding allowance", async () => {
+  getTaxFiling.mockResolvedValueOnce(gap(10.01, 10));
+  render(<TaxFilingRowsEditor invoiceId={7} onClose={() => {}} />);
+  await screen.findByTestId("hs-0");
+  expect(screen.getByRole("button", { name: "Save filing rows & complete review" }).disabled).toBe(
+    true,
+  );
+});

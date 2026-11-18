@@ -63,7 +63,7 @@ def main():
         chair = item(a, 'Chair')
         sale = 'Goods at standard rate (default)'
         filing1 = item(a, 'Filing A', '9403.6000', sale=sale)
-        filing2 = item(a, 'Filing B', '9401.3000', sale=sale)
+        filing2 = item(a, 'Filing B', '9401.7100', sale=sale)
         foreign = item(b, 'Foreign filing', '9403.6000', sale=sale)
         good('POST', '/api/stock/opening', admin, {'companyId': a, 'itemTypeId': filing1['id'], 'quantity': 100, 'asOfDate': today})
         def create_bill(values=(12500, 10500, 7000), gst=18, further=None, extra=None):
@@ -122,7 +122,16 @@ def main():
             check(status == 400, label, (status, error))
             check(good('GET', path, admin)['rows'] == current['rows'], label+' leaves saved rows intact')
         reject([merged], 'concurrent/stale edit version is refused', editor['version'])
-        reject([{**merged, 'valueExclTax': 30000.01}], 'one-paisa subtotal mismatch is refused')
+        # A rounding gap within Invoice:NarrowEditTotalTolerancePkr (Rs. 10) saves, as on the other
+        # adjustment paths: a consultant combining rows was blocked by Rs. 0.08 (2026-11-18).
+        check(editor.get('totalTolerancePkr') == 10, 'editor reports the Rs. 10 rounding allowance', editor.get('totalTolerancePkr'))
+        current = good('GET', path, admin)
+        status, near = req('PUT', path, admin, {'version': current['version'], 'rows': [{**merged, 'valueExclTax': 29999.92}]})
+        check(status == 200 and near['rows'][0]['valueExclTax'] == 29999.92, 'Rs. 0.08 short of the subtotal saves', (status, near))
+        check(status == 200 and near['bill']['gstAmount'] == 5400 and near['bill']['subtotal'] == 30000, 'the bill keeps its subtotal and sales tax')
+        good('PUT', path, admin, {'version': good('GET', path, admin)['version'], 'rows': [merged]})
+        reject([{**merged, 'valueExclTax': 30010.01}], 'a gap beyond the Rs. 10 allowance is refused')
+        reject([{**merged, 'valueExclTax': 29989.99}], 'a shortfall beyond the Rs. 10 allowance is refused')
         reject([{**merged, 'valueExclTax': 30000.001}], 'sub-paisa amounts are refused')
         reject([], 'empty filing plan is refused')
         reject([None], 'null filing row is refused')

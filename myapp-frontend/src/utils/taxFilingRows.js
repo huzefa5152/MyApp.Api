@@ -57,7 +57,8 @@ export function separateFilingRow(row, billItems) {
   });
 }
 
-export function filingErrors(rows, bill) {
+// tolerancePkr: the server's rounding allowance between the filing total and the subtotal.
+export function filingErrors(rows, bill, tolerancePkr = 0) {
   const issues = [];
   rows.forEach((r, i) => {
     const prefix = `Row ${i + 1}: `;
@@ -77,7 +78,14 @@ export function filingErrors(rows, bill) {
     bill.items.some((i) => !ids.includes(i.id))
   )
     issues.push("Source lines changed. Rebuild from the current bill and review each row.");
-  if (rows.reduce((n, r) => n + amount(r.valueExclTax), 0) !== amount(bill.subtotal))
-    issues.push("The filing total must equal the bill subtotal exactly.");
+  const gap = Math.abs(
+    rows.reduce((n, r) => n + amount(r.valueExclTax), 0) - amount(bill.subtotal),
+  );
+  if (gap > amount(tolerancePkr))
+    issues.push(
+      tolerancePkr > 0
+        ? `The filing total must be within Rs. ${money(tolerancePkr)} of the bill subtotal.`
+        : "The filing total must equal the bill subtotal exactly.",
+    );
   return issues;
 }
