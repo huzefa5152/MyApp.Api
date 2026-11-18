@@ -1,5 +1,5 @@
 import { copyLine } from "../utils/documentCopy";
-import { useState, useEffect, useLayoutEffect, useRef, Fragment } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, Fragment } from "react";
 import { MdAdd, MdDelete, MdContentPaste, MdRepeat, MdLocalOffer, MdClose } from "react-icons/md";
 import { lineAmounts } from "../utils/quoteDiscount";
 import LookupAutocomplete from "./LookupAutocomplete";
@@ -124,32 +124,46 @@ export default function LineItemsEditor({
   const tableWrapRef = useRef(null);
   const [panelWidth, setPanelWidth] = useState(null);
   const [tableNeeds, setTableNeeds] = useState(0);
-  useEffect(() => {
-    const el = panelRef.current;
+  // The table's box is narrower than the panel by its border and, once the
+  // list is long enough to scroll, by the vertical scrollbar. Measured, because
+  // comparing against the panel alone left a long list scrolling sideways by
+  // the width of that scrollbar.
+  const [gutter, setGutter] = useState(18);
+  // A callback ref, because the panel can mount after the first render; an
+  // effect that ran once at mount found no panel and never measured it.
+  const roRef = useRef(null);
+  const setPanel = useCallback((el) => {
+    panelRef.current = el;
+    roRef.current?.disconnect();
+    roRef.current = null;
     if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([entry]) => setPanelWidth(entry.contentRect.width));
-    ro.observe(el);
-    return () => ro.disconnect();
+    roRef.current = new ResizeObserver(() => setPanelWidth(el.clientWidth));
+    roRef.current.observe(el);
   }, []);
   useLayoutEffect(() => {
+    const panel = panelRef.current;
+    if (panel && panel.clientWidth !== panelWidth) setPanelWidth(panel.clientWidth);
     const wrap = tableWrapRef.current;
-    if (wrap && wrap.scrollWidth > wrap.clientWidth + 1 && wrap.scrollWidth !== tableNeeds)
+    if (!wrap) return;
+    if (wrap.scrollWidth > wrap.clientWidth + 1 && wrap.scrollWidth !== tableNeeds)
       setTableNeeds(wrap.scrollWidth);
+    const measured = Math.max(0, Math.round(panelRef.current.clientWidth - wrap.clientWidth));
+    if (measured !== gutter) setGutter(measured);
   });
-  // Below the sum of its columns (less a little slack the pickers can give up)
-  // the browser would crush qty / unit / price until their values are cut, so
-  // the table keeps this minimum and overflows instead, which flips to cards.
+  // Below the sum of its columns the browser would crush qty / unit / price
+  // until their values are cut, so under this width the rows become cards
+  // instead of scrolling sideways. Description takes whatever is left over.
   const tableMin =
     28 +
-    (showImage ? 64 : 0) +
-    (showItemType ? (showDiscount ? 170 : 180) : 0) +
-    220 +
-    92 +
-    120 +
-    (showUnitPrice ? 250 : 0) +
-    (showDiscount && showUnitPrice ? 112 : 76) -
-    40;
-  const narrow = isNarrow || (panelWidth != null && tableNeeds > 0 && panelWidth < tableNeeds);
+    (showImage ? 56 : 0) +
+    (showItemType ? (showDiscount ? 160 : 170) : 0) +
+    180 +
+    84 +
+    104 +
+    (showUnitPrice ? 226 : 0) +
+    (showDiscount && showUnitPrice ? 112 : 76);
+  const narrow =
+    isNarrow || (panelWidth != null && panelWidth - gutter < Math.max(tableMin, tableNeeds));
 
   // After a row is added/inserted we stash the index to focus; this runs post-
   // render (once the new description input exists) and focuses it exactly once.
@@ -582,7 +596,7 @@ export default function LineItemsEditor({
   );
 
   return (
-    <div className="admin-items-panel" ref={panelRef}>
+    <div className="admin-items-panel" ref={setPanel}>
       <div style={s.itemsHeaderBar}>
         <label style={{ ...s.label, margin: 0 }}>
           {itemsLabel}
@@ -873,18 +887,18 @@ export default function LineItemsEditor({
             <thead>
               <tr>
                 <th style={{ ...s.th, width: 28, textAlign: "center" }}>#</th>
-                {showImage && <th style={{ ...s.th, width: 64 }}>Photo</th>}
+                {showImage && <th style={{ ...s.th, width: 56 }}>Photo</th>}
                 {showItemType && (
-                  <th style={{ ...s.th, width: showDiscount ? 170 : 180 }}>Item Type</th>
+                  <th style={{ ...s.th, width: showDiscount ? 160 : 170 }}>Item Type</th>
                 )}
-                <th style={{ ...s.th, minWidth: 220 }}>Description</th>
-                <th style={{ ...s.th, width: 92, textAlign: "right" }}>Qty</th>
-                <th style={{ ...s.th, width: 120 }}>Unit</th>
+                <th style={{ ...s.th, minWidth: 180 }}>Description</th>
+                <th style={{ ...s.th, width: 84, textAlign: "right" }}>Qty</th>
+                <th style={{ ...s.th, width: 104 }}>Unit</th>
                 {showUnitPrice && (
-                  <th style={{ ...s.th, width: 120, textAlign: "right" }}>Unit Price</th>
+                  <th style={{ ...s.th, width: 108, textAlign: "right" }}>Unit Price</th>
                 )}
                 {showUnitPrice && (
-                  <th style={{ ...s.th, width: 130, textAlign: "right" }}>
+                  <th style={{ ...s.th, width: 118, textAlign: "right" }}>
                     {byTotal ? "Line total" : "Amount"}
                   </th>
                 )}

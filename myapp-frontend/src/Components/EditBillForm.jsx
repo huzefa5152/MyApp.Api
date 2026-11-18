@@ -4,7 +4,15 @@ import { withTaxUom, taxGroupKey } from "../utils/taxInvoiceGrouping";
 import FreightChargesField from "./FreightChargesField";
 import BillChallansEditor from "./BillChallansEditor";
 import { defaultFurtherTaxRate } from "../utils/furtherTax";
-import { Fragment, useState, useEffect, useMemo, useRef } from "react";
+import {
+  Fragment,
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useCallback,
+} from "react";
 import { toLocalYmd, todayYmd } from "../utils/dateInput";
 import {
   MdInfo,
@@ -179,6 +187,26 @@ function CommercialBillEditor({
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+  // A dialog on a laptop is narrower than the window, so the line table also
+  // turns into cards when the items area is narrower than its columns, instead
+  // of scrolling sideways. Measured on the full-width Items heading row, which
+  // renders in both views.
+  const [linesWidth, setLinesWidth] = useState(null);
+  const linesObserver = useRef(null);
+  const linesBox = useRef(null);
+  const setLinesBox = useCallback((el) => {
+    linesBox.current = el;
+    linesObserver.current?.disconnect();
+    linesObserver.current = null;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    linesObserver.current = new ResizeObserver(() => setLinesWidth(el.clientWidth));
+    linesObserver.current.observe(el);
+  }, []);
+  // Also read on every render, so the check never waits on the observer.
+  useLayoutEffect(() => {
+    const w = linesBox.current?.clientWidth;
+    if (w != null && w !== linesWidth) setLinesWidth(w);
+  });
 
   // Bill-mode source-of-truth snapshot (2026-05-11).
   //
@@ -1303,6 +1331,8 @@ function CommercialBillEditor({
   // live bill printed 220,000.20 against a 220,000.00 total with no way to
   // correct it (2026-09-18).
   const renderGrouped = !billsMode && groupedView && !originalLinesOnly;
+  // The sum of the line table's columns; below it the columns would crush.
+  const lineTableMin = 170 + 140 + 100 + 96 + 190 + 100 + (billsMode ? 0 : 90) + 130;
 
   // Derived: what's the common Item Type across rows? Used to drive
   // the bulk picker's `value` so the dropdown actually reflects what's
@@ -2198,7 +2228,7 @@ function CommercialBillEditor({
                 )}
 
                 {/* Items table — no add/remove; only field edits */}
-                <div style={styles.sectionHeadingRow}>
+                <div ref={setLinesBox} style={styles.sectionHeadingRow}>
                   <h6 style={{ ...styles.sectionHeading, margin: 0 }}>
                     Items (
                     {renderGrouped
@@ -2420,7 +2450,8 @@ function CommercialBillEditor({
                   </div>
                 )}
 
-                {isNarrow && !renderGrouped ? (
+                {(isNarrow || (linesWidth != null && linesWidth - 2 < lineTableMin)) &&
+                !renderGrouped ? (
                   <div style={styles.mcards}>
                     {items.map((item, idx) => {
                       const hasItemType = !!item.itemTypeId;
@@ -2542,18 +2573,18 @@ function CommercialBillEditor({
                   </div>
                 ) : (
                   <div data-admin-table-region="" style={styles.tableWrap}>
-                    <table style={styles.table}>
+                    <table style={{ ...styles.table, minWidth: lineTableMin }}>
                       <thead>
                         <tr style={styles.thead}>
                           {/* Item Type is now required on every bill (both
                             tabs) so the invoice can always group by it —
                             shown in Bills mode too, not just Invoices. */}
-                          <th style={{ ...styles.th, width: 180, minWidth: 180 }}>
+                          <th style={{ ...styles.th, width: 170, minWidth: 170 }}>
                             Item Type (FBR)
                           </th>
                           <th style={{ ...styles.th, minWidth: 140 }}>Description</th>
-                          <th style={{ ...styles.th, width: 120, minWidth: 120 }}>Qty</th>
-                          <th style={{ ...styles.th, width: 110, minWidth: 110 }}>UOM</th>
+                          <th style={{ ...styles.th, width: 100, minWidth: 100 }}>Qty</th>
+                          <th style={{ ...styles.th, width: 96, minWidth: 96 }}>UOM</th>
                           <th style={{ ...styles.th, width: 190, minWidth: 190 }}>Unit Price</th>
                           <th style={{ ...styles.th, width: 100, minWidth: 100 }}>Line Total</th>
                           {/* HS Code is FBR data — only relevant on the Invoices
@@ -2561,7 +2592,7 @@ function CommercialBillEditor({
                           {!billsMode && (
                             <th style={{ ...styles.th, width: 90, minWidth: 90 }}>HS Code</th>
                           )}
-                          <th style={{ ...styles.th, minWidth: 140 }}>Sale Type</th>
+                          <th style={{ ...styles.th, minWidth: 130 }}>Sale Type</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -5182,7 +5213,7 @@ const styles = {
     border: `1px solid var(--k-line)`,
     borderRadius: "var(--k-radius)",
   },
-  table: { width: "100%", borderCollapse: "collapse", minWidth: 1100, tableLayout: "fixed" },
+  table: { width: "100%", borderCollapse: "collapse", tableLayout: "fixed" },
   thead: { backgroundColor: "var(--k-surface-2)" },
   th: {
     padding: "0.6rem 0.5rem",
