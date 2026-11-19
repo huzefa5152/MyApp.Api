@@ -1237,6 +1237,9 @@ namespace MyApp.Api.Migrations
 
                     b.HasIndex("CompanyId", "DivisionId", "ChallanNumber");
 
+                    b.HasIndex("CompanyId", "IsDemo", "CreatedAt", "Id")
+                        .HasDatabaseName("IX_DeliveryChallans_List");
+
                     b.ToTable("DeliveryChallans");
                 });
 
@@ -2480,6 +2483,9 @@ namespace MyApp.Api.Migrations
 
                     b.HasIndex("CompanyId", "DivisionId", "NoteKind", "InvoiceNumber")
                         .IsUnique();
+
+                    b.HasIndex("CompanyId", "IsDemo", "CreatedAt", "Id")
+                        .HasDatabaseName("IX_Invoices_List");
 
                     b.ToTable("Invoices");
                 });
@@ -4630,6 +4636,9 @@ namespace MyApp.Api.Migrations
 
                     b.HasIndex("CompanyId", "ExternalRef");
 
+                    b.HasIndex("CompanyId", "PurchaseBillNumber")
+                        .HasDatabaseName("IX_PurchaseBills_List");
+
                     b.HasIndex("SourceDeliveryChallanId", "SupplierId")
                         .IsUnique()
                         .HasFilter("[SourceDeliveryChallanId] IS NOT NULL");
@@ -5049,6 +5058,9 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("CompanyId", "DivisionId", "SalesOrderNumber")
                         .IsUnique();
 
+                    b.HasIndex("CompanyId", "SalesOrderNumber", "Id")
+                        .HasDatabaseName("IX_SalesOrders_List");
+
                     b.ToTable("SalesOrders");
                 });
 
@@ -5198,6 +5210,9 @@ namespace MyApp.Api.Migrations
 
                     b.HasIndex("CompanyId", "DivisionId", "QuoteNumber")
                         .IsUnique();
+
+                    b.HasIndex("CompanyId", "QuoteNumber", "Id")
+                        .HasDatabaseName("IX_SalesQuotes_List");
 
                     b.ToTable("SalesQuotes");
                 });

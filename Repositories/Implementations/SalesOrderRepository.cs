@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.Models;
 using MyApp.Api.Repositories.Interfaces;
+using MyApp.Api.Helpers;
 
 namespace MyApp.Api.Repositories.Implementations
 {
@@ -22,6 +23,16 @@ namespace MyApp.Api.Repositories.Implementations
                 .Include(o => o.SalesQuote)
                 .Include(o => o.Division);
 
+        // The paged list maps orders without reading Company (MapManyAsync uses CompanyId),
+        // and its quote is loaded separately after the page (see GetPagedByCompanyAsync).
+        // Joining those rows, with their many long text columns, made production size the
+        // list's sort in hundreds of megabytes (2026-11-20).
+        private IQueryable<SalesOrder> ListIncludes() =>
+            _context.SalesOrders
+                .Include(o => o.Items.OrderBy(i => i.Id)).ThenInclude(i => i.ItemType)
+                .Include(o => o.Client)
+                .Include(o => o.Division);
+
         public async Task<List<SalesOrder>> GetByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
         {
             var query = WithIncludes().Where(o => o.CompanyId == companyId);
@@ -38,7 +49,7 @@ namespace MyApp.Api.Repositories.Implementations
             int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null,
             int? divisionId = null, HashSet<int>? allowedDivisionIds = null)
         {
-            var query = WithIncludes().Where(o => o.CompanyId == companyId);
+            var query = ListIncludes().Where(o => o.CompanyId == companyId);
             // Division-RBAC scope first (null = unrestricted); the operator's
             // explicit divisionId FILTER below is a view preference layered on
             // top — the controller asserts it against the same allowed set.
@@ -66,13 +77,14 @@ namespace MyApp.Api.Repositories.Implementations
                                      (i.ItemType != null && i.ItemType.Name.ToLower().Contains(term))));
             }
 
-            var totalCount = await query.CountAsync();
-            var items = await query
-                .OrderByDescending(o => o.SalesOrderNumber)
-                .ThenByDescending(o => o.Id)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync();
+            var (items, totalCount) = await PageById.PageAsync(query,
+                q => q.OrderByDescending(o => o.SalesOrderNumber).ThenByDescending(o => o.Id),
+                o => o.Id, page, pageSize);
+            // The orders are tracked, so loading their quotes sets order.SalesQuote,
+            // exactly as the include did.
+            var quoteIds = items.Where(o => o.SalesQuoteId != null).Select(o => o.SalesQuoteId!.Value).Distinct().ToList();
+            if (quoteIds.Count > 0)
+                await _context.SalesQuotes.Where(q => quoteIds.Contains(q.Id)).LoadAsync();
             return (items, totalCount);
         }
 

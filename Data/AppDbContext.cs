@@ -529,6 +529,25 @@ namespace MyApp.Api.Data
 
             modelBuilder.Entity<DeliveryChallan>().HasIndex(dc => dc.SplitFromChallanId);
 
+            // List order (2026-11-20): each paged list sorts one company's rows by
+            // these keys. Without an index in that order SQL Server sorted the
+            // company's whole row set on every page (see Helpers/PageById).
+            modelBuilder.Entity<DeliveryChallan>()
+                .HasIndex(dc => new { dc.CompanyId, dc.IsDemo, dc.CreatedAt, dc.Id })
+                .HasDatabaseName("IX_DeliveryChallans_List");
+            modelBuilder.Entity<Invoice>()
+                .HasIndex(i => new { i.CompanyId, i.IsDemo, i.CreatedAt, i.Id })
+                .HasDatabaseName("IX_Invoices_List");
+            modelBuilder.Entity<SalesOrder>()
+                .HasIndex(o => new { o.CompanyId, o.SalesOrderNumber, o.Id })
+                .HasDatabaseName("IX_SalesOrders_List");
+            modelBuilder.Entity<SalesQuote>()
+                .HasIndex(q => new { q.CompanyId, q.QuoteNumber, q.Id })
+                .HasDatabaseName("IX_SalesQuotes_List");
+            modelBuilder.Entity<PurchaseBill>()
+                .HasIndex(pb => new { pb.CompanyId, pb.PurchaseBillNumber })
+                .HasDatabaseName("IX_PurchaseBills_List");
+
             // Performance indexes on frequently-queried foreign keys
             modelBuilder.Entity<Invoice>()
                 .HasIndex(i => i.ClientId);

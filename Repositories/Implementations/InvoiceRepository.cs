@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.Models;
 using MyApp.Api.Repositories.Interfaces;
+using MyApp.Api.Helpers;
 
 namespace MyApp.Api.Repositories.Implementations
 {
@@ -51,8 +52,9 @@ namespace MyApp.Api.Repositories.Implementations
             var query = _context.Invoices
                 .AsNoTracking().AsSplitQuery()
                 .Include(i => i.Client)
-                .Include(i => i.Items)
-                .Include(i => i.DeliveryChallans)
+                // Lines and challans in id order: a split query does not order a collection by itself.
+                .Include(i => i.Items.OrderBy(x => x.Id))
+                .Include(i => i.DeliveryChallans.OrderBy(dc => dc.Id))
                 .Include(i => i.OriginalInvoice)
                 .Include(i => i.Division)
                 .Where(i => i.CompanyId == companyId && !i.IsDemo
@@ -90,15 +92,9 @@ namespace MyApp.Api.Repositories.Implementations
                                                   (dc.PoNumber != null && dc.PoNumber.ToLower().Contains(term))));
             }
 
-            var totalCount = await query.CountAsync();
-            var items = await query
-                .OrderByDescending(i => i.CreatedAt)
-                .ThenByDescending(i => i.Id)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync();
-
-            return (items, totalCount);
+            return await PageById.PageAsync(query,
+                q => q.OrderByDescending(i => i.CreatedAt).ThenByDescending(i => i.Id),
+                i => i.Id, page, pageSize);
         }
 
         public async Task<Invoice?> GetByIdAsync(int id)

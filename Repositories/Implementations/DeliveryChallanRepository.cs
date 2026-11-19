@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.Models;
 using MyApp.Api.Repositories.Interfaces;
+using MyApp.Api.Helpers;
 
 namespace MyApp.Api.Repositories.Implementations
 {
@@ -50,13 +51,14 @@ namespace MyApp.Api.Repositories.Implementations
         {
             var query = _context.DeliveryChallans
                 .AsNoTracking().AsSplitQuery()
-                .Include(dc => dc.Items).ThenInclude(i => i.ItemType)
-                .Include(dc => dc.Items).ThenInclude(i => i.Supplier)
-                .Include(dc => dc.Items).ThenInclude(i => i.SalesOrderItem)
+                // Lines in id order: a split query does not order a collection by itself.
+                .Include(dc => dc.Items.OrderBy(i => i.Id)).ThenInclude(i => i.ItemType)
+                .Include(dc => dc.Items.OrderBy(i => i.Id)).ThenInclude(i => i.Supplier)
+                .Include(dc => dc.Items.OrderBy(i => i.Id)).ThenInclude(i => i.SalesOrderItem)
                 .Include(dc => dc.Client)
                 .Include(dc => dc.Company)
                 .Include(dc => dc.Invoice)
-                    .ThenInclude(inv => inv!.Items)
+                    .ThenInclude(inv => inv!.Items.OrderBy(i => i.Id))
                 .Include(dc => dc.DuplicatedFrom)
                 .Include(dc => dc.SalesOrder)
                 .Include(dc => dc.Division)
@@ -100,15 +102,9 @@ namespace MyApp.Api.Repositories.Implementations
                                           (item.ItemType != null && item.ItemType.Name.ToLower().Contains(term))));
             }
 
-            var totalCount = await query.CountAsync();
-            var items = await query
-                .OrderByDescending(dc => dc.CreatedAt)
-                .ThenByDescending(dc => dc.Id)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync();
-
-            return (items, totalCount);
+            return await PageById.PageAsync(query,
+                q => q.OrderByDescending(dc => dc.CreatedAt).ThenByDescending(dc => dc.Id),
+                dc => dc.Id, page, pageSize);
         }
 
         public async Task<DeliveryChallan?> GetByIdAsync(int id)
