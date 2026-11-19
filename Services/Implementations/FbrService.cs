@@ -1306,7 +1306,7 @@ namespace MyApp.Api.Services.Implementations
 
                 var (salesTax, furtherTax, retailPrice) =
                     MyApp.Api.Helpers.FbrLineTax.Compute(item, invoice.GSTRate, buyerRegType, fbrRequest.ScenarioId,
-                        invoice.FurtherTaxRate, rateDesc);
+                        invoice.FurtherTaxRate, rateDesc, followDocumentFurtherTax: true);
 
                 // FBR rule [0077]: "Valid SRO/Schedule No. is mandatory where rate
                 // is not 18%." Prefer the operator-set value on the item; fall

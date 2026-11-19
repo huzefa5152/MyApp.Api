@@ -725,10 +725,16 @@ namespace MyApp.Api.Services.Tax
 
             var subtotal = lineTotal;
             var gstAmount = Math.Round(subtotal * sc.DefaultRate / 100m, 2);
-            var grandTotal = subtotal + gstAmount;
+            // SN002 is the 4% further tax scenario. The filing follows the bill's
+            // own rate now, so the demo bill has to carry it like a real one.
+            decimal? furtherTaxRate = sc.Code == "SN002" ? 4m : null;
+            var furtherTaxAmount = FurtherTaxCalculator.Resolve(furtherTaxRate, subtotal);
+            var grandTotal = FurtherTaxCalculator.GrandTotal(subtotal, gstAmount, furtherTaxAmount);
 
             var invoice = new Invoice
             {
+                FurtherTaxRate = furtherTaxRate,
+                FurtherTaxAmount = furtherTaxAmount,
                 InvoiceNumber = invoiceNumber,
                 Date = DateTime.UtcNow.Date,
                 CompanyId = company.Id,
