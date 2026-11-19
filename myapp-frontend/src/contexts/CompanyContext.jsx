@@ -8,6 +8,7 @@ import {
   useMemo,
 } from "react";
 import { getCompanies } from "../api/companyApi";
+import { takeBootPrefetch } from "../utils/bootPrefetch";
 import { getCompanyStamps } from "../api/stampApi";
 import { setActiveStamps } from "../utils/templateEngine";
 import { loadStampImage, stampImageSrc } from "../utils/stampImages";
@@ -73,7 +74,10 @@ export function CompanyProvider({ children }) {
   const fetchCompanies = useCallback(async () => {
     const request = ++companyRequest.current;
     try {
-      const res = await getCompanies();
+      // On a page load the answer is usually already on its way (bootPrefetch);
+      // if that one failed or there is none, ask as always.
+      const early = takeBootPrefetch("companies", localStorage.getItem("token"));
+      const res = early ? await early.catch(() => getCompanies()) : await getCompanies();
       if (request !== companyRequest.current) return;
       const list = res.data;
       setCompanies(list);

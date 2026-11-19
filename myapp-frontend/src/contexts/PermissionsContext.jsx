@@ -1,6 +1,7 @@
 // src/contexts/PermissionsContext.jsx
 import { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react";
 import { getMyPermissions } from "../api/rbacApi";
+import { takeBootPrefetch } from "../utils/bootPrefetch";
 import { useAuth } from "./AuthContext";
 
 const PermissionsContext = createContext(null);
@@ -28,7 +29,8 @@ export function PermissionsProvider({ children }) {
     }
     try {
       setLoading(true);
-      const res = await getMyPermissions();
+      const early = takeBootPrefetch("permissions", localStorage.getItem("token"));
+      const res = early ? await early.catch(() => getMyPermissions()) : await getMyPermissions();
       setPermissions(new Set(res.data.permissions || []));
       setIsSeedAdmin(res.data.isSeedAdmin === true);
     } catch {
