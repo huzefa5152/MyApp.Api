@@ -152,14 +152,13 @@ namespace MyApp.Api.Services.Implementations
             DateTime? dateFrom = null, DateTime? dateTo = null,
             int? divisionId = null, HashSet<int>? allowedDivisionIds = null, bool? fromChallan = null)
         {
+            // The page is loaded by id (Helpers/PageById) with its lines in id order, and
+            // the lines' sources afterwards (below): sorting bills joined to their whole
+            // source chain asked production for up to 182 MB per page (2026-11-20).
             var q = _context.PurchaseBills
                 .Include(pb => pb.Supplier)
-                .Include(pb => pb.Items)
+                .Include(pb => pb.Items.OrderBy(pi => pi.Id))
                     .ThenInclude(pi => pi.ItemType)
-                .Include(pb => pb.Items).ThenInclude(pi => pi.Sources).ThenInclude(src => src.SalesOrderItem!).ThenInclude(i => i.SalesOrder).ThenInclude(o => o.Client)
-                .Include(pb => pb.Items).ThenInclude(pi => pi.Sources).ThenInclude(src => src.DeliveryItem!).ThenInclude(i => i.DeliveryChallan).ThenInclude(c => c.Client)
-                .Include(pb => pb.Items).ThenInclude(pi => pi.Sources).ThenInclude(src => src.InvoiceItem!).ThenInclude(i => i.Invoice).ThenInclude(b => b.Client)
-                .Include(pb => pb.Items).ThenInclude(pi => pi.Sources).ThenInclude(src => src.InvoiceItem!).ThenInclude(i => i.DeliveryItem)
                 .Include(pb => pb.Division)
                 .Where(pb => pb.CompanyId == companyId);
             // Division-RBAC scope first (null = unrestricted); the operator's
@@ -188,12 +187,24 @@ namespace MyApp.Api.Services.Implementations
                     pb.Items.Any(it => it.Description.ToLower().Contains(term) ||
                                         (it.ItemType != null && it.ItemType.Name.ToLower().Contains(term))));
             }
-            var total = await q.CountAsync();
-            var rows = await q
-                .OrderByDescending(pb => pb.PurchaseBillNumber)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync();
+            var (rows, total) = await PageById.PageAsync(q,
+                x => x.OrderByDescending(pb => pb.PurchaseBillNumber), pb => pb.Id, page, pageSize);
+            // The bills are tracked, so loading their lines' sources fills
+            // PurchaseItem.Sources and each source's chain, as the include did; the
+            // sources are then put in id order, the order the single query returned.
+            var itemIds = rows.SelectMany(pb => pb.Items).Select(pi => pi.Id).ToList();
+            if (itemIds.Count > 0)
+            {
+                await _context.PurchaseItemSources.Where(src => itemIds.Contains(src.PurchaseItemId))
+                    .Include(src => src.SalesOrderItem!).ThenInclude(i => i.SalesOrder).ThenInclude(o => o.Client)
+                    .Include(src => src.DeliveryItem!).ThenInclude(i => i.DeliveryChallan).ThenInclude(c => c.Client)
+                    .Include(src => src.InvoiceItem!).ThenInclude(i => i.Invoice).ThenInclude(b => b.Client)
+                    .Include(src => src.InvoiceItem!).ThenInclude(i => i.DeliveryItem)
+                    .LoadAsync();
+                foreach (var item in rows.SelectMany(pb => pb.Items))
+                    if (item.Sources is List<PurchaseItemSource> sources)
+                        sources.Sort((a, b) => a.Id.CompareTo(b.Id));
+            }
             return new PagedResult<PurchaseBillDto>
             {
                 Items = rows.Select(ToDto).ToList(),
