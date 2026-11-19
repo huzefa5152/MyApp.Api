@@ -1222,7 +1222,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   });
   const totalsRows = billTotalsRows({
     subtotal, gstRate, gstAmount, taxBase, scenarioCode: chosenScenario?.code || null,
-    furtherTaxRate, furtherTaxAmount, buyerRegistered, grandTotal,
+    furtherTaxRate, furtherTaxAmount, buyerRegistered, outsideFbr, grandTotal,
     withholdingAmount: whtResolved, withholdingRate: whtMode === "rate" ? whtRate : null, balanceDue,
     advanceTaxAmount: advTaxResolved, advanceTaxSection: advTaxOption?.section,
     advanceTaxRate: advTaxOption?.rate, totalWithAdvance: totalWithAdvTax,

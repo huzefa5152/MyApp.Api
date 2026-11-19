@@ -226,6 +226,10 @@ export default function EditBillForm({
   // SRB / no-tax bill: a sale outside FBR (company switch AllowNonFbrBills).
   const [taxTreatment, setTaxTreatment] = useState("FBR");
   const outsideFbr = isOutsideFbr(taxTreatment);
+  // Only a buyer we KNOW is unregistered: an unloaded client list says nothing.
+  const billClient = clients.find((c) => String(c.id) === String(clientId));
+  const buyerUnregistered =
+    !!billClient && (billClient.registrationType || "").toLowerCase() !== "registered";
   // Withholding tax (income tax that sits ON TOP of GST — never changes
   // subtotal / GST / grand total). "none" | "rate" (a %) | "amount" (fixed PKR).
   // Prefilled from the loaded bill below.
@@ -1910,7 +1914,17 @@ export default function EditBillForm({
             note: "s.3(1A), on the value before tax",
           },
         ]
-      : []),
+      : // Same line the create forms show: an unregistered buyer charged none.
+        !outsideFbr && buyerUnregistered
+        ? [
+            {
+              key: "further",
+              label: "Further Tax (0%)",
+              amount: 0,
+              note: "Buyer is unregistered and no further tax is charged: FBR is sent 0",
+            },
+          ]
+        : []),
     {
       key: "grand",
       label: "Grand Total",

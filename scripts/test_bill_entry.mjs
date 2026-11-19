@@ -15,6 +15,9 @@ import assert from "node:assert";
 const { BILL_ANCHORS, lineAnchor, rateBlockText, billChecklist, billTotalsRows, salesTaxBase, isThirdScheduleSaleType } = await import(
   new URL("../myapp-frontend/src/utils/billEntry.js", import.meta.url).href
 );
+const { furtherTaxFiled, furtherTaxFiledForAll } = await import(
+  new URL("../myapp-frontend/src/utils/furtherTaxFiled.js", import.meta.url).href
+);
 
 let pass = 0;
 const failures = [];
@@ -77,6 +80,31 @@ check("further tax only when charged, and says why", () => {
   assert.strictEqual(ft.amount, 400);
   assert.match(ft.note, /unregistered/);
   assert.deepStrictEqual(rows.map((r) => r.key), ["subtotal", "gst", "further", "grand"]);
+});
+check("an unregistered buyer charged no further tax shows the zero", () => {
+  const rows = billTotalsRows({ ...base, furtherTaxRate: "", furtherTaxAmount: 0, buyerRegistered: false });
+  const ft = rows.find((r) => r.key === "further");
+  assert.strictEqual(ft.label, "Further Tax (0%)");
+  assert.strictEqual(ft.amount, 0);
+  assert.match(ft.note, /FBR is sent 0/);
+  assert.deepStrictEqual(rows.map((r) => r.key), ["subtotal", "gst", "further", "grand"]);
+});
+check("no zero line for a registered buyer, an unknown buyer or a bill outside FBR", () => {
+  const zero = { ...base, furtherTaxAmount: 0 };
+  for (const extra of [{ buyerRegistered: true }, { buyerRegistered: null }, { buyerRegistered: false, outsideFbr: true }])
+    assert.ok(!billTotalsRows({ ...zero, ...extra }).some((r) => r.key === "further"), JSON.stringify(extra));
+});
+check("submitting one bill says what further tax is filed", () => {
+  assert.strictEqual(furtherTaxFiled({ furtherTaxRate: 4, furtherTaxAmount: 400 }), "Further tax filed: 4% (Rs 400.00).");
+  assert.strictEqual(furtherTaxFiled({ furtherTaxRate: null, furtherTaxAmount: 0 }), "No further tax is filed on this one.");
+  assert.strictEqual(furtherTaxFiled({}), "No further tax is filed on this one.");
+});
+check("submitting many says how many carry it and how much", () => {
+  const four = { furtherTaxRate: 4, furtherTaxAmount: 400 }, none = { furtherTaxAmount: 0 };
+  assert.strictEqual(furtherTaxFiledForAll([none, none]), "None of them carries further tax.");
+  assert.strictEqual(furtherTaxFiledForAll([four, none, four]),
+    "Further tax is filed on 2 (Rs 800.00 in all) and on none of the other 1.");
+  assert.strictEqual(furtherTaxFiledForAll([four]), "Further tax is filed on 1 (Rs 400.00 in all).");
 });
 check("withholding adds itself and the balance due", () => {
   const rows = billTotalsRows({ ...base, withholdingAmount: 500, withholdingRate: 4, balanceDue: 12000 });

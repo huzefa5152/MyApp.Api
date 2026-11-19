@@ -84,6 +84,7 @@ import CopyDocumentModal from "../Components/CopyDocumentModal";
 import { DOC_COPY_TYPES } from "../api/documentCopyApi";
 import { useDocumentCopy } from "../hooks/useDocumentCopy";
 import { useConfirm } from "../Components/ConfirmDialog";
+import { furtherTaxFiled, furtherTaxFiledForAll } from "../utils/furtherTaxFiled";
 import Pagination from "../Components/Pagination";
 import usePageSize from "../hooks/usePageSize";
 import usePersistentFilter from "../hooks/usePersistentFilter";
@@ -560,7 +561,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     }
     const ok = await confirm({
       title: `Submit ${docName} #${inv.invoiceNumber} to FBR?`,
-      message: `FBR issues an IRN and ${docName} #${inv.invoiceNumber} is locked: from then on it is corrected only with a credit or debit note. This cannot be undone.`,
+      message: `${furtherTaxFiled(inv)} FBR issues an IRN and ${docName} #${inv.invoiceNumber} is locked: from then on it is corrected only with a credit or debit note. This cannot be undone.`,
       variant: "warning",
       confirmText: "Submit to FBR",
     });
@@ -910,7 +911,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     }
     const ok = await confirm({
       title: `Submit ${toSubmit.length} bill${toSubmit.length !== 1 ? "s" : ""} to FBR?`,
-      message: `${toSubmit.length} locally-validated bill${toSubmit.length !== 1 ? "s" : ""}${filterNote} will be sent to FBR. Once submitted, each bill is locked from edits and assigned an IRN. This cannot be undone.`,
+      message: `${toSubmit.length} locally-validated bill${toSubmit.length !== 1 ? "s" : ""}${filterNote} will be sent to FBR. ${furtherTaxFiledForAll(toSubmit)} Once submitted, each bill is locked from edits and assigned an IRN. This cannot be undone.`,
       variant: "warning",
       confirmText: "Submit all",
     });

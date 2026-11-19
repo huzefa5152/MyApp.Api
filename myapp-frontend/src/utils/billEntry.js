@@ -98,6 +98,7 @@ export function billTotalsRows({
   furtherTaxRate = 0,
   furtherTaxAmount = 0,
   buyerRegistered = null,
+  outsideFbr = false,
   grandTotal,
   withholdingAmount = 0,
   withholdingRate = null,
@@ -127,6 +128,13 @@ export function billTotalsRows({
       note: buyerRegistered === false
         ? "Buyer is unregistered: s.3(1A), on the value before tax"
         : "s.3(1A), on the value before tax",
+    });
+  // The one case worth saying out loud: an unregistered buyer normally carries
+  // 4%, so a bill that charges none shows the zero rather than leaving it out.
+  else if (buyerRegistered === false && !outsideFbr)
+    rows.push({
+      key: "further", label: "Further Tax (0%)", amount: 0,
+      note: "Buyer is unregistered and no further tax is charged: FBR is sent 0",
     });
   rows.push({ key: "grand", label: "Grand Total", amount: grandTotal, strong: true, note: "Value plus sales tax: the invoice total" });
   if (withholdingAmount > 0) {
