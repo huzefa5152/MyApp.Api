@@ -22,10 +22,16 @@ work should update this section, not start a second document.
 | Built bundle cached for a year, app shell always re-checked | `273e3681` | `Program.cs` (`spaStaticFiles`) |
 | Site pings itself every 4 minutes against cold starts | `273e3681` | `Services/HostedServices/KeepWarmService.cs` |
 | Purchase Bills and Goods Receipts fetch their list once | `361b087e` | the two page components |
-| Companies and permissions are asked for alongside the sign-in check on a page load, not after it | second pass, 2026-11-20 | `utils/bootPrefetch.js`, the three contexts |
+| Companies and permissions are asked for alongside the sign-in check on a page load, not after it | `ca480c3c` | `utils/bootPrefetch.js`, the three contexts |
 
 Measured result on production, 52 screens: payload −89%, API time −25%, screen
 settle time −39%. Tables are under "After, on production".
+
+Start-up change, confirmed on production after its deploy: on a warm reload the
+sign-in check, the company list and the permissions all start at the same
+instant (184 ms after navigation) and the dashboard has its figures at about
+0.74 s. There is no like-for-like figure from before; the saving is the one
+round trip the sign-in check used to take first, about 0.15 s warm.
 
 **Deployed but NOT verified**
 
@@ -59,6 +65,9 @@ the next session does not spend the same hour reaching the same answer.
 
 **Still open**
 
+- On the dashboard the figures request starts only when the stamps request has
+  finished (seen on production before and after this work). Whether one waits
+  on the other, or both wait on the screen's own script, was not investigated.
 - Sign-in fires `/api/permissions/me` twice (seen while testing the start-up
   change; it was not caused by it and was not investigated).
 - Two frontend tests fail on a clean checkout, before any of this work:
