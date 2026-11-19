@@ -633,6 +633,24 @@ try
     // permission-set TTL.
     builder.Services.AddMemoryCache();
     builder.Services.AddScoped<IPermissionService, PermissionService>();
+
+    // Performance audit 2026-11-20. API responses went out uncompressed: the
+    // host compresses static files but not what the app writes, so a list
+    // screen pulled 100 KB of print templates and the FBR settings screen
+    // 2.4 MB of lookups as plain text. Brotli at its balanced level (its fastest
+    // one barely compresses JSON), gzip at fastest: the win is the 5-10x
+    // smaller body on the wire, not the last few percent of ratio.
+    builder.Services.AddResponseCompression(o =>
+    {
+        o.EnableForHttps = true;
+        o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
+        o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
+    });
+    builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProviderOptions>(
+        o => o.Level = System.IO.Compression.CompressionLevel.Optimal);
+    builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProviderOptions>(
+        o => o.Level = System.IO.Compression.CompressionLevel.Fastest);
+    builder.Services.AddHostedService<MyApp.Api.Services.HostedServices.KeepWarmService>();
     builder.Services.AddScoped<McpUserAccessService>();
 
     // Tenant-scope guard — answers "may this user touch this company?"
@@ -2219,6 +2237,25 @@ try
     });
 
     // Global exception handling — logs to AuditLogs table
+    // Compress what the API reads back, and only that. GET only, and never the
+    // sign-in or agent-token routes: a response that carries a secret is not
+    // compressed, which keeps compression-ratio attacks (BREACH) off the table.
+    // Static files are left to the host, which already compresses them.
+    app.UseWhen(
+        ctx => HttpMethods.IsGet(ctx.Request.Method)
+            && ctx.Request.Path.StartsWithSegments("/api")
+            && !ctx.Request.Path.StartsWithSegments("/api/auth")
+            && !ctx.Request.Path.StartsWithSegments("/api/mcp"),
+        branch => branch.UseResponseCompression());
+
+    // The keep-warm ping needs the site's own address; learn it from a request.
+    var keepWarmHost = app.Configuration["KeepWarm:Host"];
+    app.Use(async (ctx, next) =>
+    {
+        MyApp.Api.Services.HostedServices.KeepWarmOrigin.Observe(ctx.Request, keepWarmHost);
+        await next();
+    });
+
     app.UseMiddleware<GlobalExceptionMiddleware>();
 
     // Only redirect to HTTPS in production if not behind a reverse proxy (Render handles SSL)
@@ -2234,9 +2271,33 @@ try
     app.UseMiddleware<CatalogAccessMiddleware>();
     app.UseMiddleware<PrivateDataFilesMiddleware>();
 
-    // Serve React frontend static files from wwwroot
+    // Serve React frontend static files from wwwroot.
+    //
+    // Performance audit 2026-11-20: nothing here carried a Cache-Control, so a
+    // browser re-asked for every script and stylesheet on every load (about 25
+    // round trips of ~250 ms each) and was free to keep an OLD app shell by
+    // guesswork -- one that points at bundle files the deploy has since pruned.
+    //   * /admin/assets/* are fingerprinted by the build: a changed file gets a
+    //     new name, so the old name can be kept for a year without ever going
+    //     stale.
+    //   * the shell (index.html) and runtime-env.js keep their names across
+    //     deploys, so they are re-checked every time and a deploy is picked up
+    //     on the next load.
+    var spaStaticFiles = new StaticFileOptions
+    {
+        OnPrepareResponse = ctx =>
+        {
+            var path = ctx.Context.Request.Path.Value ?? "";
+            var file = ctx.File.Name;
+            if (path.StartsWith("/admin/assets/", StringComparison.OrdinalIgnoreCase))
+                ctx.Context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+            else if (file.EndsWith(".html", StringComparison.OrdinalIgnoreCase)
+                     || file.Equals("runtime-env.js", StringComparison.OrdinalIgnoreCase))
+                ctx.Context.Response.Headers.CacheControl = "no-cache";
+        }
+    };
     app.UseDefaultFiles();
-    app.UseStaticFiles();
+    app.UseStaticFiles(spaStaticFiles);
 
     // Serve user-uploaded files (logos, avatars) from persistent data/ folder
     var dataPath = Path.Combine(app.Environment.ContentRootPath, "data");
@@ -2278,17 +2339,17 @@ try
     // The :nonfile constraint is LOAD-BEARING: without it this endpoint also
     // matches /admin/assets/*.js, and StaticFileMiddleware skips any request
     // that already matched an endpoint — serving HTML for every asset.
-    app.MapFallbackToFile("admin/{*path:nonfile}", "admin/index.html");
+    app.MapFallbackToFile("admin/{*path:nonfile}", "admin/index.html", spaStaticFiles);
 
     // The PUBLIC customer portal. The link a customer is sent is /portal/<token>,
     // which is NOT under /admin — so without this it would fall through to the
     // landing page below. It serves the same SPA shell: the shell's asset URLs are
     // absolute (/admin/assets/...), so they still resolve, and main.jsx detects the
     // path and renders the portal outside the router and the auth providers.
-    app.MapFallbackToFile("portal/{*path:nonfile}", "admin/index.html");
+    app.MapFallbackToFile("portal/{*path:nonfile}", "admin/index.html", spaStaticFiles);
 
     // Everything else — including "/" — serves the public landing page.
-    app.MapFallbackToFile("index.html");
+    app.MapFallbackToFile("index.html", spaStaticFiles);
 
     Log.Information("MyApp.Api starting up — environment={Env}", app.Environment.EnvironmentName);
     app.Run();
