@@ -98,7 +98,15 @@ cached on the server.
 1. **API responses are compressed** (Brotli, gzip fallback). Measured locally on
    the same data: print templates 100 KB → 15 KB, the invoice list 823 KB →
    65 KB, FBR lookups 2,451 KB → 247 KB. Bodies are byte-identical once
-   decoded.
+   decoded. JSON of 1 KB or more is compressed and sent in one write; smaller
+   bodies and anything that is not JSON go out exactly as before.
+
+   The framework's own compression middleware was deployed first and measured:
+   payload fell 89%, but it sends a compressed response in more than one small
+   write, and a screen making a single call waited about 170 ms longer (the
+   same call measured 0.14 s before and 0.32 s after). It was replaced the same
+   day by `Middleware/ApiCompressionMiddleware`, which sends each response
+   whole.
 2. **The built bundle is cached for a year; the app shell is always
    re-checked.** Files under `/admin/assets/` are fingerprinted by the build, so
    a changed file has a new name and the old name can never go stale.

@@ -1111,10 +1111,16 @@ The time on production is network round trips and payload size, not server work
 (every endpoint is 10–60 ms on a same-machine database), so the rules are about
 transport:
 
-- **API reads are compressed, and only reads.** `UseResponseCompression` runs for
-  `GET` under `/api`, never `/api/auth` or `/api/mcp`: a response that carries a
-  token is not compressed (BREACH). Do not widen that branch to POSTs or to the
-  sign-in routes.
+- **API reads are compressed, and only reads.** `Middleware/ApiCompressionMiddleware`
+  runs for `GET` under `/api`, never `/api/auth` or `/api/mcp`: a response that
+  carries a token is not compressed (BREACH). Do not widen that branch to POSTs
+  or to the sign-in routes. It holds JSON and sends it in ONE write; non-JSON
+  (PDF, Excel, attachments, streams) passes straight through.
+- **Do not swap it for the framework's `UseResponseCompression`.** That was
+  shipped first and measured on production: it sends a compressed response in
+  more than one small write, and every single-call screen got ~170 ms slower
+  (a 0.14 s call became 0.32 s). `ApiCompressionMiddlewareTests` pins the
+  behaviour; measure on production, not localhost, before changing it.
 - **Only fingerprinted files are long-lived.** `/admin/assets/*` is
   `immutable`; `index.html` and `runtime-env.js` are `no-cache`, which is what
   makes a deploy show up on the next load. A new static file whose name does

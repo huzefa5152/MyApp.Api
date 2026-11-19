@@ -634,22 +634,7 @@ try
     builder.Services.AddMemoryCache();
     builder.Services.AddScoped<IPermissionService, PermissionService>();
 
-    // Performance audit 2026-11-20. API responses went out uncompressed: the
-    // host compresses static files but not what the app writes, so a list
-    // screen pulled 100 KB of print templates and the FBR settings screen
-    // 2.4 MB of lookups as plain text. Brotli at its balanced level (its fastest
-    // one barely compresses JSON), gzip at fastest: the win is the 5-10x
-    // smaller body on the wire, not the last few percent of ratio.
-    builder.Services.AddResponseCompression(o =>
-    {
-        o.EnableForHttps = true;
-        o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
-        o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
-    });
-    builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProviderOptions>(
-        o => o.Level = System.IO.Compression.CompressionLevel.Optimal);
-    builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProviderOptions>(
-        o => o.Level = System.IO.Compression.CompressionLevel.Fastest);
+    // Performance audit 2026-11-20: keeps the host from unloading an idle site.
     builder.Services.AddHostedService<MyApp.Api.Services.HostedServices.KeepWarmService>();
     builder.Services.AddScoped<McpUserAccessService>();
 
@@ -2237,16 +2222,23 @@ try
     });
 
     // Global exception handling — logs to AuditLogs table
+    // Performance audit 2026-11-20. API responses went out uncompressed: the
+    // host compresses static files but not what the app writes, so a list
+    // screen pulled 100 KB of print templates and the FBR settings screen
+    // 2.4 MB of lookups as plain text.
+    //
     // Compress what the API reads back, and only that. GET only, and never the
     // sign-in or agent-token routes: a response that carries a secret is not
     // compressed, which keeps compression-ratio attacks (BREACH) off the table.
     // Static files are left to the host, which already compresses them.
+    // ApiCompressionMiddleware, not the framework's UseResponseCompression:
+    // that one made every small call ~170 ms slower on production.
     app.UseWhen(
         ctx => HttpMethods.IsGet(ctx.Request.Method)
             && ctx.Request.Path.StartsWithSegments("/api")
             && !ctx.Request.Path.StartsWithSegments("/api/auth")
             && !ctx.Request.Path.StartsWithSegments("/api/mcp"),
-        branch => branch.UseResponseCompression());
+        branch => branch.UseMiddleware<ApiCompressionMiddleware>());
 
     // The keep-warm ping needs the site's own address; learn it from a request.
     var keepWarmHost = app.Configuration["KeepWarm:Host"];
