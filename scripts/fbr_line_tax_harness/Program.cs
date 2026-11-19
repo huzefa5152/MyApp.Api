@@ -33,11 +33,21 @@ Check("3rd schedule, bill at 2.5% files 2.5%", Filed(2.5m, saleType: "3rd Schedu
 Check("sales tax is untouched",
     FbrLineTax.Compute(Line(), 18m, "Unregistered", "SN002", 0m, null, followDocumentFurtherTax: true).SalesTax, 1800m);
 
-Console.WriteLine("-- callers with no document rate keep the statutory rule --");
-Check("unregistered standard rate derives 4%",
+Console.WriteLine("-- a filing from before the fix is restated by the old rule --");
+Check("unregistered standard rate, no rate on the bill, was filed at 4%",
     FbrLineTax.Compute(Line(), 18m, "Unregistered", null).FurtherTax, 400m);
-Check("registered derives none",
+Check("registered, no rate on the bill, was filed at none",
     FbrLineTax.Compute(Line(), 18m, "Registered", null).FurtherTax, 0m);
+Check("a rate on the bill was filed even then (3%)",
+    FbrLineTax.Compute(Line(), 18m, "Unregistered", null, 3m).FurtherTax, 300m);
+
+Console.WriteLine("-- which rule a report uses --");
+void Flag(string name, bool got, bool want) => Check(name, got ? 1m : 0m, want ? 1m : 0m);
+Flag("filed before the fix: old rule",
+    FbrLineTax.FiledUnderStatutoryRule(FbrLineTax.DocumentRateFiledFrom.AddSeconds(-1)), true);
+Flag("filed since: follows the bill",
+    FbrLineTax.FiledUnderStatutoryRule(FbrLineTax.DocumentRateFiledFrom), false);
+Flag("not filed yet: follows the bill", FbrLineTax.FiledUnderStatutoryRule(null), false);
 
 Console.WriteLine(failed == 0 ? $"{run}/{run} FBR line tax checks passed" : $"{failed} of {run} FAILED");
 return failed == 0 ? 0 : 1;

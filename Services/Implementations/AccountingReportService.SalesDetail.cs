@@ -156,6 +156,8 @@ namespace MyApp.Api.Services.Implementations
                         x.Inv.Subtotal,
                         x.Inv.GSTAmount,
                         x.Inv.AdvanceTaxAmount,
+                        x.Inv.FurtherTaxRate,
+                        x.Inv.FbrSubmittedAt,
                         Party = x.Inv.Client!.Name,
                         Address = x.Inv.Client!.Address,
                         Ntn = x.Inv.Client!.NTN,
@@ -194,8 +196,13 @@ namespace MyApp.Api.Services.Implementations
                         SaleType = l.SaleType,
                         FixedNotifiedValueOrRetailPrice = l.Retail,
                     };
+                    // Further tax is the bill's own rate, as the FBR payload
+                    // is. Only a bill filed before the payload followed the
+                    // bill keeps the old rule, because that is what FBR holds.
                     (salesTax, furtherTax, _) = FbrLineTax.Compute(
-                        forTax, l.Inv.GSTRate, l.Inv.RegType ?? "", scenarioId: null);
+                        forTax, l.Inv.GSTRate, l.Inv.RegType ?? "", scenarioId: null,
+                        l.Inv.FurtherTaxRate,
+                        followDocumentFurtherTax: !FbrLineTax.FiledUnderStatutoryRule(l.Inv.FbrSubmittedAt));
                 }
                 else
                 {
@@ -266,6 +273,8 @@ namespace MyApp.Api.Services.Implementations
                     x.Inv.Subtotal,
                     x.Inv.GSTAmount,
                     x.Inv.AdvanceTaxAmount,
+                    x.Inv.FurtherTaxRate,
+                    x.Inv.FbrSubmittedAt,
                     RegType = x.Inv.Client!.RegistrationType,
                     HasLine = x.It != null,
                 })
@@ -284,7 +293,9 @@ namespace MyApp.Api.Services.Implementations
                             SaleType = t.SaleType,
                             FixedNotifiedValueOrRetailPrice = t.Retail,
                         },
-                        t.GSTRate, t.RegType ?? "", scenarioId: null);
+                        t.GSTRate, t.RegType ?? "", scenarioId: null,
+                        t.FurtherTaxRate,
+                        followDocumentFurtherTax: !FbrLineTax.FiledUnderStatutoryRule(t.FbrSubmittedAt));
                     totalTax += st;
                     totalFurther += ft;
                 }

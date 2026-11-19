@@ -4,7 +4,8 @@ FBR is sent the further tax the bill carries, and nothing else.
 A bill saved at 0% further tax for an unregistered buyer was being filed at the
 statutory 4% (2026-11-19): the payload fell back to 4% whenever the bill's own
 rate was blank or zero. The bill, its print and its ledger all said 0, and FBR
-was told 4%. The payload now follows the bill in every case.
+was told 4%. The payload now follows the bill in every case, and the accounting
+Sales Detail report states the same figure.
 
 Runs against a LOCAL backend on a throwaway company. The preview endpoint builds
 the payload without sending anything, so the dummy token never reaches PRAL.
@@ -109,7 +110,10 @@ def main():
                     sum(float(i["salesTaxApplicable"]) for i in items),
                     sum(float(i["totalValues"]) for i in items)), ""
 
+        expected = {}  # bill id -> the further tax it should carry everywhere
+
         def expect(name, bill_id, further, scenario="SN002"):
+            expected[bill_id] = further
             got, err = filed(bill_id, scenario)
             if got is None:
                 check(name, False, err)
@@ -148,6 +152,18 @@ def main():
         print("\n[3. Registered buyer]")
         expect("no rate files 0", bill(reg, "absent", scenario="SN001")["id"], 0, "SN001")
         expect("a rate the operator set is filed (4% = 400)", bill(reg, 4, scenario="SN001")["id"], 400, "SN001")
+
+        print("\n[4. The accounting Sales Detail report says what is filed]")
+        s, rp = http(b, "GET", f"/api/accounting/reports/company/{cid}/sales-detail?period=allPeriods&pageSize=200", t)
+        rows = (rp or {}).get("rows", []) if s == 200 else []
+        check("the report builds", s == 200 and len(rows) == len(expected), f"{s} rows={len(rows)} {str(rp)[:160]}")
+        by_bill = {r["invoiceId"]: float(r["furtherTax"]) for r in rows}
+        wrong = {i: (by_bill.get(i), want) for i, want in expected.items()
+                 if by_bill.get(i) is None or abs(by_bill[i] - want) > 0.005}
+        check("every bill's further tax is the bill's own, 0% included", not wrong, f"(report, bill): {wrong}")
+        zero = [i for i, want in expected.items() if want == 0]
+        check("no unregistered 0% bill is shown at the statutory 4%",
+              bool(zero) and all(by_bill.get(i) == 0 for i in zero), {i: by_bill.get(i) for i in zero})
     finally:
         if a.keep:
             print(f"kept company {cid}")

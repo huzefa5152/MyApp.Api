@@ -38,14 +38,15 @@ namespace MyApp.Api.Helpers
         /// one invoice line. Every caller needs all three.
         /// </summary>
         /// <param name="documentFurtherTaxRate">
-        /// The rate stored on the document. Only read when
-        /// <paramref name="followDocumentFurtherTax"/> is set.
+        /// The rate stored on the document. Above zero it is always the rate used.
         /// </param>
         /// <param name="followDocumentFurtherTax">
         /// True for the FBR payload: further tax is the document's rate and
         /// nothing else, and a blank or zero rate files zero (2026-11-19 -- a bill
-        /// saved at 0% for an unregistered buyer was being filed at 4%). False
-        /// keeps the statutory derivation for callers that hold no document rate.
+        /// saved at 0% for an unregistered buyer was being filed at 4%). False is
+        /// the rule every filing before that used -- a blank rate falls back to
+        /// the statutory 4% -- kept so a report can restate what those filings
+        /// carried. See <see cref="FiledUnderStatutoryRule"/>.
         /// </param>
         /// <param name="fbrRateDescription">
         /// FBR's own published wording for this line's sale type
@@ -54,6 +55,22 @@ namespace MyApp.Api.Helpers
         /// as it was, which is what every caller that has no reference lookup
         /// (the Sales Detail report) gets.
         /// </param>
+        /// <summary>
+        /// When the payload began following the document's further-tax rate (the
+        /// deploy of the 2026-11-19 fix, UTC like <c>Invoice.FbrSubmittedAt</c>).
+        /// </summary>
+        public static readonly DateTime DocumentRateFiledFrom =
+            new(2026, 11, 19, 13, 40, 0, DateTimeKind.Utc);
+
+        /// <summary>
+        /// True for a bill FBR already holds from before the fix. Its filing
+        /// carried the statutory 4% when the bill had no rate, and a report has
+        /// to keep saying so: FBR's record did not change when the code did.
+        /// Everything else -- filed since, or not filed yet -- follows the bill.
+        /// </summary>
+        public static bool FiledUnderStatutoryRule(DateTime? fbrSubmittedAt) =>
+            fbrSubmittedAt is { } at && at < DocumentRateFiledFrom;
+
         public static (decimal SalesTax, decimal FurtherTax, decimal RetailPrice) Compute(
             InvoiceItem item, decimal gstRate, string buyerRegType, string? scenarioId,
             decimal? documentFurtherTaxRate = null, string? fbrRateDescription = null,
@@ -115,17 +132,19 @@ namespace MyApp.Api.Helpers
             // (3) …except SN026/027/028 end-consumer retail (exempt)
             var isEndConsumerRetail = scenarioId is "SN026" or "SN027" or "SN028";
 
-            if (followDocumentFurtherTax)
+            if (documentFurtherTaxRate is > 0m)
             {
-                // The filing follows the document, whatever it says. A blank or
-                // zero rate files ZERO: the bill forms prefill 4% for an
-                // unregistered buyer, so no rate means the operator took it off.
-                // Falling back to 4% here filed tax the bill never charged.
-                if (documentFurtherTaxRate is > 0m)
-                    furtherTax = Math.Round(
-                        item.LineTotal * documentFurtherTaxRate.Value / 100m, 2, MidpointRounding.AwayFromZero);
+                // The operator said what the rate is; the filing follows the
+                // document. Charged on the line net, the same base as (2).
+                furtherTax = Math.Round(
+                    item.LineTotal * documentFurtherTaxRate.Value / 100m, 2, MidpointRounding.AwayFromZero);
             }
-            else if (buyerRegType == "Unregistered" && isStandardRate && !isEndConsumerRetail)
+            // A blank or zero rate files ZERO when the document is followed: the
+            // bill forms prefill 4% for an unregistered buyer, so no rate means
+            // the operator took it off. Falling back to 4% filed tax the bill
+            // never charged. The fallback survives only to restate old filings.
+            else if (!followDocumentFurtherTax
+                && buyerRegType == "Unregistered" && isStandardRate && !isEndConsumerRetail)
             {
                 furtherTax = Math.Round(item.LineTotal * 0.04m, 2, MidpointRounding.AwayFromZero);
             }
