@@ -118,35 +118,59 @@ update the list or clear its loading state.
 | Ids-first, page loaded as **one joined query** with an `IN` list | 3.2 GB (sales orders) | EF orders a joined collection load by every table's key; with the misestimated joins the sort is enormous. |
 | Split load with ids as a JSON parameter, no row limit | 430 MB + 101 MB (sales orders) | No row cap: production estimated 3,222 rows. Fixed by `TOP(n)` and dropping the quote join. |
 | Ids written as literals in the SQL | same estimate as above, and a fresh compile per page | Literal ids did not fix the estimate and cost ~40–60 ms of compile time per page locally. |
-| Ids-first paging for **purchase bills** | 72 MB at page size 10 (old plan: 29 MB) | Worse at the default page size. Purchase bills keep their original query. |
+| Ids-first paging for **purchase bills** with the whole source chain included | 72 MB at page size 10 (old plan: 29 MB) | Worse at the default size. Solved in round 2 by loading the sources separately (below). |
 | Ids-first for quotes, goods receipts, payments | no gain (old plans already ≤ 2.3 MB) | Reverted to keep the change small. They still get the indexes and the search fix. |
 | New `GET /salesorders/company/{id}/picker` endpoint | — | Not needed: fixing the paged list fixed the dropdown, without a new API surface to guard. |
 
+## Round 2 (2026-11-20): the remaining items
+
+Shipped after the first round, with the same verification (old and new builds
+side by side, production estimates under SHOWPLAN, the suites):
+
+1. **Purchase bill list** (`PurchaseBillService.GetPagedByCompanyAsync`): paged
+   by id with only Supplier, lines (in id order) and Division; the page's line
+   sources and their chain (order / challan / bill and client) are loaded
+   afterwards in one query with no sort, and each line's sources are put back in
+   id order. The bills are tracked, so the navigation properties fill exactly as
+   the include did. Production estimate: ≤ 1.8 MB, was 29 MB (10 rows) and
+   182 MB (100 rows).
+2. **"Purchased / Partial" label on challan cards**
+   (`DeliveryChallanService.MarkAutoPurchaseBillsAsync`):
+   - `CustomerDemand.LoadAsync(companyId, onlyChallans)` loads only what the
+     trails through the page's purchased challans hold: their order lines, every
+     live challan line on those orders, the bill lines linked to any of them, and
+     the challan lines those bills point at, so "a bill joins its challan's
+     trail" still holds. The trails are built by the same code; with no scope
+     (every other caller) the queries are unchanged.
+   - `ChallanPurchases.ChallanIds(db, among)` applies the page's challan ids
+     inside both halves of the union instead of computing every purchase in the
+     installation and filtering afterwards. Other callers use the unscoped form.
+   - Verified: labels identical for 17 purchased challans (both labels) across
+     every page of every company, including the `test_purchase_demand.py`
+     fixtures; that suite passes 49/49 on both builds.
+3. **"Setup Required" re-check** (`GetSetupRequiredChallansAsync`): an
+   existence check first; the company / client join runs only when such
+   challans exist. Behaviour unchanged (it still runs on every load).
+4. **Sales Orders, Purchase Bills and Goods Receipts pages** fetched page 1
+   twice on open; their filter effect now skips its first run, as
+   `ChallanPage` already did.
+5. **Challan search**: `LOWER()` dropped from the searched columns. All four are
+   `SQL_Latin1_General_CP1_CI_AS` on production and locally, so `LIKE` already
+   ignored case; the id step's estimate went from ~16 MB to ≤ 2.3 MB.
+
+After round 2 the largest memory any of these list statements asks production
+for is 3.3 MB, the existing company-wide "already bought" query
+(`CustomerDemand.LoadBoughtAsync`), which was not changed.
+
 ## Still open
 
-1. **Purchase bill list** (old plan ~29 MB at 10 rows, ~182 MB at 100). Its
-   includes go deep (items → sources → sales order / challan / invoice →
-   client). A narrower list projection would be the next step; measure with the
-   SHOWPLAN method first.
-2. **"Purchased / Partial" label on challan cards**
-   (`DeliveryChallanService.MarkAutoPurchaseBillsAsync`): when any card is
-   auto-purchased it loads the company's whole demand history
-   (`CustomerDemand.LoadAsync`) for 10 cards, and runs a UNION over all purchase
-   bills (~6,500 reads) on every load. Deferred because it touches costing; any
-   change must keep the same labels (`test_cost_purchase_sync.py`, commercial
-   cost suites).
-3. **Challan list re-evaluates "Setup Required" on every load**
-   (`ReEvaluateSetupRequiredAsync`) and may write status changes during a GET.
-   Cheap today; moving it would change when statuses update.
-4. **The Sales Orders page requests page 1 twice on open** (frontend effect
-   order). Harmless now, but a wasted call.
-5. **Challan search's id step** asks for ~16 MB with a search term (the
-   `LOWER(…) LIKE '%term%'` over lines and item types). Dropping `LOWER()` is
-   safe (the column collation is `SQL_Latin1_General_CP1_CI_AS`) but gains
-   little, because `LIKE '%x%'` cannot use an index either way.
-6. Every API call costs ~180–250 ms on the host even when trivial, and a screen
-   opens 5–7 calls. App-pool cold starts after idle add seconds to the first
-   request; Query Store cannot see web-server time.
+- Every API call costs ~180–250 ms on the host even when trivial, and a screen
+  opens 5–7 calls. App-pool cold starts after idle add seconds to the first
+  request. These are hosting matters, not query plans: a keep-warm ping would
+  need a scheduled job (a deployment pipeline change), and fewer calls per
+  screen would mean merging endpoints. Neither was done.
+- `CustomerDemand.LoadBoughtAsync` still reads the company's purchase sources
+  (~3 MB estimate); scoping it like `LoadAsync` is possible if it ever grows.
 
 ## How to measure again
 
