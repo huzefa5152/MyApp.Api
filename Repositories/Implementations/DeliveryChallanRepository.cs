@@ -93,13 +93,15 @@ namespace MyApp.Api.Repositories.Implementations
 
             if (!string.IsNullOrWhiteSpace(search))
             {
+                // These columns are case-insensitive (SQL_Latin1_General_CP1_CI_AS), so
+                // LIKE already ignores case; LOWER() on each row only cost CPU.
                 var term = search.ToLower();
                 query = query.Where(dc =>
                     dc.ChallanNumber.ToString().Contains(term) ||
-                    (dc.Client != null && dc.Client.Name.ToLower().Contains(term)) ||
-                    (dc.PoNumber != null && dc.PoNumber.ToLower().Contains(term)) ||
-                    dc.Items.Any(item => item.Description.ToLower().Contains(term) ||
-                                          (item.ItemType != null && item.ItemType.Name.ToLower().Contains(term))));
+                    (dc.Client != null && dc.Client.Name.Contains(term)) ||
+                    (dc.PoNumber != null && dc.PoNumber.Contains(term)) ||
+                    dc.Items.Any(item => item.Description.Contains(term) ||
+                                          (item.ItemType != null && item.ItemType.Name.Contains(term))));
             }
 
             return await PageById.PageAsync(query,
@@ -242,6 +244,10 @@ namespace MyApp.Api.Repositories.Implementations
             if (clientId.HasValue)
                 query = query.Where(dc => dc.ClientId == clientId.Value);
 
+            // Runs on every challan list load and almost always finds nothing:
+            // check first, and join the company and client rows only when needed.
+            if (!await query.AnyAsync())
+                return new List<DeliveryChallan>();
             return await query.ToListAsync();
         }
 
