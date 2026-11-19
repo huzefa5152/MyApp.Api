@@ -1104,6 +1104,30 @@ use the `create-ui-theme` skill to add a theme.
   follows the theme. A fixed hex on a pill or box reads fine in Classic and becomes a
   bright patch on Midnight's dark cards (the costing pill, 2026-11-18).
 
+## Performance: what is cached, compressed and kept warm (2026-11-20)
+
+Full audit, per-screen baseline and the risks weighed: `docs/PERFORMANCE_AUDIT_2026_11_20.md`.
+The time on production is network round trips and payload size, not server work
+(every endpoint is 10–60 ms on a same-machine database), so the rules are about
+transport:
+
+- **API reads are compressed, and only reads.** `UseResponseCompression` runs for
+  `GET` under `/api`, never `/api/auth` or `/api/mcp`: a response that carries a
+  token is not compressed (BREACH). Do not widen that branch to POSTs or to the
+  sign-in routes.
+- **Only fingerprinted files are long-lived.** `/admin/assets/*` is
+  `immutable`; `index.html` and `runtime-env.js` are `no-cache`, which is what
+  makes a deploy show up on the next load. A new static file whose name does
+  not change per build must NOT get a long `max-age`.
+- **No business data is cached on the server.** A dashboard figure that lags a
+  posted bill is a wrong figure, and a cached session or company check delays a
+  revocation, which the isolation invariant forbids.
+- **`KeepWarmService` pings the site's own address** so the host does not unload
+  it (first screen after idle measured 4–10 s per call). It only accepts the
+  hosting platform's domain or `KeepWarm:Host`; `KeepWarmOriginTests` pins that.
+
+---
+
 ## Anti-patterns I keep finding (don't repeat them)
 
 - ❌ Naming a production database / SQL host / FTP host in any tracked file (prose, code comment, migration comment, docstring). The repo is PUBLIC and the database name is also the SQL username — use a placeholder; `scripts/verify_no_production_identifiers.py` fails on it.
