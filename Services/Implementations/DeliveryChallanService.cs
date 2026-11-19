@@ -172,26 +172,27 @@ namespace MyApp.Api.Services.Implementations
                     var billedPrice = dc.Invoice?.Items.FirstOrDefault(ii => ii.DeliveryItemId == i.Id)?.UnitPrice;
                     var sellingPrice = billedPrice > 0 ? billedPrice : i.SalesOrderItem?.UnitPrice;
                     return new DeliveryItemDto
-                {
-                    Id = i.Id,
-                    ItemTypeId = i.ItemTypeId,
-                    ItemTypeName = i.ItemType?.Name ?? "",
-                    NonInventoryItemId = i.NonInventoryItemId,
-                    NonInventoryItemName = i.NonInventoryItem?.Name,
-                    Description = i.Description,
-                    Quantity = i.Quantity,
-                    PhysicalQuantity = i.DeliveredQuantity ?? i.Quantity,
-                    Unit = i.Unit,
-                    SalesOrderItemId = i.SalesOrderItemId,
-                    ActualUnitCost = i.ActualUnitCost,
-                    SupplierId = i.SupplierId,
-                    SupplierName = i.Supplier?.Name,
-                    SellingUnitPrice = sellingPrice > 0 ? sellingPrice : null,
-                    UnitProfit = sellingPrice > 0 && i.ActualUnitCost.HasValue
+                    {
+                        Id = i.Id,
+                        ItemTypeId = i.ItemTypeId,
+                        ItemTypeName = i.ItemType?.Name ?? "",
+                        NonInventoryItemId = i.NonInventoryItemId,
+                        NonInventoryItemName = i.NonInventoryItem?.Name,
+                        Description = i.Description,
+                        Quantity = i.Quantity,
+                        PhysicalQuantity = i.DeliveredQuantity ?? i.Quantity,
+                        Unit = i.Unit,
+                        SalesOrderItemId = i.SalesOrderItemId,
+                        ActualUnitCost = i.ActualUnitCost,
+                        SupplierId = i.SupplierId,
+                        SupplierName = i.Supplier?.Name,
+                        SellingUnitPrice = sellingPrice > 0 ? sellingPrice : null,
+                        UnitProfit = sellingPrice > 0 && i.ActualUnitCost.HasValue
                         ? sellingPrice.Value - i.ActualUnitCost.Value : null,
-                    TotalProfit = sellingPrice > 0 && i.ActualUnitCost.HasValue
+                        TotalProfit = sellingPrice > 0 && i.ActualUnitCost.HasValue
                         ? Math.Round((sellingPrice.Value - i.ActualUnitCost.Value) * (i.DeliveredQuantity ?? i.Quantity), 2) : null
-                }; }).ToList()
+                    };
+                }).ToList()
             };
 
             // Compute warnings for missing FBR fields — only when FBR is
@@ -232,15 +233,37 @@ namespace MyApp.Api.Services.Implementations
         /// </summary>
         /// <summary>Snapshot of the challan and its lines; a billed-delivery edit is refused once it moves.</summary>
         private static string DeliveryVersion(DeliveryChallan dc) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
-            System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new { dc.Id, dc.CompanyId, dc.ClientId, dc.ChallanNumber,
-                dc.PoNumber, PoDate = dc.PoDate?.ToString("yyyy-MM-ddTHH:mm:ss.fffffff"), dc.Site, dc.Notes, dc.IndentNo,
-                DeliveryDate = dc.DeliveryDate?.ToString("yyyy-MM-ddTHH:mm:ss.fffffff"), dc.Status, dc.InvoiceId, dc.SalesOrderId,
-                FbrStatus = dc.Invoice?.FbrStatus, FbrIRN = dc.Invoice?.FbrIRN,
-                Items = dc.Items.OrderBy(i => i.Id).Select(i => new { i.Id, i.Description,
+            System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                dc.Id,
+                dc.CompanyId,
+                dc.ClientId,
+                dc.ChallanNumber,
+                dc.PoNumber,
+                PoDate = dc.PoDate?.ToString("yyyy-MM-ddTHH:mm:ss.fffffff"),
+                dc.Site,
+                dc.Notes,
+                dc.IndentNo,
+                DeliveryDate = dc.DeliveryDate?.ToString("yyyy-MM-ddTHH:mm:ss.fffffff"),
+                dc.Status,
+                dc.InvoiceId,
+                dc.SalesOrderId,
+                FbrStatus = dc.Invoice?.FbrStatus,
+                FbrIRN = dc.Invoice?.FbrIRN,
+                Items = dc.Items.OrderBy(i => i.Id).Select(i => new
+                {
+                    i.Id,
+                    i.Description,
                     Quantity = i.Quantity.ToString("G29", System.Globalization.CultureInfo.InvariantCulture),
                     DeliveredQuantity = i.DeliveredQuantity?.ToString("G29", System.Globalization.CultureInfo.InvariantCulture),
-                    i.Unit, i.ItemTypeId, i.NonInventoryItemId, i.SalesOrderItemId, i.SupplierId,
-                    ActualUnitCost = i.ActualUnitCost?.ToString("G29", System.Globalization.CultureInfo.InvariantCulture) }) })));
+                    i.Unit,
+                    i.ItemTypeId,
+                    i.NonInventoryItemId,
+                    i.SalesOrderItemId,
+                    i.SupplierId,
+                    ActualUnitCost = i.ActualUnitCost?.ToString("G29", System.Globalization.CultureInfo.InvariantCulture)
+                })
+            })));
 
         private static bool IsEditable(DeliveryChallan dc)
         {
@@ -610,7 +633,8 @@ namespace MyApp.Api.Services.Implementations
                 var incomingIds = items.Where(i => i.Id > 0).Select(i => i.Id).ToHashSet();
                 var changed = incomingIds.Count != dc.Items.Count ||
                     dc.Items.Any(old => !incomingIds.Contains(old.Id)) ||
-                    items.Any(item => {
+                    items.Any(item =>
+                    {
                         var old = dc.Items.FirstOrDefault(i => i.Id == item.Id);
                         return old == null || old.Quantity != item.Quantity || old.Description != item.Description ||
                             old.Unit != item.Unit || old.ItemTypeId != item.ItemTypeId ||
@@ -767,7 +791,9 @@ namespace MyApp.Api.Services.Implementations
                     ItemTypeId = type?.Id,
                     ItemTypeName = type?.Name ?? "",
                     NonInventoryItemId = newDi.NonInventoryItemId,
-                    HSCode = type?.HSCode, FbrUOMId = type?.FbrUOMId, SaleType = type?.SaleType,
+                    HSCode = type?.HSCode,
+                    FbrUOMId = type?.FbrUOMId,
+                    SaleType = type?.SaleType,
                     Description = newDi.Description,
                     Quantity = newDi.Quantity,
                     UOM = newDi.Unit,
@@ -1079,7 +1105,7 @@ namespace MyApp.Api.Services.Implementations
                 {
                     var fbrReady = IsFbrReady(dc.Company, dc.Client);
                     dc.Status = !fbrReady ? "Setup Required"
-                              : hasPo     ? ReadyStatusFor(dc)
+                              : hasPo ? ReadyStatusFor(dc)
                                           : "No PO";
                 }
 

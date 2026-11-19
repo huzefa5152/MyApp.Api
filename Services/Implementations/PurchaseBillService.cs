@@ -325,164 +325,164 @@ namespace MyApp.Api.Services.Implementations
             DbUpdateException? lastConflict = null;
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
-            // Single transaction across number allocation, source-line
-            // joins, sale-side back-fill and stock movements. The previous
-            // version had three SaveChangesAsync calls — if the second
-            // failed after the first committed, you got an orphaned bill
-            // with no joins / no stock movements.
-            await using var tx = await _context.Database.BeginTransactionAsync();
-            try
-            {
-            var company = await _context.Companies.FindAsync(dto.CompanyId);
-            if (company == null) throw new KeyNotFoundException("Company not found.");
-            var supplier = await _context.Suppliers
-                .FirstOrDefaultAsync(s => s.Id == dto.SupplierId && s.CompanyId == dto.CompanyId);
-            if (supplier == null) throw new KeyNotFoundException("Supplier not found.");
-            if (dto.Items == null || dto.Items.Count == 0)
-                throw new InvalidOperationException("At least one item is required.");
-            if (dto.Items.Any(i => i.Quantity <= 0))
-                throw new InvalidOperationException("Quantity must be greater than zero.");
-            if (dto.Items.Any(i => i.UnitPrice < 0))
-                throw new InvalidOperationException("Unit price cannot be negative.");
-
-            var nextNumber = await CompanyDocumentNumbers.AllocateAsync(_context, dto.CompanyId, "purchase-bill", dto.CustomNumber, dto.DivisionId);
-
-            var items = new List<PurchaseItem>();
-            // Pre-load all chosen ItemTypes in one query.
-            var chosenItemTypeIds = dto.Items
-                .Where(i => i.ItemTypeId.HasValue)
-                .Select(i => i.ItemTypeId!.Value)
-                .Distinct()
-                .ToList();
-            var itemTypeMap = await _context.ItemTypes
-                .Where(it => chosenItemTypeIds.Contains(it.Id))
-                .ToDictionaryAsync(it => it.Id);
-
-            await ValidateNonInvItemsAsync(dto.CompanyId, dto.Items.Select(i => i.NonInventoryItemId));
-            // Each purchase-bill line must be classified — an Item Type OR a Non-Inventory item.
-            if (dto.Items.Any(i => !i.ItemTypeId.HasValue && !i.NonInventoryItemId.HasValue))
-                throw new InvalidOperationException(
-                    "Every purchase-bill line must have an Item Type or a Non-Inventory item selected.");
-
-            var validAccountIds = await ValidCompanyAccountIdsAsync(dto.CompanyId, dto.Items.Select(i => i.AccountId));
-            for (int idx = 0; idx < dto.Items.Count; idx++)
-            {
-                var i = dto.Items[idx];
-                // A non-inventory line (Freight/Discount) has no item type / HS / stock.
-                bool isNonInv = i.NonInventoryItemId.HasValue;
-                ItemType? itemType = (!isNonInv && i.ItemTypeId.HasValue)
-                    ? itemTypeMap.GetValueOrDefault(i.ItemTypeId.Value)
-                    : null;
-
-                items.Add(new PurchaseItem
+                // Single transaction across number allocation, source-line
+                // joins, sale-side back-fill and stock movements. The previous
+                // version had three SaveChangesAsync calls — if the second
+                // failed after the first committed, you got an orphaned bill
+                // with no joins / no stock movements.
+                await using var tx = await _context.Database.BeginTransactionAsync();
+                try
                 {
-                    ItemTypeId = isNonInv ? null : i.ItemTypeId,
-                    NonInventoryItemId = i.NonInventoryItemId,
-                    AccountId = Coerce(i.AccountId, validAccountIds),
-                    ItemTypeName = itemType?.Name ?? "",
-                    Description = i.Description?.Trim() ?? "",
-                    Quantity = i.Quantity,
-                    UOM = i.UOM ?? itemType?.UOM ?? "",
-                    UnitPrice = i.UnitPrice,
-                    LineTotal = Math.Round(i.Quantity * i.UnitPrice, 2),
-                    HSCode = isNonInv ? null : (i.HSCode ?? itemType?.HSCode),
-                    FbrUOMId = isNonInv ? null : (i.FbrUOMId ?? itemType?.FbrUOMId),
-                    SaleType = isNonInv ? null : (i.SaleType ?? itemType?.SaleType),
-                    RateId = isNonInv ? null : i.RateId,
-                    FixedNotifiedValueOrRetailPrice = isNonInv ? null : i.FixedNotifiedValueOrRetailPrice,
-                });
-            }
+                    var company = await _context.Companies.FindAsync(dto.CompanyId);
+                    if (company == null) throw new KeyNotFoundException("Company not found.");
+                    var supplier = await _context.Suppliers
+                        .FirstOrDefaultAsync(s => s.Id == dto.SupplierId && s.CompanyId == dto.CompanyId);
+                    if (supplier == null) throw new KeyNotFoundException("Supplier not found.");
+                    if (dto.Items == null || dto.Items.Count == 0)
+                        throw new InvalidOperationException("At least one item is required.");
+                    if (dto.Items.Any(i => i.Quantity <= 0))
+                        throw new InvalidOperationException("Quantity must be greater than zero.");
+                    if (dto.Items.Any(i => i.UnitPrice < 0))
+                        throw new InvalidOperationException("Unit price cannot be negative.");
 
-            await ApplySourcesAsync(dto.CompanyId, dto.SupplierId,
-                items.Select((item, idx) => (item, (List<PurchaseItemSourceDto>?)dto.Items[idx].Sources)).ToList(), excludeBillId: null);
+                    var nextNumber = await CompanyDocumentNumbers.AllocateAsync(_context, dto.CompanyId, "purchase-bill", dto.CustomNumber, dto.DivisionId);
 
-            var subtotal = items.Sum(x => x.LineTotal);
-            var gstAmount = Math.Round(subtotal * dto.GSTRate / 100m, 2);
-            var grandTotal = subtotal + gstAmount;
+                    var items = new List<PurchaseItem>();
+                    // Pre-load all chosen ItemTypes in one query.
+                    var chosenItemTypeIds = dto.Items
+                        .Where(i => i.ItemTypeId.HasValue)
+                        .Select(i => i.ItemTypeId!.Value)
+                        .Distinct()
+                        .ToList();
+                    var itemTypeMap = await _context.ItemTypes
+                        .Where(it => chosenItemTypeIds.Contains(it.Id))
+                        .ToDictionaryAsync(it => it.Id);
 
-            var bill = new PurchaseBill
-            {
-                PurchaseBillNumber = nextNumber,
-                Date = dto.Date.Date,
-                CompanyId = dto.CompanyId,
-                DivisionId = dto.DivisionId,
-                SupplierId = dto.SupplierId,
-                SupplierBillNumber = dto.SupplierBillNumber?.Trim(),
-                SupplierIRN = dto.SupplierIRN?.Trim(),
-                Subtotal = subtotal,
-                GSTRate = dto.GSTRate,
-                GSTAmount = gstAmount,
-                GrandTotal = grandTotal,
-                WithholdingTaxRate = dto.WithholdingTaxRate,
-                WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(dto.WithholdingTaxRate, grandTotal, dto.WithholdingTaxAmount),
-                AmountInWords = NumberToWordsConverter.Convert(grandTotal),
-                PaymentTerms = dto.PaymentTerms,
-                Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim(),
-                DocumentType = dto.DocumentType,
-                PaymentMode = dto.PaymentMode,
-                ReconciliationStatus = string.IsNullOrWhiteSpace(dto.SupplierIRN) ? "ManualOnly" : "Pending",
-                Items = items,
-                CreatedAt = DateTime.UtcNow,
-            };
+                    await ValidateNonInvItemsAsync(dto.CompanyId, dto.Items.Select(i => i.NonInventoryItemId));
+                    // Each purchase-bill line must be classified — an Item Type OR a Non-Inventory item.
+                    if (dto.Items.Any(i => !i.ItemTypeId.HasValue && !i.NonInventoryItemId.HasValue))
+                        throw new InvalidOperationException(
+                            "Every purchase-bill line must have an Item Type or a Non-Inventory item selected.");
 
-            _context.PurchaseBills.Add(bill);
-            await _context.SaveChangesAsync();
+                    var validAccountIds = await ValidCompanyAccountIdsAsync(dto.CompanyId, dto.Items.Select(i => i.AccountId));
+                    for (int idx = 0; idx < dto.Items.Count; idx++)
+                    {
+                        var i = dto.Items[idx];
+                        // A non-inventory line (Freight/Discount) has no item type / HS / stock.
+                        bool isNonInv = i.NonInventoryItemId.HasValue;
+                        ItemType? itemType = (!isNonInv && i.ItemTypeId.HasValue)
+                            ? itemTypeMap.GetValueOrDefault(i.ItemTypeId.Value)
+                            : null;
 
-            // Emit Stock IN for every line that's bound to a catalog item.
-            // No-op when Company.InventoryTrackingEnabled is false.
-            // 2026-05-13: skip lines whose ItemType has no HSCode —
-            // un-classified ItemTypes live outside the stock-tracking
-            // system. Symmetric with the OUT-side gate in
-            // StockService.SyncInvoiceStockMovementsAsync.
-            var trackedOnCreate = await _stock.GetStockTrackedItemTypeIdsAsync(
-                bill.CompanyId,
-                items.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value));
-            foreach (var it in items)
-            {
-                if (!it.ItemTypeId.HasValue || it.Quantity <= 0) continue;
-                if (!trackedOnCreate.Contains(it.ItemTypeId.Value)) continue;
-                await _stock.RecordMovementAsync(
-                    companyId: bill.CompanyId,
-                    itemTypeId: it.ItemTypeId.Value,
-                    direction: StockMovementDirection.In,
-                    // 2026-05-12: IStockService now accepts decimal(18,4)
-                    // (matches PurchaseItem precision). Fractional UOMs
-                    // are preserved instead of being rounded to int.
-                    quantity: it.Quantity,
-                    sourceType: StockMovementSourceType.PurchaseBill,
-                    sourceId: bill.Id,
-                    movementDate: bill.Date,
-                    notes: $"Purchase Bill #{bill.PurchaseBillNumber} from {supplier.Name}",
-                    divisionId: bill.DivisionId);
-            }
+                        items.Add(new PurchaseItem
+                        {
+                            ItemTypeId = isNonInv ? null : i.ItemTypeId,
+                            NonInventoryItemId = i.NonInventoryItemId,
+                            AccountId = Coerce(i.AccountId, validAccountIds),
+                            ItemTypeName = itemType?.Name ?? "",
+                            Description = i.Description?.Trim() ?? "",
+                            Quantity = i.Quantity,
+                            UOM = i.UOM ?? itemType?.UOM ?? "",
+                            UnitPrice = i.UnitPrice,
+                            LineTotal = Math.Round(i.Quantity * i.UnitPrice, 2),
+                            HSCode = isNonInv ? null : (i.HSCode ?? itemType?.HSCode),
+                            FbrUOMId = isNonInv ? null : (i.FbrUOMId ?? itemType?.FbrUOMId),
+                            SaleType = isNonInv ? null : (i.SaleType ?? itemType?.SaleType),
+                            RateId = isNonInv ? null : i.RateId,
+                            FixedNotifiedValueOrRetailPrice = isNonInv ? null : i.FixedNotifiedValueOrRetailPrice,
+                        });
+                    }
 
-            // GL posting (Dr Inventory/Purchases + Input tax / Cr AP) — same tx.
-            await _posting.PostPurchaseBillAsync(bill);
-            await tx.CommitAsync();
-            return (await GetByIdAsync(bill.Id))!;
-            }
-            catch (DbUpdateException dupEx) when (NumberAllocationRetry.IsUniqueViolation(dupEx))
-            {
-                lastConflict = dupEx;
-                _logger.LogWarning(
-                    "Purchase bill number collided with a concurrent create for company {CompanyId}; retrying (attempt {Attempt}).",
-                    dto.CompanyId, attempt);
-                await tx.RollbackAsync();
-                foreach (var entry in _context.ChangeTracker.Entries().ToList())
-                {
-                    if (entry.State != EntityState.Unchanged)
-                        entry.State = EntityState.Detached;
+                    await ApplySourcesAsync(dto.CompanyId, dto.SupplierId,
+                        items.Select((item, idx) => (item, (List<PurchaseItemSourceDto>?)dto.Items[idx].Sources)).ToList(), excludeBillId: null);
+
+                    var subtotal = items.Sum(x => x.LineTotal);
+                    var gstAmount = Math.Round(subtotal * dto.GSTRate / 100m, 2);
+                    var grandTotal = subtotal + gstAmount;
+
+                    var bill = new PurchaseBill
+                    {
+                        PurchaseBillNumber = nextNumber,
+                        Date = dto.Date.Date,
+                        CompanyId = dto.CompanyId,
+                        DivisionId = dto.DivisionId,
+                        SupplierId = dto.SupplierId,
+                        SupplierBillNumber = dto.SupplierBillNumber?.Trim(),
+                        SupplierIRN = dto.SupplierIRN?.Trim(),
+                        Subtotal = subtotal,
+                        GSTRate = dto.GSTRate,
+                        GSTAmount = gstAmount,
+                        GrandTotal = grandTotal,
+                        WithholdingTaxRate = dto.WithholdingTaxRate,
+                        WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(dto.WithholdingTaxRate, grandTotal, dto.WithholdingTaxAmount),
+                        AmountInWords = NumberToWordsConverter.Convert(grandTotal),
+                        PaymentTerms = dto.PaymentTerms,
+                        Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim(),
+                        DocumentType = dto.DocumentType,
+                        PaymentMode = dto.PaymentMode,
+                        ReconciliationStatus = string.IsNullOrWhiteSpace(dto.SupplierIRN) ? "ManualOnly" : "Pending",
+                        Items = items,
+                        CreatedAt = DateTime.UtcNow,
+                    };
+
+                    _context.PurchaseBills.Add(bill);
+                    await _context.SaveChangesAsync();
+
+                    // Emit Stock IN for every line that's bound to a catalog item.
+                    // No-op when Company.InventoryTrackingEnabled is false.
+                    // 2026-05-13: skip lines whose ItemType has no HSCode —
+                    // un-classified ItemTypes live outside the stock-tracking
+                    // system. Symmetric with the OUT-side gate in
+                    // StockService.SyncInvoiceStockMovementsAsync.
+                    var trackedOnCreate = await _stock.GetStockTrackedItemTypeIdsAsync(
+                        bill.CompanyId,
+                        items.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value));
+                    foreach (var it in items)
+                    {
+                        if (!it.ItemTypeId.HasValue || it.Quantity <= 0) continue;
+                        if (!trackedOnCreate.Contains(it.ItemTypeId.Value)) continue;
+                        await _stock.RecordMovementAsync(
+                            companyId: bill.CompanyId,
+                            itemTypeId: it.ItemTypeId.Value,
+                            direction: StockMovementDirection.In,
+                            // 2026-05-12: IStockService now accepts decimal(18,4)
+                            // (matches PurchaseItem precision). Fractional UOMs
+                            // are preserved instead of being rounded to int.
+                            quantity: it.Quantity,
+                            sourceType: StockMovementSourceType.PurchaseBill,
+                            sourceId: bill.Id,
+                            movementDate: bill.Date,
+                            notes: $"Purchase Bill #{bill.PurchaseBillNumber} from {supplier.Name}",
+                            divisionId: bill.DivisionId);
+                    }
+
+                    // GL posting (Dr Inventory/Purchases + Input tax / Cr AP) — same tx.
+                    await _posting.PostPurchaseBillAsync(bill);
+                    await tx.CommitAsync();
+                    return (await GetByIdAsync(bill.Id))!;
                 }
-                if (attempt < maxAttempts)
-                    await Task.Delay(10 * attempt);
-                continue;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "PurchaseBillService: transaction rolled back");
-                await tx.RollbackAsync();
-                throw;
-            }
+                catch (DbUpdateException dupEx) when (NumberAllocationRetry.IsUniqueViolation(dupEx))
+                {
+                    lastConflict = dupEx;
+                    _logger.LogWarning(
+                        "Purchase bill number collided with a concurrent create for company {CompanyId}; retrying (attempt {Attempt}).",
+                        dto.CompanyId, attempt);
+                    await tx.RollbackAsync();
+                    foreach (var entry in _context.ChangeTracker.Entries().ToList())
+                    {
+                        if (entry.State != EntityState.Unchanged)
+                            entry.State = EntityState.Detached;
+                    }
+                    if (attempt < maxAttempts)
+                        await Task.Delay(10 * attempt);
+                    continue;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "PurchaseBillService: transaction rolled back");
+                    await tx.RollbackAsync();
+                    throw;
+                }
             }
             throw new InvalidOperationException(
                 "Could not allocate a unique purchase bill number after " + maxAttempts +
@@ -491,10 +491,21 @@ namespace MyApp.Api.Services.Implementations
 
         private static string ChallanPurchaseRevision(DeliveryChallan challan) =>
             Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
-                System.Text.Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(new {
-                    challan.Id, challan.Status, challan.DeliveryDate,
-                    Items = challan.Items.OrderBy(i => i.Id).Select(i => new {
-                        i.Id, i.Description, i.Quantity, i.Unit, i.SupplierId, i.ActualUnitCost, i.ItemTypeId, i.NonInventoryItemId
+                System.Text.Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    challan.Id,
+                    challan.Status,
+                    challan.DeliveryDate,
+                    Items = challan.Items.OrderBy(i => i.Id).Select(i => new
+                    {
+                        i.Id,
+                        i.Description,
+                        i.Quantity,
+                        i.Unit,
+                        i.SupplierId,
+                        i.ActualUnitCost,
+                        i.ItemTypeId,
+                        i.NonInventoryItemId
                     })
                 }))));
 
@@ -514,18 +525,26 @@ namespace MyApp.Api.Services.Implementations
             var left = alreadyCreated ? await MadeOnChallanAsync(challan) : await LeftOnChallanAsync(challan);
             if (left.Values.All(q => q <= 0))
                 throw new InvalidOperationException("This challan has nothing left to purchase.");
-            return new ChallanPurchasePreviewDto {
-                ChallanId = challan.Id, ChallanNumber = challan.ChallanNumber,
+            return new ChallanPurchasePreviewDto
+            {
+                ChallanId = challan.Id,
+                ChallanNumber = challan.ChallanNumber,
                 Revision = ChallanPurchaseRevision(challan),
                 Date = (challan.DeliveryDate ?? DateTime.UtcNow).Date,
                 TracksStock = true,
                 AlreadyCreated = alreadyCreated,
                 Suppliers = challan.Items.Where(i => left[i.Id] > 0).GroupBy(i => i.SupplierId!.Value).OrderBy(g => g.Key)
-                    .Select(g => new ChallanSupplierPurchaseDto {
-                        SupplierId = g.Key, SupplierName = g.First().Supplier!.Name,
-                        Items = g.Select(i => new PurchaseItemDto {
-                            Id = i.Id, Description = i.Description, Quantity = left[i.Id],
-                            UOM = i.Unit, UnitPrice = i.ActualUnitCost!.Value,
+                    .Select(g => new ChallanSupplierPurchaseDto
+                    {
+                        SupplierId = g.Key,
+                        SupplierName = g.First().Supplier!.Name,
+                        Items = g.Select(i => new PurchaseItemDto
+                        {
+                            Id = i.Id,
+                            Description = i.Description,
+                            Quantity = left[i.Id],
+                            UOM = i.Unit,
+                            UnitPrice = i.ActualUnitCost!.Value,
                             LineTotal = Math.Round(left[i.Id] * i.ActualUnitCost.Value, 2)
                         }).ToList()
                     }).ToList()
@@ -672,110 +691,110 @@ namespace MyApp.Api.Services.Implementations
             await using var tx = await _context.Database.BeginTransactionAsync();
             try
             {
-            var bill = await _context.PurchaseBills
-                .Include(p => p.Items)
-                .FirstOrDefaultAsync(p => p.Id == id);
-            if (bill == null) return null;
+                var bill = await _context.PurchaseBills
+                    .Include(p => p.Items)
+                    .FirstOrDefaultAsync(p => p.Id == id);
+                if (bill == null) return null;
 
-            await CompanyDocumentNumbers.RenumberAsync(_context, bill.CompanyId, "purchase-bill", bill.Id, bill.PurchaseBillNumber, dto.CustomNumber, bill.DivisionId);
-            bill.PurchaseBillNumber = dto.CustomNumber ?? bill.PurchaseBillNumber;
+                await CompanyDocumentNumbers.RenumberAsync(_context, bill.CompanyId, "purchase-bill", bill.Id, bill.PurchaseBillNumber, dto.CustomNumber, bill.DivisionId);
+                bill.PurchaseBillNumber = dto.CustomNumber ?? bill.PurchaseBillNumber;
 
-            // Apply header changes
-            if (dto.Date.HasValue) bill.Date = dto.Date.Value.Date;
-            // Capture the old IRN BEFORE we overwrite it — the
-            // reconciliation transition below needs to know whether the
-            // IRN value actually changed (vs a no-op edit that touched
-            // other fields).
-            var oldIrn = bill.SupplierIRN?.Trim();
-            var newIrn = dto.SupplierIRN?.Trim();
+                // Apply header changes
+                if (dto.Date.HasValue) bill.Date = dto.Date.Value.Date;
+                // Capture the old IRN BEFORE we overwrite it — the
+                // reconciliation transition below needs to know whether the
+                // IRN value actually changed (vs a no-op edit that touched
+                // other fields).
+                var oldIrn = bill.SupplierIRN?.Trim();
+                var newIrn = dto.SupplierIRN?.Trim();
 
-            bill.SupplierBillNumber = dto.SupplierBillNumber?.Trim();
-            bill.SupplierIRN = newIrn;
-            bill.GSTRate = dto.GSTRate;
-            bill.WithholdingTaxRate = dto.WithholdingTaxRate;
-            bill.WithholdingTaxAmount = dto.WithholdingTaxAmount;   // reflowed below from rate/amount mode
-            bill.PaymentTerms = dto.PaymentTerms;
-            bill.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
-            bill.DocumentType = dto.DocumentType;
-            bill.PaymentMode = dto.PaymentMode;
-            // Reconciliation status transitions:
-            //   • IRN cleared             → "ManualOnly" (downgrade — input
-            //                               tax claim no longer eligible)
-            //   • IRN newly added on a    → "Pending" (upgrade — eligible
-            //     "ManualOnly" bill         once supplier files in IRIS)
-            //   • IRN VALUE changed on a  → "Pending" (the previous
-            //     "Matched" or "Disputed"   reconciliation no longer holds
-            //     bill                      for the new IRN — IRIS reconcile
-            //                               job needs to re-validate)
-            //   • Otherwise               → keep current status
-            var irnChanged = !string.Equals(oldIrn, newIrn, StringComparison.OrdinalIgnoreCase);
-            if (string.IsNullOrWhiteSpace(newIrn))
-                bill.ReconciliationStatus = "ManualOnly";
-            else if (bill.ReconciliationStatus == "ManualOnly")
-                bill.ReconciliationStatus = "Pending";
-            else if (irnChanged
-                     && (bill.ReconciliationStatus == "Matched"
-                         || bill.ReconciliationStatus == "Disputed"))
-                bill.ReconciliationStatus = "Pending";
+                bill.SupplierBillNumber = dto.SupplierBillNumber?.Trim();
+                bill.SupplierIRN = newIrn;
+                bill.GSTRate = dto.GSTRate;
+                bill.WithholdingTaxRate = dto.WithholdingTaxRate;
+                bill.WithholdingTaxAmount = dto.WithholdingTaxAmount;   // reflowed below from rate/amount mode
+                bill.PaymentTerms = dto.PaymentTerms;
+                bill.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
+                bill.DocumentType = dto.DocumentType;
+                bill.PaymentMode = dto.PaymentMode;
+                // Reconciliation status transitions:
+                //   • IRN cleared             → "ManualOnly" (downgrade — input
+                //                               tax claim no longer eligible)
+                //   • IRN newly added on a    → "Pending" (upgrade — eligible
+                //     "ManualOnly" bill         once supplier files in IRIS)
+                //   • IRN VALUE changed on a  → "Pending" (the previous
+                //     "Matched" or "Disputed"   reconciliation no longer holds
+                //     bill                      for the new IRN — IRIS reconcile
+                //                               job needs to re-validate)
+                //   • Otherwise               → keep current status
+                var irnChanged = !string.Equals(oldIrn, newIrn, StringComparison.OrdinalIgnoreCase);
+                if (string.IsNullOrWhiteSpace(newIrn))
+                    bill.ReconciliationStatus = "ManualOnly";
+                else if (bill.ReconciliationStatus == "ManualOnly")
+                    bill.ReconciliationStatus = "Pending";
+                else if (irnChanged
+                         && (bill.ReconciliationStatus == "Matched"
+                             || bill.ReconciliationStatus == "Disputed"))
+                    bill.ReconciliationStatus = "Pending";
 
-            await ValidateNonInvItemsAsync(bill.CompanyId, dto.Items.Select(i => i.NonInventoryItemId));
+                await ValidateNonInvItemsAsync(bill.CompanyId, dto.Items.Select(i => i.NonInventoryItemId));
 
-            // Replace items wholesale (simpler than a diff, fine for v1)
-            _context.PurchaseItems.RemoveRange(bill.Items);
-            bill.Items.Clear();
+                // Replace items wholesale (simpler than a diff, fine for v1)
+                _context.PurchaseItems.RemoveRange(bill.Items);
+                bill.Items.Clear();
 
-            var validAccountIds = await ValidCompanyAccountIdsAsync(bill.CompanyId, dto.Items.Select(i => i.AccountId));
-            var newItems = new List<PurchaseItem>();
-            foreach (var i in dto.Items)
-            {
-                bool isNonInv = i.NonInventoryItemId.HasValue;
-                ItemType? itemType = (!isNonInv && i.ItemTypeId.HasValue)
-                    ? await _context.ItemTypes.FindAsync(i.ItemTypeId.Value)
-                    : null;
-                var ni = new PurchaseItem
+                var validAccountIds = await ValidCompanyAccountIdsAsync(bill.CompanyId, dto.Items.Select(i => i.AccountId));
+                var newItems = new List<PurchaseItem>();
+                foreach (var i in dto.Items)
                 {
-                    ItemTypeId = isNonInv ? null : i.ItemTypeId,
-                    NonInventoryItemId = i.NonInventoryItemId,
-                    AccountId = Coerce(i.AccountId, validAccountIds),
-                    ItemTypeName = itemType?.Name ?? "",
-                    Description = i.Description?.Trim() ?? "",
-                    Quantity = i.Quantity,
-                    UOM = i.UOM ?? itemType?.UOM ?? "",
-                    UnitPrice = i.UnitPrice,
-                    LineTotal = Math.Round(i.Quantity * i.UnitPrice, 2),
-                    HSCode = isNonInv ? null : (i.HSCode ?? itemType?.HSCode),
-                    FbrUOMId = isNonInv ? null : (i.FbrUOMId ?? itemType?.FbrUOMId),
-                    SaleType = isNonInv ? null : (i.SaleType ?? itemType?.SaleType),
-                    RateId = isNonInv ? null : i.RateId,
-                    FixedNotifiedValueOrRetailPrice = isNonInv ? null : i.FixedNotifiedValueOrRetailPrice,
-                };
-                newItems.Add(ni);
-                bill.Items.Add(ni);
-            }
-            await ApplySourcesAsync(bill.CompanyId, bill.SupplierId,
-                newItems.Select((item, idx) => (item, (List<PurchaseItemSourceDto>?)dto.Items[idx].Sources)).ToList(), excludeBillId: bill.Id);
-            bill.Subtotal = newItems.Sum(x => x.LineTotal);
-            bill.GSTAmount = Math.Round(bill.Subtotal * dto.GSTRate / 100m, 2);
-            bill.GrandTotal = bill.Subtotal + bill.GSTAmount;
-            bill.WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(bill.WithholdingTaxRate, bill.GrandTotal, bill.WithholdingTaxAmount);
-            bill.AmountInWords = NumberToWordsConverter.Convert(bill.GrandTotal);
+                    bool isNonInv = i.NonInventoryItemId.HasValue;
+                    ItemType? itemType = (!isNonInv && i.ItemTypeId.HasValue)
+                        ? await _context.ItemTypes.FindAsync(i.ItemTypeId.Value)
+                        : null;
+                    var ni = new PurchaseItem
+                    {
+                        ItemTypeId = isNonInv ? null : i.ItemTypeId,
+                        NonInventoryItemId = i.NonInventoryItemId,
+                        AccountId = Coerce(i.AccountId, validAccountIds),
+                        ItemTypeName = itemType?.Name ?? "",
+                        Description = i.Description?.Trim() ?? "",
+                        Quantity = i.Quantity,
+                        UOM = i.UOM ?? itemType?.UOM ?? "",
+                        UnitPrice = i.UnitPrice,
+                        LineTotal = Math.Round(i.Quantity * i.UnitPrice, 2),
+                        HSCode = isNonInv ? null : (i.HSCode ?? itemType?.HSCode),
+                        FbrUOMId = isNonInv ? null : (i.FbrUOMId ?? itemType?.FbrUOMId),
+                        SaleType = isNonInv ? null : (i.SaleType ?? itemType?.SaleType),
+                        RateId = isNonInv ? null : i.RateId,
+                        FixedNotifiedValueOrRetailPrice = isNonInv ? null : i.FixedNotifiedValueOrRetailPrice,
+                    };
+                    newItems.Add(ni);
+                    bill.Items.Add(ni);
+                }
+                await ApplySourcesAsync(bill.CompanyId, bill.SupplierId,
+                    newItems.Select((item, idx) => (item, (List<PurchaseItemSourceDto>?)dto.Items[idx].Sources)).ToList(), excludeBillId: bill.Id);
+                bill.Subtotal = newItems.Sum(x => x.LineTotal);
+                bill.GSTAmount = Math.Round(bill.Subtotal * dto.GSTRate / 100m, 2);
+                bill.GrandTotal = bill.Subtotal + bill.GSTAmount;
+                bill.WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(bill.WithholdingTaxRate, bill.GrandTotal, bill.WithholdingTaxAmount);
+                bill.AmountInWords = NumberToWordsConverter.Convert(bill.GrandTotal);
 
-            await _context.SaveChangesAsync();
+                await _context.SaveChangesAsync();
 
-            // Reconcile stock to the new line set by DELTA only: compare what
-            // this bill already posted (per ItemType, from the ledger) with
-            // what the new lines should post, and emit just the difference.
-            // A no-op edit — or any edit that doesn't change a tracked item's
-            // quantity/type — moves NO stock (fixes the phantom reversal+IN
-            // churn that used to inflate Total In / Total Out on every save).
-            // It also self-heals bills corrupted by older logic: a posted net
-            // of 0 against a desired qty yields a single IN of that qty.
-            await ReconcileStockToLinesAsync(bill, newItems);
+                // Reconcile stock to the new line set by DELTA only: compare what
+                // this bill already posted (per ItemType, from the ledger) with
+                // what the new lines should post, and emit just the difference.
+                // A no-op edit — or any edit that doesn't change a tracked item's
+                // quantity/type — moves NO stock (fixes the phantom reversal+IN
+                // churn that used to inflate Total In / Total Out on every save).
+                // It also self-heals bills corrupted by older logic: a posted net
+                // of 0 against a desired qty yields a single IN of that qty.
+                await ReconcileStockToLinesAsync(bill, newItems);
 
-            // GL re-post: totals changed → replace the bill's journal entry.
-            await _posting.PostPurchaseBillAsync(bill);
-            await tx.CommitAsync();
-            return await GetByIdAsync(bill.Id);
+                // GL re-post: totals changed → replace the bill's journal entry.
+                await _posting.PostPurchaseBillAsync(bill);
+                await tx.CommitAsync();
+                return await GetByIdAsync(bill.Id);
             }
             catch (Exception ex)
             {
@@ -897,30 +916,30 @@ namespace MyApp.Api.Services.Implementations
             await using var tx = await _context.Database.BeginTransactionAsync();
             try
             {
-            var bill = await _context.PurchaseBills
-                .Include(p => p.Items)
-                .FirstOrDefaultAsync(p => p.Id == id);
-            if (bill == null) return false;
+                var bill = await _context.PurchaseBills
+                    .Include(p => p.Items)
+                    .FirstOrDefaultAsync(p => p.Id == id);
+                if (bill == null) return false;
 
-            // Period-close guard: a locked bill can't be deleted.
-            await _posting.AssertPeriodOpenAsync(bill.CompanyId, bill.Date);
+                // Period-close guard: a locked bill can't be deleted.
+                await _posting.AssertPeriodOpenAsync(bill.CompanyId, bill.Date);
 
-            // Reverse the bill's actual posted stock before deleting its rows.
-            // Compensating OUT entries are written rather than the IN rows
-            // being deleted — keeps the movement log immutable. Reverses the
-            // bill's own posted net (see ReversePostedStockAsync) so a bill
-            // whose ItemType was classified after creation isn't over-reversed.
-            await ReversePostedStockAsync(bill, bill.Date,
-                $"Reversal — Purchase Bill #{bill.PurchaseBillNumber} deleted");
+                // Reverse the bill's actual posted stock before deleting its rows.
+                // Compensating OUT entries are written rather than the IN rows
+                // being deleted — keeps the movement log immutable. Reverses the
+                // bill's own posted net (see ReversePostedStockAsync) so a bill
+                // whose ItemType was classified after creation isn't over-reversed.
+                await ReversePostedStockAsync(bill, bill.Date,
+                    $"Reversal — Purchase Bill #{bill.PurchaseBillNumber} deleted");
 
-            // The ledger entry dies with its document.
-            await _posting.RemoveForSourceAsync(bill.CompanyId,
-                Models.Accounting.SourceDocType.PurchaseBill, bill.Id);
+                // The ledger entry dies with its document.
+                await _posting.RemoveForSourceAsync(bill.CompanyId,
+                    Models.Accounting.SourceDocType.PurchaseBill, bill.Id);
 
-            _context.PurchaseBills.Remove(bill);
-            await _context.SaveChangesAsync();
-            await tx.CommitAsync();
-            return true;
+                _context.PurchaseBills.Remove(bill);
+                await _context.SaveChangesAsync();
+                await tx.CommitAsync();
+                return true;
             }
             catch (Exception ex)
             {
