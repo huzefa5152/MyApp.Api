@@ -369,6 +369,21 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 
 ## Test discipline — required before any push
 
+**Maintain regression on every change; run it on a trigger (2026-11-20).** The
+`trader-regression` skill (`.claude/skills/trader-regression/SKILL.md`) is the
+working rule for every agent on this branch:
+
+- **Every bug fix and every feature adds or updates its regression case**, in
+  the suite that owns the area, and updates that suite's row in the table below.
+  That part is never optional.
+- **The suites are RUN only when the maintainer asks, or when the change is
+  breaking / high-risk** (money arithmetic, FBR, stock, ledger, tenant
+  isolation and permissions, numbering, migrations, shared request pipeline or
+  shared components) and you judge it needs it. A small, isolated change is
+  maintained but not run, and the summary says so.
+- **The hard pre-push gate below is separate and still stands**: it is run
+  before any push that reaches a production branch, whatever the change.
+
 > ### 🔴 HARD PRE-PUSH GATE — inventory flow (non-negotiable)
 > **Claude runs every push and deploy for this repo — the operator does not.**
 > So this gate lives here, not in CI. **Before ANY `git push` that reaches a
