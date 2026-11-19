@@ -9,6 +9,70 @@ The same endpoints were then profiled on a local copy of the production data
 with SQL logging on, to separate what the server does from what the network
 costs.
 
+## Status — read this first
+
+Trader line only. Last updated 2026-11-20. A session that does more performance
+work should update this section, not start a second document.
+
+**Done and live on production**
+
+| Change | Commit | Where |
+|---|---|---|
+| API reads compressed (JSON ≥ 1 KB, one write, never sign-in or agent-token routes) | `273e3681`, replaced by `0da95c86` | `Middleware/ApiCompressionMiddleware.cs`, `Program.cs` |
+| Built bundle cached for a year, app shell always re-checked | `273e3681` | `Program.cs` (`spaStaticFiles`) |
+| Site pings itself every 4 minutes against cold starts | `273e3681` | `Services/HostedServices/KeepWarmService.cs` |
+| Purchase Bills and Goods Receipts fetch their list once | `361b087e` | the two page components |
+
+Measured result on production, 52 screens: payload −89%, API time −25%, screen
+settle time −39%. Tables are under "After, on production".
+
+**Deployed but NOT verified**
+
+- **Keep-warm.** Needs the site to sit idle past the host's unload time and then
+  be visited. To check: leave the site untouched for an hour, open the
+  dashboard, and read the API timings. Warm is about 0.15–0.25 s per call; cold
+  was 3.7–10.6 s. If it is still cold, the host unloads the site regardless and
+  the ping must move to an external scheduler.
+
+**Tried and withdrawn**
+
+- **The framework's `UseResponseCompression`.** Live for about 25 minutes on
+  2026-11-20. Payload fell 89% but every single-call screen got about 170 ms
+  slower (0.14 s became 0.32 s) because it sends a compressed response in more
+  than one small write. Do not bring it back.
+
+**Not done — the remaining work, largest first**
+
+| Item | Why it is still there | What it would take |
+|---|---|---|
+| Print templates fetched whole on 14 list screens (15 KB compressed, one extra call each) | The picker needs names; the HTML is only needed at print time | A names-only list endpoint, HTML fetched on print |
+| New Credit / Debit Note loads every invoice (76 KB compressed, 0.55–0.84 s) | The original-invoice picker is unpaged | A searchable, paged picker |
+| FBR Settings loads every lookup row (265 KB compressed, 0.5–0.6 s) | The table is unpaged | Server-side paging of the lookup table |
+| Two SQL statements on every request for the session and security stamp | Caching them delays a revocation; the isolation invariant forbids it | Nothing safe; leave |
+| Dashboard and accounting summary run 28 and 34 statements | Each is a distinct aggregate, not an N+1; caching would show a figure that lags a posted bill | Only a rewrite that merges statements, proven figure-for-figure |
+| First load is a chain of calls (sign-in check → companies and permissions → stamps → screen data) | The contexts load one after another | Loading them in parallel; touches sign-in and company selection, so it is a breaking-risk change |
+| Google Fonts stylesheet blocks first paint (~0.4 s on a cold load) | Loaded from a third party | Self-host the fonts or preconnect |
+| The app re-requests `/api/companies` when the tab regains focus | Seen during measurement, not investigated | Read `CompanyContext` before changing it |
+
+**Not measured**
+
+- Email Workspace, FBR Sandbox and Connect were not walked on production,
+  because opening them can start outbound work.
+- Create and edit forms (only list and report screens were timed).
+- Phone networks. All figures are from one desktop connection.
+- The other two production lines. Nothing here was ported to them.
+
+**How to measure again**
+
+Sign in on production in the browser, select the largest company, and walk the
+routes through the SPA router (`history.pushState` plus a `popstate` event),
+reading `performance.getEntriesByType("resource")` for `/api/` calls after each.
+Walk every screen twice and keep the undisturbed pass: touching the tab during
+a walk refetches the company list and inflates the figures. Measure on
+production, not localhost. Localhost has no network cost, and the compression
+regression above was invisible there. Navigation only; click nothing that
+writes.
+
 ## What the time is made of
 
 | Layer | Finding |
