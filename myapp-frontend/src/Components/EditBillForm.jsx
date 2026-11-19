@@ -3,7 +3,7 @@ import ManualChallanNumberField from "./ManualChallanNumberField";
 import { withTaxUom, taxGroupKey } from "../utils/taxInvoiceGrouping";
 import FreightChargesField from "./FreightChargesField";
 import BillChallansEditor from "./BillChallansEditor";
-import { defaultFurtherTaxRate } from "../utils/furtherTax";
+import { defaultFurtherTaxRate, isUnregisteredBuyer } from "../utils/furtherTax";
 import {
   Fragment,
   useState,
@@ -3196,6 +3196,19 @@ function CommercialBillEditor({
                       </strong>
                     </div>
                   )}
+                  {!(furtherTaxAmount > 0) &&
+                    taxTreatment === "FBR" &&
+                    isUnregisteredBuyer(
+                      clients.find((c) => String(c.id) === String(clientId))?.registrationType,
+                    ) && (
+                      <div
+                        style={styles.totalsRow}
+                        title="This buyer is unregistered and the bill charges no further tax."
+                      >
+                        <span>Further tax (0%):</span>
+                        <span>None charged · FBR is sent 0</span>
+                      </div>
+                    )}
                   {furtherTaxAmount > 0 && (
                     <div style={styles.totalsRow}>
                       <span>Further tax ({furtherTaxRate}%):</span>

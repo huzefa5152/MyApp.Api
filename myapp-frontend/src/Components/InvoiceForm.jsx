@@ -1,5 +1,5 @@
 import BillTaxTreatmentField from "./BillTaxTreatmentField";
-import { defaultFurtherTaxRate } from "../utils/furtherTax";
+import { defaultFurtherTaxRate, isUnregisteredBuyer } from "../utils/furtherTax";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { MdCheck, MdInfo, MdAdd, MdPersonAdd, MdExpandMore, MdExpandLess } from "react-icons/md";
 import { getPendingChallansByCompany } from "../api/challanApi";
@@ -2318,6 +2318,17 @@ export default function InvoiceForm({
                               </span>
                             </div>
                           )}
+                          {!(furtherTaxAmount > 0) &&
+                            taxTreatment === "FBR" &&
+                            isUnregisteredBuyer(buyerRegistrationType) && (
+                              <div
+                                style={styles.totalRow}
+                                title="This buyer is unregistered and the bill charges no further tax."
+                              >
+                                <span>Further tax (0%):</span>
+                                <span>None charged · FBR is sent 0</span>
+                              </div>
+                            )}
                           {furtherTaxAmount > 0 && (
                             <div style={styles.totalRow}>
                               <span>Further tax ({furtherTaxRate}%):</span>

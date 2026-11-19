@@ -3,7 +3,7 @@ import BillTaxTreatmentField from "./BillTaxTreatmentField";
 import ManualChallanNumberField from "./ManualChallanNumberField";
 import DocumentCopyPicker from "./DocumentCopyPicker";
 import { copyLine } from "../utils/documentCopy";
-import { defaultFurtherTaxRate } from "../utils/furtherTax";
+import { defaultFurtherTaxRate, isUnregisteredBuyer } from "../utils/furtherTax";
 import DocumentTaxFields from "./DocumentTaxFields";
 import FreightChargesField from "./FreightChargesField";
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -2323,6 +2323,17 @@ export default function StandaloneInvoiceForm({
                             </span>
                           </div>
                         )}
+                        {!(furtherTaxAmount > 0) &&
+                          taxTreatment === "FBR" &&
+                          isUnregisteredBuyer(buyerRegistrationType) && (
+                            <div
+                              style={styles.totalRow}
+                              title="This buyer is unregistered and the bill charges no further tax."
+                            >
+                              <span>Further tax (0%):</span>
+                              <span>None charged · FBR is sent 0</span>
+                            </div>
+                          )}
                         {furtherTaxAmount > 0 && (
                           <div style={styles.totalRow}>
                             <span>Further tax ({furtherTaxRate}%):</span>

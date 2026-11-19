@@ -95,6 +95,7 @@ import { exportToPdf, prepareLetterheadPrint } from "../utils/exportUtils";
 import { saveAs } from "file-saver";
 import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
+import { furtherTaxFiled, furtherTaxFiledForAll } from "../utils/furtherTaxFiled";
 
 // Compact status pills for the invoice/bill cards — the FBR lifecycle and any
 // note relationship collapse to a single small pill each (full detail on hover)
@@ -920,8 +921,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     }
     const ok = await confirm({
       title: `Submit Bill #${inv.invoiceNumber} to FBR?`,
-      message:
-        "Once submitted, the bill is locked from edits and assigned an IRN. This action cannot be undone.",
+      message: `${furtherTaxFiled(inv)} Once submitted, the bill is locked from edits and assigned an IRN. This action cannot be undone.`,
       variant: "warning",
       confirmText: "Submit to FBR",
     });
@@ -1328,7 +1328,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     }
     const ok = await confirm({
       title: `Submit ${toSubmit.length} bill${toSubmit.length !== 1 ? "s" : ""} to FBR?`,
-      message: `${toSubmit.length} locally-validated bill${toSubmit.length !== 1 ? "s" : ""}${filterNote} will be sent to FBR. Once submitted, each bill is locked from edits and assigned an IRN. This cannot be undone.`,
+      message: `${toSubmit.length} locally-validated bill${toSubmit.length !== 1 ? "s" : ""}${filterNote} will be sent to FBR. ${furtherTaxFiledForAll(toSubmit)} Once submitted, each bill is locked from edits and assigned an IRN. This cannot be undone.`,
       variant: "warning",
       confirmText: "Submit all",
     });
