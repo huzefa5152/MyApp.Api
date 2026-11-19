@@ -23,6 +23,7 @@ work should update this section, not start a second document.
 | Site pings itself every 4 minutes against cold starts | `273e3681` | `Services/HostedServices/KeepWarmService.cs` |
 | Purchase Bills and Goods Receipts fetch their list once | `361b087e` | the two page components |
 | Companies and permissions are asked for alongside the sign-in check on a page load, not after it | `ca480c3c` | `utils/bootPrefetch.js`, the three contexts |
+| A screen's code is fetched before it is needed: the screen a page load is heading for, and the screen behind a link once the pointer or focus reaches it | third pass, 2026-11-20 (local commit, see below) | `utils/lazyScreen.js`, `App.jsx`, `main.jsx` |
 
 Measured result on production, 52 screens: payload −89%, API time −25%, screen
 settle time −39%. Tables are under "After, on production".
@@ -32,6 +33,21 @@ sign-in check, the company list and the permissions all start at the same
 instant (184 ms after navigation) and the dashboard has its figures at about
 0.74 s. There is no like-for-like figure from before; the saving is the one
 round trip the sign-in check used to take first, about 0.15 s warm.
+
+The dashboard "waiting for stamps", explained and fixed (third pass). It was
+never waiting for stamps. Screens are loaded with `React.lazy`, which starts
+fetching a screen's code only when the screen first renders, and so puts an
+empty placeholder up first. React then holds a just-loaded screen back for up
+to 0.3 s after a placeholder appears, until the next redraw; on the dashboard
+the next redraw happened to be the stamps response, so the figures request
+started about 0.19 s late. In-app navigation was not affected (the router makes
+it a transition, which shows no placeholder), but the first visit to each
+screen after a deploy spent 0.2-0.9 s fetching that screen's code before
+anything else could start. `lazyScreen` fetches the code early, so there is no
+placeholder: locally the figures request now starts with the stamps request,
+10 ms after the company list arrives, and a hovered link's screen opens with
+its first request 12 ms after the click.
+**Status: committed locally, NOT yet deployed or measured on production.**
 
 **Deployed but NOT verified**
 
@@ -65,9 +81,6 @@ the next session does not spend the same hour reaching the same answer.
 
 **Still open**
 
-- On the dashboard the figures request starts only when the stamps request has
-  finished (seen on production before and after this work). Whether one waits
-  on the other, or both wait on the screen's own script, was not investigated.
 - Sign-in fires `/api/permissions/me` twice (seen while testing the start-up
   change; it was not caused by it and was not investigated).
 - Two frontend tests fail on a clean checkout, before any of this work:
