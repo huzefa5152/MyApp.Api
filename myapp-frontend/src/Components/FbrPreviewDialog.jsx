@@ -1,8 +1,9 @@
-import { useEffect, useState, useMemo } from "react";
-import { MdClose, MdInfo, MdCheckCircle, MdContentCopy, MdWarning } from "react-icons/md";
+import { useEffect, useState } from "react";
+import { MdClose, MdInfo, MdWarning } from "react-icons/md";
 import httpClient from "../api/httpClient";
 import { formStyles, modalSizes } from "../theme";
-import { Alert, Button, Loading, TableWrap } from "../ui/Kit";
+import { Alert, Loading } from "../ui/Kit";
+import FbrPayloadView from "./FbrPayloadView";
 
 /**
  * Read-only preview of the JSON we would POST to FBR for a bill.
@@ -12,15 +13,9 @@ import { Alert, Button, Loading, TableWrap } from "../ui/Kit";
  *   - Skips the actual HTTP call (no network, no FBR audit)
  *   - Skips pre-validate so we can preview incomplete bills too
  *
- * Renders the items as a grouped table:
- *   ItemType (description) | HS Code | UOM | Qty | Value | Sales Tax | Total
- *   ────────────────────── ─────── ───── ─── ───── ────────── ──────────
- *   Sum row at the bottom (qty, value, tax, grand total).
- *
- * The grouping is performed server-side (mirrors the Tax Invoice print —
- * one FBR row per ItemType, summed quantity + value). If any line lacks an
- * ItemType the server falls back to per-line emission and the table just
- * renders each line as-is — so the totals remain correct either way.
+ * The body is the shared FbrPayloadView: every header field, every field of
+ * every item, each tax summed, and the JSON itself in an expandable block.
+ * Grouping by item type happens server-side; this shows what came back.
  */
 export default function FbrPreviewDialog({ invoiceId, onClose }) {
   const [loading, setLoading] = useState(true);
@@ -30,8 +25,6 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
   const [origLineCount, setOrigLineCount] = useState(0);
   const [itemCount, setItemCount] = useState(0);
   const [url, setUrl] = useState("");
-  const [showRawJson, setShowRawJson] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!invoiceId) return;
@@ -64,51 +57,6 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
       cancelled = true;
     };
   }, [invoiceId]);
-
-  // Sum values across the FBR items array. Keep the math consistent with
-  // what FBR computes: salesTaxApplicable + furtherTax + extraTax → total tax.
-  const totals = useMemo(() => {
-    if (!payload?.items?.length) {
-      return { qty: 0, value: 0, tax: 0, further: 0, total: 0 };
-    }
-    return payload.items.reduce(
-      (acc, it) => {
-        const value = Number(it.valueSalesExcludingST || 0);
-        const tax = Number(it.salesTaxApplicable || 0);
-        const further = Number(it.furtherTax || 0);
-        const extra = typeof it.extraTax === "number" ? it.extraTax : 0;
-        return {
-          qty: acc.qty + Number(it.quantity || 0),
-          value: acc.value + value,
-          tax: acc.tax + tax,
-          further: acc.further + further,
-          total: acc.total + value + tax + further + extra,
-        };
-      },
-      { qty: 0, value: 0, tax: 0, further: 0, total: 0 },
-    );
-  }, [payload]);
-
-  const fmtNum = (n) =>
-    Number(n || 0).toLocaleString(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-  const fmtQty = (n) => {
-    // Strip trailing zeros, cap at 4 places — same rule as the rest of the app.
-    return parseFloat(Number(n || 0).toFixed(4)).toString();
-  };
-
-  const copyJson = async () => {
-    if (!payload) return;
-    try {
-      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* ignore */
-    }
-  };
 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
@@ -147,7 +95,7 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
               {reviewRequired && (
                 <Alert tone="warn" icon={MdWarning}>
                   Draft preview · Complete the tax filing adjustment / review before validating or
-                  submitting to FBR. Missing classification fields are shown as —.
+                  submitting to FBR. Missing classification fields are shown as blank.
                 </Alert>
               )}
               <Alert tone="info" icon={MdInfo}>
@@ -171,154 +119,7 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
                 </div>
               </Alert>
 
-              {/* Header / parties block — `responsive-grid-3col`
-                  collapses 3 → 2 → 1 columns on narrow viewports
-                  (defined in index.css). */}
-              <div className="responsive-grid-3col">
-                <div>
-                  <div style={s.partyLabel}>Seller</div>
-                  <div style={s.partyName}>{payload?.sellerBusinessName}</div>
-                  <div style={s.partyMeta}>NTN/CNIC: {payload?.sellerNTNCNIC}</div>
-                  <div style={s.partyMeta}>{payload?.sellerProvince}</div>
-                </div>
-                <div>
-                  <div style={s.partyLabel}>Buyer ({payload?.buyerRegistrationType})</div>
-                  <div style={s.partyName}>{payload?.buyerBusinessName}</div>
-                  <div style={s.partyMeta}>
-                    NTN/CNIC: {payload?.buyerNTNCNIC || <em>(unregistered)</em>}
-                  </div>
-                  <div style={s.partyMeta}>{payload?.buyerProvince}</div>
-                </div>
-                <div>
-                  <div style={s.partyLabel}>Document</div>
-                  <div style={s.partyName}>{payload?.invoiceType}</div>
-                  <div style={s.partyMeta}>Date: {payload?.invoiceDate}</div>
-                  {payload?.scenarioId && (
-                    <div style={s.partyMeta}>Scenario: {payload.scenarioId}</div>
-                  )}
-                  {/* Debit/Credit note specifics — the reference invoice IRN and
-                      the reason/remarks FBR requires (0026/0027/0028). */}
-                  {payload?.invoiceRefNo && (
-                    <div style={{ ...s.partyMeta, wordBreak: "break-all" }}>
-                      Ref Invoice: <code style={s.codeInline}>{payload.invoiceRefNo}</code>
-                    </div>
-                  )}
-                  {payload?.reason && (
-                    <div style={s.partyMeta}>
-                      Reason: <strong>{payload.reason}</strong>
-                    </div>
-                  )}
-                  {payload?.reasonRemarks && (
-                    <div style={s.partyMeta}>Remarks: {payload.reasonRemarks}</div>
-                  )}
-                </div>
-              </div>
-
-              {/* Items table — `responsive-table-wrap` enables
-                  horizontal scroll on phones (9 columns is too wide
-                  to ever fit a 360px viewport). */}
-              <div style={{ marginTop: "0.75rem" }}>
-                <div style={s.itemsHeader}>Items in FBR payload ({itemCount})</div>
-                <TableWrap data-admin-table-region="">
-                  <table className="k-table" style={s.table}>
-                    <thead>
-                      <tr>
-                        <th className="is-center" style={s.idxCol}>
-                          #
-                        </th>
-                        <th>Item Type / Description</th>
-                        <th>HS Code</th>
-                        <th>UOM</th>
-                        <th className="k-num">Qty</th>
-                        <th className="k-num">Value (excl. tax)</th>
-                        <th className="k-num">Sales Tax</th>
-                        <th className="k-num">Further Tax</th>
-                        <th className="k-num">Line Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {payload?.items?.map((it, idx) => {
-                        const value = Number(it.valueSalesExcludingST || 0);
-                        const tax = Number(it.salesTaxApplicable || 0);
-                        const further = Number(it.furtherTax || 0);
-                        const extra = typeof it.extraTax === "number" ? it.extraTax : 0;
-                        const lineTotal = value + tax + further + extra;
-                        return (
-                          <tr key={idx}>
-                            <td className="is-center k-muted">{idx + 1}</td>
-                            <td>
-                              <div style={{ fontWeight: 600 }}>{it.productDescription}</div>
-                              <div style={s.metaSub}>
-                                {it.saleType}
-                                {it.rate && ` · ${it.rate}`}
-                                {it.sroScheduleNo && ` · ${it.sroScheduleNo}`}
-                                {it.sroItemSerialNo && ` #${it.sroItemSerialNo}`}
-                              </div>
-                            </td>
-                            <td>{it.hsCode || <span style={s.muted}>—</span>}</td>
-                            <td>{it.uoM || <span style={s.muted}>—</span>}</td>
-                            <td className="k-num">{fmtQty(it.quantity)}</td>
-                            <td className="k-num">{fmtNum(value)}</td>
-                            <td className="k-num">{fmtNum(tax)}</td>
-                            <td className="k-num">
-                              {further > 0 ? fmtNum(further) : <span style={s.muted}>0.00</span>}
-                            </td>
-                            <td className="k-num" style={{ fontWeight: 700 }}>
-                              {fmtNum(lineTotal)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot>
-                      <tr>
-                        <td colSpan={4} className="k-num">
-                          Total ({itemCount} {itemCount === 1 ? "item" : "items"})
-                        </td>
-                        <td className="k-num">{fmtQty(totals.qty)}</td>
-                        <td className="k-num">{fmtNum(totals.value)}</td>
-                        <td className="k-num">{fmtNum(totals.tax)}</td>
-                        <td className="k-num">
-                          {totals.further > 0 ? (
-                            fmtNum(totals.further)
-                          ) : (
-                            <span style={s.muted}>0.00</span>
-                          )}
-                        </td>
-                        <td className="k-num" style={{ color: "var(--k-blue)" }}>
-                          {fmtNum(totals.total)}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </TableWrap>
-              </div>
-
-              {/* Toggleable raw JSON for the curious / for support tickets. */}
-              <div
-                style={{
-                  marginTop: "1rem",
-                  display: "flex",
-                  gap: "0.5rem",
-                  alignItems: "center",
-                  flexWrap: "wrap",
-                }}
-              >
-                <Button variant="secondary" size="sm" onClick={() => setShowRawJson((v) => !v)}>
-                  {showRawJson ? "Hide" : "Show"} raw JSON
-                </Button>
-                {showRawJson && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    icon={copied ? MdCheckCircle : MdContentCopy}
-                    onClick={copyJson}
-                  >
-                    {copied ? "Copied" : "Copy"}
-                  </Button>
-                )}
-              </div>
-              {showRawJson && <pre style={s.rawJson}>{JSON.stringify(payload, null, 2)}</pre>}
+              <FbrPayloadView payload={payload} itemCount={itemCount} />
             </>
           )}
         </div>
@@ -339,50 +140,6 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
 }
 
 const s = {
-  partyLabel: {
-    fontSize: "var(--k-fs-2xs)",
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-    color: "var(--k-muted)",
-    fontWeight: 700,
-    marginBottom: 4,
-  },
-  partyName: {
-    fontSize: "var(--k-fs-md)",
-    fontWeight: 700,
-    color: "var(--k-ink)",
-    overflowWrap: "anywhere",
-  },
-  partyMeta: { fontSize: "var(--k-font-sm)", color: "var(--k-muted)", marginTop: 2 },
-  itemsHeader: {
-    fontSize: "var(--k-font)",
-    fontWeight: 700,
-    color: "var(--k-ink)",
-    marginBottom: "0.4rem",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  // minWidth ensures columns don't collapse to unreadable widths on
-  // mobile — instead the TableWrap scrolls horizontally, which is the
-  // standard wide-table-on-mobile pattern.
-  table: { minWidth: "720px" },
-  idxCol: { width: 36 },
-  metaSub: { fontSize: "var(--k-fs-xs)", color: "var(--k-muted)", marginTop: 2 },
-  muted: { color: "var(--k-faint)" },
-  rawJson: {
-    margin: "0.5rem 0 0",
-    padding: "0.75rem 1rem",
-    background: "#0a1628",
-    color: "var(--k-success-bg)",
-    border: "1px solid #1a2332",
-    borderRadius: "var(--k-radius)",
-    fontSize: "var(--k-fs-xs)",
-    lineHeight: 1.45,
-    maxHeight: 360,
-    overflow: "auto",
-    whiteSpace: "pre",
-  },
   codeInline: {
     background: "rgba(13,71,161,0.08)",
     padding: "0.05rem 0.35rem",

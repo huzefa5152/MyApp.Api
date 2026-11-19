@@ -7,14 +7,14 @@ import {
   MdWarning,
   MdCheckCircle,
   MdHourglassEmpty,
-  MdContentCopy,
   MdUnfoldMore,
   MdUnfoldLess,
 } from "react-icons/md";
 import httpClient from "../api/httpClient";
 import SearchableClientSelect from "./SearchableClientSelect";
 import { formStyles, modalSizes } from "../theme";
-import { Alert, Button, EmptyState, Loading, TableWrap } from "../ui/Kit";
+import { Alert, Button, EmptyState, Loading } from "../ui/Kit";
+import FbrPayloadView from "./FbrPayloadView";
 
 /**
  * Bulk FBR submission preview (2026-05-13).
@@ -89,6 +89,7 @@ export default function BulkFbrPreviewDialog({ invoices: allInvoices, onClose })
               error: "",
               data: parsed,
               itemCount: data.preview?.itemCount ?? 0,
+              url: data.preview?.url ?? "",
               originalLineCount: data.preview?.originalLineCount ?? 0,
             },
           }));
@@ -135,12 +136,6 @@ export default function BulkFbrPreviewDialog({ invoices: allInvoices, onClose })
 
   const fmtMoney = (n) =>
     `Rs. ${Number(n || 0).toLocaleString("en-PK", { maximumFractionDigits: 0 })}`;
-  const fmtNum = (n) =>
-    Number(n || 0).toLocaleString(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-  const fmtQty = (n) => parseFloat(Number(n || 0).toFixed(4)).toString();
 
   return (
     <div data-admin-backdrop="" style={formStyles.backdrop}>
@@ -222,8 +217,6 @@ export default function BulkFbrPreviewDialog({ invoices: allInvoices, onClose })
                   payload={payloadById[inv.id]}
                   onToggle={() => toggleRow(inv.id)}
                   fmtMoney={fmtMoney}
-                  fmtNum={fmtNum}
-                  fmtQty={fmtQty}
                 />
               ))}
             </div>
@@ -247,7 +240,7 @@ export default function BulkFbrPreviewDialog({ invoices: allInvoices, onClose })
 
 // One collapsible row. The header is the always-visible summary; the
 // detail panel only renders when the row is expanded.
-function BillRow({ invoice, expanded, payload, onToggle, fmtMoney, fmtNum, fmtQty }) {
+function BillRow({ invoice, expanded, payload, onToggle, fmtMoney }) {
   const statusBadge = useMemo(() => {
     const fs = invoice.fbrStatus;
     if (fs === "Submitted")
@@ -305,167 +298,16 @@ function BillRow({ invoice, expanded, payload, onToggle, fmtMoney, fmtNum, fmtQt
               <div style={{ whiteSpace: "pre-wrap" }}>{payload.error}</div>
             </Alert>
           ) : (
-            <PayloadPanel
+            <FbrPayloadView
               payload={payload.data}
               itemCount={payload.itemCount}
               originalLineCount={payload.originalLineCount}
-              fmtNum={fmtNum}
-              fmtQty={fmtQty}
+              url={payload.url}
             />
           )}
         </div>
       )}
     </div>
-  );
-}
-
-// Pure presentation of one bill's parsed payload. Same shape as
-// FbrPreviewDialog's body, trimmed for inline display.
-function PayloadPanel({ payload, itemCount, originalLineCount, fmtNum, fmtQty }) {
-  const totals = useMemo(() => {
-    if (!payload?.items?.length) return { qty: 0, value: 0, tax: 0, further: 0, total: 0 };
-    return payload.items.reduce(
-      (acc, it) => {
-        const value = Number(it.valueSalesExcludingST || 0);
-        const tax = Number(it.salesTaxApplicable || 0);
-        const further = Number(it.furtherTax || 0);
-        const extra = typeof it.extraTax === "number" ? it.extraTax : 0;
-        return {
-          qty: acc.qty + Number(it.quantity || 0),
-          value: acc.value + value,
-          tax: acc.tax + tax,
-          further: acc.further + further,
-          total: acc.total + value + tax + further + extra,
-        };
-      },
-      { qty: 0, value: 0, tax: 0, further: 0, total: 0 },
-    );
-  }, [payload]);
-  const [showRaw, setShowRaw] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const copyJson = async () => {
-    try {
-      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* ignore */
-    }
-  };
-
-  return (
-    <>
-      <div className="responsive-grid-3col" style={{ marginTop: 4 }}>
-        <div>
-          <div style={s.partyLabel}>Seller</div>
-          <div style={s.partyName}>{payload?.sellerBusinessName}</div>
-          <div style={s.partyMeta}>NTN/CNIC: {payload?.sellerNTNCNIC}</div>
-        </div>
-        <div>
-          <div style={s.partyLabel}>Buyer ({payload?.buyerRegistrationType})</div>
-          <div style={s.partyName}>{payload?.buyerBusinessName}</div>
-          <div style={s.partyMeta}>
-            NTN/CNIC: {payload?.buyerNTNCNIC || <em>(unregistered)</em>}
-          </div>
-        </div>
-        <div>
-          <div style={s.partyLabel}>Document</div>
-          <div style={s.partyName}>{payload?.invoiceType}</div>
-          <div style={s.partyMeta}>
-            Date: {payload?.invoiceDate}
-            {payload?.scenarioId ? ` · ${payload.scenarioId}` : ""}
-          </div>
-        </div>
-      </div>
-
-      <div style={s.itemsHeader}>
-        Items in FBR payload ({itemCount})
-        {originalLineCount !== itemCount && (
-          <span
-            style={{ color: "var(--k-success)", marginLeft: "0.4rem", fontSize: "var(--k-fs-xs)" }}
-          >
-            (grouped from {originalLineCount} bill line{originalLineCount === 1 ? "" : "s"})
-          </span>
-        )}
-      </div>
-      <TableWrap data-admin-table-region="">
-        <table className="k-table k-table--compact" style={s.table}>
-          <thead>
-            <tr>
-              <th className="is-center" style={s.idxCol}>
-                #
-              </th>
-              <th>Item / Description</th>
-              <th>HS Code</th>
-              <th>UOM</th>
-              <th className="k-num">Qty</th>
-              <th className="k-num">Value (excl. tax)</th>
-              <th className="k-num">Sales Tax</th>
-              <th className="k-num">Line Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {payload?.items?.map((it, idx) => {
-              const value = Number(it.valueSalesExcludingST || 0);
-              const tax = Number(it.salesTaxApplicable || 0);
-              const further = Number(it.furtherTax || 0);
-              const extra = typeof it.extraTax === "number" ? it.extraTax : 0;
-              const lineTotal = value + tax + further + extra;
-              return (
-                <tr key={idx}>
-                  <td className="is-center k-muted">{idx + 1}</td>
-                  <td>
-                    <div style={{ fontWeight: 600 }}>{it.productDescription}</div>
-                    <div style={s.metaSub}>
-                      {it.saleType}
-                      {it.rate && ` · ${it.rate}`}
-                    </div>
-                  </td>
-                  <td>{it.hsCode || <span style={s.muted}>—</span>}</td>
-                  <td>{it.uoM || <span style={s.muted}>—</span>}</td>
-                  <td className="k-num">{fmtQty(it.quantity)}</td>
-                  <td className="k-num">{fmtNum(value)}</td>
-                  <td className="k-num">{fmtNum(tax)}</td>
-                  <td className="k-num" style={{ fontWeight: 700 }}>
-                    {fmtNum(lineTotal)}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td colSpan={4} className="k-num">
-                Total
-              </td>
-              <td className="k-num">{fmtQty(totals.qty)}</td>
-              <td className="k-num">{fmtNum(totals.value)}</td>
-              <td className="k-num">{fmtNum(totals.tax)}</td>
-              <td className="k-num" style={{ color: "var(--k-blue)" }}>
-                {fmtNum(totals.total)}
-              </td>
-            </tr>
-          </tfoot>
-        </table>
-      </TableWrap>
-
-      <div style={{ marginTop: "0.6rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        <Button variant="secondary" size="sm" onClick={() => setShowRaw((v) => !v)}>
-          {showRaw ? "Hide" : "Show"} raw JSON
-        </Button>
-        {showRaw && (
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={copied ? MdCheckCircle : MdContentCopy}
-            onClick={copyJson}
-          >
-            {copied ? "Copied" : "Copy"}
-          </Button>
-        )}
-      </div>
-      {showRaw && <pre style={s.rawJson}>{JSON.stringify(payload, null, 2)}</pre>}
-    </>
   );
 }
 
@@ -587,45 +429,5 @@ const s = {
     padding: "0.65rem 0.85rem 0.85rem",
     borderTop: "1px solid var(--k-line)",
     background: "var(--k-surface-2)",
-  },
-  partyLabel: {
-    fontSize: "var(--k-fs-2xs)",
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-    color: "var(--k-muted)",
-    fontWeight: 700,
-    marginBottom: 3,
-  },
-  partyName: {
-    fontSize: "var(--k-font)",
-    fontWeight: 700,
-    color: "var(--k-ink)",
-    overflowWrap: "anywhere",
-  },
-  partyMeta: { fontSize: "var(--k-font-sm)", color: "var(--k-muted)", marginTop: 2 },
-  itemsHeader: {
-    marginTop: "0.7rem",
-    marginBottom: "0.35rem",
-    fontSize: "var(--k-font)",
-    fontWeight: 700,
-    color: "var(--k-ink)",
-  },
-  // minWidth keeps the 8 columns legible; TableWrap scrolls on phones.
-  table: { minWidth: "680px" },
-  idxCol: { width: 34 },
-  metaSub: { fontSize: "var(--k-fs-2xs)", color: "var(--k-muted)", marginTop: 2 },
-  muted: { color: "var(--k-faint)" },
-  rawJson: {
-    margin: "0.5rem 0 0",
-    padding: "0.7rem 0.9rem",
-    background: "#0a1628",
-    color: "var(--k-success-bg)",
-    border: "1px solid #1a2332",
-    borderRadius: "var(--k-r-sm)",
-    fontSize: "var(--k-fs-xs)",
-    lineHeight: 1.4,
-    maxHeight: 280,
-    overflow: "auto",
-    whiteSpace: "pre",
   },
 };
