@@ -22,6 +22,7 @@ work should update this section, not start a second document.
 | Built bundle cached for a year, app shell always re-checked | `273e3681` | `Program.cs` (`spaStaticFiles`) |
 | Site pings itself every 4 minutes against cold starts | `273e3681` | `Services/HostedServices/KeepWarmService.cs` |
 | Purchase Bills and Goods Receipts fetch their list once | `361b087e` | the two page components |
+| Companies and permissions are asked for alongside the sign-in check on a page load, not after it | second pass, 2026-11-20 | `utils/bootPrefetch.js`, the three contexts |
 
 Measured result on production, 52 screens: payload −89%, API time −25%, screen
 settle time −39%. Tables are under "After, on production".
@@ -41,18 +42,28 @@ settle time −39%. Tables are under "After, on production".
   slower (0.14 s became 0.32 s) because it sends a compressed response in more
   than one small write. Do not bring it back.
 
-**Not done — the remaining work, largest first**
+**Looked at again on the second pass and deliberately NOT changed**
 
-| Item | Why it is still there | What it would take |
+Each of these was read through to the code before deciding. They are here so
+the next session does not spend the same hour reaching the same answer.
+
+| Item | What the code showed | Decision |
 |---|---|---|
-| Print templates fetched whole on 14 list screens (15 KB compressed, one extra call each) | The picker needs names; the HTML is only needed at print time | A names-only list endpoint, HTML fetched on print |
-| New Credit / Debit Note loads every invoice (76 KB compressed, 0.55–0.84 s) | The original-invoice picker is unpaged | A searchable, paged picker |
-| FBR Settings loads every lookup row (265 KB compressed, 0.5–0.6 s) | The table is unpaged | Server-side paging of the lookup table |
-| Two SQL statements on every request for the session and security stamp | Caching them delays a revocation; the isolation invariant forbids it | Nothing safe; leave |
-| Dashboard and accounting summary run 28 and 34 statements | Each is a distinct aggregate, not an N+1; caching would show a figure that lags a posted bill | Only a rewrite that merges statements, proven figure-for-figure |
-| First load is a chain of calls (sign-in check → companies and permissions → stamps → screen data) | The contexts load one after another | Loading them in parallel; touches sign-in and company selection, so it is a breaking-risk change |
-| Google Fonts stylesheet blocks first paint (~0.4 s on a cold load) | Loaded from a third party | Self-host the fonts or preconnect |
-| The app re-requests `/api/companies` when the tab regains focus | Seen during measurement, not investigated | Read `CompanyContext` before changing it |
+| Print templates fetched whole on 14 list screens (15 KB compressed) | Print and PDF open their window synchronously inside the click, with the template HTML already in hand (13 screens, `usePrintTemplates`). Fetching the HTML at print time makes that step asynchronous, and a window opened after an `await` is what popup blockers stop. | Leave. It is a background call that does not hold the list up; the cost of getting it wrong is a Print button that silently does nothing. |
+| New Credit / Debit Note loads every invoice (76 KB compressed, 0.55–0.84 s) | The screen filters to FBR-submitted invoices with no live note of the same kind, searches number / buyer / IRN across ALL of them and uses the picked invoice's lines. The paged endpoint caps at 100 rows and cannot express the "no live note" rule, so paging would hide eligible invoices. | Leave. The safe version is a new endpoint returning the eligible set without lines (lines fetched on pick), with its own tenant and permission cases; worth doing only if the screen is felt to be slow. |
+| FBR Settings loads every lookup row (265 KB compressed, 0.5–0.6 s) | One category (HS codes) is nearly all of it. The screen counts, groups and searches every row in the browser. | Leave. A settings screen opened rarely; paging it changes how its search and counts work. |
+| Google Fonts stylesheet | `index.html` already preconnects to both font hosts and uses `display=swap`. | Nothing left short of self-hosting the fonts. |
+| `/api/companies` refetched when the tab regains focus | Deliberate: `CompanyContext` re-validates the company list on focus, on visibility and on a `company-access-denied` event, so a revoked or newly granted company shows up without a reload. | Leave. It is an access-freshness check, not waste. |
+| Two SQL statements on every request for the session and security stamp | Caching them delays a revocation; the isolation invariant forbids it. | Leave. |
+| Dashboard and accounting summary run 28 and 34 statements | Each is a distinct aggregate, not an N+1. Caching would show a figure that lags a posted bill. | Leave unless someone rewrites them to merge statements and proves every figure. |
+
+**Still open**
+
+- Sign-in fires `/api/permissions/me` twice (seen while testing the start-up
+  change; it was not caused by it and was not investigated).
+- Two frontend tests fail on a clean checkout, before any of this work:
+  `BillChallansEditor.test.jsx` ("Search" button not found) and
+  `devtools/stampRender.test.mjs` (no test suite in the file).
 
 **Not measured**
 
@@ -246,6 +257,9 @@ scheduler.
 - `KeepWarmOriginTests` (9 cases) pins which hosts the ping may go to.
 
 ## Left alone on purpose, and what would be next
+
+The status section at the top is the current list; this is the first pass's own
+note, kept as written.
 
 - **Per-request sign-in checks** (two statements on every call: the session and
   the security stamp). Caching them would delay a revocation, which the
