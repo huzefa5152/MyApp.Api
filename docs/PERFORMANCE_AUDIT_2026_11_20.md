@@ -23,7 +23,7 @@ work should update this section, not start a second document.
 | Site pings itself every 4 minutes against cold starts | `273e3681` | `Services/HostedServices/KeepWarmService.cs` |
 | Purchase Bills and Goods Receipts fetch their list once | `361b087e` | the two page components |
 | Companies and permissions are asked for alongside the sign-in check on a page load, not after it | `ca480c3c` | `utils/bootPrefetch.js`, the three contexts |
-| A screen's code is fetched before it is needed: the screen a page load is heading for, and the screen behind a link once the pointer or focus reaches it | third pass, 2026-11-20 (local commit, see below) | `utils/lazyScreen.js`, `App.jsx`, `main.jsx` |
+| A screen's code is fetched before it is needed: the screen a page load is heading for, and the screen behind a link once the pointer or focus reaches it | `8507ca84` | `utils/lazyScreen.js`, `App.jsx`, `main.jsx` |
 
 Measured result on production, 52 screens: payload −89%, API time −25%, screen
 settle time −39%. Tables are under "After, on production".
@@ -47,7 +47,12 @@ anything else could start. `lazyScreen` fetches the code early, so there is no
 placeholder: locally the figures request now starts with the stamps request,
 10 ms after the company list arrives, and a hovered link's screen opens with
 its first request 12 ms after the click.
-**Status: committed locally, NOT yet deployed or measured on production.**
+Deployed (`8507ca84`) and measured on production, warm reloads: the figures
+request starts 6-10 ms after the company list arrives (it was about 195 ms),
+and the dashboard has its figures about 0.54 s after navigation (it was about
+0.74 s). Opening a screen whose link the pointer had reached: first request
+12 ms after the click, nothing left to download. Opening one with no warning:
+0.21 s and 14 files first, as before.
 
 **Deployed but NOT verified**
 
