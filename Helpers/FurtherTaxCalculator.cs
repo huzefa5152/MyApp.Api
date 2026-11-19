@@ -34,6 +34,34 @@ namespace MyApp.Api.Helpers
         }
 
         /// <summary>
+        /// The rate a new bill starts on when nobody has said: 4% for a buyer
+        /// who is not registered, none for one who is. This is the bill form's
+        /// own default (the forms treat a buyer with no registration type as
+        /// unregistered), kept here so a bill made any other way -- an agent's
+        /// -- starts where an operator's would. It is only ever a starting
+        /// point: a rate that was stated, zero included, is never replaced.
+        /// </summary>
+        public static decimal? DefaultRate(string? buyerRegistrationType) =>
+            string.Equals(buyerRegistrationType?.Trim(), "Registered", StringComparison.OrdinalIgnoreCase)
+                ? null : 4m;
+
+        /// <summary>
+        /// Makes the filed items add up to the bill's further tax to the paisa.
+        /// Each item is rounded on its own, so several lines can land a paisa
+        /// or two off the figure the bill prints; the largest item takes the
+        /// difference. Anything bigger than rounding is NOT a rounding matter
+        /// and is left exactly as computed.
+        /// </summary>
+        public static decimal[] SettleToBill(decimal billAmount, IReadOnlyList<decimal> itemAmounts)
+        {
+            var settled = itemAmounts.ToArray();
+            var drift = billAmount - settled.Sum();
+            if (drift == 0m || settled.Length == 0 || Math.Abs(drift) > 0.01m * settled.Length) return settled;
+            settled[Array.IndexOf(settled, settled.Max())] += drift;
+            return settled;
+        }
+
+        /// <summary>
         /// What the document comes to once further tax is on it. Kept here so a
         /// caller cannot forget the third term.
         /// </summary>

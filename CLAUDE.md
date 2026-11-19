@@ -1030,9 +1030,28 @@ up is the easiest way to corrupt this ledger, so:
   is wrong, which is the worst shape a bug can take here. It posts to its own
   liability account, `ControlType.FurtherTaxPayable`, seeded onto existing
   charts by `Data/FurtherTaxAccountSeeder.cs`.
-- **`Helpers/FbrLineTax.cs` takes the DOCUMENT's rate** (`documentFurtherTaxRate`)
-  and a stored rate wins over the statutory 4%, so what is filed matches what
-  was printed.
+- **FBR is sent the DOCUMENT's rate and nothing else (2026-11-19).**
+  `Helpers/FbrLineTax.cs` used to honour the stored rate only when it was above
+  zero and fall back to the statutory 4% otherwise, so a bill saved at 0% for an
+  unregistered buyer printed 0 and filed 4%. Fourteen bills went out that way.
+  A blank or zero rate now files ZERO (`followDocumentFurtherTax`). Never
+  reintroduce a derived rate on the filing path: the default belongs where the
+  bill is made, never where it is filed.
+  - The DEFAULT is one rule, `FurtherTaxCalculator.DefaultRate` (4 unless the
+    buyer is Registered), mirrored by the two create forms. The MCP bill tool
+    applies it when no rate is given; a stated rate, zero included, stands.
+  - `FurtherTaxCalculator.SettleToBill` puts item-rounding paisa onto the
+    largest filed item so the filing sums to the bill's `FurtherTaxAmount`.
+  - The old fallback survives ONLY to restate filings made before the fix
+    (`FbrLineTax.FiledUnderStatutoryRule`, used by the accounting Sales Detail),
+    because FBR's record of those did not change when the code did.
+  - The totals panel shows `Further Tax (0%)` for an unregistered buyer charged
+    none, and the submit confirmations say what further tax is being filed.
+  - Suites: `python scripts/test_fbr_further_tax_follows_bill.py --base <url>`
+    (37 checks: create, edit both ways, multi-line rounding, the report),
+    `cd scripts/fbr_line_tax_harness && dotnet run -c Release` (27, offline),
+    `node scripts/test_bill_entry.mjs` (28), and the further-tax block of
+    `scripts/test_mcp_writes.py`.
 - Merge fields are seeded at RUNTIME (`Data/FurtherTaxMergeFieldSeeder.cs`) for
   the reason `AdvanceTaxMergeFieldSeeder` records — the Bill/TaxInvoice fields
   carry hard-coded `HasData` ids that collide with operator-created rows.

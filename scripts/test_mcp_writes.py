@@ -226,6 +226,36 @@ check("…the challan is now billed", challan_id and one(f"SELECT COUNT(*) FROM 
 refused, text = call(T, "prepare_bill", {"companyId": A, "clientId": client_a, "challanIds": [challan_id], "prices": prices})
 check("…and cannot be billed twice", refused and "cannot be billed" in text, text)
 refused, text = call(T, "prepare_bill", {"companyId": A, "clientId": client_a, "date": "2099-01-01", "items": line})
+
+
+# Further tax: with no rate given an agent's bill starts where the bill form
+# does, and a stated rate -- zero included -- is never replaced.
+def planned_rate(extra):
+    def find(node):
+        if isinstance(node, dict):
+            if "furtherTaxRate" in node:
+                return True, node["furtherTaxRate"]
+            node = list(node.values())
+        if isinstance(node, list):
+            for child in node:
+                hit = find(child)
+                if hit[0]:
+                    return hit
+        return False, None
+    plan, why = prepare(T, "prepare_bill", {"companyId": A, "clientId": client_a, "items": line, **extra})
+    return find(plan)[1] if plan else f"refused: {why}"
+
+
+was = sql(f"SELECT ISNULL(RegistrationType, '<null>') FROM Clients WHERE Id = {client_a}")[0]
+for state, want in (("Unregistered", 4), ("Registered", None)):
+    sql(f"UPDATE Clients SET RegistrationType = '{state}' WHERE Id = {client_a}")
+    got = planned_rate({})
+    check(f"a bill with no further tax rate for a {state.lower()} buyer starts on {want}", got == want, got)
+    got = planned_rate({"furtherTaxRate": "0"})
+    check(f"  a stated 0 stands for a {state.lower()} buyer", got == 0, got)
+    got = planned_rate({"furtherTaxRate": "3"})
+    check(f"  a stated 3 stands for a {state.lower()} buyer", got == 3, got)
+sql(f"UPDATE Clients SET RegistrationType = {'NULL' if was == '<null>' else repr(was)} WHERE Id = {client_a}")  # as it was
 check("a future-dated bill is refused", refused and "future" in text, text)
 cycle(T, "purchase bill", "prepare_purchase_bill", {"companyId": A, "supplierId": supplier_a, "items": [{"description": f"MCP buy {RUN}", "quantity": "3", "unitPrice": "300", "unit": "Pcs", "itemTypeId": item_a}]},
       "PurchaseBills", f"CompanyId = {A}")

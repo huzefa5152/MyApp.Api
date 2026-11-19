@@ -136,7 +136,7 @@ namespace MyApp.Api.Controllers
                         gstRate = new { type = "string", description = "Percent, up to 2 decimals. Default 18." },
                         paymentTerms = Str(200), paymentMode = Str(50), poNumber = Str(100), poDate = DateProp,
                         advanceTaxSection = Str(20, "Optional advance tax section, as on the bill form."), advanceTaxFilerActive = new { type = "boolean" },
-                        furtherTaxRate = new { type = "string", description = "Optional further tax percent." },
+                        furtherTaxRate = new { type = "string", description = "Further tax percent. Left out on a new bill it follows the bill form: 4 for a buyer who is not registered, none for a registered one. Send 0 to charge none. FBR is sent exactly the rate on the bill." },
                         taxRateOverrideReason = Str(500, "Needed when the GST rate differs from the rate the goods were imported at."),
                         challanIds = new { type = "array", minItems = 1, maxItems = 20, items = new { type = "integer", minimum = 1 } },
                         prices = new { type = "array", maxItems = 500, items = new { type = "object", additionalProperties = false, required = new[] { "deliveryItemId", "unitPrice" }, properties = new { deliveryItemId = Int(), unitPrice = new { type = "string" }, description = Str(500), itemTypeId = Int() } } },
@@ -565,7 +565,13 @@ namespace MyApp.Api.Controllers
             var date = DateArg(args, "date") ?? PakistanClock.Today;
             if (PakistanClock.IsFutureInvoiceDate(date)) throw new ToolError("A bill cannot be dated in the future (FBR rule 0043).");
             var gst = Gst(args);
-            var furtherTax = OptDec(args, "furtherTaxRate", 0, 100, 2);
+            // No rate given: start where the bill form starts, so an agent's
+            // bill and an operator's agree. A stated rate, zero included, stands.
+            var furtherTax = Has(args, "furtherTaxRate")
+                ? OptDec(args, "furtherTaxRate", 0, 100, 2)
+                : FurtherTaxCalculator.DefaultRate(await _context.Clients.AsNoTracking()
+                    .Where(c => c.Id == clientId && c.CompanyId == companyId)
+                    .Select(c => c.RegistrationType).FirstOrDefaultAsync());
             var advanceSection = OptText(args, "advanceTaxSection", 20) is { Length: > 0 } sec ? sec : null;
             var advanceFiler = OptBool(args, "advanceTaxFilerActive");
             var overrideReason = OptText(args, "taxRateOverrideReason", 500) is { Length: > 0 } why ? why : null;

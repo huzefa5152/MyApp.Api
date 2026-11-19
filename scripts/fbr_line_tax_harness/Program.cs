@@ -49,5 +49,24 @@ Flag("filed since: follows the bill",
     FbrLineTax.FiledUnderStatutoryRule(FbrLineTax.DocumentRateFiledFrom), false);
 Flag("not filed yet: follows the bill", FbrLineTax.FiledUnderStatutoryRule(null), false);
 
+Console.WriteLine("-- the rate a new bill starts on --");
+void Rate(string name, decimal? got, decimal? want) => Check(name, got ?? -1m, want ?? -1m);
+Rate("unregistered starts on 4", FurtherTaxCalculator.DefaultRate("Unregistered"), 4m);
+Rate("CNIC buyer starts on 4", FurtherTaxCalculator.DefaultRate("CNIC"), 4m);
+Rate("no registration type starts on 4, as the form does", FurtherTaxCalculator.DefaultRate(null), 4m);
+Rate("registered starts on none", FurtherTaxCalculator.DefaultRate("Registered"), null);
+Rate("registered, any case or spacing", FurtherTaxCalculator.DefaultRate(" registered "), null);
+
+Console.WriteLine("-- the filed items add up to the bill --");
+// Three lines of 33.33 at 4% round to 1.33 each (3.99); the bill says 4.00.
+var settled = FurtherTaxCalculator.SettleToBill(4.00m, new[] { 1.33m, 1.33m, 1.33m });
+Check("a paisa of rounding is settled", settled.Sum(), 4.00m);
+Check("onto one item only", settled.Count(x => x != 1.33m), 1m);
+Check("already equal is left alone", FurtherTaxCalculator.SettleToBill(400m, new[] { 400m })[0], 400m);
+Check("a zero bill keeps zero items", FurtherTaxCalculator.SettleToBill(0m, new[] { 0m, 0m }).Sum(), 0m);
+Check("a real difference is not rounding and is not touched",
+    FurtherTaxCalculator.SettleToBill(400m, new[] { 100m, 100m }).Sum(), 200m);
+Check("nothing to settle on an empty filing", FurtherTaxCalculator.SettleToBill(5m, Array.Empty<decimal>()).Length, 0m);
+
 Console.WriteLine(failed == 0 ? $"{run}/{run} FBR line tax checks passed" : $"{failed} of {run} FAILED");
 return failed == 0 ? 0 : 1;

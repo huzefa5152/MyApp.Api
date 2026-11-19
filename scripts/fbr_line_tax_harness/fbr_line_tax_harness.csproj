@@ -11,5 +11,6 @@
   <ItemGroup>
     <Compile Include="..\..\Helpers\FbrLineTax.cs" />
     <Compile Include="..\..\Helpers\FbrRateDescription.cs" />
+    <Compile Include="..\..\Helpers\FurtherTaxCalculator.cs" />
   </ItemGroup>
 </Project>

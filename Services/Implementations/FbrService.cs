@@ -1368,6 +1368,13 @@ namespace MyApp.Api.Services.Implementations
                 });
             }
 
+            // The bill and the filing state ONE further tax figure. Items are
+            // rounded one by one, so settle the paisa onto the largest of them.
+            var settledFurtherTax = FurtherTaxCalculator.SettleToBill(
+                invoice.FurtherTaxAmount, fbrRequest.Items.Select(i => i.FurtherTax).ToList());
+            for (var i = 0; i < settledFurtherTax.Length; i++)
+                fbrRequest.Items[i].FurtherTax = settledFurtherTax[i];
+
             // ── Call FBR API ──
             var action = isSubmit ? "Submit" : "Validate";
             var url = isSubmit ? GetSubmitUrl(company) : GetValidateUrl(company);

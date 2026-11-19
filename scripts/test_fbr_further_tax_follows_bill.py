@@ -153,11 +153,29 @@ def main():
         expect("no rate files 0", bill(reg, "absent", scenario="SN001")["id"], 0, "SN001")
         expect("a rate the operator set is filed (4% = 400)", bill(reg, 4, scenario="SN001")["id"], 400, "SN001")
 
-        print("\n[4. The accounting Sales Detail report says what is filed]")
+        print("\n[4. Several lines: the filed items add up to the bill to the paisa]")
+        # Three lines of 33.33 at 4% round to 1.33 each (3.99); the bill charges 4.00.
+        s, d = http(b, "POST", "/api/invoices/standalone", t, {
+            "date": datetime.now().strftime("%Y-%m-%dT00:00:00Z"), "companyId": cid, "clientId": unreg["id"],
+            "gstRate": 18, "taxTreatment": "FBR", "scenarioId": "SN002", "documentType": 4, "paymentMode": "Credit",
+            "furtherTaxRate": 4, "printGroupTaxInvoiceByItemType": False,
+            "items": [{**line, "description": f"Part {n}", "quantity": 1, "unitPrice": 33.33} for n in (1, 2, 3)]})
+        assert s in (200, 201), f"create three-line bill: {s} {d}"
+        made_bills.append(d["id"])
+        s, pv = http(b, "GET", f"/api/fbr/{d['id']}/preview-payload?scenarioId=SN002", t)
+        pitems = json.loads(((pv or {}).get("preview") or {}).get("json") or "{}").get("items", []) if s == 200 else []
+        filed_total = round(sum(float(i["furtherTax"]) for i in pitems), 2)
+        check("the bill charges 4.00", abs(float(d.get("furtherTaxAmount") or 0) - 4.00) < 0.005, d.get("furtherTaxAmount"))
+        check("the filing adds up to 4.00 too, whatever the item rounding",
+              bool(pitems) and filed_total == 4.00, f"items={[i['furtherTax'] for i in pitems]} total={filed_total}")
+        expected[d["id"]] = None  # the report is per line; its rounding is checked by its own suite
+
+        print("\n[5. The accounting Sales Detail report says what is filed]")
         s, rp = http(b, "GET", f"/api/accounting/reports/company/{cid}/sales-detail?period=allPeriods&pageSize=200", t)
         rows = (rp or {}).get("rows", []) if s == 200 else []
-        check("the report builds", s == 200 and len(rows) == len(expected), f"{s} rows={len(rows)} {str(rp)[:160]}")
-        by_bill = {r["invoiceId"]: float(r["furtherTax"]) for r in rows}
+        expected = {i: want for i, want in expected.items() if want is not None}
+        check("the report builds", s == 200 and len(rows) >= len(expected), f"{s} rows={len(rows)} {str(rp)[:160]}")
+        by_bill = {r["invoiceId"]: float(r["furtherTax"]) for r in rows if r["invoiceId"] in expected}
         wrong = {i: (by_bill.get(i), want) for i, want in expected.items()
                  if by_bill.get(i) is None or abs(by_bill[i] - want) > 0.005}
         check("every bill's further tax is the bill's own, 0% included", not wrong, f"(report, bill): {wrong}")
