@@ -142,7 +142,14 @@ export default function GoodsReceiptsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCompany]);
 
+  // Re-fetch when filters or page change. Not on mount: the company effect above
+  // already loads page 1, and running both fetched the list twice on every open.
+  const filtersMountedRef = useRef(false);
   useEffect(() => {
+    if (!filtersMountedRef.current) {
+      filtersMountedRef.current = true;
+      return;
+    }
     if (selectedCompany) fetchReceipts(page);
   }, [page, size, searchQuery, supplierFilter, divisionFilter]);
   const copy = useDocumentCopy({
