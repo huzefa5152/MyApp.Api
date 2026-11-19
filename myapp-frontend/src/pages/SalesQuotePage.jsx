@@ -1,7 +1,8 @@
+import useDebouncedValue from "../hooks/useDebouncedValue";
 import DocumentLinesNavigation, {
   DocumentLinesHeaderLink,
 } from "../Components/DocumentLinesNavigation";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   MdRequestQuote,
   MdAdd,
@@ -109,6 +110,8 @@ export default function SalesQuotePage() {
   const [totalPages, setTotalPages] = useState(0);
   const [size, setSize] = usePageSize("salesquotes");
   const [search, setSearch] = useState("");
+  const searchQuery = useDebouncedValue(search);
+  const latestRequest = useRef(0);
   const [statusFilter, setStatusFilter] = useState("");
   const [divisionFilter, setDivisionFilter] = useState("");
   const [clientFilter, setClientFilter] = useState("");
@@ -125,26 +128,29 @@ export default function SalesQuotePage() {
     async (companyId, pg) => {
       if (!companyId) return;
       setLoading(true);
+      const request = ++latestRequest.current;
       try {
         const params = { page: pg || page };
         if (size) params.pageSize = size;
-        if (search) params.search = search;
+        if (searchQuery) params.search = searchQuery;
         if (statusFilter) params.status = statusFilter;
         if (divisionFilter) params.divisionId = divisionFilter;
         if (clientFilter) params.clientId = clientFilter;
         const { data } = await getPagedSalesQuotesByCompany(companyId, params);
+        if (request !== latestRequest.current) return;
         setQuotes(data.items);
         setTotalCount(data.totalCount);
         setTotalPages(data.totalPages);
       } catch {
+        if (request !== latestRequest.current) return;
         setQuotes([]);
         setTotalCount(0);
         setTotalPages(0);
       } finally {
-        setLoading(false);
+        if (request === latestRequest.current) setLoading(false);
       }
     },
-    [page, size, search, statusFilter, divisionFilter, clientFilter],
+    [page, size, searchQuery, statusFilter, divisionFilter, clientFilter],
   );
 
   // Reset paging + filters and load the client list when the company changes.
@@ -168,7 +174,7 @@ export default function SalesQuotePage() {
   useEffect(() => {
     if (selectedCompany) fetchQuotes(selectedCompany.id, page);
     else setQuotes([]);
-  }, [selectedCompany, page, size, search, statusFilter, divisionFilter, clientFilter]);
+  }, [selectedCompany, page, size, searchQuery, statusFilter, divisionFilter, clientFilter]);
 
   const reload = () => selectedCompany && fetchQuotes(selectedCompany.id, page);
   const copy = useDocumentCopy({ sourceType: DOC_COPY_TYPES.salesQuote, onRefresh: reload });

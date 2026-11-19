@@ -1,3 +1,4 @@
+import useDebouncedValue from "../hooks/useDebouncedValue";
 import DocumentLinesNavigation, {
   DocumentLinesHeaderLink,
 } from "../Components/DocumentLinesNavigation";
@@ -336,6 +337,8 @@ export default function InvoicePage({ mode = "invoices" }) {
   // matching the per-tab view-mode persistence above.
   const [size, setSize] = usePageSize(isBillsMode ? "bills" : isNotesMode ? mode : "invoices");
   const [search, setSearch] = useState(() => searchParams.get("search") || "");
+  const searchQuery = useDebouncedValue(search);
+  const latestRequest = useRef(0);
   // Keep the URL's ?search= in sync with the search-box state. Without
   // this, clearing the box would still leave the param in the URL, and
   // a page reload would re-seed the box from the stale value (which is
@@ -379,10 +382,11 @@ export default function InvoicePage({ mode = "invoices" }) {
     async (companyId, pg) => {
       if (!companyId) return;
       setLoadingInvoices(true);
+      const request = ++latestRequest.current;
       try {
         const params = { page: pg || page };
         if (size) params.pageSize = size;
-        if (search) params.search = search;
+        if (searchQuery) params.search = searchQuery;
         if (clientFilter) params.clientId = clientFilter;
         if (divisionFilter) params.divisionId = divisionFilter;
         if (dateFrom) params.dateFrom = dateFrom;
@@ -391,6 +395,7 @@ export default function InvoicePage({ mode = "invoices" }) {
         // only (server-side split — the three groups never mix).
         if (isNotesMode) params.type = noteDocType === 10 ? "creditnotes" : "debitnotes";
         const { data } = await getPagedInvoicesByCompany(companyId, params);
+        if (request !== latestRequest.current) return;
         setInvoices(data.items);
         setTotalCount(data.totalCount);
         setTotalPages(data.totalPages);
@@ -412,14 +417,15 @@ export default function InvoicePage({ mode = "invoices" }) {
           return next;
         });
       } catch {
+        if (request !== latestRequest.current) return;
         setInvoices([]);
         setTotalCount(0);
         setTotalPages(0);
       } finally {
-        setLoadingInvoices(false);
+        if (request === latestRequest.current) setLoadingInvoices(false);
       }
     },
-    [page, size, search, clientFilter, divisionFilter, dateFrom, dateTo],
+    [page, size, searchQuery, clientFilter, divisionFilter, dateFrom, dateTo],
   );
 
   useEffect(() => {
@@ -455,7 +461,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       return;
     }
     if (selectedCompany) fetchInvoices(selectedCompany.id, page);
-  }, [page, size, search, clientFilter, divisionFilter, dateFrom, dateTo]);
+  }, [page, size, searchQuery, clientFilter, divisionFilter, dateFrom, dateTo]);
 
   const resetFilters = () => {
     setSearch("");

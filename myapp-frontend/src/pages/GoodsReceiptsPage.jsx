@@ -1,7 +1,8 @@
+import useDebouncedValue from "../hooks/useDebouncedValue";
 import DocumentLinesNavigation, {
   DocumentLinesHeaderLink,
 } from "../Components/DocumentLinesNavigation";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   MdInventory2,
   MdAdd,
@@ -86,6 +87,8 @@ export default function GoodsReceiptsPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [search, setSearch] = useState("");
+  const searchQuery = useDebouncedValue(search);
+  const latestRequest = useRef(0);
   const [supplierFilter, setSupplierFilter] = useState("");
   const [divisionFilter, setDivisionFilter] = useState("");
   // Shared template-picker state, scoped to the selected division: "All
@@ -99,25 +102,28 @@ export default function GoodsReceiptsPage() {
     async (pg) => {
       if (!selectedCompany) return;
       setLoading(true);
+      const request = ++latestRequest.current;
       try {
         const params = { page: pg || page };
         if (size) params.pageSize = size;
-        if (search) params.search = search;
+        if (searchQuery) params.search = searchQuery;
         if (supplierFilter) params.supplierId = supplierFilter;
         if (divisionFilter) params.divisionId = divisionFilter;
         const { data } = await getGoodsReceiptsByCompanyPaged(selectedCompany.id, params);
+        if (request !== latestRequest.current) return;
         setReceipts(data.items || []);
         setTotalCount(data.totalCount || 0);
         setTotalPages(Math.ceil((data.totalCount || 0) / (data.pageSize || 10)));
       } catch {
+        if (request !== latestRequest.current) return;
         setReceipts([]);
         setTotalCount(0);
         setTotalPages(0);
       } finally {
-        setLoading(false);
+        if (request === latestRequest.current) setLoading(false);
       }
     },
-    [selectedCompany, page, size, search, supplierFilter, divisionFilter],
+    [selectedCompany, page, size, searchQuery, supplierFilter, divisionFilter],
   );
 
   useEffect(() => {
@@ -138,7 +144,7 @@ export default function GoodsReceiptsPage() {
 
   useEffect(() => {
     if (selectedCompany) fetchReceipts(page);
-  }, [page, size, search, supplierFilter, divisionFilter]);
+  }, [page, size, searchQuery, supplierFilter, divisionFilter]);
   const copy = useDocumentCopy({
     sourceType: DOC_COPY_TYPES.goodsReceipt,
     onRefresh: () => fetchReceipts(page),

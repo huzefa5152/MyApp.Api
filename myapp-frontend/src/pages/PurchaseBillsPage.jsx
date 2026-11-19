@@ -1,8 +1,9 @@
+import useDebouncedValue from "../hooks/useDebouncedValue";
 import DocumentLinesNavigation, {
   DocumentLinesHeaderLink,
 } from "../Components/DocumentLinesNavigation";
 import CardActions from "../Components/CardActions";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import useQueryAction from "../hooks/useQueryAction";
 import {
@@ -122,6 +123,8 @@ export default function PurchaseBillsPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
+  const searchQuery = useDebouncedValue(search);
+  const latestRequest = useRef(0);
   // Seed from ?supplierId= so the Suppliers page "N purchase bills" chip
   // deep-links straight to this list filtered to that supplier.
   const [sourceFilter, setSourceFilter] = useState("");
@@ -179,32 +182,35 @@ export default function PurchaseBillsPage() {
     async (pg) => {
       if (!selectedCompany) return;
       setLoading(true);
+      const request = ++latestRequest.current;
       try {
         const params = { page: pg || page };
         if (size) params.pageSize = size;
-        if (search) params.search = search;
+        if (searchQuery) params.search = searchQuery;
         if (supplierFilter) params.supplierId = supplierFilter;
         if (sourceFilter) params.fromChallan = sourceFilter === "challan";
         if (divisionFilter) params.divisionId = divisionFilter;
         if (dateFrom) params.dateFrom = dateFrom;
         if (dateTo) params.dateTo = dateTo;
         const { data } = await getPurchaseBillsByCompanyPaged(selectedCompany.id, params);
+        if (request !== latestRequest.current) return;
         setBills(data.items || []);
         setTotalCount(data.totalCount || 0);
         setTotalPages(Math.ceil((data.totalCount || 0) / (data.pageSize || 10)));
       } catch {
+        if (request !== latestRequest.current) return;
         setBills([]);
         setTotalCount(0);
         setTotalPages(0);
       } finally {
-        setLoading(false);
+        if (request === latestRequest.current) setLoading(false);
       }
     },
     [
       selectedCompany,
       page,
       size,
-      search,
+      searchQuery,
       supplierFilter,
       sourceFilter,
       divisionFilter,
@@ -233,7 +239,7 @@ export default function PurchaseBillsPage() {
 
   useEffect(() => {
     if (selectedCompany) fetchBills(page);
-  }, [page, size, search, supplierFilter, sourceFilter, divisionFilter, dateFrom, dateTo]);
+  }, [page, size, searchQuery, supplierFilter, sourceFilter, divisionFilter, dateFrom, dateTo]);
   const copy = useDocumentCopy({
     sourceType: DOC_COPY_TYPES.purchaseBill,
     onRefresh: () => fetchBills(page),

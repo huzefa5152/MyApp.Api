@@ -1,3 +1,4 @@
+import useDebouncedValue from "../hooks/useDebouncedValue";
 import DocumentLinesNavigation, {
   DocumentLinesHeaderLink,
 } from "../Components/DocumentLinesNavigation";
@@ -122,6 +123,8 @@ export default function ChallanPage() {
   // User-chosen rows-per-page (persisted, null until picked → server default).
   const [size, setSize] = usePageSize("challans");
   const [search, setSearch] = useState("");
+  const searchQuery = useDebouncedValue(search);
+  const latestRequest = useRef(0);
   // ?status= arrives from the dashboard ("challans need FBR setup").
   const [statusFilter, setStatusFilter] = useState(
     () => new URLSearchParams(window.location.search).get("status") || "",
@@ -172,10 +175,11 @@ export default function ChallanPage() {
     async (companyId, pg) => {
       if (!companyId) return;
       setLoadingChallans(true);
+      const request = ++latestRequest.current;
       try {
         const params = { page: pg || page };
         if (size) params.pageSize = size;
-        if (search) params.search = search;
+        if (searchQuery) params.search = searchQuery;
         if (statusFilter) params.status = statusFilter;
         if (divisionFilter) params.divisionId = divisionFilter;
         if (clientFilter) params.clientId = clientFilter;
@@ -183,22 +187,24 @@ export default function ChallanPage() {
         if (dateFrom) params.dateFrom = dateFrom;
         if (dateTo) params.dateTo = dateTo;
         const { data } = await getPagedChallansByCompany(companyId, params);
+        if (request !== latestRequest.current) return;
         setChallans(data.items);
         setTotalCount(data.totalCount);
         setTotalPages(data.totalPages);
         setPageSize(data.pageSize);
       } catch {
+        if (request !== latestRequest.current) return;
         setChallans([]);
         setTotalCount(0);
         setTotalPages(0);
       } finally {
-        setLoadingChallans(false);
+        if (request === latestRequest.current) setLoadingChallans(false);
       }
     },
     [
       page,
       size,
-      search,
+      searchQuery,
       statusFilter,
       divisionFilter,
       clientFilter,
@@ -246,7 +252,7 @@ export default function ChallanPage() {
   }, [
     page,
     size,
-    search,
+    searchQuery,
     statusFilter,
     divisionFilter,
     clientFilter,

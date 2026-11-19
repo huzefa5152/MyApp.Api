@@ -1,7 +1,8 @@
+import useDebouncedValue from "../hooks/useDebouncedValue";
 import DocumentLinesNavigation, {
   DocumentLinesHeaderLink,
 } from "../Components/DocumentLinesNavigation";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import useQueryAction from "../hooks/useQueryAction";
 import {
@@ -139,6 +140,8 @@ export default function SalesOrderPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [size, setSize] = usePageSize("salesorders");
   const [search, setSearch] = useState("");
+  const searchQuery = useDebouncedValue(search);
+  const latestRequest = useRef(0);
   const [statusFilter, setStatusFilter] = useState("");
   const [divisionFilter, setDivisionFilter] = useState("");
   const [clients, setClients] = useState([]);
@@ -153,26 +156,29 @@ export default function SalesOrderPage() {
     async (companyId, pg) => {
       if (!companyId) return;
       setLoading(true);
+      const request = ++latestRequest.current;
       try {
         const params = { page: pg || page };
         if (size) params.pageSize = size;
-        if (search) params.search = search;
+        if (searchQuery) params.search = searchQuery;
         if (statusFilter) params.status = statusFilter;
         if (divisionFilter) params.divisionId = divisionFilter;
         if (clientFilter) params.clientId = clientFilter;
         const { data } = await getPagedSalesOrdersByCompany(companyId, params);
+        if (request !== latestRequest.current) return;
         setOrders(data.items);
         setTotalCount(data.totalCount);
         setTotalPages(data.totalPages);
       } catch {
+        if (request !== latestRequest.current) return;
         setOrders([]);
         setTotalCount(0);
         setTotalPages(0);
       } finally {
-        setLoading(false);
+        if (request === latestRequest.current) setLoading(false);
       }
     },
-    [page, size, search, statusFilter, divisionFilter, clientFilter],
+    [page, size, searchQuery, statusFilter, divisionFilter, clientFilter],
   );
 
   const fetchClients = useCallback(
@@ -213,7 +219,7 @@ export default function SalesOrderPage() {
   }, [selectedCompany]);
   useEffect(() => {
     if (selectedCompany) fetchOrders(selectedCompany.id, page);
-  }, [page, size, search, statusFilter, divisionFilter, clientFilter]);
+  }, [page, size, searchQuery, statusFilter, divisionFilter, clientFilter]);
 
   const reload = () => selectedCompany && fetchOrders(selectedCompany.id, page);
   const copy = useDocumentCopy({ sourceType: DOC_COPY_TYPES.salesOrder, onRefresh: reload });
