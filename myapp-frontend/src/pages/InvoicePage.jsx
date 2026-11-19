@@ -1,9 +1,40 @@
-import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
+import DocumentLinesNavigation, {
+  DocumentLinesHeaderLink,
+} from "../Components/DocumentLinesNavigation";
 import CardActions from "../Components/CardActions";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import useQueryAction from "../hooks/useQueryAction";
-import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments, MdUndo, MdPostAdd, MdCopyAll, MdDownload, MdAddLink, MdLinkOff, MdShoppingCart } from "react-icons/md";
+import {
+  MdReceipt,
+  MdAdd,
+  MdBusiness,
+  MdPrint,
+  MdDescription,
+  MdSearch,
+  MdPictureAsPdf,
+  MdGridOn,
+  MdCloudUpload,
+  MdCheckCircle,
+  MdError,
+  MdHourglassEmpty,
+  MdDelete,
+  MdCancel,
+  MdEdit,
+  MdVisibility,
+  MdBlock,
+  MdRestore,
+  MdOpenInNew,
+  MdViewList,
+  MdPayments,
+  MdUndo,
+  MdPostAdd,
+  MdCopyAll,
+  MdDownload,
+  MdAddLink,
+  MdLinkOff,
+  MdShoppingCart,
+} from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import PaymentForm from "../Components/PaymentForm";
 import PaymentHistoryDialog from "../Components/PaymentHistoryDialog";
@@ -23,7 +54,14 @@ import { useListViewMode } from "../hooks/useListViewMode";
 import AttachmentBadge from "../Components/AttachmentBadge";
 import AttachmentQuickModal from "../Components/AttachmentQuickModal";
 import { useEntityAttachmentCounts } from "../hooks/useEntityAttachmentCounts";
-import { getPagedInvoicesByCompany, getInvoicePrintBill, getInvoicePrintTaxInvoice, deleteInvoice, cancelInvoice, setInvoiceFbrExcluded } from "../api/invoiceApi";
+import {
+  getPagedInvoicesByCompany,
+  getInvoicePrintBill,
+  getInvoicePrintTaxInvoice,
+  deleteInvoice,
+  cancelInvoice,
+  setInvoiceFbrExcluded,
+} from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { submitInvoiceToFbr, validateInvoiceWithFbr } from "../api/fbrApi";
 import { dropdownStyles, cardStyles, cardHover } from "../theme";
@@ -33,7 +71,10 @@ import { getTemplate, hasExcelTemplate, exportExcel } from "../api/printTemplate
 import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
 import { defaultBillTemplate, defaultTaxInvoiceTemplate } from "../utils/defaultTemplates";
-import { defaultCreditNoteTemplate, defaultDebitNoteTemplate } from "../utils/purchaseNoteDocTemplates";
+import {
+  defaultCreditNoteTemplate,
+  defaultDebitNoteTemplate,
+} from "../utils/purchaseNoteDocTemplates";
 import { usePrintTemplates } from "../hooks/usePrintTemplates";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import BulkInvoiceDialog from "../Components/BulkInvoiceDialog";
@@ -63,7 +104,12 @@ const colors = {
 function paymentStatusBadge(inv) {
   const s = inv.paymentStatus;
   if (s === "Paid") return <StatusBadge tone="success">Paid</StatusBadge>;
-  if (s === "Overdue") return <StatusBadge tone="danger">Overdue{inv.daysOverdue ? ` ${inv.daysOverdue}d` : ""}</StatusBadge>;
+  if (s === "Overdue")
+    return (
+      <StatusBadge tone="danger">
+        Overdue{inv.daysOverdue ? ` ${inv.daysOverdue}d` : ""}
+      </StatusBadge>
+    );
   if (s === "PartiallyPaid") return <StatusBadge tone="info">Partial</StatusBadge>;
   return <StatusBadge tone="neutral">Unpaid</StatusBadge>;
 }
@@ -86,8 +132,15 @@ export default function InvoicePage({ mode = "invoices" }) {
   const noteLabel = noteDocType === 10 ? "Credit Note" : "Debit Note";
   // Persist view-mode per tab so each tab remembers its own setting
   // (e.g. operator wants cards on Bills but table on Invoices).
-  const [viewMode, setViewMode, isBigScreen] = useListViewMode(isBillsMode ? "bills" : isNotesMode ? mode : "invoices");
-  const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  const [viewMode, setViewMode, isBigScreen] = useListViewMode(
+    isBillsMode ? "bills" : isNotesMode ? mode : "invoices",
+  );
+  const {
+    companies,
+    selectedCompany,
+    setSelectedCompany,
+    loading: loadingCompanies,
+  } = useCompany();
   const { has } = usePermissions();
   const confirm = useConfirm();
   const canCreate = has("bills.manage.create");
@@ -118,7 +171,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     ? false
     : isBillsMode
       ? canUpdate
-      : (canEditItemType || canEditItemTypeAndQty);
+      : canEditItemType || canEditItemTypeAndQty;
   const canDelete = has("bills.manage.delete");
   // Void is its own permission (bills.manage.void), distinct from delete, so a
   // role can be allowed to void bills without also gaining hard-delete rights.
@@ -136,7 +189,7 @@ export default function InvoicePage({ mode = "invoices" }) {
   // invoices.print.view → Tax-Invoice print/PDF/XLS. Bills tab uses
   // canPrintBill, Invoices tab uses canPrintTax.
   const canPrintBill = has("bills.print.view");
-  const canPrintTax  = has("invoices.print.view");
+  const canPrintTax = has("invoices.print.view");
   const canPrint = isBillsMode ? canPrintBill : canPrintTax;
   // Bulk download produces the same documents the per-row Print / PDF
   // buttons do, so it carries the same permission. Notes are excluded:
@@ -145,20 +198,26 @@ export default function InvoicePage({ mode = "invoices" }) {
   // Each tab prints with its own template type: Bills → Bill, Invoices →
   // TaxInvoice, note tabs → CreditNote / DebitNote (notes previously reused
   // the TaxInvoice template; they now have their own type + starter set).
-  const printTemplateType = isBillsMode ? "Bill"
-    : noteDocType === 9 ? "DebitNote"
-    : noteDocType === 10 ? "CreditNote"
-    : "TaxInvoice";
+  const printTemplateType = isBillsMode
+    ? "Bill"
+    : noteDocType === 9
+      ? "DebitNote"
+      : noteDocType === 10
+        ? "CreditNote"
+        : "TaxInvoice";
   // Division scope for the print-template picker (declared here so the hook can
   // consume it; the list filter + dropdown next to Company drive it). "All
   // Divisions" → company-wide templates; a specific division → that division's;
   // an empty scope hides the picker and blocks Print/PDF.
   const [divisionFilter, setDivisionFilter] = useState("");
   const tplPicker = usePrintTemplates(printTemplateType, { divisionId: divisionFilter });
-  const printFallbackTemplate = isBillsMode ? defaultBillTemplate
-    : noteDocType === 9 ? defaultDebitNoteTemplate
-    : noteDocType === 10 ? defaultCreditNoteTemplate
-    : defaultTaxInvoiceTemplate;
+  const printFallbackTemplate = isBillsMode
+    ? defaultBillTemplate
+    : noteDocType === 9
+      ? defaultDebitNoteTemplate
+      : noteDocType === 10
+        ? defaultCreditNoteTemplate
+        : defaultTaxInvoiceTemplate;
   // Explicit dropdown pick wins; else the company default from the loaded
   // list; if the list couldn't load (no template perm / fetch error) fall
   // back to the legacy per-click default fetch, then the built-in template.
@@ -169,7 +228,9 @@ export default function InvoicePage({ mode = "invoices" }) {
       try {
         const res = await getTemplate(selectedCompany.id, printTemplateType);
         if (res.data?.htmlContent) return res.data.htmlContent;
-      } catch { /* use default */ }
+      } catch {
+        /* use default */
+      }
     }
     return printFallbackTemplate;
   };
@@ -227,7 +288,11 @@ export default function InvoicePage({ mode = "invoices" }) {
   const [clients, setClients] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [attachTarget, setAttachTarget] = useState(null);
-  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "Invoice", invoices.map((r) => r.id));
+  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(
+    selectedCompany?.id,
+    "Invoice",
+    invoices.map((r) => r.id),
+  );
   // Bill currently open in the correction wizard (null when closed). Opens the
   // post-sale CorrectionWizard the same way Reverse-etc modals open from a row.
   const [correctTarget, setCorrectTarget] = useState(null);
@@ -238,8 +303,9 @@ export default function InvoicePage({ mode = "invoices" }) {
   // Dashboard quick actions: ?new=1 opens New Bill, ?new=standalone the
   // no-challan form (refused, like its button, when bills need a sales order).
   useQueryAction("new", isBillsMode && !!selectedCompany, (v) => {
-    if (v === "standalone") { if (canCreateStandalone && !requireSO) setShowStandaloneForm(true); }
-    else if (canCreate) setShowForm(true);
+    if (v === "standalone") {
+      if (canCreateStandalone && !requireSO) setShowStandaloneForm(true);
+    } else if (canCreate) setShowForm(true);
   });
   const [editingId, setEditingId] = useState(null);
   const [viewingId, setViewingId] = useState(null);
@@ -297,51 +363,64 @@ export default function InvoicePage({ mode = "invoices" }) {
     // Skip the call entirely if the role can't view clients — avoids a
     // guaranteed 403 in the network log for view-only roles like tax
     // consultant. The client filter dropdown is hidden in that case.
-    if (!canViewClients) { setClients([]); return; }
+    if (!canViewClients) {
+      setClients([]);
+      return;
+    }
     try {
       const { data } = await getClientsByCompany(companyId);
       setClients(data);
-    } catch { setClients([]); }
+    } catch {
+      setClients([]);
+    }
   };
 
-  const fetchInvoices = useCallback(async (companyId, pg) => {
-    if (!companyId) return;
-    setLoadingInvoices(true);
-    try {
-      const params = { page: pg || page };
-      if (size) params.pageSize = size;
-      if (search) params.search = search;
-      if (clientFilter) params.clientId = clientFilter;
-      if (divisionFilter) params.divisionId = divisionFilter;
-      if (dateFrom) params.dateFrom = dateFrom;
-      if (dateTo) params.dateTo = dateTo;
-      // Note tabs list ONLY their own type; other tabs get sale bills
-      // only (server-side split — the three groups never mix).
-      if (isNotesMode) params.type = noteDocType === 10 ? "creditnotes" : "debitnotes";
-      const { data } = await getPagedInvoicesByCompany(companyId, params);
-      setInvoices(data.items);
-      setTotalCount(data.totalCount);
-      setTotalPages(data.totalPages);
-      // Hydrate the in-memory "locally validated" Set from the
-      // persisted FbrStatus. Pre-fix the Set was session-only, so a
-      // bill that had been validated successfully (now persisted as
-      // FbrStatus = "Validated", see FbrService 2026-05-08) would
-      // load with an empty Set after refresh and the UI would fall
-      // back to the orange "pending FBR" pill — confusing the
-      // operator who just saw the green "validated" pill before the
-      // refresh. Bills already at "Submitted" stay out of the Set —
-      // they're past validation and have the dedicated submitted
-      // pill / IRN display path.
-      setFbrValidated((prev) => {
-        const next = new Set(prev);
-        for (const inv of data.items || []) {
-          if (inv.fbrStatus === "Validated") next.add(inv.id);
-        }
-        return next;
-      });
-    } catch { setInvoices([]); setTotalCount(0); setTotalPages(0); }
-    finally { setLoadingInvoices(false); }
-  }, [page, size, search, clientFilter, divisionFilter, dateFrom, dateTo]);
+  const fetchInvoices = useCallback(
+    async (companyId, pg) => {
+      if (!companyId) return;
+      setLoadingInvoices(true);
+      try {
+        const params = { page: pg || page };
+        if (size) params.pageSize = size;
+        if (search) params.search = search;
+        if (clientFilter) params.clientId = clientFilter;
+        if (divisionFilter) params.divisionId = divisionFilter;
+        if (dateFrom) params.dateFrom = dateFrom;
+        if (dateTo) params.dateTo = dateTo;
+        // Note tabs list ONLY their own type; other tabs get sale bills
+        // only (server-side split — the three groups never mix).
+        if (isNotesMode) params.type = noteDocType === 10 ? "creditnotes" : "debitnotes";
+        const { data } = await getPagedInvoicesByCompany(companyId, params);
+        setInvoices(data.items);
+        setTotalCount(data.totalCount);
+        setTotalPages(data.totalPages);
+        // Hydrate the in-memory "locally validated" Set from the
+        // persisted FbrStatus. Pre-fix the Set was session-only, so a
+        // bill that had been validated successfully (now persisted as
+        // FbrStatus = "Validated", see FbrService 2026-05-08) would
+        // load with an empty Set after refresh and the UI would fall
+        // back to the orange "pending FBR" pill — confusing the
+        // operator who just saw the green "validated" pill before the
+        // refresh. Bills already at "Submitted" stay out of the Set —
+        // they're past validation and have the dedicated submitted
+        // pill / IRN display path.
+        setFbrValidated((prev) => {
+          const next = new Set(prev);
+          for (const inv of data.items || []) {
+            if (inv.fbrStatus === "Validated") next.add(inv.id);
+          }
+          return next;
+        });
+      } catch {
+        setInvoices([]);
+        setTotalCount(0);
+        setTotalPages(0);
+      } finally {
+        setLoadingInvoices(false);
+      }
+    },
+    [page, size, search, clientFilter, divisionFilter, dateFrom, dateTo],
+  );
 
   useEffect(() => {
     if (selectedCompany) {
@@ -354,10 +433,10 @@ export default function InvoicePage({ mode = "invoices" }) {
       if (divisionFilter) setDivisionFilter("");
       else fetchInvoices(selectedCompany.id, 1);
       hasExcelTemplate(selectedCompany.id, "Bill")
-        .then(r => setHasExcelBill(r.data.hasExcelTemplate))
+        .then((r) => setHasExcelBill(r.data.hasExcelTemplate))
         .catch(() => setHasExcelBill(false));
       hasExcelTemplate(selectedCompany.id, "TaxInvoice")
-        .then(r => setHasExcelTax(r.data.hasExcelTemplate))
+        .then((r) => setHasExcelTax(r.data.hasExcelTemplate))
         .catch(() => setHasExcelTax(false));
     } else {
       setInvoices([]);
@@ -371,15 +450,26 @@ export default function InvoicePage({ mode = "invoices" }) {
   // already loads page 1, and running both fetched the list twice on every open.
   const filtersMountedRef = useRef(false);
   useEffect(() => {
-    if (!filtersMountedRef.current) { filtersMountedRef.current = true; return; }
+    if (!filtersMountedRef.current) {
+      filtersMountedRef.current = true;
+      return;
+    }
     if (selectedCompany) fetchInvoices(selectedCompany.id, page);
   }, [page, size, search, clientFilter, divisionFilter, dateFrom, dateTo]);
 
   const resetFilters = () => {
-    setSearch(""); setClientFilter(""); setDivisionFilter(""); setDateFrom(""); setDateTo(""); setPage(1);
+    setSearch("");
+    setClientFilter("");
+    setDivisionFilter("");
+    setDateFrom("");
+    setDateTo("");
+    setPage(1);
   };
 
-  const handleFilterChange = (setter) => (e) => { setter(e.target.value); setPage(1); };
+  const handleFilterChange = (setter) => (e) => {
+    setter(e.target.value);
+    setPage(1);
+  };
 
   const handleCreated = () => {
     setShowForm(false);
@@ -389,26 +479,38 @@ export default function InvoicePage({ mode = "invoices" }) {
 
   const handlePrintBill = async (inv) => {
     const w = window.open("", "_blank");
-    if (!w) { notify("Popup blocked. Please allow popups for this site.", "warning"); return; }
+    if (!w) {
+      notify("Popup blocked. Please allow popups for this site.", "warning");
+      return;
+    }
     w.document.write("<p>Loading bill...</p>");
     try {
       const { data } = await getInvoicePrintBill(inv.id);
       const template = await resolvePrintTemplate(inv);
       const html = mergeTemplate(template, data);
       writeAndPrint(w, html);
-    } catch { w.close(); notify("Failed to load bill data.", "error"); }
+    } catch {
+      w.close();
+      notify("Failed to load bill data.", "error");
+    }
   };
 
   const handlePrintTax = async (inv) => {
     const w = window.open("", "_blank");
-    if (!w) { notify("Popup blocked. Please allow popups for this site.", "warning"); return; }
+    if (!w) {
+      notify("Popup blocked. Please allow popups for this site.", "warning");
+      return;
+    }
     w.document.write("<p>Loading tax invoice...</p>");
     try {
       const { data } = await getInvoicePrintTaxInvoice(inv.id);
       const template = await resolvePrintTemplate(inv);
       const html = mergeTemplate(template, data);
       writeAndPrint(w, html);
-    } catch { w.close(); notify("Failed to load tax invoice data.", "error"); }
+    } catch {
+      w.close();
+      notify("Failed to load tax invoice data.", "error");
+    }
   };
 
   const handleExportBillPdf = async (inv) => {
@@ -419,8 +521,11 @@ export default function InvoicePage({ mode = "invoices" }) {
       const template = await resolvePrintTemplate(inv);
       const html = mergeTemplate(template, data);
       await exportToPdf(html, `Bill # ${data.invoiceNumber} ${data.clientName}`);
-    } catch { notify("Failed to export Bill PDF.", "error"); }
-    finally { setExportingId(null); }
+    } catch {
+      notify("Failed to export Bill PDF.", "error");
+    } finally {
+      setExportingId(null);
+    }
   };
 
   const handleExportBillExcel = async (inv) => {
@@ -430,8 +535,11 @@ export default function InvoicePage({ mode = "invoices" }) {
       const { data } = await getInvoicePrintBill(inv.id);
       const res = await exportExcel(selectedCompany.id, "Bill", data);
       saveAs(res.data, `Bill # ${data.invoiceNumber} ${data.clientName}.xlsx`);
-    } catch { notify("Failed to export Bill Excel.", "error"); }
-    finally { setExportingId(null); }
+    } catch {
+      notify("Failed to export Bill Excel.", "error");
+    } finally {
+      setExportingId(null);
+    }
   };
 
   const handleExportTaxPdf = async (inv) => {
@@ -445,9 +553,15 @@ export default function InvoicePage({ mode = "invoices" }) {
       // Bill exports (which keep the "Bill # ..." prefix). Note tabs name the
       // file after the note kind ("CREDIT NOTE # 3 ...").
       const pdfLabel = isNotesMode ? noteLabel.toUpperCase() : "INVOICE";
-      await exportToPdf(html, `${pdfLabel} # ${data.invoiceNumber} ${data.buyerName || data.clientName}`);
-    } catch { notify("Failed to export Tax Invoice PDF.", "error"); }
-    finally { setExportingId(null); }
+      await exportToPdf(
+        html,
+        `${pdfLabel} # ${data.invoiceNumber} ${data.buyerName || data.clientName}`,
+      );
+    } catch {
+      notify("Failed to export Tax Invoice PDF.", "error");
+    } finally {
+      setExportingId(null);
+    }
   };
 
   const handleExportTaxExcel = async (inv) => {
@@ -463,9 +577,15 @@ export default function InvoicePage({ mode = "invoices" }) {
       // saveAs() overrides the server's Content-Disposition filename, so the
       // prefix MUST be correct on this line — fixing only the backend wasn't enough.
       const xlsLabel = isNotesMode ? noteLabel.toUpperCase() : "INVOICE";
-      saveAs(res.data, `${xlsLabel} # ${data.invoiceNumber} ${data.buyerName || data.clientName}.xlsx`);
-    } catch { notify("Failed to export Tax Invoice Excel.", "error"); }
-    finally { setExportingId(null); }
+      saveAs(
+        res.data,
+        `${xlsLabel} # ${data.invoiceNumber} ${data.buyerName || data.clientName}.xlsx`,
+      );
+    } catch {
+      notify("Failed to export Tax Invoice Excel.", "error");
+    } finally {
+      setExportingId(null);
+    }
   };
 
   const [fbrLoading, setFbrLoading] = useState(null);
@@ -477,7 +597,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       const { data } = await validateInvoiceWithFbr(inv.id);
       if (data.success) {
         notify("FBR validation passed! You can now submit this invoice.", "success");
-        setFbrValidated(prev => new Set(prev).add(inv.id));
+        setFbrValidated((prev) => new Set(prev).add(inv.id));
       } else {
         // 2026-05-08: a failed re-validate must NOT wipe a bill's
         // previously-Validated state. The backend doesn't persist
@@ -493,7 +613,9 @@ export default function InvoicePage({ mode = "invoices" }) {
       notify(err.response?.data?.errorMessage || "FBR validation failed.", "error");
       // Same rationale as the !data.success branch — don't touch
       // the Set on failure.
-    } finally { setFbrLoading(null); }
+    } finally {
+      setFbrLoading(null);
+    }
   };
 
   const handleFbrSubmit = async (inv) => {
@@ -503,7 +625,8 @@ export default function InvoicePage({ mode = "invoices" }) {
     }
     const ok = await confirm({
       title: `Submit Bill #${inv.invoiceNumber} to FBR?`,
-      message: "Once submitted, the bill is locked from edits and assigned an IRN. This action cannot be undone.",
+      message:
+        "Once submitted, the bill is locked from edits and assigned an IRN. This action cannot be undone.",
       variant: "warning",
       confirmText: "Submit to FBR",
     });
@@ -513,7 +636,11 @@ export default function InvoicePage({ mode = "invoices" }) {
       const { data } = await submitInvoiceToFbr(inv.id);
       if (data.success) {
         notify(`Submitted to FBR! IRN: ${data.irn}`, "success");
-        setFbrValidated(prev => { const s = new Set(prev); s.delete(inv.id); return s; });
+        setFbrValidated((prev) => {
+          const s = new Set(prev);
+          s.delete(inv.id);
+          return s;
+        });
         fetchInvoices(selectedCompany.id, page);
       } else {
         notify(`FBR submission failed: ${data.errorMessage}`, "error");
@@ -522,7 +649,9 @@ export default function InvoicePage({ mode = "invoices" }) {
     } catch (err) {
       notify(err.response?.data?.errorMessage || "FBR submission failed.", "error");
       fetchInvoices(selectedCompany.id, page);
-    } finally { setFbrLoading(null); }
+    } finally {
+      setFbrLoading(null);
+    }
   };
 
   const handleDeleteInvoice = async (inv) => {
@@ -532,7 +661,8 @@ export default function InvoicePage({ mode = "invoices" }) {
     }
     const ok = await confirm({
       title: `Delete Bill #${inv.invoiceNumber}?`,
-      message: "This permanently removes the bill, reverses its GL and inventory impact, and reverts its linked delivery challans to Pending (billable again). A gap is left in the numbering. To keep the number, use Void instead.",
+      message:
+        "This permanently removes the bill, reverses its GL and inventory impact, and reverts its linked delivery challans to Pending (billable again). A gap is left in the numbering. To keep the number, use Void instead.",
       variant: "danger",
       confirmText: "Delete bill",
     });
@@ -553,10 +683,14 @@ export default function InvoicePage({ mode = "invoices" }) {
     }
     const res = await confirm({
       title: `Void Bill #${inv.invoiceNumber}?`,
-      message: "The bill keeps its number (no gap in the sequence) but is marked Cancelled and dropped from reports. Its delivery challan(s) revert to Pending so you can re-bill them.",
+      message:
+        "The bill keeps its number (no gap in the sequence) but is marked Cancelled and dropped from reports. Its delivery challan(s) revert to Pending so you can re-bill them.",
       variant: "warning",
       confirmText: "Void bill",
-      input: { label: "Reason (optional)", placeholder: "e.g. wrong rate / wrong challan — re-billing" },
+      input: {
+        label: "Reason (optional)",
+        placeholder: "e.g. wrong rate / wrong challan — re-billing",
+      },
     });
     if (!res?.ok) return;
     try {
@@ -575,7 +709,10 @@ export default function InvoicePage({ mode = "invoices" }) {
   // and generates the note — which then Validates/Submits like any bill.
   const handleReverseInvoice = (inv) => {
     if (inv.fbrStatus !== "Submitted") {
-      notify("Only an FBR-submitted bill can be reversed. Void a non-submitted bill instead.", "error");
+      notify(
+        "Only an FBR-submitted bill can be reversed. Void a non-submitted bill instead.",
+        "error",
+      );
       return;
     }
     navigate(`/credit-debit-notes?type=credit&invoiceId=${inv.id}`);
@@ -604,9 +741,19 @@ export default function InvoicePage({ mode = "invoices" }) {
   // counts: FBR rule [0043] rejects a future invoice date, so Validate All /
   // Submit All would only collect guaranteed failures. They rejoin the queue by
   // themselves on their own date — nothing to un-exclude. (2026-08-28)
-  const unsubmittedInvoices = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && inv.fbrReady && !inv.isFbrExcluded && !isFutureDocDate(inv.date));
-  const incompleteCount = invoices.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && !inv.fbrReady && !inv.isFbrExcluded).length;
-  const validatedCount = unsubmittedInvoices.filter(inv => fbrValidated.has(inv.id)).length;
+  const unsubmittedInvoices = invoices.filter(
+    (inv) =>
+      inv.fbrStatus !== "Submitted" &&
+      !inv.isCancelled &&
+      inv.fbrReady &&
+      !inv.isFbrExcluded &&
+      !isFutureDocDate(inv.date),
+  );
+  const incompleteCount = invoices.filter(
+    (inv) =>
+      inv.fbrStatus !== "Submitted" && !inv.isCancelled && !inv.fbrReady && !inv.isFbrExcluded,
+  ).length;
+  const validatedCount = unsubmittedInvoices.filter((inv) => fbrValidated.has(inv.id)).length;
 
   // Copy always produces an ordinary standalone bill, so it is gated on the
   // standalone-create key and hidden in the Credit / Debit Note tabs (a note
@@ -636,7 +783,7 @@ export default function InvoicePage({ mode = "invoices" }) {
         nextExcluded
           ? `Bill #${inv.invoiceNumber} excluded from FBR bulk actions.`
           : `Bill #${inv.invoiceNumber} re-enabled for FBR bulk actions.`,
-        "success"
+        "success",
       );
       fetchInvoices(selectedCompany.id, page);
     } catch (err) {
@@ -664,10 +811,24 @@ export default function InvoicePage({ mode = "invoices" }) {
     if (action === "validate") {
       // Skip FBR-excluded bills — operator explicitly opted them out of bulk
       // actions — and future-dated ones, which FBR would reject with [0043].
-      return all.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && inv.fbrReady && !inv.isFbrExcluded && !isFutureDocDate(inv.date));
+      return all.filter(
+        (inv) =>
+          inv.fbrStatus !== "Submitted" &&
+          !inv.isCancelled &&
+          inv.fbrReady &&
+          !inv.isFbrExcluded &&
+          !isFutureDocDate(inv.date),
+      );
     }
     if (action === "submit") {
-      return all.filter(inv => inv.fbrStatus !== "Submitted" && !inv.isCancelled && fbrValidated.has(inv.id) && !inv.isFbrExcluded && !isFutureDocDate(inv.date));
+      return all.filter(
+        (inv) =>
+          inv.fbrStatus !== "Submitted" &&
+          !inv.isCancelled &&
+          fbrValidated.has(inv.id) &&
+          !inv.isFbrExcluded &&
+          !isFutureDocDate(inv.date),
+      );
     }
     return all;
   };
@@ -677,11 +838,19 @@ export default function InvoicePage({ mode = "invoices" }) {
     setBulkFbrLoading(true);
     setFbrLoading("bulk-validate-fetching");
     let candidates = [];
-    try { candidates = await fetchAllFilteredBills("validate"); }
-    catch { notify("Failed to fetch bill list for validation.", "error"); setBulkFbrLoading(false); setFbrLoading(null); return; }
+    try {
+      candidates = await fetchAllFilteredBills("validate");
+    } catch {
+      notify("Failed to fetch bill list for validation.", "error");
+      setBulkFbrLoading(false);
+      setFbrLoading(null);
+      return;
+    }
     if (candidates.length === 0) {
       notify(`No FBR-ready unsubmitted bills${filterNote}.`, "info");
-      setBulkFbrLoading(false); setFbrLoading(null); return;
+      setBulkFbrLoading(false);
+      setFbrLoading(null);
+      return;
     }
     // Per-bill rows for the results dialog. Replaces the old summary toast —
     // failures stay on screen with the FBR message until the operator
@@ -695,24 +864,49 @@ export default function InvoicePage({ mode = "invoices" }) {
     let stopReason = "";
     for (const inv of candidates) {
       if (fbrValidated.has(inv.id)) {
-        results.push({ invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, status: "already", message: "Already validated locally — no new call to FBR." });
+        results.push({
+          invoiceId: inv.id,
+          invoiceNumber: inv.invoiceNumber,
+          status: "already",
+          message: "Already validated locally — no new call to FBR.",
+        });
         continue;
       }
       if (stopFurtherCalls) {
-        results.push({ invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, status: "skipped", message: stopReason || "Skipped after token/connectivity error on an earlier bill." });
+        results.push({
+          invoiceId: inv.id,
+          invoiceNumber: inv.invoiceNumber,
+          status: "skipped",
+          message: stopReason || "Skipped after token/connectivity error on an earlier bill.",
+        });
         continue;
       }
       setFbrLoading(inv.id + "-validate");
       try {
         const { data } = await validateInvoiceWithFbr(inv.id);
         if (data.success) {
-          setFbrValidated(prev => new Set(prev).add(inv.id));
-          results.push({ invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, status: "passed", message: "Passed FBR validation." });
+          setFbrValidated((prev) => new Set(prev).add(inv.id));
+          results.push({
+            invoiceId: inv.id,
+            invoiceNumber: inv.invoiceNumber,
+            status: "passed",
+            message: "Passed FBR validation.",
+          });
         } else {
           const msg = data.errorMessage || "FBR rejected the bill (no message returned).";
-          results.push({ invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, status: "failed", message: msg });
-          if (msg.includes("token") || msg.includes("authentication") || msg.includes("Cannot connect")) {
-            stopFurtherCalls = true; stopReason = msg;
+          results.push({
+            invoiceId: inv.id,
+            invoiceNumber: inv.invoiceNumber,
+            status: "failed",
+            message: msg,
+          });
+          if (
+            msg.includes("token") ||
+            msg.includes("authentication") ||
+            msg.includes("Cannot connect")
+          ) {
+            stopFurtherCalls = true;
+            stopReason = msg;
           }
         }
       } catch (err) {
@@ -720,10 +914,22 @@ export default function InvoicePage({ mode = "invoices" }) {
         // friendly string (axios's raw err.message is "Network Error" /
         // "Request failed with status code 500" — not user-friendly).
         const serverMsg = err.response?.data?.errorMessage || err.response?.data?.message;
-        const msg = serverMsg
-          || (!err.response ? "Could not reach the server." : "Request failed unexpectedly.");
-        results.push({ invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, status: "failed", message: msg });
-        if ((serverMsg && (serverMsg.includes("token") || serverMsg.includes("authentication") || serverMsg.includes("Cannot connect"))) || err.code === "ERR_NETWORK") {
+        const msg =
+          serverMsg ||
+          (!err.response ? "Could not reach the server." : "Request failed unexpectedly.");
+        results.push({
+          invoiceId: inv.id,
+          invoiceNumber: inv.invoiceNumber,
+          status: "failed",
+          message: msg,
+        });
+        if (
+          (serverMsg &&
+            (serverMsg.includes("token") ||
+              serverMsg.includes("authentication") ||
+              serverMsg.includes("Cannot connect"))) ||
+          err.code === "ERR_NETWORK"
+        ) {
           stopFurtherCalls = true;
           stopReason = msg;
         }
@@ -739,11 +945,22 @@ export default function InvoicePage({ mode = "invoices" }) {
     setBulkFbrLoading(true);
     setFbrLoading("bulk-submit-fetching");
     let toSubmit = [];
-    try { toSubmit = await fetchAllFilteredBills("submit"); }
-    catch { notify("Failed to fetch bill list for submission.", "error"); setBulkFbrLoading(false); setFbrLoading(null); return; }
+    try {
+      toSubmit = await fetchAllFilteredBills("submit");
+    } catch {
+      notify("Failed to fetch bill list for submission.", "error");
+      setBulkFbrLoading(false);
+      setFbrLoading(null);
+      return;
+    }
     if (toSubmit.length === 0) {
-      notify(`No locally-validated bills to submit${filterNote}. Click Validate All first.`, "error");
-      setBulkFbrLoading(false); setFbrLoading(null); return;
+      notify(
+        `No locally-validated bills to submit${filterNote}. Click Validate All first.`,
+        "error",
+      );
+      setBulkFbrLoading(false);
+      setFbrLoading(null);
+      return;
     }
     const ok = await confirm({
       title: `Submit ${toSubmit.length} bill${toSubmit.length !== 1 ? "s" : ""} to FBR?`,
@@ -752,28 +969,55 @@ export default function InvoicePage({ mode = "invoices" }) {
       confirmText: "Submit all",
     });
     if (!ok) {
-      setBulkFbrLoading(false); setFbrLoading(null); return;
+      setBulkFbrLoading(false);
+      setFbrLoading(null);
+      return;
     }
     const results = [];
     let stopFurtherCalls = false;
     let stopReason = "";
     for (const inv of toSubmit) {
       if (stopFurtherCalls) {
-        results.push({ invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, status: "skipped", message: stopReason || "Skipped after token/connectivity error on an earlier bill." });
+        results.push({
+          invoiceId: inv.id,
+          invoiceNumber: inv.invoiceNumber,
+          status: "skipped",
+          message: stopReason || "Skipped after token/connectivity error on an earlier bill.",
+        });
         continue;
       }
       setFbrLoading(inv.id + "-submit");
       try {
         const { data } = await submitInvoiceToFbr(inv.id);
         if (data.success) {
-          setFbrValidated(prev => { const s = new Set(prev); s.delete(inv.id); return s; });
+          setFbrValidated((prev) => {
+            const s = new Set(prev);
+            s.delete(inv.id);
+            return s;
+          });
           const irn = data.irn || data.IRN || null;
-          results.push({ invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, status: "submitted", message: irn ? null : "Submitted to FBR.", irn });
+          results.push({
+            invoiceId: inv.id,
+            invoiceNumber: inv.invoiceNumber,
+            status: "submitted",
+            message: irn ? null : "Submitted to FBR.",
+            irn,
+          });
         } else {
           const msg = data.errorMessage || "FBR rejected the bill (no message returned).";
-          results.push({ invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, status: "failed", message: msg });
-          if (msg.includes("token") || msg.includes("authentication") || msg.includes("Cannot connect")) {
-            stopFurtherCalls = true; stopReason = msg;
+          results.push({
+            invoiceId: inv.id,
+            invoiceNumber: inv.invoiceNumber,
+            status: "failed",
+            message: msg,
+          });
+          if (
+            msg.includes("token") ||
+            msg.includes("authentication") ||
+            msg.includes("Cannot connect")
+          ) {
+            stopFurtherCalls = true;
+            stopReason = msg;
           }
         }
       } catch (err) {
@@ -781,10 +1025,22 @@ export default function InvoicePage({ mode = "invoices" }) {
         // friendly string (axios's raw err.message is "Network Error" /
         // "Request failed with status code 500" — not user-friendly).
         const serverMsg = err.response?.data?.errorMessage || err.response?.data?.message;
-        const msg = serverMsg
-          || (!err.response ? "Could not reach the server." : "Request failed unexpectedly.");
-        results.push({ invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, status: "failed", message: msg });
-        if ((serverMsg && (serverMsg.includes("token") || serverMsg.includes("authentication") || serverMsg.includes("Cannot connect"))) || err.code === "ERR_NETWORK") {
+        const msg =
+          serverMsg ||
+          (!err.response ? "Could not reach the server." : "Request failed unexpectedly.");
+        results.push({
+          invoiceId: inv.id,
+          invoiceNumber: inv.invoiceNumber,
+          status: "failed",
+          message: msg,
+        });
+        if (
+          (serverMsg &&
+            (serverMsg.includes("token") ||
+              serverMsg.includes("authentication") ||
+              serverMsg.includes("Cannot connect"))) ||
+          err.code === "ERR_NETWORK"
+        ) {
           stopFurtherCalls = true;
           stopReason = msg;
         }
@@ -799,987 +1055,1721 @@ export default function InvoicePage({ mode = "invoices" }) {
   const hasFilters = search || clientFilter || divisionFilter || dateFrom || dateTo;
 
   return (
-    <DocumentLinesNavigation type={isBillsMode ? "bill" : mode === "creditnotes" ? "creditNote" : mode === "debitnotes" ? "debitNote" : "taxInvoice"}>
-    <div>
-      <div data-admin-page-header="" style={styles.pageHeader}>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div data-admin-page-icon="" style={styles.headerIcon}>{isNotesMode ? <MdUndo size={28} color="#fff" /> : <MdReceipt size={28} color="#fff" />}</div>
-          <div>
-            <h2 style={styles.pageTitle}>{isNotesMode ? `${noteLabel}s` : isBillsMode ? "Bills" : "Invoices"}</h2>
-            <p style={styles.pageSubtitle}>
-              {selectedCompany
-                ? (isNotesMode
+    <DocumentLinesNavigation
+      type={
+        isBillsMode
+          ? "bill"
+          : mode === "creditnotes"
+            ? "creditNote"
+            : mode === "debitnotes"
+              ? "debitNote"
+              : "taxInvoice"
+      }
+    >
+      <div>
+        <div data-admin-page-header="" style={styles.pageHeader}>
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+            <div data-admin-page-icon="" style={styles.headerIcon}>
+              {isNotesMode ? (
+                <MdUndo size={28} color="#fff" />
+              ) : (
+                <MdReceipt size={28} color="#fff" />
+              )}
+            </div>
+            <div>
+              <h2 style={styles.pageTitle}>
+                {isNotesMode ? `${noteLabel}s` : isBillsMode ? "Bills" : "Invoices"}
+              </h2>
+              <p style={styles.pageSubtitle}>
+                {selectedCompany
+                  ? isNotesMode
                     ? `${noteDocType === 10 ? "Returns / reversals of submitted invoices" : "Upward adjustments against submitted invoices"} — ${totalCount} note${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
                     : isBillsMode
-                    ? `${totalCount} bill${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
-                    : `Classify items and submit to FBR — ${totalCount} record${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`)
-                : "Select a company"}
-            </p>
+                      ? `${totalCount} bill${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
+                      : `Classify items and submit to FBR — ${totalCount} record${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
+                  : "Select a company"}
+              </p>
+            </div>
+            <DocumentLinesHeaderLink />
           </div>
-          <DocumentLinesHeaderLink />
-        </div>
-        {/* Creation buttons live on the Bills tab only — Invoices tab is
+          {/* Creation buttons live on the Bills tab only — Invoices tab is
             for FBR classification & submission of existing records. */}
-        {isBillsMode && companies.length > 0 && (canCreate || canCreateStandalone) && (
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-            {canCreate && (
-              <button style={styles.addBtn} onClick={() => setShowForm(true)}>
-                <MdAdd size={18} /> New Bill
-              </button>
-            )}
-            {canCreateStandalone && !requireSO && (
-              <button
-                style={styles.addBtnSecondary}
-                onClick={() => setShowStandaloneForm(true)}
-                title="Create a bill directly without linking a delivery challan (FBR-only flow)"
-              >
-                <MdAdd size={18} /> New Bill (No Challan)
-              </button>
-            )}
-          </div>
-        )}
-        {/* Note tabs: notes are generated from an existing submitted
+          {isBillsMode && companies.length > 0 && (canCreate || canCreateStandalone) && (
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              {canCreate && (
+                <button style={styles.addBtn} onClick={() => setShowForm(true)}>
+                  <MdAdd size={18} /> New Bill
+                </button>
+              )}
+              {canCreateStandalone && !requireSO && (
+                <button
+                  style={styles.addBtnSecondary}
+                  onClick={() => setShowStandaloneForm(true)}
+                  title="Create a bill directly without linking a delivery challan (FBR-only flow)"
+                >
+                  <MdAdd size={18} /> New Bill (No Challan)
+                </button>
+              )}
+            </div>
+          )}
+          {/* Note tabs: notes are generated from an existing submitted
             invoice — the "New" button opens the note screen in this
             tab's mode. */}
-        {isNotesMode && companies.length > 0 && canReverse && (
-          <button
-            style={styles.addBtn}
-            onClick={() => navigate(`/credit-debit-notes?type=${noteDocType === 10 ? "credit" : "debit"}`)}
-            title={noteDocType === 10
-              ? "Reverse a submitted invoice — fully or line-by-line — by generating a Credit Note"
-              : "Record an upward adjustment (undercharge / rate change / extra goods) against a submitted invoice"}
-          >
-            <MdAdd size={18} /> New {noteLabel}
-          </button>
-        )}
-      </div>
-
-      {loadingCompanies ? (
-        <div style={styles.loadingContainer}><div style={styles.spinner} /></div>
-      ) : companies.length > 0 ? (
-        <>
-          {companies.length > 1 && (<div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.75rem", padding: "0.85rem 1rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 12, background: "#fff" }}>
-            <label htmlFor="invoice-company" style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 600, color: colors.textSecondary }}><MdBusiness aria-hidden="true" size={20} color={colors.blue} /> Company</label>
-            <select
-              id="invoice-company"
-              style={{ ...dropdownStyles.base, flex: "1 1 220px", minWidth: 0, maxWidth: 420, minHeight: 44 }}
-              value={selectedCompany?.id || ""}
-              onChange={(e) => setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))}
+          {isNotesMode && companies.length > 0 && canReverse && (
+            <button
+              style={styles.addBtn}
+              onClick={() =>
+                navigate(`/credit-debit-notes?type=${noteDocType === 10 ? "credit" : "debit"}`)
+              }
+              title={
+                noteDocType === 10
+                  ? "Reverse a submitted invoice — fully or line-by-line — by generating a Credit Note"
+                  : "Record an upward adjustment (undercharge / rate change / extra goods) against a submitted invoice"
+              }
             >
-              {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
-            </select>
-            {/* Division scope — next to Company. Drives the list filter + the
-                print-template scope. Self-hides for companies with no divisions. */}
-            {selectedCompany && (
-              <DivisionSelect
-                companyId={selectedCompany?.id}
-                value={divisionFilter}
-                onChange={(v) => { setDivisionFilter(v); setPage(1); }}
-                mode="filter"
-                style={dropdownStyles.base}
-              />
-            )}
-          </div>)}
+              <MdAdd size={18} /> New {noteLabel}
+            </button>
+          )}
+        </div>
 
-          {/* FBR Bulk Actions — bar shows if caller has either FBR perm.
+        {loadingCompanies ? (
+          <div style={styles.loadingContainer}>
+            <div style={styles.spinner} />
+          </div>
+        ) : companies.length > 0 ? (
+          <>
+            {companies.length > 1 && (
+              <div
+                style={{
+                  marginBottom: "1rem",
+                  display: "flex",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: "0.75rem",
+                  padding: "0.85rem 1rem",
+                  border: `1px solid ${colors.cardBorder}`,
+                  borderRadius: 12,
+                  background: "#fff",
+                }}
+              >
+                <label
+                  htmlFor="invoice-company"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    fontWeight: 600,
+                    color: colors.textSecondary,
+                  }}
+                >
+                  <MdBusiness aria-hidden="true" size={20} color={colors.blue} /> Company
+                </label>
+                <select
+                  id="invoice-company"
+                  style={{
+                    ...dropdownStyles.base,
+                    flex: "1 1 220px",
+                    minWidth: 0,
+                    maxWidth: 420,
+                    minHeight: 44,
+                  }}
+                  value={selectedCompany?.id || ""}
+                  onChange={(e) =>
+                    setSelectedCompany(
+                      companies.find((c) => parseInt(c.id) === parseInt(e.target.value)),
+                    )
+                  }
+                >
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.brandName || c.name}
+                    </option>
+                  ))}
+                </select>
+                {/* Division scope — next to Company. Drives the list filter + the
+                print-template scope. Self-hides for companies with no divisions. */}
+                {selectedCompany && (
+                  <DivisionSelect
+                    companyId={selectedCompany?.id}
+                    value={divisionFilter}
+                    onChange={(v) => {
+                      setDivisionFilter(v);
+                      setPage(1);
+                    }}
+                    mode="filter"
+                    style={dropdownStyles.base}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* FBR Bulk Actions — bar shows if caller has either FBR perm.
               Validate All is gated on canFbrValidate; Submit All on
               canFbrSubmit. Asymmetric grants render a partial bar.
               Bills tab hides the bar entirely — bulk FBR ops live on
               the Invoices tab. */}
-          {!isBillsMode && canFbrAny && selectedCompany?.hasFbrToken && (unsubmittedInvoices.length > 0 || incompleteCount > 0) && (
-            <div style={styles.fbrBulkBar}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                <MdCloudUpload size={18} color="#0d47a1" />
-                <span style={{ fontSize: "0.85rem", fontWeight: 600, color: colors.textPrimary }}>
-                  FBR: {unsubmittedInvoices.length} ready to submit
-                  {validatedCount > 0 ? `, ${validatedCount} validated` : ""}
-                </span>
-                {incompleteCount > 0 && (
-                  <span style={{ fontSize: "0.78rem", padding: "0.15rem 0.5rem", borderRadius: 12, backgroundColor: "#fff8e1", color: "#e65100", border: "1px solid #ffcc80", fontWeight: 700 }}>
-                    {incompleteCount} setup incomplete
-                  </span>
-                )}
-              </div>
-              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                {/* Preview All — read-only inspector for the whole bulk
+            {!isBillsMode &&
+              canFbrAny &&
+              selectedCompany?.hasFbrToken &&
+              (unsubmittedInvoices.length > 0 || incompleteCount > 0) && (
+                <div style={styles.fbrBulkBar}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <MdCloudUpload size={18} color="#0d47a1" />
+                    <span
+                      style={{ fontSize: "0.85rem", fontWeight: 600, color: colors.textPrimary }}
+                    >
+                      FBR: {unsubmittedInvoices.length} ready to submit
+                      {validatedCount > 0 ? `, ${validatedCount} validated` : ""}
+                    </span>
+                    {incompleteCount > 0 && (
+                      <span
+                        style={{
+                          fontSize: "0.78rem",
+                          padding: "0.15rem 0.5rem",
+                          borderRadius: 12,
+                          backgroundColor: "#fff8e1",
+                          color: "#e65100",
+                          border: "1px solid #ffcc80",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {incompleteCount} setup incomplete
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                    {/* Preview All — read-only inspector for the whole bulk
                     queue. Gated on the same permission as the per-bill
                     preview dialog so we don't unintentionally expose
                     payload data to roles that lacked it before. Hidden
                     on tabs without ready bills. 2026-05-13. */}
-                {canFbrPreview && unsubmittedInvoices.length > 0 && (
-                  <button
-                    style={{ ...styles.fbrBulkBtn, ...styles.fbrBulkPreviewBtn }}
-                    onClick={() => setShowBulkFbrPreview(true)}
-                    title="Preview the FBR payload for every bill that's ready to validate — collapsible rows, no network call to FBR."
-                  >
-                    <MdViewList size={15} />
-                    Preview All
-                  </button>
-                )}
-                {canFbrValidate && (
-                  <button
-                    style={{ ...styles.fbrBulkBtn, ...styles.fbrBulkValidateBtn }}
-                    disabled={bulkFbrLoading}
-                    onClick={handleBulkValidateAll}
-                  >
-                    {bulkFbrLoading ? <span className="btn-spinner" /> : <MdCheckCircle size={15} />}
-                    Validate All
-                  </button>
-                )}
-                {canFbrSubmit && (
-                  <button
-                    style={{
-                      ...styles.fbrBulkBtn, ...styles.fbrBulkSubmitBtn,
-                      opacity: validatedCount === 0 ? 0.4 : 1,
-                      cursor: validatedCount === 0 ? "not-allowed" : "pointer",
-                    }}
-                    disabled={bulkFbrLoading || validatedCount === 0}
-                    onClick={handleBulkSubmitValidated}
-                  >
-                    {bulkFbrLoading ? <span className="btn-spinner" /> : <MdCloudUpload size={15} />}
-                    Submit {validatedCount > 0 ? `${validatedCount} ` : ""}to FBR
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Filters */}
-          {selectedCompany && (
-            <div className="filters-row">
-              <div className="filter-search-wrap">
-                <MdSearch size={15} className="filter-search-icon" />
-                <input
-                  type="text"
-                  placeholder="Search Bill#, Challan#, PO#, Client, Item..."
-                  className="filter-search-input"
-                  value={search}
-                  onChange={handleFilterChange(setSearch)}
-                />
-              </div>
-              {canViewClients && (
-                <div style={{ minWidth: 220, maxWidth: 340 }}>
-                  <SearchableSelect
-                    items={clients}
-                    value={clientFilter}
-                    onChange={(id) => handleFilterChange(setClientFilter)({ target: { value: id ? String(id) : "" } })}
-                    placeholder="All Clients"
-                  />
-                </div>
-              )}
-              <div className="filter-date-group">
-                <input type="date" className="filter-date-input" value={dateFrom} onChange={handleFilterChange(setDateFrom)} title="From date" />
-                <span className="filter-date-sep">–</span>
-                <input type="date" className="filter-date-input" value={dateTo} onChange={handleFilterChange(setDateTo)} title="To date" />
-              </div>
-              {hasFilters && (
-                <button className="filter-clear-btn" onClick={resetFilters}>Clear</button>
-              )}
-              <PrintTemplateSelect picker={tplPicker} />
-              {canBulkPrint && (
-                <button
-                  type="button"
-                  className="filter-clear-btn"
-                  style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
-                  onClick={() => setBulkPrintOpen(true)}
-                  title={`Download every ${printTemplateType === "TaxInvoice" ? "Sales Tax Invoice" : "Bill"} matching these filters`}
-                >
-                  <MdDownload size={14} /> Bulk PDF
-                </button>
-              )}
-              {isBigScreen && (
-                <div style={{ marginLeft: "auto" }}>
-                  <ViewModeToggle
-                    mode={viewMode}
-                    onChange={setViewMode}
-                    ariaLabel={isBillsMode ? "Bills view mode" : "Invoices view mode"}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-        </>
-      ) : (
-        <div style={styles.emptyState}><p style={{ color: colors.textSecondary }}>No companies available.</p></div>
-      )}
-
-      {loadingInvoices ? (
-        <div style={styles.loadingContainer}><div style={styles.spinner} /></div>
-      ) : invoices.length === 0 && selectedCompany ? (
-        <div style={styles.emptyState}>
-          <MdReceipt size={40} color={colors.cardBorder} />
-          <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>
-            {hasFilters ? "No invoices match the current filters." : "No invoices found. Create one from pending challans."}
-          </p>
-        </div>
-      ) : (
-        <>
-          {viewMode === "table" ? (
-            <InvoiceTable
-              invoices={invoices}
-              isBillsMode={isBillsMode}
-              isReturnsMode={isNotesMode}
-              noteDocType={noteDocType}
-              perms={{
-                canPrint,
-                canFbrPreview,
-                canFbrAny,
-                canFbrValidate,
-                canFbrSubmit,
-                canOpenEdit: canEditInThisMode,
-                canFbrExclude,
-                canDelete,
-                canVoid,
-                canLinkChallan,
-                canRecordReceipt,
-                canViewReceipts,
-                canReverse,
-                canCopy: canCopyBill,
-                // Block Print / PDF when no template resolves for this scope —
-                // mirrors the card view so the table can't silently no-op.
-                noTemplate: tplPicker.noTemplate,
-                noTemplateReason: tplPicker.noTemplateReason,
-              }}
-              hasExcelBill={hasExcelBill}
-              hasExcelTax={hasExcelTax}
-              selectedCompanyHasFbrToken={!!selectedCompany?.hasFbrToken}
-              fbrEnabled={fbrEnabled}
-              fbrValidated={fbrValidated}
-              fbrLoading={fbrLoading}
-              exportingId={exportingId}
-              onLinkChallan={(inv) => setLinkingChallanFor(inv)}
-              onView={(inv) => setViewingId(inv.id)}
-              onRecordReceipt={(inv) => setReceiptPreset({ contactId: inv.clientId, documentId: inv.id, divisionId: inv.divisionId })}
-              onShowPayments={(inv) => setPaymentHistoryDoc(inv)}
-              onPrintBill={handlePrintBill}
-              onPrintTax={handlePrintTax}
-              onExportBillPdf={handleExportBillPdf}
-              onExportBillExcel={handleExportBillExcel}
-              onExportTaxPdf={handleExportTaxPdf}
-              onExportTaxExcel={handleExportTaxExcel}
-              onFbrPreview={(inv) => setFbrPreviewId(inv.id)}
-              onFbrValidate={handleFbrValidate}
-              onFbrSubmit={handleFbrSubmit}
-              onEdit={(inv) => setEditingId(inv.id)}
-              onCopy={(inv) => copy.openCopy(inv.id, `Bill #${inv.invoiceNumber}`)}
-              onToggleFbrExcluded={handleToggleFbrExcluded}
-              onDelete={handleDeleteInvoice}
-              onVoid={handleVoidInvoice}
-              onReverse={handleReverseInvoice}
-              onCorrect={setCorrectTarget}
-              attachCounts={attachCounts}
-              onAttach={(inv) => setAttachTarget(inv)}
-            />
-          ) : (
-          <div className="card-grid">
-            {invoices.map((inv) => (
-              <div
-                key={inv.id}
-                style={cardStyles.card}
-                onMouseEnter={(e) => Object.assign(e.currentTarget.style, cardHover)}
-                onMouseLeave={(e) => Object.assign(e.currentTarget.style, { transform: "none", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" })}
-              >
-                <div style={cardStyles.cardContent}>
-                  <div>
-                    <h5 style={cardStyles.title}>
-                      <MdReceipt style={{ color: colors.blue, marginRight: 6 }} />
-                      {isNotesMode ? noteLabel : isBillsMode ? "Bill" : "Invoice"} #{inv.invoiceNumber}
-                      {" "}<AttachmentBadge count={attachCounts[inv.id]} onClick={() => setAttachTarget(inv)} />
-                    </h5>
-                    <p style={cardStyles.text}><strong>Client:</strong> {inv.clientName}</p>
-                    {inv.divisionName && (
-                      <p style={cardStyles.text}>
-                        <strong>Division:</strong>{" "}
-                        <span style={{ display: "inline-block", fontSize: "0.72rem", fontWeight: 700, color: "#4527a0", background: "#ede7f6", padding: "0.1rem 0.45rem", borderRadius: 8, verticalAlign: "middle" }}>{inv.divisionName}</span>
-                      </p>
+                    {canFbrPreview && unsubmittedInvoices.length > 0 && (
+                      <button
+                        style={{ ...styles.fbrBulkBtn, ...styles.fbrBulkPreviewBtn }}
+                        onClick={() => setShowBulkFbrPreview(true)}
+                        title="Preview the FBR payload for every bill that's ready to validate — collapsible rows, no network call to FBR."
+                      >
+                        <MdViewList size={15} />
+                        Preview All
+                      </button>
                     )}
-                    {/* PO Number / Indent No / Site come from the linked
+                    {canFbrValidate && (
+                      <button
+                        style={{ ...styles.fbrBulkBtn, ...styles.fbrBulkValidateBtn }}
+                        disabled={bulkFbrLoading}
+                        onClick={handleBulkValidateAll}
+                      >
+                        {bulkFbrLoading ? (
+                          <span className="btn-spinner" />
+                        ) : (
+                          <MdCheckCircle size={15} />
+                        )}
+                        Validate All
+                      </button>
+                    )}
+                    {canFbrSubmit && (
+                      <button
+                        style={{
+                          ...styles.fbrBulkBtn,
+                          ...styles.fbrBulkSubmitBtn,
+                          opacity: validatedCount === 0 ? 0.4 : 1,
+                          cursor: validatedCount === 0 ? "not-allowed" : "pointer",
+                        }}
+                        disabled={bulkFbrLoading || validatedCount === 0}
+                        onClick={handleBulkSubmitValidated}
+                      >
+                        {bulkFbrLoading ? (
+                          <span className="btn-spinner" />
+                        ) : (
+                          <MdCloudUpload size={15} />
+                        )}
+                        Submit {validatedCount > 0 ? `${validatedCount} ` : ""}to FBR
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+            {/* Filters */}
+            {selectedCompany && (
+              <div className="filters-row">
+                <div className="filter-search-wrap">
+                  <MdSearch size={15} className="filter-search-icon" />
+                  <input
+                    type="text"
+                    placeholder="Search Bill#, Challan#, PO#, Client, Item..."
+                    className="filter-search-input"
+                    value={search}
+                    onChange={handleFilterChange(setSearch)}
+                  />
+                </div>
+                {canViewClients && (
+                  <div style={{ minWidth: 220, maxWidth: 340 }}>
+                    <SearchableSelect
+                      items={clients}
+                      value={clientFilter}
+                      onChange={(id) =>
+                        handleFilterChange(setClientFilter)({
+                          target: { value: id ? String(id) : "" },
+                        })
+                      }
+                      placeholder="All Clients"
+                    />
+                  </div>
+                )}
+                <div className="filter-date-group">
+                  <input
+                    type="date"
+                    className="filter-date-input"
+                    value={dateFrom}
+                    onChange={handleFilterChange(setDateFrom)}
+                    title="From date"
+                  />
+                  <span className="filter-date-sep">–</span>
+                  <input
+                    type="date"
+                    className="filter-date-input"
+                    value={dateTo}
+                    onChange={handleFilterChange(setDateTo)}
+                    title="To date"
+                  />
+                </div>
+                {hasFilters && (
+                  <button className="filter-clear-btn" onClick={resetFilters}>
+                    Clear
+                  </button>
+                )}
+                <PrintTemplateSelect picker={tplPicker} />
+                {canBulkPrint && (
+                  <button
+                    type="button"
+                    className="filter-clear-btn"
+                    style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
+                    onClick={() => setBulkPrintOpen(true)}
+                    title={`Download every ${printTemplateType === "TaxInvoice" ? "Sales Tax Invoice" : "Bill"} matching these filters`}
+                  >
+                    <MdDownload size={14} /> Bulk PDF
+                  </button>
+                )}
+                {isBigScreen && (
+                  <div style={{ marginLeft: "auto" }}>
+                    <ViewModeToggle
+                      mode={viewMode}
+                      onChange={setViewMode}
+                      ariaLabel={isBillsMode ? "Bills view mode" : "Invoices view mode"}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        ) : (
+          <div style={styles.emptyState}>
+            <p style={{ color: colors.textSecondary }}>No companies available.</p>
+          </div>
+        )}
+
+        {loadingInvoices ? (
+          <div style={styles.loadingContainer}>
+            <div style={styles.spinner} />
+          </div>
+        ) : invoices.length === 0 && selectedCompany ? (
+          <div style={styles.emptyState}>
+            <MdReceipt size={40} color={colors.cardBorder} />
+            <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>
+              {hasFilters
+                ? "No invoices match the current filters."
+                : "No invoices found. Create one from pending challans."}
+            </p>
+          </div>
+        ) : (
+          <>
+            {viewMode === "table" ? (
+              <InvoiceTable
+                invoices={invoices}
+                isBillsMode={isBillsMode}
+                isReturnsMode={isNotesMode}
+                noteDocType={noteDocType}
+                perms={{
+                  canPrint,
+                  canFbrPreview,
+                  canFbrAny,
+                  canFbrValidate,
+                  canFbrSubmit,
+                  canOpenEdit: canEditInThisMode,
+                  canFbrExclude,
+                  canDelete,
+                  canVoid,
+                  canLinkChallan,
+                  canRecordReceipt,
+                  canViewReceipts,
+                  canReverse,
+                  canCopy: canCopyBill,
+                  // Block Print / PDF when no template resolves for this scope —
+                  // mirrors the card view so the table can't silently no-op.
+                  noTemplate: tplPicker.noTemplate,
+                  noTemplateReason: tplPicker.noTemplateReason,
+                }}
+                hasExcelBill={hasExcelBill}
+                hasExcelTax={hasExcelTax}
+                selectedCompanyHasFbrToken={!!selectedCompany?.hasFbrToken}
+                fbrEnabled={fbrEnabled}
+                fbrValidated={fbrValidated}
+                fbrLoading={fbrLoading}
+                exportingId={exportingId}
+                onLinkChallan={(inv) => setLinkingChallanFor(inv)}
+                onView={(inv) => setViewingId(inv.id)}
+                onRecordReceipt={(inv) =>
+                  setReceiptPreset({
+                    contactId: inv.clientId,
+                    documentId: inv.id,
+                    divisionId: inv.divisionId,
+                  })
+                }
+                onShowPayments={(inv) => setPaymentHistoryDoc(inv)}
+                onPrintBill={handlePrintBill}
+                onPrintTax={handlePrintTax}
+                onExportBillPdf={handleExportBillPdf}
+                onExportBillExcel={handleExportBillExcel}
+                onExportTaxPdf={handleExportTaxPdf}
+                onExportTaxExcel={handleExportTaxExcel}
+                onFbrPreview={(inv) => setFbrPreviewId(inv.id)}
+                onFbrValidate={handleFbrValidate}
+                onFbrSubmit={handleFbrSubmit}
+                onEdit={(inv) => setEditingId(inv.id)}
+                onCopy={(inv) => copy.openCopy(inv.id, `Bill #${inv.invoiceNumber}`)}
+                onToggleFbrExcluded={handleToggleFbrExcluded}
+                onDelete={handleDeleteInvoice}
+                onVoid={handleVoidInvoice}
+                onReverse={handleReverseInvoice}
+                onCorrect={setCorrectTarget}
+                attachCounts={attachCounts}
+                onAttach={(inv) => setAttachTarget(inv)}
+              />
+            ) : (
+              <div className="card-grid">
+                {invoices.map((inv) => (
+                  <div
+                    key={inv.id}
+                    style={cardStyles.card}
+                    onMouseEnter={(e) => Object.assign(e.currentTarget.style, cardHover)}
+                    onMouseLeave={(e) =>
+                      Object.assign(e.currentTarget.style, {
+                        transform: "none",
+                        boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+                      })
+                    }
+                  >
+                    <div style={cardStyles.cardContent}>
+                      <div>
+                        <h5 style={cardStyles.title}>
+                          <MdReceipt style={{ color: colors.blue, marginRight: 6 }} />
+                          {isNotesMode ? noteLabel : isBillsMode ? "Bill" : "Invoice"} #
+                          {inv.invoiceNumber}{" "}
+                          <AttachmentBadge
+                            count={attachCounts[inv.id]}
+                            onClick={() => setAttachTarget(inv)}
+                          />
+                        </h5>
+                        <p style={cardStyles.text}>
+                          <strong>Client:</strong> {inv.clientName}
+                        </p>
+                        {inv.divisionName && (
+                          <p style={cardStyles.text}>
+                            <strong>Division:</strong>{" "}
+                            <span
+                              style={{
+                                display: "inline-block",
+                                fontSize: "0.72rem",
+                                fontWeight: 700,
+                                color: "#4527a0",
+                                background: "#ede7f6",
+                                padding: "0.1rem 0.45rem",
+                                borderRadius: 8,
+                                verticalAlign: "middle",
+                              }}
+                            >
+                              {inv.divisionName}
+                            </span>
+                          </p>
+                        )}
+                        {/* PO Number / Indent No / Site come from the linked
                         DeliveryChallans (aggregated server-side). All
                         three are optional — render only when present so
                         sparse bills don't get noisy. */}
-                    {inv.poNumber && <p style={cardStyles.text}><strong>PO:</strong> {inv.poNumber}</p>}
-                    {inv.indentNo && <p style={cardStyles.text}><strong>Indent:</strong> {inv.indentNo}</p>}
-                    {inv.site && <p style={cardStyles.text}><strong>Site:</strong> {inv.site}</p>}
-                    <p style={cardStyles.text}><strong>Date:</strong> {new Date(inv.date).toLocaleDateString()}</p>
-                    {isBillsMode && inv.freightCharges > 0 && (
-                      <p style={cardStyles.text}><strong>Freight / cartage:</strong> Rs. {inv.freightCharges.toLocaleString()}</p>
-                    )}
-                    <p style={cardStyles.text}><strong>{isBillsMode ? "Commercial Total:" : "Grand Total:"}</strong> Rs. {(isBillsMode
-                      ? (inv.commercialTotal ?? ((inv.grandTotal || 0) + (inv.freightCharges || 0)))
-                      : inv.grandTotal)?.toLocaleString()}</p>
-                    {/* Payment status + balance — clickable to see all receipts
-                        applied to this invoice and how much remains. */}
-                    {!inv.isCancelled && (
-                      <button
-                        type="button"
-                        onClick={canViewReceipts ? () => setPaymentHistoryDoc(inv) : undefined}
-                        title={canViewReceipts ? "View receipts & balance" : undefined}
-                        style={{ all: "unset", marginTop: 4, display: "inline-flex", alignItems: "center", gap: 6, cursor: canViewReceipts ? "pointer" : "default" }}
-                      >
-                        {paymentStatusBadge(inv)}
-                        {inv.balanceDue > 0 && (
-                          <span style={{ fontSize: "0.74rem", color: colors.textSecondary, fontWeight: 600 }}>
-                            Bal: Rs {inv.balanceDue?.toLocaleString()}
-                          </span>
+                        {inv.poNumber && (
+                          <p style={cardStyles.text}>
+                            <strong>PO:</strong> {inv.poNumber}
+                          </p>
                         )}
-                      </button>
-                    )}
-                    <p style={{ ...cardStyles.text, fontSize: "0.78rem", color: colors.textSecondary }}>
-                      {inv.challanNumbers?.length > 0
-                        ? `DC#${inv.challanNumbers.join(", #")}`
-                        : <em style={{ color: "#78909c" }}>Standalone · no delivery challan</em>}
-                      {" | "}{inv.items?.length} items
-                    </p>
-                    {/* FBR status row — shows current status OR 'Setup Incomplete' when fields are missing.
+                        {inv.indentNo && (
+                          <p style={cardStyles.text}>
+                            <strong>Indent:</strong> {inv.indentNo}
+                          </p>
+                        )}
+                        {inv.site && (
+                          <p style={cardStyles.text}>
+                            <strong>Site:</strong> {inv.site}
+                          </p>
+                        )}
+                        <p style={cardStyles.text}>
+                          <strong>Date:</strong> {new Date(inv.date).toLocaleDateString()}
+                        </p>
+                        {isBillsMode && inv.freightCharges > 0 && (
+                          <p style={cardStyles.text}>
+                            <strong>Freight / cartage:</strong> Rs.{" "}
+                            {inv.freightCharges.toLocaleString()}
+                          </p>
+                        )}
+                        <p style={cardStyles.text}>
+                          <strong>{isBillsMode ? "Commercial Total:" : "Grand Total:"}</strong> Rs.{" "}
+                          {(isBillsMode
+                            ? (inv.commercialTotal ??
+                              (inv.grandTotal || 0) + (inv.freightCharges || 0))
+                            : inv.grandTotal
+                          )?.toLocaleString()}
+                        </p>
+                        {/* Payment status + balance — clickable to see all receipts
+                        applied to this invoice and how much remains. */}
+                        {!inv.isCancelled && (
+                          <button
+                            type="button"
+                            onClick={canViewReceipts ? () => setPaymentHistoryDoc(inv) : undefined}
+                            title={canViewReceipts ? "View receipts & balance" : undefined}
+                            style={{
+                              all: "unset",
+                              marginTop: 4,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                              cursor: canViewReceipts ? "pointer" : "default",
+                            }}
+                          >
+                            {paymentStatusBadge(inv)}
+                            {inv.balanceDue > 0 && (
+                              <span
+                                style={{
+                                  fontSize: "0.74rem",
+                                  color: colors.textSecondary,
+                                  fontWeight: 600,
+                                }}
+                              >
+                                Bal: Rs {inv.balanceDue?.toLocaleString()}
+                              </span>
+                            )}
+                          </button>
+                        )}
+                        <p
+                          style={{
+                            ...cardStyles.text,
+                            fontSize: "0.78rem",
+                            color: colors.textSecondary,
+                          }}
+                        >
+                          {inv.challanNumbers?.length > 0 ? (
+                            `DC#${inv.challanNumbers.join(", #")}`
+                          ) : (
+                            <em style={{ color: "#78909c" }}>Standalone · no delivery challan</em>
+                          )}
+                          {" | "}
+                          {inv.items?.length} items
+                        </p>
+                        {/* FBR status row — shows current status OR 'Setup Incomplete' when fields are missing.
                         In Bills mode we keep only the binary "Submitted to FBR" / "Pending FBR submission"
                         identifier as a pill so the operator sees at a glance which rows are locked.
                         Workflow detail (Ready / Setup Incomplete / Excluded) lives on the Invoices tab. */}
-                    {/* 2026-05-08: Bills + Invoices modes now share the
+                        {/* 2026-05-08: Bills + Invoices modes now share the
                         same green pill for Submitted. The Invoices mode
                         previously rendered plain inline text so the
                         styling was inconsistent with the other status
                         pills (Ready / Validated / Failed / etc.). */}
-                    {inv.isCancelled && (
-                      <div
-                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.7rem", borderRadius: 8, background: "#ffebee", color: "#b71c1c", fontSize: "0.78rem", fontWeight: 700, border: "1px solid #ef9a9a" }}
-                        title={inv.cancelReason ? `Cancelled — ${inv.cancelReason}` : "This bill has been cancelled (voided). Its delivery challan(s) were reverted to Pending so they can be re-billed."}
-                      >
-                        <MdCancel size={14} color="#b71c1c" />
-                        <span>Cancelled{inv.cancelReason ? ` — ${inv.cancelReason}` : ""}</span>
-                      </div>
-                    )}
-                    {/* This document IS a credit/debit note — show what it adjusts. */}
-                    {(inv.documentType === 9 || inv.documentType === 10) && (
-                      <div
-                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.7rem", borderRadius: 8, background: "#ede7f6", color: "#5e35b1", fontSize: "0.78rem", fontWeight: 700, border: "1px solid #b39ddb" }}
-                        title={inv.originalInvoiceNumber ? `${inv.documentType === 10 ? "Credit" : "Debit"} Note against Bill #${inv.originalInvoiceNumber}${inv.originalInvoiceRefIRN ? ` (IRN ${inv.originalInvoiceRefIRN})` : ""}` : undefined}
-                      >
-                        <MdUndo size={14} color="#5e35b1" />
-                        <span>{inv.documentType === 10 ? "Credit Note" : "Debit Note"}{inv.originalInvoiceNumber ? ` ↩ against Bill #${inv.originalInvoiceNumber}` : ""}</span>
-                      </div>
-                    )}
-                    {/* This invoice HAS notes against it — clear indicators. */}
-                    {inv.documentType !== 9 && inv.documentType !== 10 && inv.reversedByCreditNoteNumber && (
-                      <div
-                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.7rem", borderRadius: 8, background: "#ede7f6", color: "#5e35b1", fontSize: "0.78rem", fontWeight: 700, border: "1px solid #b39ddb" }}
-                        title={`A Credit Note (#${inv.reversedByCreditNoteNumber}) has been created against this invoice. It reverses this sale.`}
-                      >
-                        <MdUndo size={14} color="#5e35b1" />
-                        <span>Reversed — Credit Note #{inv.reversedByCreditNoteNumber} created</span>
-                      </div>
-                    )}
-                    {inv.documentType !== 9 && inv.documentType !== 10 && inv.adjustedByDebitNoteNumber && (
-                      <div
-                        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.7rem", borderRadius: 8, background: "#e0f2f1", color: "#00695c", fontSize: "0.78rem", fontWeight: 700, border: "1px solid #80cbc4" }}
-                        title={`A Debit Note (#${inv.adjustedByDebitNoteNumber}) adjusts this invoice upward.`}
-                      >
-                        <MdUndo size={14} color="#00695c" />
-                        <span>Adjusted — Debit Note #{inv.adjustedByDebitNoteNumber}</span>
-                      </div>
-                    )}
-                    {!inv.isCancelled && inv.fbrStatus === "Submitted" && (
-                      <div style={styles.fbrPillSubmitted} title={inv.fbrIRN ? `IRN: ${inv.fbrIRN}` : "This bill has been submitted to FBR and is locked from edits."}>
-                        <MdCheckCircle size={14} color="#1b5e20" />
-                        <span>{isBillsMode ? "Submitted to FBR" : "FBR: Submitted"}</span>
-                        {inv.fbrIRN && <span style={styles.fbrPillIrn}>IRN {inv.fbrIRN}</span>}
-                      </div>
-                    )}
-                    {isBillsMode && fbrEnabled && !inv.isCancelled && inv.fbrStatus !== "Submitted" && (
-                      <div style={styles.fbrPillPending} title="This bill hasn't been submitted to FBR yet. Open the Invoices tab to validate and submit.">
-                        <MdHourglassEmpty size={14} color="#b26a00" />
-                        <span>Pending FBR submission</span>
-                      </div>
-                    )}
-                    {!isBillsMode && !inv.isCancelled && inv.fbrStatus === "Failed" && (
-                      <div style={styles.fbrPillFailed} title={inv.fbrErrorMessage || "FBR rejected this submission. Open View FBR for details."}>
-                        <MdError size={14} color="#b71c1c" />
-                        <span>FBR Failed</span>
-                      </div>
-                    )}
-                    {!isBillsMode && !inv.isCancelled && inv.fbrStatus === "Failed" && inv.fbrErrorMessage && (
-                      <p style={{ fontSize: "0.72rem", color: "#c62828", marginTop: "0.35rem", wordBreak: "break-word", lineHeight: 1.35 }}>
-                        {inv.fbrErrorMessage}
-                      </p>
-                    )}
-                    {!isBillsMode && fbrEnabled && !inv.isCancelled && inv.fbrStatus !== "Submitted" && !inv.fbrReady && (
-                      <div
-                        style={styles.fbrPillIncomplete}
-                        title={inv.fbrMissing?.length ? `Missing:\n• ${inv.fbrMissing.join("\n• ")}` : ""}
-                      >
-                        <MdError size={14} color="#b26a00" style={{ flexShrink: 0 }} />
-                        <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.3 }}>
-                          <span>FBR Setup Incomplete</span>
-                          {inv.fbrMissing?.length > 0 && (
-                            <span style={styles.fbrPillIncompleteHint}>
-                              {inv.fbrMissing.slice(0, 3).join(" · ")}
-                              {inv.fbrMissing.length > 3 && ` · +${inv.fbrMissing.length - 3} more`}
+                        {inv.isCancelled && (
+                          <div
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                              padding: "0.35rem 0.7rem",
+                              borderRadius: 8,
+                              background: "#ffebee",
+                              color: "#b71c1c",
+                              fontSize: "0.78rem",
+                              fontWeight: 700,
+                              border: "1px solid #ef9a9a",
+                            }}
+                            title={
+                              inv.cancelReason
+                                ? `Cancelled — ${inv.cancelReason}`
+                                : "This bill has been cancelled (voided). Its delivery challan(s) were reverted to Pending so they can be re-billed."
+                            }
+                          >
+                            <MdCancel size={14} color="#b71c1c" />
+                            <span>Cancelled{inv.cancelReason ? ` — ${inv.cancelReason}` : ""}</span>
+                          </div>
+                        )}
+                        {/* This document IS a credit/debit note — show what it adjusts. */}
+                        {(inv.documentType === 9 || inv.documentType === 10) && (
+                          <div
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                              padding: "0.35rem 0.7rem",
+                              borderRadius: 8,
+                              background: "#ede7f6",
+                              color: "#5e35b1",
+                              fontSize: "0.78rem",
+                              fontWeight: 700,
+                              border: "1px solid #b39ddb",
+                            }}
+                            title={
+                              inv.originalInvoiceNumber
+                                ? `${inv.documentType === 10 ? "Credit" : "Debit"} Note against Bill #${inv.originalInvoiceNumber}${inv.originalInvoiceRefIRN ? ` (IRN ${inv.originalInvoiceRefIRN})` : ""}`
+                                : undefined
+                            }
+                          >
+                            <MdUndo size={14} color="#5e35b1" />
+                            <span>
+                              {inv.documentType === 10 ? "Credit Note" : "Debit Note"}
+                              {inv.originalInvoiceNumber
+                                ? ` ↩ against Bill #${inv.originalInvoiceNumber}`
+                                : ""}
                             </span>
+                          </div>
+                        )}
+                        {/* This invoice HAS notes against it — clear indicators. */}
+                        {inv.documentType !== 9 &&
+                          inv.documentType !== 10 &&
+                          inv.reversedByCreditNoteNumber && (
+                            <div
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 6,
+                                padding: "0.35rem 0.7rem",
+                                borderRadius: 8,
+                                background: "#ede7f6",
+                                color: "#5e35b1",
+                                fontSize: "0.78rem",
+                                fontWeight: 700,
+                                border: "1px solid #b39ddb",
+                              }}
+                              title={`A Credit Note (#${inv.reversedByCreditNoteNumber}) has been created against this invoice. It reverses this sale.`}
+                            >
+                              <MdUndo size={14} color="#5e35b1" />
+                              <span>
+                                Reversed — Credit Note #{inv.reversedByCreditNoteNumber} created
+                              </span>
+                            </div>
                           )}
-                        </div>
-                      </div>
-                    )}
-                    {!isBillsMode && fbrEnabled && !inv.isCancelled && inv.fbrStatus !== "Submitted" && inv.fbrReady && !inv.isFbrExcluded && !isFutureDocDate(inv.date) && (
-                      <div style={styles.fbrPillReady} title="All FBR fields are set. Click Validate to dry-run, or Submit to issue the IRN.">
-                        <MdCheckCircle size={14} color="#0d47a1" />
-                        <span>Ready to Validate</span>
-                      </div>
-                    )}
-                    {/* Future-dated bill: creation is allowed, but FBR rule
+                        {inv.documentType !== 9 &&
+                          inv.documentType !== 10 &&
+                          inv.adjustedByDebitNoteNumber && (
+                            <div
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 6,
+                                padding: "0.35rem 0.7rem",
+                                borderRadius: 8,
+                                background: "#e0f2f1",
+                                color: "#00695c",
+                                fontSize: "0.78rem",
+                                fontWeight: 700,
+                                border: "1px solid #80cbc4",
+                              }}
+                              title={`A Debit Note (#${inv.adjustedByDebitNoteNumber}) adjusts this invoice upward.`}
+                            >
+                              <MdUndo size={14} color="#00695c" />
+                              <span>Adjusted — Debit Note #{inv.adjustedByDebitNoteNumber}</span>
+                            </div>
+                          )}
+                        {!inv.isCancelled && inv.fbrStatus === "Submitted" && (
+                          <div
+                            style={styles.fbrPillSubmitted}
+                            title={
+                              inv.fbrIRN
+                                ? `IRN: ${inv.fbrIRN}`
+                                : "This bill has been submitted to FBR and is locked from edits."
+                            }
+                          >
+                            <MdCheckCircle size={14} color="#1b5e20" />
+                            <span>{isBillsMode ? "Submitted to FBR" : "FBR: Submitted"}</span>
+                            {inv.fbrIRN && <span style={styles.fbrPillIrn}>IRN {inv.fbrIRN}</span>}
+                          </div>
+                        )}
+                        {isBillsMode &&
+                          fbrEnabled &&
+                          !inv.isCancelled &&
+                          inv.fbrStatus !== "Submitted" && (
+                            <div
+                              style={styles.fbrPillPending}
+                              title="This bill hasn't been submitted to FBR yet. Open the Invoices tab to validate and submit."
+                            >
+                              <MdHourglassEmpty size={14} color="#b26a00" />
+                              <span>Pending FBR submission</span>
+                            </div>
+                          )}
+                        {!isBillsMode && !inv.isCancelled && inv.fbrStatus === "Failed" && (
+                          <div
+                            style={styles.fbrPillFailed}
+                            title={
+                              inv.fbrErrorMessage ||
+                              "FBR rejected this submission. Open View FBR for details."
+                            }
+                          >
+                            <MdError size={14} color="#b71c1c" />
+                            <span>FBR Failed</span>
+                          </div>
+                        )}
+                        {!isBillsMode &&
+                          !inv.isCancelled &&
+                          inv.fbrStatus === "Failed" &&
+                          inv.fbrErrorMessage && (
+                            <p
+                              style={{
+                                fontSize: "0.72rem",
+                                color: "#c62828",
+                                marginTop: "0.35rem",
+                                wordBreak: "break-word",
+                                lineHeight: 1.35,
+                              }}
+                            >
+                              {inv.fbrErrorMessage}
+                            </p>
+                          )}
+                        {!isBillsMode &&
+                          fbrEnabled &&
+                          !inv.isCancelled &&
+                          inv.fbrStatus !== "Submitted" &&
+                          !inv.fbrReady && (
+                            <div
+                              style={styles.fbrPillIncomplete}
+                              title={
+                                inv.fbrMissing?.length
+                                  ? `Missing:\n• ${inv.fbrMissing.join("\n• ")}`
+                                  : ""
+                              }
+                            >
+                              <MdError size={14} color="#b26a00" style={{ flexShrink: 0 }} />
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  lineHeight: 1.3,
+                                }}
+                              >
+                                <span>FBR Setup Incomplete</span>
+                                {inv.fbrMissing?.length > 0 && (
+                                  <span style={styles.fbrPillIncompleteHint}>
+                                    {inv.fbrMissing.slice(0, 3).join(" · ")}
+                                    {inv.fbrMissing.length > 3 &&
+                                      ` · +${inv.fbrMissing.length - 3} more`}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        {!isBillsMode &&
+                          fbrEnabled &&
+                          !inv.isCancelled &&
+                          inv.fbrStatus !== "Submitted" &&
+                          inv.fbrReady &&
+                          !inv.isFbrExcluded &&
+                          !isFutureDocDate(inv.date) && (
+                            <div
+                              style={styles.fbrPillReady}
+                              title="All FBR fields are set. Click Validate to dry-run, or Submit to issue the IRN."
+                            >
+                              <MdCheckCircle size={14} color="#0d47a1" />
+                              <span>Ready to Validate</span>
+                            </div>
+                          )}
+                        {/* Future-dated bill: creation is allowed, but FBR rule
                         [0043] rejects a future invoice date — so Validate /
                         Submit are hidden until the bill's own date arrives.
                         The pill says so, otherwise the missing buttons read
                         as a bug. (2026-08-28) */}
-                    {!isBillsMode && fbrEnabled && !inv.isCancelled && inv.fbrStatus !== "Submitted" && isFutureDocDate(inv.date) && (
-                      <div
-                        style={styles.fbrPillIncomplete}
-                        title="FBR rejects a future-dated invoice [0043]. Validate and Submit unlock on this bill's own date."
-                      >
-                        <MdHourglassEmpty size={14} color="#b26a00" style={{ flexShrink: 0 }} />
-                        <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.3 }}>
-                          <span>Future-dated</span>
-                          <span style={styles.fbrPillIncompleteHint}>
-                            FBR opens {new Date(inv.date).toLocaleDateString()}
-                          </span>
-                        </div>
+                        {!isBillsMode &&
+                          fbrEnabled &&
+                          !inv.isCancelled &&
+                          inv.fbrStatus !== "Submitted" &&
+                          isFutureDocDate(inv.date) && (
+                            <div
+                              style={styles.fbrPillIncomplete}
+                              title="FBR rejects a future-dated invoice [0043]. Validate and Submit unlock on this bill's own date."
+                            >
+                              <MdHourglassEmpty
+                                size={14}
+                                color="#b26a00"
+                                style={{ flexShrink: 0 }}
+                              />
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  lineHeight: 1.3,
+                                }}
+                              >
+                                <span>Future-dated</span>
+                                <span style={styles.fbrPillIncompleteHint}>
+                                  FBR opens {new Date(inv.date).toLocaleDateString()}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        {!isBillsMode &&
+                          fbrEnabled &&
+                          !inv.isCancelled &&
+                          inv.fbrStatus !== "Submitted" &&
+                          inv.isFbrExcluded && (
+                            <div
+                              style={styles.fbrPillExcluded}
+                              title="This bill is excluded from Validate All / Submit All bulk actions. Per-bill Validate / Submit still work."
+                            >
+                              <MdBlock size={14} color="#455a64" />
+                              <span>Excluded from FBR bulk</span>
+                            </div>
+                          )}
                       </div>
-                    )}
-                    {!isBillsMode && fbrEnabled && !inv.isCancelled && inv.fbrStatus !== "Submitted" && inv.isFbrExcluded && (
-                      <div
-                        style={styles.fbrPillExcluded}
-                        title="This bill is excluded from Validate All / Submit All bulk actions. Per-bill Validate / Submit still work."
-                      >
-                        <MdBlock size={14} color="#455a64" />
-                        <span>Excluded from FBR bulk</span>
-                      </div>
-                    )}
-                  </div>
-                  <CardActions style={cardStyles.buttonGroup}>
-                    {has("purchasebills.manage.create") && !isNotesMode && !inv.isCancelled && inv.documentType !== 9 && inv.documentType !== 10 && (
-                      <button style={styles.printBtn} onClick={() => navigate(`/purchase-bills?for=bill:${inv.id}`)} title="Buy for this bill">
-                        <MdShoppingCart size={14} /> Buy
-                      </button>
-                    )}
-                    {/* Receipt shortcut — record money in against this invoice,
+                      <CardActions style={cardStyles.buttonGroup}>
+                        {has("purchasebills.manage.create") &&
+                          !isNotesMode &&
+                          !inv.isCancelled &&
+                          inv.documentType !== 9 &&
+                          inv.documentType !== 10 && (
+                            <button
+                              style={styles.printBtn}
+                              onClick={() => navigate(`/purchase-bills?for=bill:${inv.id}`)}
+                              title="Buy for this bill"
+                            >
+                              <MdShoppingCart size={14} /> Buy
+                            </button>
+                          )}
+                        {/* Receipt shortcut — record money in against this invoice,
                         pre-filling the client + this document in the form. */}
-                    {canRecordReceipt && !inv.isCancelled && (
-                      <button
-                        style={{ ...styles.printBtn, backgroundColor: "#e8f5e9", color: "#1b5e20", border: "1px solid #a5d6a7" }}
-                        onClick={() => setReceiptPreset({ contactId: inv.clientId, documentId: inv.id, divisionId: inv.divisionId })}
-                        title="Record a receipt (payment received) against this invoice"
-                      >
-                        <MdPayments size={14} /> Receipt
-                      </button>
-                    )}
-                    {/* Bills card: View, Print Bill, Bill PDF, Bill XLS, Edit, Delete.
+                        {canRecordReceipt && !inv.isCancelled && (
+                          <button
+                            style={{
+                              ...styles.printBtn,
+                              backgroundColor: "#e8f5e9",
+                              color: "#1b5e20",
+                              border: "1px solid #a5d6a7",
+                            }}
+                            onClick={() =>
+                              setReceiptPreset({
+                                contactId: inv.clientId,
+                                documentId: inv.id,
+                                divisionId: inv.divisionId,
+                              })
+                            }
+                            title="Record a receipt (payment received) against this invoice"
+                          >
+                            <MdPayments size={14} /> Receipt
+                          </button>
+                        )}
+                        {/* Bills card: View, Print Bill, Bill PDF, Bill XLS, Edit, Delete.
                         Invoices card: Tax Print, Tax PDF, Tax XLS, View FBR, Validate, Submit. */}
-                    {!isNotesMode && (
-                      <button data-primary={(isBillsMode) || undefined}
-                        style={{ ...styles.printBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" }}
-                        onClick={() => setViewingId(inv.id)}
-                        title={isBillsMode ? "View bill details (read-only)" : "View invoice details (read-only)"}
-                      >
-                        <MdVisibility size={14} /> View
-                      </button>
-                    )}
-                    {/* Cross-tab locator — Bills tab only. Navigates to
+                        {!isNotesMode && (
+                          <button
+                            data-primary={isBillsMode || undefined}
+                            style={{
+                              ...styles.printBtn,
+                              backgroundColor: "#e3f2fd",
+                              color: "#0d47a1",
+                              border: "1px solid #90caf9",
+                            }}
+                            onClick={() => setViewingId(inv.id)}
+                            title={
+                              isBillsMode
+                                ? "View bill details (read-only)"
+                                : "View invoice details (read-only)"
+                            }
+                          >
+                            <MdVisibility size={14} /> View
+                          </button>
+                        )}
+                        {/* Cross-tab locator — Bills tab only. Navigates to
                         the Invoices tab with ?search=<billNumber> seeded;
                         the Invoices page reads the param on mount so the
                         list filters down to a single card. Operator can
                         clear the search box to see the full Invoices list
                         again. Reuses the existing search pipeline so no
                         new filter logic is needed. */}
-                    {isBillsMode && (
-                      <button
-                        style={{ ...styles.printBtn, backgroundColor: "#e0f2f1", color: "#00695c", border: "1px solid #80cbc4" }}
-                        onClick={() => navigate(`/invoices?search=${encodeURIComponent(inv.invoiceNumber)}`)}
-                        title="Find this bill on the Invoices tab so you can classify items and submit to FBR"
-                      >
-                        <MdOpenInNew size={14} /> Open in Invoices
-                      </button>
-                    )}
-                    {isBillsMode && canPrint && (
-                      <button data-primary style={{ ...styles.printBtn, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print bill"} onClick={() => handlePrintBill(inv)}>
-                        <MdPrint size={14} /> Bill
-                      </button>
-                    )}
-                    {!isBillsMode && canPrint && (
-                      <button data-primary={(inv.fbrStatus === "Submitted" || inv.isCancelled) || undefined} style={{ ...styles.taxBtn, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print tax invoice"} onClick={() => handlePrintTax(inv)}>
-                        <MdDescription size={14} /> Tax Invoice
-                      </button>
-                    )}
-                    {isBillsMode && canPrint && (
-                      <button style={{ ...styles.pdfBtn, opacity: (tplPicker.noTemplate || exportingId) ? 0.5 : 1, ...(tplPicker.noTemplate ? { cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download Bill PDF"} onClick={() => handleExportBillPdf(inv)}>
-                        {exportingId === inv.id + "-bill-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} Bill PDF
-                      </button>
-                    )}
-                    {!isBillsMode && canPrint && (
-                      <button style={{ ...styles.pdfBtn, opacity: (tplPicker.noTemplate || exportingId) ? 0.5 : 1, ...(tplPicker.noTemplate ? { cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download Tax PDF"} onClick={() => handleExportTaxPdf(inv)}>
-                        {exportingId === inv.id + "-tax-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} Tax PDF
-                      </button>
-                    )}
-                    {isBillsMode && canPrint && hasExcelBill && (
-                      <button style={{ ...styles.excelBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportBillExcel(inv)}>
-                        {exportingId === inv.id + "-bill-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Bill XLS
-                      </button>
-                    )}
-                    {!isBillsMode && canPrint && hasExcelTax && (
-                      <button style={{ ...styles.excelBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportTaxExcel(inv)}>
-                        {exportingId === inv.id + "-tax-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Tax XLS
-                      </button>
-                    )}
-                    {/* View what FBR will see — grouped items, totals, raw
+                        {isBillsMode && (
+                          <button
+                            style={{
+                              ...styles.printBtn,
+                              backgroundColor: "#e0f2f1",
+                              color: "#00695c",
+                              border: "1px solid #80cbc4",
+                            }}
+                            onClick={() =>
+                              navigate(`/invoices?search=${encodeURIComponent(inv.invoiceNumber)}`)
+                            }
+                            title="Find this bill on the Invoices tab so you can classify items and submit to FBR"
+                          >
+                            <MdOpenInNew size={14} /> Open in Invoices
+                          </button>
+                        )}
+                        {isBillsMode && canPrint && (
+                          <button
+                            data-primary
+                            style={{
+                              ...styles.printBtn,
+                              ...(tplPicker.noTemplate
+                                ? { opacity: 0.5, cursor: "not-allowed" }
+                                : {}),
+                            }}
+                            disabled={tplPicker.noTemplate}
+                            title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print bill"}
+                            onClick={() => handlePrintBill(inv)}
+                          >
+                            <MdPrint size={14} /> Bill
+                          </button>
+                        )}
+                        {!isBillsMode && canPrint && (
+                          <button
+                            data-primary={
+                              inv.fbrStatus === "Submitted" || inv.isCancelled || undefined
+                            }
+                            style={{
+                              ...styles.taxBtn,
+                              ...(tplPicker.noTemplate
+                                ? { opacity: 0.5, cursor: "not-allowed" }
+                                : {}),
+                            }}
+                            disabled={tplPicker.noTemplate}
+                            title={
+                              tplPicker.noTemplate
+                                ? tplPicker.noTemplateReason
+                                : "Print tax invoice"
+                            }
+                            onClick={() => handlePrintTax(inv)}
+                          >
+                            <MdDescription size={14} /> Tax Invoice
+                          </button>
+                        )}
+                        {isBillsMode && canPrint && (
+                          <button
+                            style={{
+                              ...styles.pdfBtn,
+                              opacity: tplPicker.noTemplate || exportingId ? 0.5 : 1,
+                              ...(tplPicker.noTemplate ? { cursor: "not-allowed" } : {}),
+                            }}
+                            disabled={tplPicker.noTemplate || !!exportingId}
+                            title={
+                              tplPicker.noTemplate
+                                ? tplPicker.noTemplateReason
+                                : "Download Bill PDF"
+                            }
+                            onClick={() => handleExportBillPdf(inv)}
+                          >
+                            {exportingId === inv.id + "-bill-pdf" ? (
+                              <span className="btn-spinner" />
+                            ) : (
+                              <MdPictureAsPdf size={14} />
+                            )}{" "}
+                            Bill PDF
+                          </button>
+                        )}
+                        {!isBillsMode && canPrint && (
+                          <button
+                            style={{
+                              ...styles.pdfBtn,
+                              opacity: tplPicker.noTemplate || exportingId ? 0.5 : 1,
+                              ...(tplPicker.noTemplate ? { cursor: "not-allowed" } : {}),
+                            }}
+                            disabled={tplPicker.noTemplate || !!exportingId}
+                            title={
+                              tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download Tax PDF"
+                            }
+                            onClick={() => handleExportTaxPdf(inv)}
+                          >
+                            {exportingId === inv.id + "-tax-pdf" ? (
+                              <span className="btn-spinner" />
+                            ) : (
+                              <MdPictureAsPdf size={14} />
+                            )}{" "}
+                            Tax PDF
+                          </button>
+                        )}
+                        {isBillsMode && canPrint && hasExcelBill && (
+                          <button
+                            style={{ ...styles.excelBtn, opacity: exportingId ? 0.5 : 1 }}
+                            disabled={!!exportingId}
+                            onClick={() => handleExportBillExcel(inv)}
+                          >
+                            {exportingId === inv.id + "-bill-excel" ? (
+                              <span className="btn-spinner" />
+                            ) : (
+                              <MdGridOn size={14} />
+                            )}{" "}
+                            Bill XLS
+                          </button>
+                        )}
+                        {!isBillsMode && canPrint && hasExcelTax && (
+                          <button
+                            style={{ ...styles.excelBtn, opacity: exportingId ? 0.5 : 1 }}
+                            disabled={!!exportingId}
+                            onClick={() => handleExportTaxExcel(inv)}
+                          >
+                            {exportingId === inv.id + "-tax-excel" ? (
+                              <span className="btn-spinner" />
+                            ) : (
+                              <MdGridOn size={14} />
+                            )}{" "}
+                            Tax XLS
+                          </button>
+                        )}
+                        {/* View what FBR will see — grouped items, totals, raw
                         JSON. Pure read-only, no calls to FBR. Available for
                         any bill (even submitted ones — useful to inspect
                         what was sent historically). Gated by its own perm
                         so it can be granted without Validate/Submit rights. */}
-                    {/* Bills tab hides FBR preview / validate / submit /
+                        {/* Bills tab hides FBR preview / validate / submit /
                         exclude — those live on the Invoices tab. The FBR
                         status badge above the buttons still shows in both
                         modes so the operator can see locked rows. */}
-                    {!isBillsMode && canFbrPreview && (
-                      <button data-primary={(inv.fbrStatus === "Submitted") || undefined}
-                        style={{ ...styles.printBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" }}
-                        onClick={() => setFbrPreviewId(inv.id)}
-                        title="Preview the FBR payload — grouped items, total qty, total value, total tax. Read-only, doesn't send anything."
-                      >
-                        <MdVisibility size={14} /> View FBR
-                      </button>
-                    )}
-                    {!isBillsMode && canFbrAny && selectedCompany?.hasFbrToken && inv.fbrStatus !== "Submitted" && !inv.isCancelled && !isFutureDocDate(inv.date) && (
-                      <>
-                        {canFbrValidate && (
-                          <button data-primary
+                        {!isBillsMode && canFbrPreview && (
+                          <button
+                            data-primary={inv.fbrStatus === "Submitted" || undefined}
                             style={{
-                              ...styles.fbrValidateBtn,
-                              opacity: fbrLoading || !inv.fbrReady ? 0.4 : 1,
-                              cursor: !inv.fbrReady ? "not-allowed" : "pointer",
-                              ...(fbrValidated.has(inv.id) ? { backgroundColor: "#e8f5e9", color: "#2e7d32" } : {}),
+                              ...styles.printBtn,
+                              backgroundColor: "#e3f2fd",
+                              color: "#0d47a1",
+                              border: "1px solid #90caf9",
                             }}
-                            disabled={!!fbrLoading || !inv.fbrReady}
-                            onClick={() => handleFbrValidate(inv)}
-                            title={
-                              !inv.fbrReady
-                                ? `Complete FBR setup first:\n• ${inv.fbrMissing?.join("\n• ") || "Missing FBR fields"}`
-                                : "Dry-run: checks all bill data with FBR without recording it. Must pass before you can submit."
-                            }
+                            onClick={() => setFbrPreviewId(inv.id)}
+                            title="Preview the FBR payload — grouped items, total qty, total value, total tax. Read-only, doesn't send anything."
                           >
-                            {fbrLoading === inv.id + "-validate" ? <span className="btn-spinner" /> : <MdCheckCircle size={14} />}
-                            {fbrValidated.has(inv.id) ? "Validated" : "Validate"}
+                            <MdVisibility size={14} /> View FBR
                           </button>
                         )}
-                        {canFbrSubmit && (
-                          <button data-primary
-                            style={{
-                              ...styles.fbrSubmitBtn,
-                              opacity: fbrLoading || !fbrValidated.has(inv.id) || !inv.fbrReady ? 0.4 : 1,
-                              cursor: !fbrValidated.has(inv.id) || !inv.fbrReady ? "not-allowed" : "pointer",
-                            }}
-                            disabled={!!fbrLoading || !fbrValidated.has(inv.id) || !inv.fbrReady}
-                            onClick={() => handleFbrSubmit(inv)}
-                            title={
-                              !inv.fbrReady
-                                ? "Complete FBR setup first."
-                                : fbrValidated.has(inv.id)
-                                ? "Permanently submit this bill to FBR. Cannot be undone."
-                                : "Validate first before submitting to FBR."
-                            }
-                          >
-                            {fbrLoading === inv.id + "-submit" ? <span className="btn-spinner" /> : <MdCloudUpload size={14} />} Submit FBR
-                          </button>
-                        )}
-                      </>
-                    )}
-                    {/* Edit on Bills tab: full bill edit (per the user's
+                        {!isBillsMode &&
+                          canFbrAny &&
+                          selectedCompany?.hasFbrToken &&
+                          inv.fbrStatus !== "Submitted" &&
+                          !inv.isCancelled &&
+                          !isFutureDocDate(inv.date) && (
+                            <>
+                              {canFbrValidate && (
+                                <button
+                                  data-primary
+                                  style={{
+                                    ...styles.fbrValidateBtn,
+                                    opacity: fbrLoading || !inv.fbrReady ? 0.4 : 1,
+                                    cursor: !inv.fbrReady ? "not-allowed" : "pointer",
+                                    ...(fbrValidated.has(inv.id)
+                                      ? { backgroundColor: "#e8f5e9", color: "#2e7d32" }
+                                      : {}),
+                                  }}
+                                  disabled={!!fbrLoading || !inv.fbrReady}
+                                  onClick={() => handleFbrValidate(inv)}
+                                  title={
+                                    !inv.fbrReady
+                                      ? `Complete FBR setup first:\n• ${inv.fbrMissing?.join("\n• ") || "Missing FBR fields"}`
+                                      : "Dry-run: checks all bill data with FBR without recording it. Must pass before you can submit."
+                                  }
+                                >
+                                  {fbrLoading === inv.id + "-validate" ? (
+                                    <span className="btn-spinner" />
+                                  ) : (
+                                    <MdCheckCircle size={14} />
+                                  )}
+                                  {fbrValidated.has(inv.id) ? "Validated" : "Validate"}
+                                </button>
+                              )}
+                              {canFbrSubmit && (
+                                <button
+                                  data-primary
+                                  style={{
+                                    ...styles.fbrSubmitBtn,
+                                    opacity:
+                                      fbrLoading || !fbrValidated.has(inv.id) || !inv.fbrReady
+                                        ? 0.4
+                                        : 1,
+                                    cursor:
+                                      !fbrValidated.has(inv.id) || !inv.fbrReady
+                                        ? "not-allowed"
+                                        : "pointer",
+                                  }}
+                                  disabled={
+                                    !!fbrLoading || !fbrValidated.has(inv.id) || !inv.fbrReady
+                                  }
+                                  onClick={() => handleFbrSubmit(inv)}
+                                  title={
+                                    !inv.fbrReady
+                                      ? "Complete FBR setup first."
+                                      : fbrValidated.has(inv.id)
+                                        ? "Permanently submit this bill to FBR. Cannot be undone."
+                                        : "Validate first before submitting to FBR."
+                                  }
+                                >
+                                  {fbrLoading === inv.id + "-submit" ? (
+                                    <span className="btn-spinner" />
+                                  ) : (
+                                    <MdCloudUpload size={14} />
+                                  )}{" "}
+                                  Submit FBR
+                                </button>
+                              )}
+                            </>
+                          )}
+                        {/* Edit on Bills tab: full bill edit (per the user's
                         permissions) — items, prices, dates, etc. Item Type
                         column is hidden so classification only happens on
                         the Invoices tab. Hidden once FBR-submitted (locks
                         edits permanently). */}
-                    {isBillsMode && canEditInThisMode && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
-                      <button data-primary
-                        style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
-                        onClick={() => setEditingId(inv.id)}
-                        title={canUpdate
-                          ? "Edit items and prices on this bill"
-                          : "Edit bill (your permissions)"}
-                      >
-                        <MdEdit size={14} /> Edit
-                      </button>
-                    )}
-                    {canCopyBill && !inv.isCancelled && (
-                      <button
-                        style={{ ...styles.printBtn, backgroundColor: "#e8eaf6", color: "#283593", border: "1px solid #9fa8da" }}
-                        onClick={() => copy.openCopy(inv.id, `Bill #${inv.invoiceNumber}`)}
-                        title="Copy this bill into a new one"
-                      >
-                        <MdCopyAll size={14} /> Copy
-                      </button>
-                    )}
-                    {/* Edit on Invoices tab (invoice-mode edit): item type, qty
+                        {isBillsMode &&
+                          canEditInThisMode &&
+                          inv.fbrStatus !== "Submitted" &&
+                          !inv.isCancelled && (
+                            <button
+                              data-primary
+                              style={{
+                                ...styles.printBtn,
+                                backgroundColor: "#fff3e0",
+                                color: "#e65100",
+                                border: "1px solid #ffcc80",
+                              }}
+                              onClick={() => setEditingId(inv.id)}
+                              title={
+                                canUpdate
+                                  ? "Edit items and prices on this bill"
+                                  : "Edit bill (your permissions)"
+                              }
+                            >
+                              <MdEdit size={14} /> Edit
+                            </button>
+                          )}
+                        {canCopyBill && !inv.isCancelled && (
+                          <button
+                            style={{
+                              ...styles.printBtn,
+                              backgroundColor: "#e8eaf6",
+                              color: "#283593",
+                              border: "1px solid #9fa8da",
+                            }}
+                            onClick={() => copy.openCopy(inv.id, `Bill #${inv.invoiceNumber}`)}
+                            title="Copy this bill into a new one"
+                          >
+                            <MdCopyAll size={14} /> Copy
+                          </button>
+                        )}
+                        {/* Edit on Invoices tab (invoice-mode edit): item type, qty
                         and unit price — kept as an adjustment OVERLAY over the
                         bill (base bill untouched; total reconciles to it). Shown
                         for FBR-off companies too: they have no Bills-tab FBR
                         step, so this is their line-adjust surface. Hidden once
                         FBR-submitted or cancelled. */}
-                    {!isBillsMode && canEditInThisMode && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
-                      <button data-primary
-                        style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
-                        onClick={() => setEditingId(inv.id)}
-                        title="Edit item type, qty & unit price (saved as an adjustment over the bill)"
-                      >
-                        <MdEdit size={14} /> Edit
-                      </button>
-                    )}
-                    {!isBillsMode && canFbrExclude && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
-                      <button
-                        style={{
-                          ...styles.printBtn,
-                          backgroundColor: inv.isFbrExcluded ? "#e8f5e9" : "#eceff1",
-                          color: inv.isFbrExcluded ? "#2e7d32" : "#546e7a",
-                          border: `1px solid ${inv.isFbrExcluded ? "#a5d6a7" : "#b0bec5"}`,
-                        }}
-                        onClick={() => handleToggleFbrExcluded(inv)}
-                        title={
-                          inv.isFbrExcluded
-                            ? "Re-enable this bill for Validate All / Submit All bulk actions."
-                            : "Exclude this bill from Validate All / Submit All. Per-bill Validate / Submit still work."
-                        }
-                      >
-                        {inv.isFbrExcluded ? <MdRestore size={14} /> : <MdBlock size={14} />}
-                        {inv.isFbrExcluded ? "Include in FBR" : "Exclude from FBR"}
-                      </button>
-                    )}
-                    {/* Delete: any non-submitted, non-cancelled document (2026-07-14
+                        {!isBillsMode &&
+                          canEditInThisMode &&
+                          inv.fbrStatus !== "Submitted" &&
+                          !inv.isCancelled && (
+                            <button
+                              data-primary
+                              style={{
+                                ...styles.printBtn,
+                                backgroundColor: "#fff3e0",
+                                color: "#e65100",
+                                border: "1px solid #ffcc80",
+                              }}
+                              onClick={() => setEditingId(inv.id)}
+                              title="Edit item type, qty & unit price (saved as an adjustment over the bill)"
+                            >
+                              <MdEdit size={14} /> Edit
+                            </button>
+                          )}
+                        {!isBillsMode &&
+                          canFbrExclude &&
+                          inv.fbrStatus !== "Submitted" &&
+                          !inv.isCancelled && (
+                            <button
+                              style={{
+                                ...styles.printBtn,
+                                backgroundColor: inv.isFbrExcluded ? "#e8f5e9" : "#eceff1",
+                                color: inv.isFbrExcluded ? "#2e7d32" : "#546e7a",
+                                border: `1px solid ${inv.isFbrExcluded ? "#a5d6a7" : "#b0bec5"}`,
+                              }}
+                              onClick={() => handleToggleFbrExcluded(inv)}
+                              title={
+                                inv.isFbrExcluded
+                                  ? "Re-enable this bill for Validate All / Submit All bulk actions."
+                                  : "Exclude this bill from Validate All / Submit All. Per-bill Validate / Submit still work."
+                              }
+                            >
+                              {inv.isFbrExcluded ? <MdRestore size={14} /> : <MdBlock size={14} />}
+                              {inv.isFbrExcluded ? "Include in FBR" : "Exclude from FBR"}
+                            </button>
+                          )}
+                        {/* Delete: any non-submitted, non-cancelled document (2026-07-14
                         the latest-only rule was lifted). Removes the row entirely and
                         reverts its GL + inventory impact and frees its challans; a gap
                         is left in the numbering. Use Void instead to keep the number. */}
-                    {canDelete && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
-                      <button
-                        style={{ ...styles.printBtn, backgroundColor: "#ffebee", color: "#c62828", border: "1px solid #ef9a9a" }}
-                        onClick={() => handleDeleteInvoice(inv)}
-                        title="Delete this document entirely — reverts its GL + inventory impact and frees its challans (leaves a gap in the numbering). Use Void to keep the number."
-                      >
-                        <MdDelete size={14} /> Delete
-                      </button>
-                    )}
-                    {/* Void: Bills tab, ANY non-submitted, non-cancelled bill
+                        {canDelete && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
+                          <button
+                            style={{
+                              ...styles.printBtn,
+                              backgroundColor: "#ffebee",
+                              color: "#c62828",
+                              border: "1px solid #ef9a9a",
+                            }}
+                            onClick={() => handleDeleteInvoice(inv)}
+                            title="Delete this document entirely — reverts its GL + inventory impact and frees its challans (leaves a gap in the numbering). Use Void to keep the number."
+                          >
+                            <MdDelete size={14} /> Delete
+                          </button>
+                        )}
+                        {/* Void: Bills tab, ANY non-submitted, non-cancelled bill
                         (not just the latest). Keeps the bill number so the
                         sequence stays gap-free, marks the bill Cancelled, and
                         reverts its delivery challan(s) to Pending for re-billing. */}
-                    {/* Link DC: a standalone bill has no delivery note behind it.
+                        {/* Link DC: a standalone bill has no delivery note behind it.
                         Attach an existing unbilled challan for this buyer, or
                         raise one from the bill's own lines. */}
-                    {isBillsMode && canLinkChallan && !(inv.challanNumbers?.length > 0) && !inv.isCancelled && (
-                      <button
-                        style={{ ...styles.printBtn, backgroundColor: "#eceff1", color: "#546e7a", border: "1px solid #b0bec5" }}
-                        onClick={() => setLinkingChallanFor(inv)}
-                        title="No delivery challan behind this bill — attach an existing unbilled challan for this buyer, or raise one from the bill's own lines."
-                      >
-                        <MdAddLink size={14} /> Link deliveries
-                      </button>
-                    )}
-                    {/* Detach: only a challan that was ATTACHED can be taken off.
+                        {isBillsMode &&
+                          canLinkChallan &&
+                          !(inv.challanNumbers?.length > 0) &&
+                          !inv.isCancelled && (
+                            <button
+                              style={{
+                                ...styles.printBtn,
+                                backgroundColor: "#eceff1",
+                                color: "#546e7a",
+                                border: "1px solid #b0bec5",
+                              }}
+                              onClick={() => setLinkingChallanFor(inv)}
+                              title="No delivery challan behind this bill — attach an existing unbilled challan for this buyer, or raise one from the bill's own lines."
+                            >
+                              <MdAddLink size={14} /> Link deliveries
+                            </button>
+                          )}
+                        {/* Detach: only a challan that was ATTACHED can be taken off.
                         One the bill was raised FROM is referenced by the bill's
                         own lines, so that bill is voided or deleted instead. */}
-                    {isBillsMode && canLinkChallan && inv.challanNumbers?.length > 0 && !inv.isCancelled &&
-                     (inv.items || []).every((i) => !i.deliveryItemId) && (
-                      <button
-                        style={{ ...styles.printBtn, backgroundColor: "#eceff1", color: "#546e7a", border: "1px solid #b0bec5" }}
-                        onClick={() => setLinkingChallanFor(inv)}
-                        title="Detach the delivery challan attached to this bill — it goes back to the pending list so it can be billed correctly. The bill itself is unchanged."
-                      >
-                        <MdLinkOff size={14} /> Manage deliveries
-                      </button>
-                    )}
-                    {(isBillsMode || isNotesMode) && canVoid && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
-                      <button
-                        style={{ ...styles.printBtn, backgroundColor: "#fff8e1", color: "#b26a00", border: "1px solid #ffe082" }}
-                        onClick={() => handleVoidInvoice(inv)}
-                        title={isNotesMode
-                          ? "Void this note — keeps its number (no gap), frees the original invoice so it can be reversed again."
-                          : "Void this bill — keeps the bill number (no gap), marks it Cancelled and reverts its delivery challan(s) to Pending so they can be re-billed."}
-                      >
-                        <MdCancel size={14} /> Void
-                      </button>
-                    )}
-                    {/* Reverse: an FBR-SUBMITTED sale invoice (not itself a
+                        {isBillsMode &&
+                          canLinkChallan &&
+                          inv.challanNumbers?.length > 0 &&
+                          !inv.isCancelled &&
+                          (inv.items || []).every((i) => !i.deliveryItemId) && (
+                            <button
+                              style={{
+                                ...styles.printBtn,
+                                backgroundColor: "#eceff1",
+                                color: "#546e7a",
+                                border: "1px solid #b0bec5",
+                              }}
+                              onClick={() => setLinkingChallanFor(inv)}
+                              title="Detach the delivery challan attached to this bill — it goes back to the pending list so it can be billed correctly. The bill itself is unchanged."
+                            >
+                              <MdLinkOff size={14} /> Manage deliveries
+                            </button>
+                          )}
+                        {(isBillsMode || isNotesMode) &&
+                          canVoid &&
+                          inv.fbrStatus !== "Submitted" &&
+                          !inv.isCancelled && (
+                            <button
+                              style={{
+                                ...styles.printBtn,
+                                backgroundColor: "#fff8e1",
+                                color: "#b26a00",
+                                border: "1px solid #ffe082",
+                              }}
+                              onClick={() => handleVoidInvoice(inv)}
+                              title={
+                                isNotesMode
+                                  ? "Void this note — keeps its number (no gap), frees the original invoice so it can be reversed again."
+                                  : "Void this bill — keeps the bill number (no gap), marks it Cancelled and reverts its delivery challan(s) to Pending so they can be re-billed."
+                              }
+                            >
+                              <MdCancel size={14} /> Void
+                            </button>
+                          )}
+                        {/* Reverse: an FBR-SUBMITTED sale invoice (not itself a
                         note) can be reversed → generates a Credit Note as a new
                         unsubmitted bill to Validate + Submit. Replaces Void once
                         the bill has reached FBR. */}
-                    {canReverse && inv.fbrStatus === "Submitted" && !inv.isCancelled && !inv.reversedByCreditNoteNumber &&
-                     inv.documentType !== 9 && inv.documentType !== 10 && (
-                      <button
-                        style={{ ...styles.printBtn, backgroundColor: "#ede7f6", color: "#5e35b1", border: "1px solid #b39ddb" }}
-                        onClick={() => handleReverseInvoice(inv)}
-                        title="Reverse this FBR-submitted bill — generates a Credit Note (new unsubmitted bill) that you then Validate and Submit to FBR."
-                      >
-                        <MdUndo size={14} /> Reverse
-                      </button>
-                    )}
-                    {/* Correct: bill the balance quantity under-reported on a
+                        {canReverse &&
+                          inv.fbrStatus === "Submitted" &&
+                          !inv.isCancelled &&
+                          !inv.reversedByCreditNoteNumber &&
+                          inv.documentType !== 9 &&
+                          inv.documentType !== 10 && (
+                            <button
+                              style={{
+                                ...styles.printBtn,
+                                backgroundColor: "#ede7f6",
+                                color: "#5e35b1",
+                                border: "1px solid #b39ddb",
+                              }}
+                              onClick={() => handleReverseInvoice(inv)}
+                              title="Reverse this FBR-submitted bill — generates a Credit Note (new unsubmitted bill) that you then Validate and Submit to FBR."
+                            >
+                              <MdUndo size={14} /> Reverse
+                            </button>
+                          )}
+                        {/* Correct: bill the balance quantity under-reported on a
                         locked original. Eligible when FBR is on AND the bill is
                         submitted, OR FBR is off AND the bill is fully paid.
                         Hidden once a live supplement already exists so no
                         duplicate correction can be created. */}
-                    {canReverse && !inv.isCancelled && !inv.hasSupplement &&
-                     inv.documentType !== 9 && inv.documentType !== 10 &&
-                     (fbrEnabled ? inv.fbrStatus === "Submitted" : inv.paymentStatus === "Paid") && (
-                      <button
-                        style={{ ...styles.printBtn, backgroundColor: "#d6eee8", color: "#0a5d50", border: "1px solid #b6ddd3" }}
-                        onClick={() => setCorrectTarget(inv)}
-                        title="Bill the balance quantity under-reported on this bill — creates a new unclassified bill (+ same challan/PO) to classify and, when FBR is on, submit to FBR."
-                      >
-                        <MdPostAdd size={14} /> Correct
-                      </button>
-                    )}
-                  </CardActions>
-                </div>
+                        {canReverse &&
+                          !inv.isCancelled &&
+                          !inv.hasSupplement &&
+                          inv.documentType !== 9 &&
+                          inv.documentType !== 10 &&
+                          (fbrEnabled
+                            ? inv.fbrStatus === "Submitted"
+                            : inv.paymentStatus === "Paid") && (
+                            <button
+                              style={{
+                                ...styles.printBtn,
+                                backgroundColor: "#d6eee8",
+                                color: "#0a5d50",
+                                border: "1px solid #b6ddd3",
+                              }}
+                              onClick={() => setCorrectTarget(inv)}
+                              title="Bill the balance quantity under-reported on this bill — creates a new unclassified bill (+ same challan/PO) to classify and, when FBR is on, submit to FBR."
+                            >
+                              <MdPostAdd size={14} /> Correct
+                            </button>
+                          )}
+                      </CardActions>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          )}
-          {/* Pagination */}
-          <Pagination
-            page={page}
-            totalPages={totalPages}
-            total={totalCount}
-            onPage={setPage}
-            pageSize={size}
-            onPageSize={(n) => { setSize(n); setPage(1); }}
-          />
-        </>
-      )}
+            )}
+            {/* Pagination */}
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              total={totalCount}
+              onPage={setPage}
+              pageSize={size}
+              onPageSize={(n) => {
+                setSize(n);
+                setPage(1);
+              }}
+            />
+          </>
+        )}
 
-      {/* Bills mode shows the Item Type column (item-type pick is the
+        {/* Bills mode shows the Item Type column (item-type pick is the
           ONE FBR-classification field exposed in Bills) but hides the
           rest of the FBR machinery (HS Code, Sale Type, scenario picker).
           Picking an item type still auto-fills HS / UOM / Sale Type
           behind the scenes so the bill is ready for FBR validation on
           the Invoices tab. */}
-      {showForm && selectedCompany && (
-        <InvoiceForm
-          companyId={selectedCompany.id}
-          company={selectedCompany}
-          billsMode={isBillsMode}
-          defaultDivisionId={divisionFilter}
-          onClose={() => setShowForm(false)}
-          onSaved={handleCreated}
-        />
-      )}
+        {showForm && selectedCompany && (
+          <InvoiceForm
+            companyId={selectedCompany.id}
+            company={selectedCompany}
+            billsMode={isBillsMode}
+            defaultDivisionId={divisionFilter}
+            onClose={() => setShowForm(false)}
+            onSaved={handleCreated}
+          />
+        )}
 
-      {showStandaloneForm && selectedCompany && (
-        <StandaloneInvoiceForm
-          companyId={selectedCompany.id}
-          company={selectedCompany}
-          billsMode={isBillsMode}
-          defaultDivisionId={divisionFilter}
-          onClose={() => setShowStandaloneForm(false)}
-          onSaved={() => { setShowStandaloneForm(false); handleCreated(); }}
-        />
-      )}
+        {showStandaloneForm && selectedCompany && (
+          <StandaloneInvoiceForm
+            companyId={selectedCompany.id}
+            company={selectedCompany}
+            billsMode={isBillsMode}
+            defaultDivisionId={divisionFilter}
+            onClose={() => setShowStandaloneForm(false)}
+            onSaved={() => {
+              setShowStandaloneForm(false);
+              handleCreated();
+            }}
+          />
+        )}
 
-      {receiptPreset && selectedCompany && (
-        <PaymentForm
-          mode="receipts"
-          companyId={selectedCompany.id}
-          preset={receiptPreset}
-          onClose={() => setReceiptPreset(null)}
-          onSaved={() => { setReceiptPreset(null); fetchInvoices(selectedCompany.id, page); }}
-        />
-      )}
+        {receiptPreset && selectedCompany && (
+          <PaymentForm
+            mode="receipts"
+            companyId={selectedCompany.id}
+            preset={receiptPreset}
+            onClose={() => setReceiptPreset(null)}
+            onSaved={() => {
+              setReceiptPreset(null);
+              fetchInvoices(selectedCompany.id, page);
+            }}
+          />
+        )}
 
-      {paymentHistoryDoc && selectedCompany && (
-        <PaymentHistoryDialog
-          mode="receipts"
-          companyId={selectedCompany.id}
-          doc={{ ...paymentHistoryDoc, number: paymentHistoryDoc.invoiceNumber }}
-          onClose={() => setPaymentHistoryDoc(null)}
-        />
-      )}
+        {paymentHistoryDoc && selectedCompany && (
+          <PaymentHistoryDialog
+            mode="receipts"
+            companyId={selectedCompany.id}
+            doc={{ ...paymentHistoryDoc, number: paymentHistoryDoc.invoiceNumber }}
+            onClose={() => setPaymentHistoryDoc(null)}
+          />
+        )}
 
-      {/* Post-sale correction wizard — opens from a row's Correct action.
+        {/* Post-sale correction wizard — opens from a row's Correct action.
           supp → new unclassified delta bill (navigate to it on the Invoices
           tab to classify); credit/debit → a note against the original (refresh
           so the original's Reversed/Adjusted badge appears). */}
-      {attachTarget && selectedCompany?.id && (
-        <AttachmentQuickModal
-          companyId={selectedCompany?.id}
-          entityType="Invoice"
-          entityId={attachTarget.id}
-          title={`${isNotesMode ? noteLabel : isBillsMode ? "Bill" : "Invoice"} #${attachTarget.invoiceNumber} — Attachments`}
-          onClose={() => { setAttachTarget(null); refreshAttachCounts(); }}
-        />
-      )}
-      {copy.source && (
-        <CopyDocumentModal
-          sourceType={DOC_COPY_TYPES.bill}
-          sourceId={copy.source.id}
-          sourceLabel={copy.source.label}
-          onClose={copy.close}
-          onCopied={copy.onCopied}
-        />
-      )}
+        {attachTarget && selectedCompany?.id && (
+          <AttachmentQuickModal
+            companyId={selectedCompany?.id}
+            entityType="Invoice"
+            entityId={attachTarget.id}
+            title={`${isNotesMode ? noteLabel : isBillsMode ? "Bill" : "Invoice"} #${attachTarget.invoiceNumber} — Attachments`}
+            onClose={() => {
+              setAttachTarget(null);
+              refreshAttachCounts();
+            }}
+          />
+        )}
+        {copy.source && (
+          <CopyDocumentModal
+            sourceType={DOC_COPY_TYPES.bill}
+            sourceId={copy.source.id}
+            sourceLabel={copy.source.label}
+            onClose={copy.close}
+            onCopied={copy.onCopied}
+          />
+        )}
 
-      {/* Bulk download / consolidated print. Seeded with the screen's own date
+        {/* Bulk download / consolidated print. Seeded with the screen's own date
           filter and carrying the same client / division / search filters, so it
           operates on exactly the set the operator is looking at. */}
-      {selectedCompany && (
-        <BulkInvoiceDialog
-          open={bulkPrintOpen}
-          onClose={() => setBulkPrintOpen(false)}
-          title={printTemplateType === "TaxInvoice" ? "Download Sales Tax Invoices" : "Download Bills"}
-          documentType={printTemplateType}
-          templates={tplPicker.templates}
-          initialFrom={dateFrom}
-          initialTo={dateTo}
-          extraFilters={{
-            clientId: clientFilter ? Number(clientFilter) : null,
-            divisionId: divisionFilter ? Number(divisionFilter) : null,
-            search: search || null,
-          }}
-          // Named, not id'd: "Client: 75" tells an operator nothing. Without
-          // this the dialog reports a count the operator cannot account for —
-          // over a wide date range, an inherited client filter looks exactly
-          // like a broken query.
-          inheritedFilters={[
-            clientFilter
-              ? `Client: ${clients.find((c) => String(c.id) === String(clientFilter))?.name || clientFilter}`
-              : null,
-            divisionFilter ? "Division filter" : null,
-            search ? `Search: "${search}"` : null,
-          ].filter(Boolean)}
-          resolve={async (request) => {
-            const { data } = await resolveInvoiceBulk(selectedCompany.id, request);
-            return data;
-          }}
-        />
-      )}
-
-      {correctTarget && (
-        <CorrectionWizard
-          invoice={correctTarget}
-          onClose={() => setCorrectTarget(null)}
-          onCreated={(doc, correctionMode) => {
-            setCorrectTarget(null);
-            if (selectedCompany) fetchInvoices(selectedCompany.id, page);
-            if (correctionMode === "supp") {
-              notify(`Bill #${doc.invoiceNumber} created for the balance quantity — classify it for FBR in Invoice mode.`, "success");
-              navigate(`/invoices?search=${doc.invoiceNumber}`);
-            } else {
-              const kind = correctionMode === "credit" ? "Credit" : "Debit";
-              notify(`${kind} Note #${doc.invoiceNumber} created — open the ${kind} Notes tab to validate and submit it to FBR.`, "success");
+        {selectedCompany && (
+          <BulkInvoiceDialog
+            open={bulkPrintOpen}
+            onClose={() => setBulkPrintOpen(false)}
+            title={
+              printTemplateType === "TaxInvoice" ? "Download Sales Tax Invoices" : "Download Bills"
             }
-          }}
+            documentType={printTemplateType}
+            templates={tplPicker.templates}
+            initialFrom={dateFrom}
+            initialTo={dateTo}
+            extraFilters={{
+              clientId: clientFilter ? Number(clientFilter) : null,
+              divisionId: divisionFilter ? Number(divisionFilter) : null,
+              search: search || null,
+            }}
+            // Named, not id'd: "Client: 75" tells an operator nothing. Without
+            // this the dialog reports a count the operator cannot account for —
+            // over a wide date range, an inherited client filter looks exactly
+            // like a broken query.
+            inheritedFilters={[
+              clientFilter
+                ? `Client: ${clients.find((c) => String(c.id) === String(clientFilter))?.name || clientFilter}`
+                : null,
+              divisionFilter ? "Division filter" : null,
+              search ? `Search: "${search}"` : null,
+            ].filter(Boolean)}
+            resolve={async (request) => {
+              const { data } = await resolveInvoiceBulk(selectedCompany.id, request);
+              return data;
+            }}
+          />
+        )}
+
+        {correctTarget && (
+          <CorrectionWizard
+            invoice={correctTarget}
+            onClose={() => setCorrectTarget(null)}
+            onCreated={(doc, correctionMode) => {
+              setCorrectTarget(null);
+              if (selectedCompany) fetchInvoices(selectedCompany.id, page);
+              if (correctionMode === "supp") {
+                notify(
+                  `Bill #${doc.invoiceNumber} created for the balance quantity — classify it for FBR in Invoice mode.`,
+                  "success",
+                );
+                navigate(`/invoices?search=${doc.invoiceNumber}`);
+              } else {
+                const kind = correctionMode === "credit" ? "Credit" : "Debit";
+                notify(
+                  `${kind} Note #${doc.invoiceNumber} created — open the ${kind} Notes tab to validate and submit it to FBR.`,
+                  "success",
+                );
+              }
+            }}
+          />
+        )}
+
+        {editingId && (
+          <EditBillForm
+            invoiceId={editingId}
+            billsMode={isBillsMode}
+            fbrEnabled={fbrEnabled}
+            // Invoices-tab edit lets the FBR officer set Item Type AND Qty —
+            // descriptions, prices, dates, payment terms etc. stay read-only
+            // and reflect whatever was last saved on the Bills tab. Set on
+            // the Invoice card's Edit button only.
+            forceItemTypeAndQty={!isBillsMode}
+            onClose={() => setEditingId(null)}
+            onSaved={() => {
+              setEditingId(null);
+              notify("Bill updated.", "success");
+              fetchInvoices(selectedCompany.id, page);
+              // clear any stale validation state for this bill
+              setFbrValidated((prev) => {
+                const next = new Set(prev);
+                next.delete(editingId);
+                return next;
+              });
+            }}
+          />
+        )}
+
+        {linkingChallanFor && (
+          <LinkChallanModal
+            invoice={linkingChallanFor}
+            canCreateChallan={canCreateChallanFromBill}
+            onClose={() => setLinkingChallanFor(null)}
+            onDone={(updated) => {
+              const dcs = updated?.challanNumbers || [];
+              notify(
+                dcs.length
+                  ? `Bill #${updated.invoiceNumber} is now on DC #${dcs.join(", #")}.`
+                  : `Bill #${linkingChallanFor.invoiceNumber} has no delivery challan — the challan is back in the pending list.`,
+                "success",
+              );
+              setLinkingChallanFor(null);
+              if (selectedCompany) fetchInvoices(selectedCompany.id, page);
+            }}
+          />
+        )}
+
+        {viewingId && (
+          <EditBillForm
+            invoiceId={viewingId}
+            readOnly
+            billsMode={isBillsMode}
+            fbrEnabled={fbrEnabled}
+            onClose={() => setViewingId(null)}
+            onSaved={() => setViewingId(null)}
+          />
+        )}
+
+        <BulkFbrResultsDialog
+          open={bulkResults.open}
+          action={bulkResults.action}
+          items={bulkResults.items}
+          onClose={() => setBulkResults((prev) => ({ ...prev, open: false }))}
         />
-      )}
 
-      {editingId && (
-        <EditBillForm
-          invoiceId={editingId}
-          billsMode={isBillsMode}
-          fbrEnabled={fbrEnabled}
-          // Invoices-tab edit lets the FBR officer set Item Type AND Qty —
-          // descriptions, prices, dates, payment terms etc. stay read-only
-          // and reflect whatever was last saved on the Bills tab. Set on
-          // the Invoice card's Edit button only.
-          forceItemTypeAndQty={!isBillsMode}
-          onClose={() => setEditingId(null)}
-          onSaved={() => {
-            setEditingId(null);
-            notify("Bill updated.", "success");
-            fetchInvoices(selectedCompany.id, page);
-            // clear any stale validation state for this bill
-            setFbrValidated((prev) => {
-              const next = new Set(prev);
-              next.delete(editingId);
-              return next;
-            });
-          }}
-        />
-      )}
-
-      {linkingChallanFor && (
-        <LinkChallanModal
-          invoice={linkingChallanFor}
-          canCreateChallan={canCreateChallanFromBill}
-          onClose={() => setLinkingChallanFor(null)}
-          onDone={(updated) => {
-            const dcs = updated?.challanNumbers || [];
-            notify(dcs.length
-              ? `Bill #${updated.invoiceNumber} is now on DC #${dcs.join(", #")}.`
-              : `Bill #${linkingChallanFor.invoiceNumber} has no delivery challan — the challan is back in the pending list.`,
-              "success");
-            setLinkingChallanFor(null);
-            if (selectedCompany) fetchInvoices(selectedCompany.id, page);
-          }}
-        />
-      )}
-
-      {viewingId && (
-        <EditBillForm
-          invoiceId={viewingId}
-          readOnly
-          billsMode={isBillsMode}
-          fbrEnabled={fbrEnabled}
-          onClose={() => setViewingId(null)}
-          onSaved={() => setViewingId(null)}
-        />
-      )}
-
-      <BulkFbrResultsDialog
-        open={bulkResults.open}
-        action={bulkResults.action}
-        items={bulkResults.items}
-        onClose={() => setBulkResults((prev) => ({ ...prev, open: false }))}
-      />
-
-      {/* FBR submission preview — read-only inspector. Operator can see
+        {/* FBR submission preview — read-only inspector. Operator can see
           grouped items, totals, raw JSON before clicking Validate / Submit. */}
-      {fbrPreviewId !== null && (
-        <FbrPreviewDialog
-          invoiceId={fbrPreviewId}
-          onClose={() => setFbrPreviewId(null)}
-        />
-      )}
+        {fbrPreviewId !== null && (
+          <FbrPreviewDialog invoiceId={fbrPreviewId} onClose={() => setFbrPreviewId(null)} />
+        )}
 
-      {/* Bulk FBR preview — every Validate All / Submit All candidate as
+        {/* Bulk FBR preview — every Validate All / Submit All candidate as
           a collapsible list, lazy-loading per-row payload on expand. */}
-      {showBulkFbrPreview && (
-        <BulkFbrPreviewDialog
-          invoices={unsubmittedInvoices}
-          onClose={() => setShowBulkFbrPreview(false)}
-        />
-      )}
-    </div>
+        {showBulkFbrPreview && (
+          <BulkFbrPreviewDialog
+            invoices={unsubmittedInvoices}
+            onClose={() => setShowBulkFbrPreview(false)}
+          />
+        )}
+      </div>
     </DocumentLinesNavigation>
   );
 }
 
 const styles = {
-  pageHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" },
-  headerIcon: { width: 48, height: 48, borderRadius: 14, background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, display: "flex", alignItems: "center", justifyContent: "center" },
+  pageHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "1.5rem",
+    flexWrap: "wrap",
+    gap: "1rem",
+  },
+  headerIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   pageTitle: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: colors.textPrimary },
   pageSubtitle: { margin: "0.15rem 0 0", fontSize: "0.88rem", color: colors.textSecondary },
-  addBtn: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1.25rem", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, color: "#fff", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 14px rgba(13,71,161,0.25)" },
+  addBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    padding: "0.55rem 1.25rem",
+    borderRadius: 10,
+    border: "none",
+    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
+    color: "#fff",
+    fontSize: "0.9rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    boxShadow: "0 4px 14px rgba(13,71,161,0.25)",
+  },
   // Visually distinct from the primary "New Bill" — outlined treatment
   // makes the standalone path the secondary action without losing
   // discoverability for roles that also have the primary permission.
-  addBtnSecondary: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1.25rem", borderRadius: 10, border: `1px solid ${colors.blue}`, background: "#fff", color: colors.blue, fontSize: "0.9rem", fontWeight: 600, cursor: "pointer" },
-  loadingContainer: { display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", padding: "3rem 0" },
-  spinner: { width: 28, height: 28, border: `3px solid ${colors.cardBorder}`, borderTopColor: colors.blue, borderRadius: "50%", animation: "spin 0.8s linear infinite" },
-  emptyState: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "3rem 1rem", textAlign: "center" },
-  printBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#f3e5f5", color: "#7b1fa2" },
-  taxBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#e8f5e9", color: "#2e7d32" },
-  pdfBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#ffebee", color: "#c62828" },
-  excelBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#e8f5e9", color: "#1b5e20" },
-  pagination: { display: "flex", justifyContent: "center", alignItems: "center", gap: "1rem", padding: "1rem 0", marginTop: "0.5rem" },
+  addBtnSecondary: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    padding: "0.55rem 1.25rem",
+    borderRadius: 10,
+    border: `1px solid ${colors.blue}`,
+    background: "#fff",
+    color: colors.blue,
+    fontSize: "0.9rem",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+  loadingContainer: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "0.75rem",
+    padding: "3rem 0",
+  },
+  spinner: {
+    width: 28,
+    height: 28,
+    border: `3px solid ${colors.cardBorder}`,
+    borderTopColor: colors.blue,
+    borderRadius: "50%",
+    animation: "spin 0.8s linear infinite",
+  },
+  emptyState: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "3rem 1rem",
+    textAlign: "center",
+  },
+  printBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.25rem",
+    padding: "0.3rem 0.6rem",
+    borderRadius: 6,
+    border: "none",
+    fontSize: "0.76rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    backgroundColor: "#f3e5f5",
+    color: "#7b1fa2",
+  },
+  taxBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.25rem",
+    padding: "0.3rem 0.6rem",
+    borderRadius: 6,
+    border: "none",
+    fontSize: "0.76rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    backgroundColor: "#e8f5e9",
+    color: "#2e7d32",
+  },
+  pdfBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.25rem",
+    padding: "0.3rem 0.6rem",
+    borderRadius: 6,
+    border: "none",
+    fontSize: "0.76rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    backgroundColor: "#ffebee",
+    color: "#c62828",
+  },
+  excelBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.25rem",
+    padding: "0.3rem 0.6rem",
+    borderRadius: 6,
+    border: "none",
+    fontSize: "0.76rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    backgroundColor: "#e8f5e9",
+    color: "#1b5e20",
+  },
+  pagination: {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: "1rem",
+    padding: "1rem 0",
+    marginTop: "0.5rem",
+  },
   pageBtn: {
-    display: "inline-flex", alignItems: "center", gap: "0.2rem", padding: "0.4rem 0.8rem", borderRadius: 8,
-    border: `1px solid ${colors.inputBorder}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.2rem",
+    padding: "0.4rem 0.8rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    backgroundColor: "#fff",
+    color: colors.blue,
+    fontSize: "0.82rem",
+    fontWeight: 600,
+    cursor: "pointer",
   },
   pageInfo: { fontSize: "0.82rem", color: colors.textSecondary, fontWeight: 500 },
-  fbrValidateBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#fff3e0", color: "#e65100" },
-  fbrSubmitBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#e3f2fd", color: "#0d47a1" },
-  fbrBulkBar: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem", marginBottom: "1rem", padding: "0.65rem 1rem", borderRadius: 10, border: "1px solid #e3f2fd", backgroundColor: "#f8faff" },
+  fbrValidateBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.25rem",
+    padding: "0.3rem 0.6rem",
+    borderRadius: 6,
+    border: "none",
+    fontSize: "0.76rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    backgroundColor: "#fff3e0",
+    color: "#e65100",
+  },
+  fbrSubmitBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.25rem",
+    padding: "0.3rem 0.6rem",
+    borderRadius: 6,
+    border: "none",
+    fontSize: "0.76rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    backgroundColor: "#e3f2fd",
+    color: "#0d47a1",
+  },
+  fbrBulkBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: "0.75rem",
+    marginBottom: "1rem",
+    padding: "0.65rem 1rem",
+    borderRadius: 10,
+    border: "1px solid #e3f2fd",
+    backgroundColor: "#f8faff",
+  },
   // FBR-status pills used in Bills mode. Soft-tinted background with a
   // matching border + an icon and label, sitting under the bill metadata
   // row so the operator gets a clear at-a-glance "locked / not yet" cue.
@@ -1889,11 +2879,26 @@ const styles = {
     border: "1px solid #b0bec5",
     letterSpacing: "0.01em",
   },
-  fbrBulkBtn: { display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 1rem", borderRadius: 8, border: "none", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", transition: "filter 0.2s" },
+  fbrBulkBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.35rem",
+    padding: "0.45rem 1rem",
+    borderRadius: 8,
+    border: "none",
+    fontSize: "0.82rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    transition: "filter 0.2s",
+  },
   // 2026-05-13: neutral-blue outline for "Preview All" — distinct from
   // the amber Validate All (action) and solid-blue Submit All (terminal
   // action). Reads as an inspector button, not a workflow trigger.
   fbrBulkPreviewBtn: { backgroundColor: "#fff", color: "#0d47a1", border: "1px solid #b7d4f0" },
   fbrBulkValidateBtn: { backgroundColor: "#fff3e0", color: "#e65100" },
-  fbrBulkSubmitBtn: { backgroundColor: "#0d47a1", color: "#fff", boxShadow: "0 2px 8px rgba(13,71,161,0.2)" },
+  fbrBulkSubmitBtn: {
+    backgroundColor: "#0d47a1",
+    color: "#fff",
+    boxShadow: "0 2px 8px rgba(13,71,161,0.2)",
+  },
 };

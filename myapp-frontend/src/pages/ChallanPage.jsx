@@ -1,4 +1,6 @@
-import DocumentLinesNavigation, { DocumentLinesHeaderLink } from "../Components/DocumentLinesNavigation";
+import DocumentLinesNavigation, {
+  DocumentLinesHeaderLink,
+} from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import useQueryAction from "../hooks/useQueryAction";
@@ -60,7 +62,12 @@ const colors = {
 
 export default function ChallanPage() {
   const confirm = useConfirm();
-  const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  const {
+    companies,
+    selectedCompany,
+    setSelectedCompany,
+    loading: loadingCompanies,
+  } = useCompany();
   const { has } = usePermissions();
   const canCreate = has("challans.manage.create");
   const canUpdate = has("challans.manage.update");
@@ -80,13 +87,25 @@ export default function ChallanPage() {
   // AND see an empty dropdown — skip both the fetch and the UI, same as the
   // client filter above.
   const canViewSalesOrders = has("salesorders.list.view");
-  const copy = useDocumentCopy({ sourceType: DOC_COPY_TYPES.challan, onRefresh: () => { if (selectedCompany) { setPage(1); fetchChallans(selectedCompany.id, 1); } } });
+  const copy = useDocumentCopy({
+    sourceType: DOC_COPY_TYPES.challan,
+    onRefresh: () => {
+      if (selectedCompany) {
+        setPage(1);
+        fetchChallans(selectedCompany.id, 1);
+      }
+    },
+  });
   const [viewMode, setViewMode, isBigScreen] = useListViewMode("challans");
   const [clients, setClients] = useState([]);
   const [salesOrders, setSalesOrders] = useState([]);
   const [challans, setChallans] = useState([]);
   const [attachTarget, setAttachTarget] = useState(null);
-  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(selectedCompany?.id, "DeliveryChallan", challans.map((r) => r.id));
+  const { counts: attachCounts, refresh: refreshAttachCounts } = useEntityAttachmentCounts(
+    selectedCompany?.id,
+    "DeliveryChallan",
+    challans.map((r) => r.id),
+  );
   const [showModal, setShowModal] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [editChallan, setEditChallan] = useState(null);
@@ -104,7 +123,9 @@ export default function ChallanPage() {
   const [size, setSize] = usePageSize("challans");
   const [search, setSearch] = useState("");
   // ?status= arrives from the dashboard ("challans need FBR setup").
-  const [statusFilter, setStatusFilter] = useState(() => new URLSearchParams(window.location.search).get("status") || "");
+  const [statusFilter, setStatusFilter] = useState(
+    () => new URLSearchParams(window.location.search).get("status") || "",
+  );
   const [divisionFilter, setDivisionFilter] = useState("");
   const [clientFilter, setClientFilter] = useState("");
   // Seed the SO filter from ?salesOrderId= so the "View Challans" shortcut
@@ -135,39 +156,57 @@ export default function ChallanPage() {
   const fetchClients = async (companyId) => {
     // Skip the call entirely for roles without clients.manage.view —
     // avoids a guaranteed 403 in the network log. Dropdown is hidden.
-    if (!canViewClients) { setClients([]); return; }
+    if (!canViewClients) {
+      setClients([]);
+      return;
+    }
     try {
       const { data } = await getClientsByCompany(companyId);
       setClients(data);
-    } catch { setClients([]); }
+    } catch {
+      setClients([]);
+    }
   };
 
-  const fetchChallans = useCallback(async (companyId, pg) => {
-    if (!companyId) return;
-    setLoadingChallans(true);
-    try {
-      const params = { page: pg || page };
-      if (size) params.pageSize = size;
-      if (search) params.search = search;
-      if (statusFilter) params.status = statusFilter;
-      if (divisionFilter) params.divisionId = divisionFilter;
-      if (clientFilter) params.clientId = clientFilter;
-      if (salesOrderFilter) params.salesOrderId = salesOrderFilter;
-      if (dateFrom) params.dateFrom = dateFrom;
-      if (dateTo) params.dateTo = dateTo;
-      const { data } = await getPagedChallansByCompany(companyId, params);
-      setChallans(data.items);
-      setTotalCount(data.totalCount);
-      setTotalPages(data.totalPages);
-      setPageSize(data.pageSize);
-    } catch {
-      setChallans([]);
-      setTotalCount(0);
-      setTotalPages(0);
-    } finally {
-      setLoadingChallans(false);
-    }
-  }, [page, size, search, statusFilter, divisionFilter, clientFilter, salesOrderFilter, dateFrom, dateTo]);
+  const fetchChallans = useCallback(
+    async (companyId, pg) => {
+      if (!companyId) return;
+      setLoadingChallans(true);
+      try {
+        const params = { page: pg || page };
+        if (size) params.pageSize = size;
+        if (search) params.search = search;
+        if (statusFilter) params.status = statusFilter;
+        if (divisionFilter) params.divisionId = divisionFilter;
+        if (clientFilter) params.clientId = clientFilter;
+        if (salesOrderFilter) params.salesOrderId = salesOrderFilter;
+        if (dateFrom) params.dateFrom = dateFrom;
+        if (dateTo) params.dateTo = dateTo;
+        const { data } = await getPagedChallansByCompany(companyId, params);
+        setChallans(data.items);
+        setTotalCount(data.totalCount);
+        setTotalPages(data.totalPages);
+        setPageSize(data.pageSize);
+      } catch {
+        setChallans([]);
+        setTotalCount(0);
+        setTotalPages(0);
+      } finally {
+        setLoadingChallans(false);
+      }
+    },
+    [
+      page,
+      size,
+      search,
+      statusFilter,
+      divisionFilter,
+      clientFilter,
+      salesOrderFilter,
+      dateFrom,
+      dateTo,
+    ],
+  );
 
   useEffect(() => {
     if (selectedCompany) {
@@ -186,7 +225,7 @@ export default function ChallanPage() {
       if (divisionFilter) setDivisionFilter("");
       else fetchChallans(selectedCompany.id, 1);
       hasExcelTemplate(selectedCompany.id, "Challan")
-        .then(r => setHasExcelTpl(r.data.hasExcelTemplate))
+        .then((r) => setHasExcelTpl(r.data.hasExcelTemplate))
         .catch(() => setHasExcelTpl(false));
     } else {
       setChallans([]);
@@ -199,22 +238,44 @@ export default function ChallanPage() {
   // already loads page 1, and running both fetched the list twice on every open.
   const filtersMountedRef = useRef(false);
   useEffect(() => {
-    if (!filtersMountedRef.current) { filtersMountedRef.current = true; return; }
+    if (!filtersMountedRef.current) {
+      filtersMountedRef.current = true;
+      return;
+    }
     if (selectedCompany) fetchChallans(selectedCompany.id, page);
-  }, [page, size, search, statusFilter, divisionFilter, clientFilter, salesOrderFilter, dateFrom, dateTo]);
+  }, [
+    page,
+    size,
+    search,
+    statusFilter,
+    divisionFilter,
+    clientFilter,
+    salesOrderFilter,
+    dateFrom,
+    dateTo,
+  ]);
 
   // Sales orders powering the SO filter dropdown — scoped to the selected
   // company + division (the picker helper walks the division-scoped paged
   // endpoint). Refetched when either changes; skipped for roles that can't
   // view sales orders (they'd 403 + get an empty dropdown).
   useEffect(() => {
-    if (!selectedCompany || !canViewSalesOrders) { setSalesOrders([]); return; }
+    if (!selectedCompany || !canViewSalesOrders) {
+      setSalesOrders([]);
+      return;
+    }
     let cancelled = false;
     const params = divisionFilter ? { divisionId: divisionFilter } : {};
     getSalesOrdersForPicker(selectedCompany.id, params)
-      .then((items) => { if (!cancelled) setSalesOrders(items || []); })
-      .catch(() => { if (!cancelled) setSalesOrders([]); });
-    return () => { cancelled = true; };
+      .then((items) => {
+        if (!cancelled) setSalesOrders(items || []);
+      })
+      .catch(() => {
+        if (!cancelled) setSalesOrders([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [selectedCompany, divisionFilter, canViewSalesOrders]);
 
   const resetFilters = () => {
@@ -233,7 +294,9 @@ export default function ChallanPage() {
     setPage(1);
   };
 
-  const handleAddChallan = () => { if (selectedCompany) setShowModal(true); };
+  const handleAddChallan = () => {
+    if (selectedCompany) setShowModal(true);
+  };
   // Dashboard quick action: /challans?new=1 opens the create form.
   useQueryAction("new", !!selectedCompany && canCreate, handleAddChallan);
 
@@ -256,7 +319,12 @@ export default function ChallanPage() {
   };
 
   const handleCancel = async (challan) => {
-    const ok = await confirm({ title: "Cancel Challan?", message: `Cancel Challan #${challan.challanNumber}? This will mark it as cancelled.`, variant: "warning", confirmText: "Cancel Challan" });
+    const ok = await confirm({
+      title: "Cancel Challan?",
+      message: `Cancel Challan #${challan.challanNumber}? This will mark it as cancelled.`,
+      variant: "warning",
+      confirmText: "Cancel Challan",
+    });
     if (!ok) return;
     try {
       await cancelChallan(challan.id);
@@ -267,7 +335,12 @@ export default function ChallanPage() {
   };
 
   const handleDelete = async (challan) => {
-    const ok = await confirm({ title: "Delete Challan?", message: `Delete Challan #${challan.challanNumber}? This cannot be undone.`, variant: "danger", confirmText: "Delete" });
+    const ok = await confirm({
+      title: "Delete Challan?",
+      message: `Delete Challan #${challan.challanNumber}? This cannot be undone.`,
+      variant: "danger",
+      confirmText: "Delete",
+    });
     if (!ok) return;
     try {
       await deleteChallan(challan.id);
@@ -287,15 +360,23 @@ export default function ChallanPage() {
       try {
         const res = await getTemplate(selectedCompany.id, "Challan");
         if (res.data?.htmlContent) return res.data.htmlContent;
-      } catch { /* use default */ }
+      } catch {
+        /* use default */
+      }
     }
     return defaultChallanTemplate;
   };
 
   const handlePrint = async (challan) => {
-    if (!selectedCompany) { notify("No company selected.", "error"); return; }
+    if (!selectedCompany) {
+      notify("No company selected.", "error");
+      return;
+    }
     const w = window.open("", "_blank");
-    if (!w) { notify("Popup blocked. Please allow popups for this site.", "warning"); return; }
+    if (!w) {
+      notify("Popup blocked. Please allow popups for this site.", "warning");
+      return;
+    }
     w.document.write("<p>Loading challan...</p>");
     try {
       const { data } = await getChallanPrintData(challan.id);
@@ -344,13 +425,10 @@ export default function ChallanPage() {
         setEditChallan(clones[0]);
         notify(
           `Challan #${clones[0].challanNumber} duplicated. Update the PO and items, then save.`,
-          "success"
+          "success",
         );
       } else {
-        notify(
-          `Created ${clones.length} copies of Challan #${challan.challanNumber}.`,
-          "success"
-        );
+        notify(`Created ${clones.length} copies of Challan #${challan.challanNumber}.`, "success");
       }
     } catch (err) {
       notify(err.response?.data?.error || "Failed to duplicate challan.", "error");
@@ -389,315 +467,392 @@ export default function ChallanPage() {
     }
   };
 
-  const hasFilters = search || statusFilter || divisionFilter || clientFilter || salesOrderFilter || dateFrom || dateTo;
+  const hasFilters =
+    search ||
+    statusFilter ||
+    divisionFilter ||
+    clientFilter ||
+    salesOrderFilter ||
+    dateFrom ||
+    dateTo;
 
   // SO filter options: "SO #<n> — <client>", searchable by number or client
   // (SearchableSelect searches the label by default). Memoised so the portaled
   // dropdown isn't handed a fresh array identity on every render.
   const salesOrderOptions = useMemo(
-    () => (salesOrders || []).map((o) => ({
-      id: o.id,
-      label: `SO #${o.salesOrderNumber}${o.clientName ? ` — ${o.clientName}` : ""}`,
-    })),
-    [salesOrders]
+    () =>
+      (salesOrders || []).map((o) => ({
+        id: o.id,
+        label: `SO #${o.salesOrderNumber}${o.clientName ? ` — ${o.clientName}` : ""}`,
+      })),
+    [salesOrders],
   );
 
   return (
     <DocumentLinesNavigation type="challan">
-    <div>
-      <div data-admin-page-header="" style={styles.pageHeader}>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div data-admin-page-icon="" style={styles.headerIcon}>
-            <MdDescription size={28} color="#fff" />
+      <div>
+        <div data-admin-page-header="" style={styles.pageHeader}>
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+            <div data-admin-page-icon="" style={styles.headerIcon}>
+              <MdDescription size={28} color="#fff" />
+            </div>
+            <div>
+              <h2 style={styles.pageTitle}>Delivery Challans</h2>
+              <p style={styles.pageSubtitle}>
+                {selectedCompany
+                  ? `${totalCount} challan${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
+                  : "Select a company to view challans"}
+              </p>
+            </div>
+            <DocumentLinesHeaderLink />
           </div>
-          <div>
-            <h2 style={styles.pageTitle}>Delivery Challans</h2>
-            <p style={styles.pageSubtitle}>
-              {selectedCompany
-                ? `${totalCount} challan${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
-                : "Select a company to view challans"}
-            </p>
-          </div>
-          <DocumentLinesHeaderLink />
-        </div>
-        {companies.length > 0 && (
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            {canCreate && (
-              <button style={styles.addBtn} onClick={handleAddChallan}>
-                <MdAdd size={18} /> New Challan
-              </button>
-            )}
-            {canImportPo && (
-              <button
-                style={{ ...styles.addBtn, background: colors.teal, boxShadow: "0 4px 14px rgba(0,137,123,0.25)" }}
-                onClick={() => selectedCompany && setShowImport(true)}
-              >
-                <MdUploadFile size={18} /> Import PO
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-
-      {loadingCompanies ? (
-        <div style={styles.loadingContainer}>
-          <div style={styles.spinner} />
-          <span style={{ color: colors.textSecondary, fontSize: "0.9rem" }}>Loading companies...</span>
-        </div>
-      ) : companies.length > 0 ? (
-        <>
-          {companies.length > 1 && (<div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <MdBusiness size={20} color={colors.blue} />
-            <select
-              style={dropdownStyles.base}
-              value={selectedCompany?.id || ""}
-              onChange={(e) =>
-                setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))
-              }
-            >
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>{c.brandName || c.name}</option>
-              ))}
-            </select>
-            {/* Division scope — sits next to Company. Drives both the list
-                filter and the print-template scope. Hidden for companies with
-                no divisions (DivisionSelect self-hides). */}
-            {selectedCompany && (
-              <DivisionSelect
-                companyId={selectedCompany.id}
-                value={divisionFilter}
-                onChange={(v) => { setDivisionFilter(v); setSalesOrderFilter(""); setPage(1); }}
-                style={dropdownStyles.base}
-              />
-            )}
-          </div>)}
-
-          {/* Filters + view-mode toggle */}
-          {selectedCompany && (
-            <div className="filters-row">
-              <div className="filter-search-wrap">
-                <MdSearch size={15} className="filter-search-icon" />
-                <input
-                  type="text"
-                  placeholder="Search DC#, Client, PO..."
-                  className="filter-search-input"
-                  value={search}
-                  onChange={handleFilterChange(setSearch)}
-                />
-              </div>
-              <select className="filter-select" value={statusFilter} onChange={handleFilterChange(setStatusFilter)}>
-                <option value="">All Status</option>
-                <option value="Pending">Pending</option>
-                <option value="Imported">Imported</option>
-                <option value="No PO">No PO</option>
-                <option value="Setup Required">Setup Required</option>
-                <option value="Invoiced">Billed</option>
-                <option value="Cancelled">Cancelled</option>
-              </select>
-              {canViewClients && (
-                <div style={{ minWidth: 220, maxWidth: 340 }}>
-                  <SearchableSelect
-                    items={clients}
-                    value={clientFilter}
-                    onChange={(id) => handleFilterChange(setClientFilter)({ target: { value: id ? String(id) : "" } })}
-                    placeholder="All Clients"
-                  />
-                </div>
+          {companies.length > 0 && (
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              {canCreate && (
+                <button style={styles.addBtn} onClick={handleAddChallan}>
+                  <MdAdd size={18} /> New Challan
+                </button>
               )}
-              {canViewSalesOrders && (
-                <div style={{ minWidth: 220, maxWidth: 340 }}>
-                  <SearchableSelect
-                    items={salesOrderOptions}
-                    value={salesOrderFilter}
-                    onChange={(id) => handleFilterChange(setSalesOrderFilter)({ target: { value: id ? String(id) : "" } })}
-                    labelKey="label"
-                    placeholder="All Sales Orders"
-                  />
-                </div>
-              )}
-              <div className="filter-date-group">
-                <input type="date" className="filter-date-input" value={dateFrom} onChange={handleFilterChange(setDateFrom)} title="From date" />
-                <span className="filter-date-sep">–</span>
-                <input type="date" className="filter-date-input" value={dateTo} onChange={handleFilterChange(setDateTo)} title="To date" />
-              </div>
-              {hasFilters && (
-                <button className="filter-clear-btn" onClick={resetFilters}>Clear</button>
-              )}
-              <PrintTemplateSelect picker={tplPicker} />
-              {isBigScreen && (
-                <div style={{ marginLeft: "auto" }}>
-                  <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Delivery challan view mode" />
-                </div>
+              {canImportPo && (
+                <button
+                  style={{
+                    ...styles.addBtn,
+                    background: colors.teal,
+                    boxShadow: "0 4px 14px rgba(0,137,123,0.25)",
+                  }}
+                  onClick={() => selectedCompany && setShowImport(true)}
+                >
+                  <MdUploadFile size={18} /> Import PO
+                </button>
               )}
             </div>
           )}
-        </>
-      ) : (
-        <div style={styles.emptyState}>
-          <MdBusiness size={40} color={colors.cardBorder} />
-          <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>No companies available. Add a company first.</p>
         </div>
-      )}
 
-      {loadingChallans ? (
-        <div style={styles.loadingContainer}>
-          <div style={styles.spinner} />
-          <span style={{ color: colors.textSecondary, fontSize: "0.9rem" }}>Loading challans...</span>
-        </div>
-      ) : challans.length === 0 && selectedCompany ? (
-        <div style={styles.emptyState}>
-          <MdDescription size={40} color={colors.cardBorder} />
-          <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>
-            {hasFilters ? "No challans match the current filters." : "No delivery challans found for this company."}
-          </p>
-        </div>
-      ) : (
-        <>
-          {viewMode === "table" ? (
-            <ChallanTable
-              challans={challans}
-              onCopy={(c) => copy.openCopy(c.id, `Delivery Challan #${c.challanNumber}`)}
-              onLinkOrder={canLinkOrder ? (c) => setLinkChallan(c) : null}
-              onCancel={handleCancel}
-              onDelete={handleDelete}
-              onPrint={handlePrint}
-              onEditItems={handleEditItems}
-              onExportPdf={handleExportPdf}
-              onExportExcel={hasExcelTpl ? handleExportExcel : null}
-              printDisabled={tplPicker.noTemplate}
-              printDisabledReason={tplPicker.noTemplateReason}
-              onGenerateBill={(c) => setGenerateBillChallanId(c.id)}
-              onDuplicate={handleDuplicate}
-              exportingId={exportingId}
-              duplicatingId={duplicatingId}
-              companyFbrOff={selectedCompany?.fbrEnabled === false}
-              attachCounts={attachCounts}
-              onAttach={(c) => setAttachTarget(c)}
+        {loadingCompanies ? (
+          <div style={styles.loadingContainer}>
+            <div style={styles.spinner} />
+            <span style={{ color: colors.textSecondary, fontSize: "0.9rem" }}>
+              Loading companies...
+            </span>
+          </div>
+        ) : companies.length > 0 ? (
+          <>
+            {companies.length > 1 && (
+              <div
+                style={{
+                  marginBottom: "1rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.75rem",
+                }}
+              >
+                <MdBusiness size={20} color={colors.blue} />
+                <select
+                  style={dropdownStyles.base}
+                  value={selectedCompany?.id || ""}
+                  onChange={(e) =>
+                    setSelectedCompany(
+                      companies.find((c) => parseInt(c.id) === parseInt(e.target.value)),
+                    )
+                  }
+                >
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.brandName || c.name}
+                    </option>
+                  ))}
+                </select>
+                {/* Division scope — sits next to Company. Drives both the list
+                filter and the print-template scope. Hidden for companies with
+                no divisions (DivisionSelect self-hides). */}
+                {selectedCompany && (
+                  <DivisionSelect
+                    companyId={selectedCompany.id}
+                    value={divisionFilter}
+                    onChange={(v) => {
+                      setDivisionFilter(v);
+                      setSalesOrderFilter("");
+                      setPage(1);
+                    }}
+                    style={dropdownStyles.base}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Filters + view-mode toggle */}
+            {selectedCompany && (
+              <div className="filters-row">
+                <div className="filter-search-wrap">
+                  <MdSearch size={15} className="filter-search-icon" />
+                  <input
+                    type="text"
+                    placeholder="Search DC#, Client, PO..."
+                    className="filter-search-input"
+                    value={search}
+                    onChange={handleFilterChange(setSearch)}
+                  />
+                </div>
+                <select
+                  className="filter-select"
+                  value={statusFilter}
+                  onChange={handleFilterChange(setStatusFilter)}
+                >
+                  <option value="">All Status</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Imported">Imported</option>
+                  <option value="No PO">No PO</option>
+                  <option value="Setup Required">Setup Required</option>
+                  <option value="Invoiced">Billed</option>
+                  <option value="Cancelled">Cancelled</option>
+                </select>
+                {canViewClients && (
+                  <div style={{ minWidth: 220, maxWidth: 340 }}>
+                    <SearchableSelect
+                      items={clients}
+                      value={clientFilter}
+                      onChange={(id) =>
+                        handleFilterChange(setClientFilter)({
+                          target: { value: id ? String(id) : "" },
+                        })
+                      }
+                      placeholder="All Clients"
+                    />
+                  </div>
+                )}
+                {canViewSalesOrders && (
+                  <div style={{ minWidth: 220, maxWidth: 340 }}>
+                    <SearchableSelect
+                      items={salesOrderOptions}
+                      value={salesOrderFilter}
+                      onChange={(id) =>
+                        handleFilterChange(setSalesOrderFilter)({
+                          target: { value: id ? String(id) : "" },
+                        })
+                      }
+                      labelKey="label"
+                      placeholder="All Sales Orders"
+                    />
+                  </div>
+                )}
+                <div className="filter-date-group">
+                  <input
+                    type="date"
+                    className="filter-date-input"
+                    value={dateFrom}
+                    onChange={handleFilterChange(setDateFrom)}
+                    title="From date"
+                  />
+                  <span className="filter-date-sep">–</span>
+                  <input
+                    type="date"
+                    className="filter-date-input"
+                    value={dateTo}
+                    onChange={handleFilterChange(setDateTo)}
+                    title="To date"
+                  />
+                </div>
+                {hasFilters && (
+                  <button className="filter-clear-btn" onClick={resetFilters}>
+                    Clear
+                  </button>
+                )}
+                <PrintTemplateSelect picker={tplPicker} />
+                {isBigScreen && (
+                  <div style={{ marginLeft: "auto" }}>
+                    <ViewModeToggle
+                      mode={viewMode}
+                      onChange={setViewMode}
+                      ariaLabel="Delivery challan view mode"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        ) : (
+          <div style={styles.emptyState}>
+            <MdBusiness size={40} color={colors.cardBorder} />
+            <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>
+              No companies available. Add a company first.
+            </p>
+          </div>
+        )}
+
+        {loadingChallans ? (
+          <div style={styles.loadingContainer}>
+            <div style={styles.spinner} />
+            <span style={{ color: colors.textSecondary, fontSize: "0.9rem" }}>
+              Loading challans...
+            </span>
+          </div>
+        ) : challans.length === 0 && selectedCompany ? (
+          <div style={styles.emptyState}>
+            <MdDescription size={40} color={colors.cardBorder} />
+            <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>
+              {hasFilters
+                ? "No challans match the current filters."
+                : "No delivery challans found for this company."}
+            </p>
+          </div>
+        ) : (
+          <>
+            {viewMode === "table" ? (
+              <ChallanTable
+                challans={challans}
+                onCopy={(c) => copy.openCopy(c.id, `Delivery Challan #${c.challanNumber}`)}
+                onLinkOrder={canLinkOrder ? (c) => setLinkChallan(c) : null}
+                onCancel={handleCancel}
+                onDelete={handleDelete}
+                onPrint={handlePrint}
+                onEditItems={handleEditItems}
+                onExportPdf={handleExportPdf}
+                onExportExcel={hasExcelTpl ? handleExportExcel : null}
+                printDisabled={tplPicker.noTemplate}
+                printDisabledReason={tplPicker.noTemplateReason}
+                onGenerateBill={(c) => setGenerateBillChallanId(c.id)}
+                onDuplicate={handleDuplicate}
+                exportingId={exportingId}
+                duplicatingId={duplicatingId}
+                companyFbrOff={selectedCompany?.fbrEnabled === false}
+                attachCounts={attachCounts}
+                onAttach={(c) => setAttachTarget(c)}
+              />
+            ) : (
+              <ChallanList
+                challans={challans}
+                onCopy={(c) => copy.openCopy(c.id, `Delivery Challan #${c.challanNumber}`)}
+                onLinkOrder={canLinkOrder ? (c) => setLinkChallan(c) : null}
+                onCancel={handleCancel}
+                onDelete={handleDelete}
+                onPrint={handlePrint}
+                onEditItems={handleEditItems}
+                onExportPdf={handleExportPdf}
+                onExportExcel={hasExcelTpl ? handleExportExcel : null}
+                printDisabled={tplPicker.noTemplate}
+                printDisabledReason={tplPicker.noTemplateReason}
+                onGenerateBill={(c) => setGenerateBillChallanId(c.id)}
+                onDuplicate={handleDuplicate}
+                exportingId={exportingId}
+                duplicatingId={duplicatingId}
+                companyFbrOff={selectedCompany?.fbrEnabled === false}
+                attachCounts={attachCounts}
+                onAttach={(c) => setAttachTarget(c)}
+              />
+            )}
+            {/* Pagination */}
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              total={totalCount}
+              onPage={setPage}
+              pageSize={size}
+              onPageSize={(n) => {
+                setSize(n);
+                setPage(1);
+              }}
             />
-          ) : (
-            <ChallanList
-              challans={challans}
-              onCopy={(c) => copy.openCopy(c.id, `Delivery Challan #${c.challanNumber}`)}
-              onLinkOrder={canLinkOrder ? (c) => setLinkChallan(c) : null}
-              onCancel={handleCancel}
-              onDelete={handleDelete}
-              onPrint={handlePrint}
-              onEditItems={handleEditItems}
-              onExportPdf={handleExportPdf}
-              onExportExcel={hasExcelTpl ? handleExportExcel : null}
-              printDisabled={tplPicker.noTemplate}
-              printDisabledReason={tplPicker.noTemplateReason}
-              onGenerateBill={(c) => setGenerateBillChallanId(c.id)}
-              onDuplicate={handleDuplicate}
-              exportingId={exportingId}
-              duplicatingId={duplicatingId}
-              companyFbrOff={selectedCompany?.fbrEnabled === false}
-              attachCounts={attachCounts}
-              onAttach={(c) => setAttachTarget(c)}
-            />
-          )}
-          {/* Pagination */}
-          <Pagination
-            page={page}
-            totalPages={totalPages}
-            total={totalCount}
-            onPage={setPage}
-            pageSize={size}
-            onPageSize={(n) => { setSize(n); setPage(1); }}
+          </>
+        )}
+
+        {linkChallan && selectedCompany && (
+          <AttachChallanToOrderModal
+            companyId={selectedCompany.id}
+            challan={linkChallan}
+            onClose={() => setLinkChallan(null)}
+            onAttached={(order) => {
+              setLinkChallan(null);
+              notify(`Challan linked to SO #${order?.salesOrderNumber ?? ""}.`, "success");
+              fetchChallans(selectedCompany.id, page);
+            }}
           />
-        </>
-      )}
+        )}
 
-      {linkChallan && selectedCompany && (
-        <AttachChallanToOrderModal
-          companyId={selectedCompany.id}
-          challan={linkChallan}
-          onClose={() => setLinkChallan(null)}
-          onAttached={(order) => {
-            setLinkChallan(null);
-            notify(`Challan linked to SO #${order?.salesOrderNumber ?? ""}.`, "success");
-            fetchChallans(selectedCompany.id, page);
-          }}
-        />
-      )}
+        {attachTarget && selectedCompany?.id && (
+          <AttachmentQuickModal
+            companyId={selectedCompany?.id}
+            entityType="DeliveryChallan"
+            entityId={attachTarget.id}
+            title={`Challan #${attachTarget.challanNumber} — Attachments`}
+            onClose={() => {
+              setAttachTarget(null);
+              refreshAttachCounts();
+            }}
+          />
+        )}
 
-      {attachTarget && selectedCompany?.id && (
-        <AttachmentQuickModal
-          companyId={selectedCompany?.id}
-          entityType="DeliveryChallan"
-          entityId={attachTarget.id}
-          title={`Challan #${attachTarget.challanNumber} — Attachments`}
-          onClose={() => { setAttachTarget(null); refreshAttachCounts(); }}
-        />
-      )}
+        {copy.source && (
+          <CopyDocumentModal
+            sourceType={DOC_COPY_TYPES.challan}
+            sourceId={copy.source.id}
+            sourceLabel={copy.source.label}
+            onClose={copy.close}
+            onCopied={copy.onCopied}
+          />
+        )}
 
-      {copy.source && (
-        <CopyDocumentModal
-          sourceType={DOC_COPY_TYPES.challan}
-          sourceId={copy.source.id}
-          sourceLabel={copy.source.label}
-          onClose={copy.close}
-          onCopied={copy.onCopied}
-        />
-      )}
+        {showModal && selectedCompany && (
+          <ChallanForm
+            companyId={selectedCompany.id}
+            defaultDivisionId={divisionFilter}
+            onClose={() => setShowModal(false)}
+            onSaved={handleSaveChallan}
+          />
+        )}
 
-      {showModal && selectedCompany && (
-        <ChallanForm
-          companyId={selectedCompany.id}
-          defaultDivisionId={divisionFilter}
-          onClose={() => setShowModal(false)}
-          onSaved={handleSaveChallan}
-        />
-      )}
+        {showImport && selectedCompany && (
+          <POImportForm
+            companyId={selectedCompany.id}
+            target="challan"
+            onClose={() => setShowImport(false)}
+            onSaved={() => {
+              setShowImport(false);
+              setPage(1);
+              fetchChallans(selectedCompany.id, 1);
+              notify("Delivery Challan created from PO.", "success");
+            }}
+          />
+        )}
 
-      {showImport && selectedCompany && (
-        <POImportForm
-          companyId={selectedCompany.id}
-          target="challan"
-          onClose={() => setShowImport(false)}
-          onSaved={() => { setShowImport(false); setPage(1); fetchChallans(selectedCompany.id, 1); notify("Delivery Challan created from PO.", "success"); }}
-        />
-      )}
+        {editChallan && (
+          <ChallanEditForm
+            challan={editChallan}
+            onClose={() => setEditChallan(null)}
+            onSaved={handleEditSaved}
+          />
+        )}
 
-      {editChallan && (
-        <ChallanEditForm
-          challan={editChallan}
-          onClose={() => setEditChallan(null)}
-          onSaved={handleEditSaved}
-        />
-      )}
+        {generateBillChallanId && selectedCompany && (
+          <InvoiceForm
+            companyId={selectedCompany.id}
+            company={selectedCompany}
+            prefillChallanId={generateBillChallanId}
+            // 2026-05-08: Generate Bill from Challans always lands on the
+            // Bills view (no FBR fields). Same shape as the Bills tab's
+            // "+ New Bill" entry point. Without this, the form rendered
+            // Item Type / HS Code / Sale Type columns + the New Item Type
+            // button — visually inconsistent with the other bill-creation
+            // flows.
+            billsMode={true}
+            onClose={() => setGenerateBillChallanId(null)}
+            onSaved={() => {
+              setGenerateBillChallanId(null);
+              notify("Bill created.", "success");
+              fetchChallans(selectedCompany.id, page);
+            }}
+          />
+        )}
 
-      {generateBillChallanId && selectedCompany && (
-        <InvoiceForm
-          companyId={selectedCompany.id}
-          company={selectedCompany}
-          prefillChallanId={generateBillChallanId}
-          // 2026-05-08: Generate Bill from Challans always lands on the
-          // Bills view (no FBR fields). Same shape as the Bills tab's
-          // "+ New Bill" entry point. Without this, the form rendered
-          // Item Type / HS Code / Sale Type columns + the New Item Type
-          // button — visually inconsistent with the other bill-creation
-          // flows.
-          billsMode={true}
-          onClose={() => setGenerateBillChallanId(null)}
-          onSaved={() => {
-            setGenerateBillChallanId(null);
-            notify("Bill created.", "success");
-            fetchChallans(selectedCompany.id, page);
-          }}
-        />
-      )}
-
-      {/* Count-input dialog for the Duplicate flow. Replaces the
+        {/* Count-input dialog for the Duplicate flow. Replaces the
           legacy yes/no confirm — see handleDuplicate above. */}
-      <DuplicateChallanDialog
-        open={!!duplicateSource}
-        challanNumber={duplicateSource?.challanNumber}
-        onConfirm={handleDuplicateConfirm}
-        onCancel={() => setDuplicateSource(null)}
-      />
-
-    </div>
+        <DuplicateChallanDialog
+          open={!!duplicateSource}
+          challanNumber={duplicateSource?.challanNumber}
+          onConfirm={handleDuplicateConfirm}
+          onCancel={() => setDuplicateSource(null)}
+        />
+      </div>
     </DocumentLinesNavigation>
   );
 }
@@ -708,7 +863,20 @@ function buildChallanPrintHtml(data) {
   const fmtDate = (d) => {
     if (!d) return "";
     const dt = new Date(d);
-    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const months = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
     const dd = String(dt.getDate()).padStart(2, "0");
     const mmm = months[dt.getMonth()];
     const yy = String(dt.getFullYear()).slice(-2);
@@ -716,12 +884,15 @@ function buildChallanPrintHtml(data) {
   };
 
   // Build item rows
-  let itemRows = data.items.map((item) =>
-    `<tr>
+  let itemRows = data.items
+    .map(
+      (item) =>
+        `<tr>
       <td class="cell qty">${item.quantity}</td>
       <td class="cell item">${renderRichTextHtml(item.description)}</td>
-    </tr>`
-  ).join("");
+    </tr>`,
+    )
+    .join("");
 
   // Pad with empty rows to reach minimum
   const emptyCount = Math.max(0, MIN_ROWS - data.items.length);
