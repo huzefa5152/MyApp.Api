@@ -130,6 +130,48 @@ cached on the server.
 | The keep-warm ping being steered elsewhere | The address is learned from a request's Host header, which the caller controls, so only the hosting platform's own domain (or a host named in `KeepWarm:Host`) is accepted. It asks for a static file: no data, no database, no audit row. Off in Development and with `KeepWarm:Enabled = false`. |
 | The double-fetch fix dropping a refresh | Filters, search and paging still refetch; checked in the browser. |
 
+## After, on production
+
+The same walk of 52 screens, same company, after the deploy. Each screen was
+walked twice; a pass was discarded for a screen when the tab was used during it
+(that refetches the company list and inflates the figures).
+
+| | Before | After | Change |
+|---|---:|---:|---:|
+| Payload on the wire, all screens | 6,882 KB | 729 KB | −89% |
+| API time, all screens (sum) | 32.8 s | 24.4 s | −25% |
+| Time until each screen's network went quiet (sum) | 35.4 s | 21.5 s | −39% |
+| Screens with data that got at least 10% faster | | 26 of 46 | |
+| Screens that got more than 10% slower | | 5 of 46 | all within 60 ms of before, or disturbed |
+
+| Call | Before | After |
+|---|---:|---:|
+| Cheapest authenticated call | 131–137 ms | 135–143 ms |
+| A small list (clients) | 138–194 ms | 135–142 ms |
+| Print templates | 100 KB, 213–300 ms | 15 KB, 274–344 ms |
+| Every invoice (New Credit / Debit Note) | 1,033 KB, 1,132 ms | 76 KB, 554–839 ms |
+| FBR lookups (FBR Settings) | 3,300 KB, 1,512 ms | 265 KB, 525–634 ms |
+
+| Screen | Before ms | After ms |
+|---|---:|---:|
+| Bills | 4,104 | 1,039 |
+| Purchase Bills | 1,698 | 890 |
+| Goods Receipts | 985 | 558 |
+| Stock | 953 | 354 |
+| FBR Settings | 1,774 | 525 |
+| New Credit / Debit Note | 1,132 | 554 |
+| Challans | 1,728 | 1,226 |
+
+Asset caching is confirmed on production by its headers (bundle `immutable`,
+shell `no-cache`); a reload makes no asset requests at all. Small calls did not
+get faster: they are one network round trip either way.
+
+**Not verified:** the keep-warm ping. Proving it needs the site to sit idle
+past the host's unload time and then be visited; the next cold visit will show
+it. If the first screen after a long idle spell is still slow, the host is
+unloading the site regardless and the ping should move to an external
+scheduler.
+
 ## Verification
 
 - All 49 profiled endpoints return the same status, the same number of SQL
