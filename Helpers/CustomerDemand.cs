@@ -92,11 +92,49 @@ namespace MyApp.Api.Helpers
         /// but no longer asks for the undelivered rest.
         /// </summary>
         // ponytail: loads the company's line projections into memory; move the trail grouping into SQL if a company passes ~100k lines.
-        public async Task LoadAsync(int companyId)
+        /// <param name="onlyChallans">When given, loads only what the trails through
+        /// these challans hold: their order lines, every live challan line on those
+        /// orders, the bill lines linked to any of them, and the challan lines those
+        /// bills point at (so a bill still joins its challan's trail, never the
+        /// order's). Those trails come out exactly as in a full load; others may be
+        /// partial, so read only these challans' trails. The challan list uses it to
+        /// label one page without reading the company's whole history (2026-11-20).</param>
+        public async Task LoadAsync(int companyId, IReadOnlyCollection<int>? onlyChallans = null)
         {
             _companyId = companyId;
-            var orders = await _db.SalesOrderItems.AsNoTracking()
-                .Where(i => i.SalesOrder.CompanyId == companyId)
+            List<int>? orderScope = null, challanLineScope = null, billLineScope = null;
+            if (onlyChallans != null)
+            {
+                var docs = onlyChallans.ToList();
+                orderScope = await _db.DeliveryItems.AsNoTracking()
+                    .Where(i => docs.Contains(i.DeliveryChallanId) && i.SalesOrderItemId != null)
+                    .Select(i => i.SalesOrderItemId!.Value).Distinct().ToListAsync();
+                var lines = await _db.DeliveryItems.AsNoTracking()
+                    .Where(i => i.DeliveryChallan.CompanyId == companyId
+                                && (docs.Contains(i.DeliveryChallanId)
+                                    || (i.SalesOrderItemId != null && orderScope.Contains(i.SalesOrderItemId.Value))))
+                    .Select(i => i.Id).ToListAsync();
+                billLineScope = await _db.InvoiceItems.AsNoTracking()
+                    .Where(i => i.Invoice.CompanyId == companyId
+                                && ((i.DeliveryItemId != null && lines.Contains(i.DeliveryItemId.Value))
+                                    || (i.SalesOrderItemId != null && orderScope.Contains(i.SalesOrderItemId.Value))))
+                    .Select(i => i.Id).ToListAsync();
+                var billChallanLines = await _db.InvoiceItems.AsNoTracking()
+                    .Where(i => billLineScope.Contains(i.Id) && i.DeliveryItemId != null)
+                    .Select(i => i.DeliveryItemId!.Value).Distinct().ToListAsync();
+                challanLineScope = lines.Union(billChallanLines).ToList();
+            }
+            var orderLines = _db.SalesOrderItems.AsNoTracking()
+                .Where(i => i.SalesOrder.CompanyId == companyId);
+            if (orderScope != null) orderLines = orderLines.Where(i => orderScope.Contains(i.Id));
+            var challanLines = _db.DeliveryItems.AsNoTracking()
+                .Where(i => i.DeliveryChallan.CompanyId == companyId && i.DeliveryChallan.Status != "Cancelled" && !i.DeliveryChallan.IsDemo);
+            if (challanLineScope != null) challanLines = challanLines.Where(i => challanLineScope.Contains(i.Id));
+            var billLines = _db.InvoiceItems.AsNoTracking()
+                .Where(i => i.Invoice.CompanyId == companyId && !i.Invoice.IsCancelled && !i.Invoice.IsDemo
+                            && (i.Invoice.DocumentType ?? 0) != 9 && (i.Invoice.DocumentType ?? 0) != 10);
+            if (billLineScope != null) billLines = billLines.Where(i => billLineScope.Contains(i.Id));
+            var orders = await orderLines
                 .Select(i => new
                 {
                     i.Id,
@@ -113,8 +151,7 @@ namespace MyApp.Api.Helpers
                     ItemTypeName = i.ItemType != null ? i.ItemType.Name : null,
                     i.NonInventoryItemId,
                 }).ToListAsync();
-            var challans = await _db.DeliveryItems.AsNoTracking()
-                .Where(i => i.DeliveryChallan.CompanyId == companyId && i.DeliveryChallan.Status != "Cancelled" && !i.DeliveryChallan.IsDemo)
+            var challans = await challanLines
                 .Select(i => new
                 {
                     i.Id,
@@ -135,9 +172,7 @@ namespace MyApp.Api.Helpers
                     SupplierName = i.Supplier != null ? i.Supplier.Name : null,
                     i.ActualUnitCost,
                 }).ToListAsync();
-            var bills = await _db.InvoiceItems.AsNoTracking()
-                .Where(i => i.Invoice.CompanyId == companyId && !i.Invoice.IsCancelled && !i.Invoice.IsDemo
-                            && (i.Invoice.DocumentType ?? 0) != 9 && (i.Invoice.DocumentType ?? 0) != 10)
+            var bills = await billLines
                 .Select(i => new
                 {
                     i.Id,

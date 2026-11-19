@@ -316,7 +316,7 @@ namespace MyApp.Api.Services.Implementations
         {
             var ids = dtos.Select(d => d.Id).ToList();
             if (ids.Count == 0) return;
-            var linked = (await ChallanPurchases.ChallanIds(_context).Where(id => ids.Contains(id)).ToListAsync()).ToHashSet();
+            var linked = (await ChallanPurchases.ChallanIds(_context, ids).ToListAsync()).ToHashSet();
             foreach (var dto in dtos) dto.HasAutoPurchaseBills = linked.Contains(dto.Id);
             if (linked.Count > 0)
             {
@@ -325,7 +325,9 @@ namespace MyApp.Api.Services.Implementations
                 foreach (var companyId in dtos.Where(d => linked.Contains(d.Id)).Select(d => d.CompanyId).Distinct())
                 {
                     var demand = new CustomerDemand(_context);
-                    await demand.LoadAsync(companyId);
+                    // Only the trails through this page's purchased challans: the
+                    // labels read nothing else (CustomerDemand.LoadAsync's scope).
+                    await demand.LoadAsync(companyId, dtos.Where(d => d.CompanyId == companyId && linked.Contains(d.Id)).Select(d => d.Id).ToList());
                     await demand.LoadBoughtAsync(null);
                     var open = demand.Trails.Where(t => t.Left > 0.0001m).SelectMany(t => t.Challans).Select(c => c.Doc.Id).ToHashSet();
                     full.UnionWith(linked.Where(id => !open.Contains(id)));

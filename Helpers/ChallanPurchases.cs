@@ -14,10 +14,21 @@ namespace MyApp.Api.Helpers
     /// </summary>
     public static class ChallanPurchases
     {
-        public static IQueryable<int> ChallanIds(AppDbContext db)
+        public static IQueryable<int> ChallanIds(AppDbContext db) => ChallanIds(db, null);
+
+        /// <summary>
+        /// The same set, limited to <paramref name="among"/> inside both halves of the
+        /// union, so SQL reads only those challans instead of every purchase in the
+        /// installation and filtering afterwards (the challan list, 2026-11-20).
+        /// </summary>
+        public static IQueryable<int> ChallanIds(AppDbContext db, IReadOnlyCollection<int>? among)
         {
             var s = db.PurchaseItemSources;
-            var viaLines = db.DeliveryItems.Where(di => s.Any(x =>
+            var lines = among == null ? db.DeliveryItems : db.DeliveryItems.Where(di => among.Contains(di.DeliveryChallanId));
+            var bills = among == null
+                ? db.PurchaseBills.Where(p => p.SourceDeliveryChallanId != null)
+                : db.PurchaseBills.Where(p => p.SourceDeliveryChallanId != null && among.Contains(p.SourceDeliveryChallanId.Value));
+            var viaLines = lines.Where(di => s.Any(x =>
                     x.DeliveryItemId == di.Id
                     || (x.InvoiceItem != null && x.InvoiceItem.DeliveryItemId == di.Id)
                     || (di.SalesOrderItemId != null
@@ -27,7 +38,7 @@ namespace MyApp.Api.Helpers
                             || (x.InvoiceItem != null && x.InvoiceItem.DeliveryItem != null
                                 && x.InvoiceItem.DeliveryItem.SalesOrderItemId == di.SalesOrderItemId)))))
                 .Select(di => di.DeliveryChallanId);
-            return db.PurchaseBills.Where(p => p.SourceDeliveryChallanId != null)
+            return bills
                 .Select(p => p.SourceDeliveryChallanId!.Value)
                 .Union(viaLines);
         }
