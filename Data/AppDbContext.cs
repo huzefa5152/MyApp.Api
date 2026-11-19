@@ -200,8 +200,8 @@ namespace MyApp.Api.Data
         public DbSet<StockMovement> StockMovements { get; set; }
         public DbSet<OpeningStockBalance> OpeningStockBalances { get; set; }
 
-                public DbSet<UserSession> UserSessions { get; set; }
-                public DbSet<McpAgentToken> McpAgentTokens { get; set; }
+        public DbSet<UserSession> UserSessions { get; set; }
+        public DbSet<McpAgentToken> McpAgentTokens { get; set; }
         public DbSet<McpUserAccessPolicy> McpUserAccessPolicies { get; set; }
         public DbSet<McpActivity> McpActivities { get; set; }
         public DbSet<McpOAuthClient> McpOAuthClients { get; set; }
