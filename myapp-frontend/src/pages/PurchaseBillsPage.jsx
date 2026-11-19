@@ -3,7 +3,7 @@ import RecordsViewport from "../Components/RecordsViewport";
 import DocumentLinesNavigation, {
   DocumentLinesHeaderLink,
 } from "../Components/DocumentLinesNavigation";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   MdShoppingCart,
   MdAdd,
@@ -156,7 +156,14 @@ export default function PurchaseBillsPage() {
     }
   }, [selectedCompany]);
 
+  // The company effect above already loads page 1 when the screen opens;
+  // without this the list was fetched twice on every visit.
+  const filtersMounted = useRef(false);
   useEffect(() => {
+    if (!filtersMounted.current) {
+      filtersMounted.current = true;
+      return;
+    }
     if (selectedCompany) fetchBills(page);
   }, [page, pageSize, search, supplierFilter, sourceFilter, dateFrom, dateTo]);
 
