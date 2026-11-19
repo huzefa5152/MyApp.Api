@@ -106,6 +106,7 @@ namespace MyApp.Api.Controllers
                 clientId = new { type = "integer", minimum = 1 },
                 date = new { type = "string", format = "date", description = "Defaults to today (Pakistan time); never in the future." },
                 gstRate = new { type = "string", description = "Percent, up to 2 decimals. Default 18." },
+                furtherTaxRate = new { type = "string", description = "Further tax percent (s.3(1A)), up to 2 decimals. None is added unless stated: on a standard-rate sale to a buyer who is not registered it is normally 4. Charged on the value before sales tax, added to the bill total, and filed with FBR exactly as stated." },
                 freightCharges = new { type = "string", description = "Optional non-negative PKR transport / cartage / freight charge, up to 2 decimals. Added only to the commercial bill; sales tax remains unchanged." },
                 paymentTerms = new { type = "string", maxLength = 200 },
                 paymentMode = new { type = "string", @enum = PaymentModes },
@@ -328,6 +329,8 @@ namespace MyApp.Api.Controllers
             var date = OptDate(args, "date") ?? PkToday();
             if (date.Date > PkToday()) throw new ToolError("A bill cannot be dated in the future (FBR rule 0043).");
             var gst = Has(args, "gstRate") ? Dec(args.GetProperty("gstRate"), "gstRate", 0, 100, 2) : 18m;
+            // Stated or absent, never derived: FBR is sent what the bill carries.
+            decimal? furtherRate = Has(args, "furtherTaxRate") ? Dec(args.GetProperty("furtherTaxRate"), "furtherTaxRate", 0, 100, 2) : null;
             var freight = Has(args, "freightCharges")
                 ? CommercialTotalCalculator.Validate(Dec(args.GetProperty("freightCharges"), "freightCharges", 0m, 9999999999999999.99m, 2))
                 : 0m;
@@ -392,8 +395,10 @@ namespace MyApp.Api.Controllers
             var unrounded = lines.Sum(l => l.Quantity * l.UnitPrice);
             var gstAmount = Math.Round(unrounded * gst / 100m, 2);
             var subtotal = RoundAway(unrounded);
-            var grand = RoundAway(unrounded + gstAmount);
+            var furtherAmount = FurtherTaxCalculator.Resolve(furtherRate, subtotal);
+            var grand = RoundAway(unrounded + gstAmount) + furtherAmount;
             var commercial = CommercialTotalCalculator.Total(grand, freight);
+            var buyerRegistered = string.Equals(client.RegistrationType?.Trim(), "Registered", StringComparison.OrdinalIgnoreCase);
 
             var payload = new
             {
@@ -412,6 +417,13 @@ namespace MyApp.Api.Controllers
                 items = lines.Select(l => new { l.DeliveryItemId, l.Description, l.Quantity, l.Unit, l.UnitPrice, l.ItemTypeId, lineTotal = RoundAway(l.Quantity * l.UnitPrice) }),
                 subtotal,
                 gstAmount,
+                furtherTaxRate = furtherAmount > 0m ? furtherRate : null,
+                furtherTaxAmount = furtherAmount,
+                furtherTaxNote = furtherAmount > 0m
+                    ? $"Further tax {furtherRate}% is on this bill and is what FBR will be sent."
+                    : buyerRegistered
+                        ? "No further tax is on this bill."
+                        : "No further tax is on this bill, and FBR will be sent none. This buyer is not registered: state furtherTaxRate (normally 4 on a standard-rate sale) if it applies.",
                 grandTotal = grand,
                 freightCharges = freight,
                 commercialTotal = commercial,
@@ -419,7 +431,7 @@ namespace MyApp.Api.Controllers
                 note = "The bill number is assigned when it is saved. The ERP finalises the exact figures and reports them back. It is not submitted to FBR.",
             };
             var what = fromChallans ? $"Bill challan(s) {string.Join(", ", challanIds!)}" : "Create a standalone bill";
-            var summary = $"{what} for \"{client.Name}\" in company {companyId}: {lines.Count} line(s), GST {gst}%, freight {freight:0.00}, commercial total about {commercial:0.00} PKR";
+            var summary = $"{what} for \"{client.Name}\" in company {companyId}: {lines.Count} line(s), GST {gst}%, further tax {(furtherAmount > 0m ? $"{furtherRate}% ({furtherAmount:0.00})" : "none")}, freight {freight:0.00}, commercial total about {commercial:0.00} PKR";
             return await StorePlanAsync(agent, fromChallans ? "bill.create" : "bill.standalone", companyId, payload, summary, key);
         }
 
@@ -485,6 +497,9 @@ namespace MyApp.Api.Controllers
                 S("poDate") is { } d ? DateTime.ParseExact(d, "yyyy-MM-dd", CultureInfo.InvariantCulture) : null, S("notes"));
         }
 
+        private static decimal? PlanFurtherTaxRate(JsonElement p) =>
+            p.TryGetProperty("furtherTaxRate", out var r) && r.ValueKind == JsonValueKind.Number ? r.GetDecimal() : null;
+
         private static CreateInvoiceDto BillFromChallansPlan(JsonElement p, int companyId)
         {
             var h = BillHeader(p);
@@ -494,6 +509,7 @@ namespace MyApp.Api.Controllers
                 ClientId = p.GetProperty("clientId").GetInt32(),
                 Date = h.Date,
                 GSTRate = p.GetProperty("gstRate").GetDecimal(),
+                FurtherTaxRate = PlanFurtherTaxRate(p),
                 PaymentTerms = h.Terms,
                 PaymentMode = h.Mode,
                 PoNumber = h.Po,
@@ -520,6 +536,7 @@ namespace MyApp.Api.Controllers
                 ClientId = p.GetProperty("clientId").GetInt32(),
                 Date = h.Date,
                 GSTRate = p.GetProperty("gstRate").GetDecimal(),
+                FurtherTaxRate = PlanFurtherTaxRate(p),
                 PaymentTerms = h.Terms,
                 PaymentMode = h.Mode,
                 PoNumber = h.Po,

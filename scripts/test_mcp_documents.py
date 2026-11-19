@@ -398,6 +398,33 @@ s, si = http("GET", f"/api/invoices/{sinv}", admin)
 check("the saved bill matches the rounding the plan showed", si["subtotal"] == 100.01 and si["gstAmount"] == 18.0 and si["grandTotal"] == 118.01, si)
 check("…and was not submitted to FBR", not si.get("fbrIRN") and si.get("fbrSubmittedAt") in (None, "") and si.get("fbrStatus") != "Submitted",
       {k: si.get(k) for k in ("fbrIRN", "fbrStatus", "fbrSubmittedAt")})
+
+# Further tax: an agent states it or the bill carries none. Nothing is derived,
+# so the plan the user approves, the saved bill and the FBR filing agree.
+print("\n== further tax on an agent's bill ==")
+check("no rate stated: the plan carries none and says so", d_.get("furtherTaxAmount") == 0 and d_.get("furtherTaxRate") is None
+      and "No further tax" in (d_.get("furtherTaxNote") or ""), {k: d_.get(k) for k in ("furtherTaxRate", "furtherTaxAmount", "furtherTaxNote")})
+check("…and the bill saved from it carries none", not si.get("furtherTaxAmount") and not si.get("furtherTaxRate"),
+      {k: si.get(k) for k in ("furtherTaxRate", "furtherTaxAmount")})
+err, fp = tool(TW, "prepare_bill", {**SB, "furtherTaxRate": "4"})
+fd = fp.get("details", {}) if not err else {}
+check("a stated 4% is on the plan: 4.00 on 100.01, total 122.01",
+      not err and fd.get("furtherTaxRate") == 4 and fd.get("furtherTaxAmount") == 4.0 and fd.get("grandTotal") == 122.01, fp)
+err, zp = tool(TW, "prepare_bill", {**SB, "furtherTaxRate": "0"})
+zd = zp.get("details", {}) if not err else {}
+check("a stated 0 charges none", not err and zd.get("furtherTaxAmount") == 0 and zd.get("grandTotal") == 118.01, zp)
+err, m = tool(TW, "prepare_bill", {**SB, "furtherTaxRate": "101"})
+check("a rate over 100 is refused", err, m)
+if fd:
+    err, fc = tool(TW, "commit_action", {"planId": fp["planId"]})
+    check("commit creates the bill with further tax", not err and fc["resultRef"].startswith("Invoice:"), fc)
+    if not err:
+        finv = int(fc["resultRef"].split(":")[1])
+        made_bills.append(finv)
+        s, fi = http("GET", f"/api/invoices/{finv}", admin)
+        check("the saved bill carries exactly what the plan showed",
+              fi.get("furtherTaxRate") == 4 and fi.get("furtherTaxAmount") == 4.0 and fi.get("grandTotal") == 122.01,
+              {k: fi.get(k) for k in ("furtherTaxRate", "furtherTaxAmount", "grandTotal")})
 err, sk = tool(TW, "prepare_bill", {**SB, "idempotencyKey": f"mail-{RUN}-b"})
 err, sk2 = tool(TW, "prepare_bill", {**SB, "idempotencyKey": f"mail-{RUN}-b"})
 check("a bill idempotency key returns the same plan", sk["planId"] == sk2["planId"])
