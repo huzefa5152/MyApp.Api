@@ -223,9 +223,21 @@ namespace MyApp.Api.Services.Implementations
         /// a group, which is why the two agree.
         /// </summary>
         private async Task<List<CustomerLedgerEntryDto>> BuildEntriesAsync(
+            int companyId, IReadOnlyCollection<int> clientIds) =>
+            (await BuildOwnedEntriesAsync(companyId, clientIds)).Select(o => o.Entry).ToList();
+
+        /// <summary>
+        /// <see cref="BuildEntriesAsync"/>'s rows, each with the client record it
+        /// belongs to: the document's client, the payment's contact, or — for cash
+        /// and adjustments applied from another contact's receipt — the invoice's
+        /// client. Those are exactly the ids each source filters on, so splitting
+        /// one read of a set by owner gives the same rows as reading each client
+        /// alone.
+        /// </summary>
+        private async Task<List<(int Owner, CustomerLedgerEntryDto Entry)>> BuildOwnedEntriesAsync(
             int companyId, IReadOnlyCollection<int> clientIds)
         {
-            var entries = new List<CustomerLedgerEntryDto>();
+            var entries = new List<(int Owner, CustomerLedgerEntryDto Entry)>();
             if (clientIds.Count == 0) return entries;
             var ids = clientIds as ICollection<int> ?? clientIds.ToList();
 
@@ -234,7 +246,7 @@ namespace MyApp.Api.Services.Implementations
             var docs = await _context.Invoices.AsNoTracking()
                 .Where(i => ids.Contains(i.ClientId) && i.CompanyId == companyId
                             && !i.IsDemo && !i.IsCancelled)
-                .Select(i => new { i.Id, i.InvoiceNumber, i.Date, i.GrandTotal, i.DocumentType, i.ExternalRef })
+                .Select(i => new { i.Id, i.InvoiceNumber, i.Date, i.GrandTotal, i.DocumentType, i.ExternalRef, i.ClientId })
                 .ToListAsync();
 
             foreach (var d in docs)
@@ -243,7 +255,7 @@ namespace MyApp.Api.Services.Implementations
                 if (ClientOpeningBalance.IsOpening(d.ExternalRef))
                 {
                     var paidAhead = d.DocumentType == CreditNoteType;
-                    entries.Add(new CustomerLedgerEntryDto
+                    entries.Add((d.ClientId, new CustomerLedgerEntryDto
                     {
                         Date = d.Date,
                         Type = TypeOpening,
@@ -251,7 +263,7 @@ namespace MyApp.Api.Services.Implementations
                         DocId = d.Id,
                         Debit = paidAhead ? d.GrandTotal : 0m,
                         Credit = paidAhead ? 0m : d.GrandTotal,
-                    });
+                    }));
                     continue;
                 }
 
@@ -261,19 +273,19 @@ namespace MyApp.Api.Services.Implementations
                 // debit note, credits it for a credit note.
                 if (d.DocumentType == CreditNoteType)
                 {
-                    entries.Add(new CustomerLedgerEntryDto
+                    entries.Add((d.ClientId, new CustomerLedgerEntryDto
                     {
                         Date = d.Date,
                         Type = TypeCreditNote,
                         Reference = "CN-" + d.InvoiceNumber,
                         DocId = d.Id,
                         Debit = d.GrandTotal,
-                    });
+                    }));
                 }
                 else
                 {
                     var isDebitNote = d.DocumentType == DebitNoteType;
-                    entries.Add(new CustomerLedgerEntryDto
+                    entries.Add((d.ClientId, new CustomerLedgerEntryDto
                     {
                         Date = d.Date,
                         Type = isDebitNote ? TypeDebitNote : TypeInvoice,
@@ -292,7 +304,7 @@ namespace MyApp.Api.Services.Implementations
                         // means charging Collectible here and booking the withheld
                         // slice as its own row; deliberately deferred.
                         Credit = d.GrandTotal,
-                    });
+                    }));
                 }
             }
 
@@ -322,7 +334,7 @@ namespace MyApp.Api.Services.Implementations
                 .ToListAsync();
 
             foreach (var r in receipts)
-                entries.Add(new CustomerLedgerEntryDto
+                entries.Add((r.PartyId, new CustomerLedgerEntryDto
                 {
                     Date = r.Date,
                     Type = TypeReceipt,
@@ -332,7 +344,7 @@ namespace MyApp.Api.Services.Implementations
                     Method = r.Method,
                     BankAccount = r.BankAccountName,
                     Description = r.Description,
-                });
+                }));
 
             // Money paid back OUT to this customer and held against their balance
             // — a refund of an advance. NEW with the 2026-08-31 payee change and
@@ -352,7 +364,7 @@ namespace MyApp.Api.Services.Implementations
                 .Where(r => r.Amount != 0m);
 
             foreach (var r in refunds)
-                entries.Add(new CustomerLedgerEntryDto
+                entries.Add((r.PartyId, new CustomerLedgerEntryDto
                 {
                     Date = r.Date,
                     Type = TypeRefund,
@@ -361,7 +373,7 @@ namespace MyApp.Api.Services.Implementations
                     Credit = r.Amount,
                     BankAccount = r.BankAccountName,
                     Description = r.Description,
-                });
+                }));
 
             // Cash that settles THIS client's invoices from a receipt naming a
             // DIFFERENT contact. PaymentService.AssertInvoicesBelongToCompanyAsync
@@ -411,7 +423,7 @@ namespace MyApp.Api.Services.Implementations
             {
                 // Already represented by its contact-sourced row above.
                 if (IsContactOf(a.ContactType, a.ContactId, a.InvoiceClientId)) continue;
-                entries.Add(new CustomerLedgerEntryDto
+                entries.Add((a.InvoiceClientId, new CustomerLedgerEntryDto
                 {
                     Date = a.Date,
                     Type = TypeReceipt,
@@ -421,7 +433,7 @@ namespace MyApp.Api.Services.Implementations
                     Method = a.Method,
                     BankAccount = a.BankAccountName,
                     Description = $"Applied to INV-{a.InvoiceNumber} from a receipt recorded against another contact",
-                });
+                }));
             }
 
             // Settle-remainder adjustments — the non-cash slice that ALSO clears
@@ -439,11 +451,11 @@ namespace MyApp.Api.Services.Implementations
                       && !inv.IsDemo && !inv.IsCancelled
                       && p.CompanyId == companyId && !p.IsCancelled
                       && p.Direction == PaymentDirection.Receipt
-                select new { p.Id, p.Number, p.Date, a.AdjustmentAmount, inv.InvoiceNumber }
+                select new { p.Id, p.Number, p.Date, a.AdjustmentAmount, inv.InvoiceNumber, InvoiceClientId = inv.ClientId }
             ).ToListAsync();
 
             foreach (var a in adjustments)
-                entries.Add(new CustomerLedgerEntryDto
+                entries.Add((a.InvoiceClientId, new CustomerLedgerEntryDto
                 {
                     Date = a.Date,
                     Type = TypeAdjustment,
@@ -451,9 +463,36 @@ namespace MyApp.Api.Services.Implementations
                     DocId = a.Id,
                     Debit = a.AdjustmentAmount,
                     Description = $"Settled against INV-{a.InvoiceNumber}",
-                });
+                }));
 
             return entries;
+        }
+
+        /// <inheritdoc/>
+        public async Task<Dictionary<int, List<CustomerLedgerEntryDto>>> GetWindowEntriesByClientAsync(
+            int companyId, IReadOnlyCollection<int> clientIds, DateTime from, DateTime to)
+        {
+            var owned = await BuildOwnedEntriesAsync(companyId, clientIds);
+            var start = from.Date;
+            var end = to.Date;
+            var result = new Dictionary<int, List<CustomerLedgerEntryDto>>();
+            foreach (var group in owned.GroupBy(o => o.Owner))
+            {
+                // The same steps ComposeAsync takes for one client with no type
+                // filter: order, drop the opening rows, keep the window, newest
+                // first — so a tie keeps the order it had there.
+                var rows = group.Select(o => o.Entry)
+                    .OrderBy(e => e.Date)
+                    .ThenByDescending(e => e.Credit)
+                    .ThenBy(e => e.Type, StringComparer.Ordinal)
+                    .ThenBy(e => e.DocId ?? 0)
+                    .ThenBy(e => e.Reference, StringComparer.Ordinal)
+                    .Where(e => e.Type != TypeOpening && e.Date.Date >= start && e.Date.Date <= end)
+                    .ToList();
+                rows.Reverse();
+                if (rows.Count > 0) result[group.Key] = rows;
+            }
+            return result;
         }
 
         /// <inheritdoc/>

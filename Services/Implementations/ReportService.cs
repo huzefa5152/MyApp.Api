@@ -790,6 +790,11 @@ namespace MyApp.Api.Services.Implementations
                 ClientName = echoName,
             };
 
+            // Which customers get a section. Company-wide view: a customer with no
+            // carried-in balance and nothing in the window has no statement to
+            // print. An explicit single-customer request still renders (an empty
+            // statement is itself an answer).
+            var sections = new List<(CustomerLedgerRowDto Agg, int GroupKey)>();
             foreach (var agg in aggregates)
             {
                 if (!groupByRowId.TryGetValue(agg.ClientId, out var groupKey)) continue;
@@ -797,15 +802,21 @@ namespace MyApp.Api.Services.Implementations
                 {
                     if (groupKey != focusGroup.Value) continue;
                 }
-                // Company-wide view: a customer with no carried-in balance and
-                // nothing in the window has no statement to print. An explicit
-                // single-customer request still renders (an empty statement is
-                // itself an answer).
                 else if (agg.Opening == 0m && agg.Invoiced == 0m && agg.Received == 0m) continue;
+                sections.Add((agg, groupKey));
+            }
 
+            // Every member's rows in ONE read rather than one ledger call per
+            // member (performance audit 2026-11-20: ~6 queries a customer, about
+            // 300 for one production company). The same rows, split by client.
+            var memberIds = sections.SelectMany(s => membersByGroup[s.GroupKey]).ToList();
+            var rowsByClient = await _ledger.GetWindowEntriesByClientAsync(companyId, memberIds, from, toInclusive);
+
+            foreach (var (agg, groupKey) in sections)
+            {
                 var entries = new List<CustomerLedgerEntryDto>();
                 foreach (var memberId in membersByGroup[groupKey])
-                    entries.AddRange(await FetchLedgerEntriesAsync(companyId, memberId, from, toInclusive));
+                    if (rowsByClient.TryGetValue(memberId, out var memberRows)) entries.AddRange(memberRows);
 
                 // Oldest-first, using the SAME tie-break the ledger service
                 // applies (document before the money that settles it on a shared
@@ -889,27 +900,6 @@ namespace MyApp.Api.Services.Implementations
                 .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(c => c.Id)
                 .ToList();
-        }
-
-        /// <summary>
-        /// Every ledger row for one customer in the window. The ledger service
-        /// is paged (capped at <see cref="PaginationHelper.AuditMax"/>) because
-        /// it feeds a screen; a statement must be whole, so we walk the pages.
-        /// </summary>
-        private async Task<List<CustomerLedgerEntryDto>> FetchLedgerEntriesAsync(
-            int companyId, int clientId, DateTime from, DateTime to)
-        {
-            const int pageSize = PaginationHelper.AuditMax;
-            const int pageCeiling = 500;                 // 100k rows — a runaway guard, not a limit anyone meets
-            var all = new List<CustomerLedgerEntryDto>();
-            for (var page = 1; page <= pageCeiling; page++)
-            {
-                var slice = await _ledger.GetForClientAsync(companyId, clientId, from, to, null, page, pageSize);
-                if (slice.Entries.Count == 0) break;
-                all.AddRange(slice.Entries);
-                if (all.Count >= slice.Total) break;
-            }
-            return all;
         }
 
         /// <summary>Workbook column D — what the row was, in words.</summary>

@@ -107,5 +107,18 @@ namespace MyApp.Api.Services.Interfaces
         /// </summary>
         Task<List<CustomerLedgerRowDto>> GetAllCustomersAsync(
             int companyId, DateTime? from, DateTime? to);
+
+        /// <summary>
+        /// The window's rows for MANY client records at once, keyed by client id:
+        /// exactly the rows <see cref="GetForClientAsync"/> returns for each of them
+        /// with no type filter, read in one pass instead of one per client
+        /// (performance audit 2026-11-20 — the Client Ledger report ran about six
+        /// queries per customer). Opening-balance rows are left out, as there,
+        /// because the Opening figure carries them. A client with no rows is absent.
+        /// <paramref name="clientIds"/> must already belong to
+        /// <paramref name="companyId"/>; every query still filters on both.
+        /// </summary>
+        Task<Dictionary<int, List<CustomerLedgerEntryDto>>> GetWindowEntriesByClientAsync(
+            int companyId, IReadOnlyCollection<int> clientIds, DateTime from, DateTime to);
     }
 }
