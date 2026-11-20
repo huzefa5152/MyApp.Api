@@ -28,7 +28,22 @@ start a second document.
 | Companies and permissions are asked for alongside the sign-in check, not after it | `utils/bootPrefetch.js`, the three contexts |
 | Invoices, Credit Notes, Debit Notes, Challans, Sales Orders, Purchase Bills and Goods Receipts fetch their list once | the page components |
 
-**Second pass — done, verified locally, NOT yet deployed**
+**Second pass — done and live on production** (`571b7f5b`, `f0cb00e9`; deploy run 44804108970)
+
+Measured on production after the deploy, company 4, five runs each:
+
+| Endpoint | Original median | After the first pass | Now (median, 5 runs) |
+|---|---:|---:|---:|
+| `reports/company/4/client-ledger?year=2026` | 1,619 ms | 1,088 ms | 206 ms |
+| `itemtypes?companyId=4` (full catalog) | 2,309 ms | 1,289 ms | 228 ms |
+| `itemtypes/paged?companyId=4&page=1` | 245–440 ms | — | 301 ms |
+
+Before pushing, the branch had moved (three stock-sheet commits from another
+session); the two changes were re-verified on the combined code: stock gate
+114/114, client ledger suite 97/97, all 631 report variants identical to the
+remote's code on the same data, and all 200 catalog requests identical when
+fetched from both builds back to back (the local data was changing under the
+captures, so each request was compared old/new/old).
 
 | Change | Proof |
 |---|---|
