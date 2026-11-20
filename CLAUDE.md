@@ -2755,6 +2755,35 @@ written down as the expectation.
 
 ---
 
+## Performance: what is cached, compressed, split and kept warm (2026-11-20)
+
+Full audit, baseline, what is left and the risks weighed:
+`docs/PERFORMANCE_AUDIT_2026_11_20.md`. On production the time is round trips,
+payload and the start-up chain, not server work (5–150 ms per endpoint locally).
+
+- **API reads are compressed, and only reads.** `Middleware/ApiCompressionMiddleware`
+  runs for `GET` under `/api`, never `/api/auth` or `/api/mcp` (BREACH). It holds
+  JSON and sends it in ONE write; non-JSON passes straight through. Do not swap it
+  for the framework's `UseResponseCompression`: measured on the Trader line, that
+  made every small call ~170 ms slower.
+- **Only fingerprinted files are long-lived.** `IsFingerprintedAsset` covers BOTH
+  `/assets` and `/admin/assets`; the old rule checked `/assets` only and this site
+  serves under `/admin`, so the bundle had no cache header at all. The shell and
+  `runtime-env.js` are `no-cache`.
+- **Every signed-in screen is a `lazyScreen`** (`App.jsx`). The first load used to
+  be one 4.9 MB bundle. A new screen is added the same way, never as an eager
+  import, and `DashboardLayout`'s `<Suspense>` around the outlet must stay.
+  `preloadScreenFor` walks a route's element, so a screen wrapped in
+  `RequirePermission` is still found.
+- **No business data is cached.** A figure that lags a posted bill is wrong, and a
+  cached session or company check delays a revocation.
+- **`KeepWarmService` pings the site's own address** (first page after idle
+  measured 37.5 s). It only accepts the hosting platform's domain or `KeepWarm:Host`.
+- Checks: `cd scripts/perf_harness && dotnet run -c Release` (35, offline) and
+  `node scripts/test_boot_prefetch.mjs` (6, offline).
+
+---
+
 ## Anti-patterns I keep finding (don't repeat them)
 
 - ❌ Naming a production database / SQL host / FTP host in any tracked file (prose, code comment, migration comment, docstring). The repo is PUBLIC and the database name is also the SQL username — use a placeholder; `scripts/verify_no_production_identifiers.py` fails on it.
