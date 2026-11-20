@@ -271,6 +271,34 @@ def main():
         check("GD 1 is used up", "SBV-PUMP-1" not in g or near(g["SBV-PUMP-1"].get("remainingValueExcludingTax"), 0, 0.05),
               json.dumps(g)[:400])
 
+        # Annex-H1 for November: GD 2 is a purchase of its FULL 100,000, even
+        # though 25,000 of it went straight to the pre-sales (it once showed
+        # 75,000 purchased and -25,000 in Other).
+        import io
+        import openpyxl
+        r = call("GET", f"/stock/company/{cid}/annex-h1/excel", params={"month": "2026-11"})
+        h1 = {}
+        if r.ok:
+            ws = openpyxl.load_workbook(io.BytesIO(r.content), data_only=True)["Annex-H1"]
+            for row in ws.iter_rows(min_row=5, values_only=True):
+                if isinstance(row[0], (int, float)) and row[1] == "8413.7090":
+                    h1 = {"open": row[5], "in": row[7], "supplies": (row[9] or 0) + (row[11] or 0),
+                          "other": row[13], "close": row[15]}
+        check("Annex-H1 Nov, pump: opening 10,000, purchased the full 100,000, supplies 35,000, other 0, closing 75,000",
+              h1 and near(h1["open"], 10000) and near(h1["in"], 100000) and near(h1["supplies"], 35000)
+              and near(h1["other"], 0) and near(h1["close"], 75000), (r.status_code, h1))
+        r = call("GET", f"/stock/company/{cid}/onhand/excel/monthly", params={"month": "2026-11"})
+        rows = []
+        if r.ok:
+            ws = openpyxl.load_workbook(io.BytesIO(r.content), data_only=True).worksheets[0]
+            rows = [x for x in ws.iter_rows(min_row=4, values_only=True)
+                    if isinstance(x[3], str) and x[3].upper().startswith("SBV PUMP")]
+        gd2 = next((x for x in rows if x[1] == "SBV-PUMP-2"), None)
+        check("monthly sheet Nov: GD 2 opens at its full 100,000, hands 25,000 to the pre-sales (Other), closes 75,000",
+              gd2 and near(gd2[10], 100000) and near(gd2[34], 25000) and near(gd2[18], 75000), gd2)
+        check("monthly sheet Nov: every pump row adds up (Opening - Consumed - Other = Balance)",
+              rows and all(near((x[10] or 0) - (x[14] or 0) - (x[34] or 0), x[18] or 0) for x in rows), rows)
+
         print("\n-- 11b. Weighted average with the same switch still blocks --")
         r = call("POST", "/companies", json={
             "name": f"_sale_by_value_wa {tag}", "brandName": "SBVWA", "fullAddress": "1 Test Street",

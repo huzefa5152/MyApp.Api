@@ -80,6 +80,28 @@ namespace MyApp.Api.Helpers
                     }
                 }
 
+                // What each RECEIPT (a GD arrival, a purchase, a goods receipt)
+                // handed straight to sales made before it (the owed or oversold
+                // part, ShortfallKey takes). The receipt brought that stock in
+                // too, so its line opens at the FULL arrival and the hand-over
+                // shows in Other, against the "sold beyond stock" line -- else
+                // Annex-H1's purchased/imported misses it (Prime demo, Nov 2026:
+                // 55,000 for an 84,000 GD). An inward ADJUSTMENT that settles a
+                // shortfall is not a purchase and stays in Other, as before.
+                var settled = new Dictionary<int, (decimal Qty, decimal Value, decimal Actual)>();
+                foreach (var m in byItem.GetValueOrDefault(item.ItemTypeId) ?? new())
+                {
+                    if (m.Direction != StockMovementDirection.In
+                        || m.SourceType is not (StockMovementSourceType.ImportConsignment
+                            or StockMovementSourceType.PurchaseBill or StockMovementSourceType.GoodsReceipt)
+                        || !end.Takes.TryGetValue(m.Id, out var takes)) continue;
+                    foreach (var t in takes.Where(t => t.PoolKey == GdFifoValuation.ShortfallKey))
+                    {
+                        settled.TryGetValue(m.Id, out var st);
+                        settled[m.Id] = (st.Qty + t.Quantity, st.Value + t.Value, st.Actual + t.ActualValue);
+                    }
+                }
+
                 foreach (var p in end.Pools)
                 {
                     startPools.TryGetValue(p.Key, out var s);
@@ -100,6 +122,12 @@ namespace MyApp.Api.Helpers
                     var openQty = s?.Quantity ?? (restatedHere ? 0m : p.InQuantity);
                     var openVal = s?.Value ?? (restatedHere ? 0m : p.InValue);
                     var openAct = s?.ActualValue ?? (restatedHere ? 0m : p.InActualValue);
+                    var bornHere = s == null && !restatedHere;
+                    (decimal Qty, decimal Value, decimal Actual) handed = default;
+                    if (bornHere && p.MovementId is int mid && settled.Remove(mid, out handed))
+                    {
+                        openQty += handed.Qty; openVal += handed.Value; openAct += handed.Actual;
+                    }
                     if (Nil(openQty, openVal) && Nil(c.Qty, c.Value) && Nil(p.Quantity, p.Value))
                         continue;
 
@@ -131,9 +159,10 @@ namespace MyApp.Api.Helpers
                         BalanceValueExcludingTax = Money(p.Value),
                         OtherQuantity = openQty - sd.Qty - p.Quantity,
                         OtherValueExcludingTax = Money(openVal) - Money(sd.Value) - Money(p.Value),
-                        // Born this month (not by a restatement): it opened at what it brought in.
-                        ReceivedQuantity = s == null && !restatedHere ? p.InQuantity : 0m,
-                        ReceivedValueExcludingTax = s == null && !restatedHere ? Money(p.InValue) : 0m,
+                        // Born this month (not by a restatement): it opened at what it
+                        // brought in, including what it handed to earlier sales.
+                        ReceivedQuantity = bornHere ? p.InQuantity + handed.Qty : 0m,
+                        ReceivedValueExcludingTax = bornHere ? Money(p.InValue + handed.Value) : 0m,
                         SoldQuantity = sd.Qty,
                         SoldValueExcludingTax = Money(sd.Value),
                         OpeningActualCostExcludingTax = costed ? Money(openAct) : null,
@@ -145,7 +174,12 @@ namespace MyApp.Api.Helpers
                 var startShort = start?.ShortfallQuantity ?? 0m;
                 consumed.TryGetValue(GdFifoValuation.ShortfallKey, out var sc);
                 sold.TryGetValue(GdFifoValuation.ShortfallKey, out var ss);
-                if (end.ShortfallQuantity > 0m || startShort > 0m || sc.Qty != 0m)
+                // A hand-over whose stock left no line of its own (the arrival
+                // went entirely to earlier sales) is still a receipt: it opens here.
+                var unplaced = (Qty: settled.Values.Sum(v => v.Qty), Value: settled.Values.Sum(v => v.Value));
+                var openShortQty = -startShort + unplaced.Qty;
+                var openShortValue = -Money(start?.ShortfallValue ?? 0m) + Money(unplaced.Value);
+                if (end.ShortfallQuantity > 0m || startShort > 0m || sc.Qty != 0m || unplaced.Qty != 0m)
                     output.Lines.Add(new StockMonthlyLineDto
                     {
                         ItemTypeId = item.ItemTypeId,
@@ -154,16 +188,18 @@ namespace MyApp.Api.Helpers
                         HsCode = item.HsCode,
                         Unit = item.Unit,
                         SalesTaxRate = item.SalesTaxRate,
-                        OpeningQuantity = -startShort,
-                        OpeningValueExcludingTax = -Money(start?.ShortfallValue ?? 0m),
+                        OpeningQuantity = openShortQty,
+                        OpeningValueExcludingTax = openShortValue,
+                        ReceivedQuantity = unplaced.Qty,
+                        ReceivedValueExcludingTax = Money(unplaced.Value),
                         ConsumedQuantity = ss.Qty,
                         ConsumedValueExcludingTax = Money(ss.Value),
                         SoldQuantity = ss.Qty,
                         SoldValueExcludingTax = Money(ss.Value),
                         BalanceQuantity = -end.ShortfallQuantity,
                         BalanceValueExcludingTax = -Money(end.ShortfallValue),
-                        OtherQuantity = -startShort - ss.Qty + end.ShortfallQuantity,
-                        OtherValueExcludingTax = -Money(start?.ShortfallValue ?? 0m) - Money(ss.Value) + Money(end.ShortfallValue),
+                        OtherQuantity = openShortQty - ss.Qty + end.ShortfallQuantity,
+                        OtherValueExcludingTax = openShortValue - Money(ss.Value) + Money(end.ShortfallValue),
                     });
             }
 

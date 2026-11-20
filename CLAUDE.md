@@ -1606,7 +1606,14 @@ GD panel and Excel export all say which GDs it took.
   Balance IS the next month's Opening and every row adds up. Until 2026-11-20
   Consumed was every OUTWARD take: a stock adjustment reversed the same day
   read as consumption (Alpha, Oct 2026: 2.13M) while its reversal read as new
-  stock, and a restatement month added up on almost no row.
+  stock, and a restatement month added up on almost no row. A RECEIPT (GD
+  arrival, purchase bill, goods receipt) that pays off sales made before it
+  (`ShortfallKey` takes on its own movement) opens its line at the FULL
+  arrival and hands the settled part over in Other, against the "sold beyond
+  stock" line, so the two cancel on Annex-H1 and Purchased/Imported is the
+  whole GD (2026-11-21; it had shown the GD net of the settlement -- AY Oct
+  2026 understated by 720,412.32). An inward ADJUSTMENT that settles a
+  shortfall is not a purchase and stays in Other.
   Consumed is FIFO COST, never the invoice's sale value (maintainer's decision:
   clients write the sale value; the sheet must agree with the stock screen and
   the COGS relief). A GD line dated after the month that the month never drew
