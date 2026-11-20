@@ -2,6 +2,9 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { loginApi, getCurrentUser } from "../api/authApi";
+import { prefetchCompanies } from "../api/companyApi";
+import { prefetchMyPermissions } from "../api/rbacApi";
+import { startBootPrefetch } from "../utils/bootPrefetch";
 import { clearPersistentFilters } from "../hooks/usePersistentFilter";
 
 const AuthContext = createContext(null);
@@ -33,6 +36,14 @@ export function AuthProvider({ children }) {
       setLoading(false);
       return;
     }
+
+    // Ask for the companies and permissions NOW rather than after the check
+    // below returns: the server validates the token on each of them anyway, and
+    // the contexts still read nothing until this check has succeeded.
+    startBootPrefetch(storedToken, {
+      companies: prefetchCompanies,
+      permissions: prefetchMyPermissions,
+    });
 
     getCurrentUser({ silent: true })
       .then((res) => {

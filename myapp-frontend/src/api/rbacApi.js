@@ -4,6 +4,9 @@ import httpClient from "./httpClient";
 export const getAllPermissions = () => httpClient.get("/permissions");
 export const getPermissionTree = () => httpClient.get("/permissions/tree");
 export const getMyPermissions = () => httpClient.get("/permissions/me");
+// Asked at start-up alongside the sign-in check (utils/bootPrefetch); fails quietly.
+export const prefetchMyPermissions = () =>
+  httpClient.get("/permissions/me", { _skipAuthRedirect: true });
 
 // ── Roles ────────────────────────────────────────────────────────────────
 export const getRoles = () => httpClient.get("/roles");
