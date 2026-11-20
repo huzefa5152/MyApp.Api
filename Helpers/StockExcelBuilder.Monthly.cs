@@ -40,6 +40,7 @@ namespace MyApp.Api.Helpers
             }
             var lastDataRow = r - 1;
             WriteTotals(ws, lastDataRow + 3, lastDataRow);
+            WriteOtherBlock(ws, lastDataRow);
 
             ApplyWidths(ws);
             ws.SheetView.FreezeRows(HeaderRow);
@@ -92,6 +93,9 @@ namespace MyApp.Api.Helpers
             Number(ws, r, CBalRate, rate, Pct);
             Formula(ws, r, CBalTax, $"S{r}*T{r}", Acct0);
 
+            Number(ws, r, COtherQty, l.OtherQuantity, Acct0);
+            Number(ws, r, COtherExl, l.OtherValueExcludingTax, Acct0);
+
             ws.Cell(r, CStripe).Style.Fill.BackgroundColor = SeparatorFill;
 
             // Cost of Good Sold: measured where the line carries a landed cost,
@@ -124,6 +128,44 @@ namespace MyApp.Api.Helpers
             ws.Range(r, CClaim, r, Cols).Style.Font.SetFontName(Face);
         }
 
+        // Other sits after the Cost of Good Sold block, so the client's own
+        // columns (A..AF) keep their places.
+        private const int COtherQty = Cols + 2;   // AH  Other   Qty
+        private const int COtherExl = Cols + 3;   // AI          Other Exl
+
+        /// <summary>The month's movements that were not sales -- adjustments,
+        /// revaluations, restatements -- so Opening - Consumed - Other = Balance
+        /// on every row. Out is positive, as on Annex-H1.</summary>
+        private static void WriteOtherBlock(IXLWorksheet ws, int lastDataRow)
+        {
+            var band = ws.Range(BandRow, COtherQty, BandRow, COtherExl).Merge();
+            ws.Cell(BandRow, COtherQty).Value = "Other (adjustments)";
+            band.Style.Font.SetFontName(Face);
+            band.Style.Fill.BackgroundColor = FillFor("other");
+            band.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            Outline(band);
+            foreach (var (col, label) in new[] { (COtherQty, "Qty"), (COtherExl, "Other Exl") })
+            {
+                var cell = ws.Cell(HeaderRow, col);
+                cell.Value = label;
+                cell.Style.Font.SetBold().Font.SetFontName(Face);
+                cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                cell.Style.Fill.BackgroundColor = FillFor("other");
+                Outline(cell);
+                ws.Column(col).Width = 16;
+            }
+            if (lastDataRow < FirstDataRow) return;
+            var totals = lastDataRow + 3;
+            foreach (var col in new[] { COtherQty, COtherExl })
+            {
+                var letter = ColumnLetter(col);
+                Formula(ws, totals, col,
+                    $"SUMIF($D${FirstDataRow}:$D${totals - 1},\"<>{BreakdownMarker}*\",{letter}{FirstDataRow}:{letter}{totals - 1})",
+                    Acct0);
+                ws.Cell(totals, col).Style.Font.SetBold().Font.SetFontName(Face);
+            }
+        }
+
         private static void WriteMonthlySummary(XLWorkbook wb, StockMonthlyExportDto data, bool truncated)
         {
             var ws = wb.Worksheets.Add("Summary");
@@ -139,6 +181,7 @@ namespace MyApp.Api.Helpers
             {
                 ("Opening (excluding tax)", data.Lines.Sum(l => l.OpeningValueExcludingTax)),
                 ("Consumed (excluding tax)", data.Lines.Sum(l => l.ConsumedValueExcludingTax)),
+                ("Other: adjustments, restatements (excluding tax)", data.Lines.Sum(l => l.OtherValueExcludingTax)),
                 ("Balance (excluding tax)", data.Lines.Sum(l => l.BalanceValueExcludingTax)),
             })
             {
@@ -159,7 +202,7 @@ namespace MyApp.Api.Helpers
                 lines.Add($"{data.LaterLinesOmitted:N0} GD line(s) dated after this month left out "
                     + $"(value {data.LaterLinesValue:N2}); they appear from their own month.");
             if (data.RestatedInMonth)
-                lines.Add("A stock-sheet restatement was applied this month: the lines it replaced close at nil and the restated lines open at nil, so on those lines Balance is not Opening minus Consumed.");
+                lines.Add("A stock-sheet restatement was applied this month: the lines it replaced close at nil and the restated lines open at nil; the difference is in Other.");
             if (truncated)
                 lines.Add($"TRUNCATED at {MaxRows:N0} rows — narrow the search for a complete export.");
             foreach (var line in lines)
@@ -173,7 +216,8 @@ namespace MyApp.Api.Helpers
             {
                 "One row per GD line: a product on a GD, with its own HS code and value.",
                 "Opening is the line's position on the first of the month; a GD that arrived during the month opens at what it brought in.",
-                "Consumed is what this month's sales took from the line, at FIFO cost: claimed GDs first, oldest GD date first.",
+                "Consumed is what this month's sales took from the line (net of sale returns), at FIFO cost: claimed GDs first, oldest GD date first. It equals Annex-H1's supplies.",
+                "Other (columns AH:AI) is everything else that moved the line: stock adjustments, revaluations and restatements. Out is positive, as on Annex-H1, so Opening - Consumed - Other = Balance.",
                 "Balance is the line's position at month end, from the stock valuation — next month's Opening.",
                 "Cost of Good Sold uses the GD landed cost where one exists; otherwise cost = value x rate / (rate + 3%).",
                 "Sub cat is yours to fill. A Claim Month is the filed period, never inferred from the GD date.",

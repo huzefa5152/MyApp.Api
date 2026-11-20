@@ -13,9 +13,12 @@ namespace MyApp.Api.Helpers
     ///    being during the month (a GD arrival, other stock in) opens at what it
     ///    brought in. A line a restatement created opens at nil: the lines it
     ///    replaced already open the month, and their balance goes to nil.
-    ///  • Consumed = what the month's OUTWARD movements took from the pool, less
-    ///    what a sale RETURN put back. An inward movement's own takes are the
-    ///    pool it opened or a shortfall it settled, never consumption.
+    ///  • Consumed = what the month's SALES took from the pool, less what a sale
+    ///    RETURN put back -- the same figure as Annex-H1's supplies. A stock
+    ///    adjustment is not a sale: one reversed the same day used to read as
+    ///    consumption on the sheet (Alpha, Oct 2026, 2.13M).
+    ///  • Other = Opening - Consumed - Balance: adjustments, revaluations and
+    ///    restatements, out positive (Annex-H1's sign), so every row adds up.
     ///  • Balance = the pool at month end -- next month's Opening, since both
     ///    come from a walk cut at the same date.
     ///  • A GD line dated AFTER the month that the month never drew on did not
@@ -122,10 +125,12 @@ namespace MyApp.Api.Helpers
                         SalesTaxRate = p.Rate,
                         OpeningQuantity = openQty,
                         OpeningValueExcludingTax = Money(openVal),
-                        ConsumedQuantity = c.Qty,
-                        ConsumedValueExcludingTax = Money(c.Value),
+                        ConsumedQuantity = sd.Qty,
+                        ConsumedValueExcludingTax = Money(sd.Value),
                         BalanceQuantity = p.Quantity,
                         BalanceValueExcludingTax = Money(p.Value),
+                        OtherQuantity = openQty - sd.Qty - p.Quantity,
+                        OtherValueExcludingTax = Money(openVal) - Money(sd.Value) - Money(p.Value),
                         // Born this month (not by a restatement): it opened at what it brought in.
                         ReceivedQuantity = s == null && !restatedHere ? p.InQuantity : 0m,
                         ReceivedValueExcludingTax = s == null && !restatedHere ? Money(p.InValue) : 0m,
@@ -151,12 +156,14 @@ namespace MyApp.Api.Helpers
                         SalesTaxRate = item.SalesTaxRate,
                         OpeningQuantity = -startShort,
                         OpeningValueExcludingTax = -Money(start?.ShortfallValue ?? 0m),
-                        ConsumedQuantity = sc.Qty,
-                        ConsumedValueExcludingTax = Money(sc.Value),
+                        ConsumedQuantity = ss.Qty,
+                        ConsumedValueExcludingTax = Money(ss.Value),
                         SoldQuantity = ss.Qty,
                         SoldValueExcludingTax = Money(ss.Value),
                         BalanceQuantity = -end.ShortfallQuantity,
                         BalanceValueExcludingTax = -Money(end.ShortfallValue),
+                        OtherQuantity = -startShort - ss.Qty + end.ShortfallQuantity,
+                        OtherValueExcludingTax = -Money(start?.ShortfallValue ?? 0m) - Money(ss.Value) + Money(end.ShortfallValue),
                     });
             }
 

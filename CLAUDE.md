@@ -1599,8 +1599,13 @@ GD panel and Excel export all say which GDs it took.
   the walk over movements before the 1st and before the next 1st, and
   `Helpers/StockMonthlySheet` (pure) turns the pools into one row per GD line:
   Opening = the pool at the 1st (a pool born in the month opens at what it
-  brought in), Consumed = OUTWARD takes in the month less sale returns, Balance
-  = the pool at month end -- so a month's Balance IS the next month's Opening.
+  brought in), Consumed = what the month's SALES took less sale returns (the
+  same figure as Annex-H1's Supplies), Other (columns AH:AI, out positive) =
+  Opening - Consumed - Balance, Balance = the pool at month end -- so a month's
+  Balance IS the next month's Opening and every row adds up. Until 2026-11-20
+  Consumed was every OUTWARD take: a stock adjustment reversed the same day
+  read as consumption (Alpha, Oct 2026: 2.13M) while its reversal read as new
+  stock, and a restatement month added up on almost no row.
   Consumed is FIFO COST, never the invoice's sale value (maintainer's decision:
   clients write the sale value; the sheet must agree with the stock screen and
   the COGS relief). A GD line dated after the month that the month never drew

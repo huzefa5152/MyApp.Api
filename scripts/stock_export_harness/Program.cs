@@ -758,7 +758,8 @@ Console.WriteLine("\n=== Monthly sheet: one row per GD line ===");
                 GdNumber = "KAPE-HC-54847", GdDate = new DateTime(2026, 2, 12), Description = "KITCHEN SCALE PARTS",
                 HsCode = "8423.9000", Unit = "Kg", SalesTaxRate = 18m,
                 OpeningQuantity = 100m, OpeningValueExcludingTax = 50_000m, ConsumedQuantity = 40m, ConsumedValueExcludingTax = 20_000m,
-                BalanceQuantity = 60m, BalanceValueExcludingTax = 30_000m },
+                OtherQuantity = 10m, OtherValueExcludingTax = 5_000m,
+                BalanceQuantity = 50m, BalanceValueExcludingTax = 25_000m },
             new StockMonthlyLineDto { ItemTypeId = 1, ItemTypeName = "Scale parts",
                 GdNumber = "KAPE-HC-9509", GdDate = new DateTime(2026, 8, 31), Description = "WEIGHT SCALE PARTS",
                 HsCode = "8423.9000", Unit = "Kg", SalesTaxRate = 25m,
@@ -785,7 +786,12 @@ Console.WriteLine("\n=== Monthly sheet: one row per GD line ===");
     Check("monthly: 4-digit code is a formula on the 8-digit", mws.Cell(4, 6).FormulaA1 == "LEFT(G4,4)");
     Check("monthly: opening / consumed / balance are values",
         mws.Cell(4, 11).GetValue<decimal>() == 50_000m && mws.Cell(4, 15).GetValue<decimal>() == 20_000m
-        && mws.Cell(4, 19).GetValue<decimal>() == 30_000m && !mws.Cell(4, 19).HasFormula);
+        && mws.Cell(4, 19).GetValue<decimal>() == 25_000m && !mws.Cell(4, 19).HasFormula);
+    Check("monthly: Other sits after Cost of Good Sold, client columns unmoved",
+        mws.Cell(2, 34).GetString() == "Other (adjustments)" && mws.Cell(3, 34).GetString() == "Qty"
+        && mws.Cell(3, 35).GetString() == "Other Exl" && mws.Cell(3, 24).GetString() == "Exl"
+        && mws.Cell(4, 34).GetValue<decimal>() == 10m && mws.Cell(4, 35).GetValue<decimal>() == 5_000m);
+    Check("monthly: Other is totalled like the rest", mws.Cell(8, 35).FormulaA1.Contains("AI4:AI7"), mws.Cell(8, 35).FormulaA1);
     Check("monthly: each line keeps its own rate",
         mws.Cell(4, 12).GetValue<decimal>() == 0.18m && mws.Cell(5, 12).GetValue<decimal>() == 0.25m);
     Check("monthly: an uncosted line unwinds the uplift", mws.Cell(4, 24).FormulaA1 == "IF(L4=0,K4,K4*L4/(L4+3%))");
@@ -797,11 +803,11 @@ Console.WriteLine("\n=== Monthly sheet: one row per GD line ===");
     var byHs = mwb.Worksheet("By HS");
     Check("monthly: By HS groups on the 4-digit heading with a grand total",
         byHs.Cell(6, 1).GetString() == "8423" && byHs.Cell(9, 1).GetString() == "Grand Total"
-        && byHs.Cell(9, 2).GetValue<decimal>() == 35_000m, byHs.Cell(9, 2).GetString());
+        && byHs.Cell(9, 2).GetValue<decimal>() == 30_000m, byHs.Cell(9, 2).GetString());
     var mSum = mwb.Worksheet("Summary");
-    Check("monthly: Summary states opening, consumed and balance",
+    Check("monthly: Summary states opening, consumed, other and balance",
         mSum.Cell(5, 2).GetValue<decimal>() == 55_000m && mSum.Cell(6, 2).GetValue<decimal>() == 20_000m
-        && mSum.Cell(7, 2).GetValue<decimal>() == 35_000m);
+        && mSum.Cell(7, 2).GetValue<decimal>() == 5_000m && mSum.Cell(8, 2).GetValue<decimal>() == 30_000m);
 }
 
 Console.WriteLine($"\n=== {pass}/{pass + fail} checks passed ===");

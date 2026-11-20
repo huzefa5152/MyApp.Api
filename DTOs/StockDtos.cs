@@ -734,11 +734,15 @@
         public decimal ReceivedQuantity { get; set; }
         public decimal ReceivedValueExcludingTax { get; set; }
 
-        /// <summary>The part of Consumed that went out on SALES (invoices, net of
-        /// sale returns) -- Annex-H1's supplies. The rest of Consumed is stock
-        /// adjustments.</summary>
+        /// <summary>What went out on SALES (invoices, net of sale returns) --
+        /// Annex-H1's supplies. Consumed carries the same figure.</summary>
         public decimal SoldQuantity { get; set; }
         public decimal SoldValueExcludingTax { get; set; }
+
+        /// <summary>Opening - Consumed - Balance: stock adjustments, revaluations
+        /// and restatements, out positive -- Annex-H1's "Other" sign.</summary>
+        public decimal OtherQuantity { get; set; }
+        public decimal OtherValueExcludingTax { get; set; }
 
         /// <summary>Landed cost held at the start / end of the month. Null when
         /// the line has none or the caller lacks stock.actualcost.view.</summary>
