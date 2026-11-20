@@ -3,12 +3,13 @@
 // is the authority and is never loosened; this only says so in advance, so the
 // operator is not surprised by a refusal.
 //
-// The guard refuses on a company with inventory tracking AND the hard block on,
-// for every user. Elsewhere a shortfall saves and the line only warns.
+// The guard refuses only where the server says so (CompanyDto.StockBlocksSale:
+// tracking AND the hard block on, and never under FIFO by GD, where a sale
+// ahead of its GD goes negative and the GD settles it). Elsewhere a shortfall
+// saves and the line only warns.
 
 /** Is this company's stock guard a hard block? */
-export const isHardBlock = (company) =>
-  !!(company && company.inventoryTrackingEnabled !== false && company.stockGuardHardBlock);
+export const isHardBlock = (company) => !!company?.stockBlocksSale;
 
 /**
  * @param {object} p

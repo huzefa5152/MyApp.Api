@@ -111,13 +111,28 @@ check(
     assert.deepStrictEqual(applyFbrHint({ uom: "" }, undefined), { uom: "" });
   },
 );
-const hard = { inventoryTrackingEnabled: true, stockGuardHardBlock: true, inventoryFlowVersion: 1 };
+// stockBlocksSale is the server's verdict (CompanyDto): the hard-block switch
+// with tracking on, never under FIFO by GD. "fifo" is a FIFO-by-GD company with
+// the switch on: it warns, it does not block.
+const hard = {
+  inventoryTrackingEnabled: true,
+  stockGuardHardBlock: true,
+  stockBlocksSale: true,
+  inventoryFlowVersion: 1,
+};
 const soft = {
   inventoryTrackingEnabled: true,
   stockGuardHardBlock: false,
+  stockBlocksSale: false,
   inventoryFlowVersion: 1,
 };
-const off = { inventoryTrackingEnabled: false, stockGuardHardBlock: true };
+const off = { inventoryTrackingEnabled: false, stockGuardHardBlock: true, stockBlocksSale: false };
+const fifo = {
+  inventoryTrackingEnabled: true,
+  stockGuardHardBlock: true,
+  stockBlocksSale: false,
+  inventoryFlowVersion: 2,
+};
 const pending = { name: "Check valve", hsCode: "8481.3000" };
 
 console.log("\n=== stock before save (D8) ===");
@@ -127,6 +142,19 @@ check("41: a pending new item on a hard-block company: No stock, Save blocked", 
     blocksSave: true,
     onHand: 0,
   }),
+);
+check(
+  "41f: FIFO by GD with the switch on: No stock warns, Save allowed (a GD settles it later)",
+  () => {
+    const r = lineStock({
+      item: { hsCode: "8481.3000", availableQty: 0 },
+      quantity: 5,
+      company: fifo,
+    });
+    assert.ok(r.noStock && !r.blocksSave && !isHardBlock(fifo));
+    const p = lineStock({ pending, quantity: 1, company: fifo });
+    assert.ok(p.noStock && !p.blocksSave);
+  },
 );
 check("41d: the same on a soft company: No stock, Save allowed", () => {
   const r = lineStock({ pending, quantity: 1, company: soft });

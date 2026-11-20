@@ -43,9 +43,10 @@ namespace MyApp.Api.Services.Implementations
             _gl = gl;
         }
 
-        private static CompanyDto ToDto(Company c, bool hasChallans = false, bool hasInvoices = false,
+        private static CompanyDto ToDto(Company c, bool gdFifo, bool hasChallans = false, bool hasInvoices = false,
             bool hasSalesQuotes = false, bool hasSalesOrders = false) => new()
         {
+            StockBlocksSale = StockCostingMethod.BlocksSaleBeyondStock(c, gdFifo),
             Id = c.Id,
             Name = c.Name,
             BrandName = c.BrandName,
@@ -128,8 +129,9 @@ namespace MyApp.Api.Services.Implementations
             var invoiceSet = new HashSet<int>(companiesWithInvoices);
             var quoteSet = new HashSet<int>(companiesWithQuotes);
             var orderSet = new HashSet<int>(companiesWithOrders);
+            var fifoSet = await StockCostingMethod.GdFifoCompanyIdsAsync(_context, companyIds);
 
-            return companies.Select(c => ToDto(c, challanSet.Contains(c.Id), invoiceSet.Contains(c.Id),
+            return companies.Select(c => ToDto(c, fifoSet.Contains(c.Id), challanSet.Contains(c.Id), invoiceSet.Contains(c.Id),
                 quoteSet.Contains(c.Id), orderSet.Contains(c.Id))).ToList();
         }
 
@@ -147,7 +149,8 @@ namespace MyApp.Api.Services.Implementations
             var hasInvoices = await _context.Invoices.NotOpening().AnyAsync(i => i.CompanyId == company.Id && i.DivisionId == null);
             var hasSalesQuotes = await _context.SalesQuotes.AnyAsync(q => q.CompanyId == company.Id && q.DivisionId == null);
             var hasSalesOrders = await _context.SalesOrders.AnyAsync(o => o.CompanyId == company.Id && o.DivisionId == null);
-            return ToDto(company, hasChallans, hasInvoices, hasSalesQuotes, hasSalesOrders);
+            return ToDto(company, await StockCostingMethod.IsGdFifoAsync(_context, company.Id),
+                hasChallans, hasInvoices, hasSalesQuotes, hasSalesOrders);
         }
 
         public async Task<CompanyDto> CreateAsync(CreateCompanyDto dto)
@@ -260,7 +263,7 @@ namespace MyApp.Api.Services.Implementations
                 }
             }
 
-            return ToDto(created);
+            return ToDto(created, await StockCostingMethod.IsGdFifoAsync(_context, created.Id));
         }
 
         public async Task<CompanyDto?> UpdateAsync(int id, UpdateCompanyDto dto)
@@ -392,7 +395,7 @@ namespace MyApp.Api.Services.Implementations
                     id);
             }
 
-            return ToDto(updated, hasChallans, hasInvoices);
+            return ToDto(updated, await StockCostingMethod.IsGdFifoAsync(_context, updated.Id), hasChallans, hasInvoices);
         }
 
         public async Task DeleteAsync(int id)

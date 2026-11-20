@@ -17,7 +17,8 @@ whatever order the GDs and invoices were typed in. One fresh company:
      4. A GD dated BEFORE those invoices, entered after them (the late GD):
         the value is exactly in - invoiced; quantities are worked out again and
         the movement feed adds up to the on-hand quantity.
-     5. An invoice for more than the stock is worth is refused.
+     5. (Replaced 2026-11-21: an invoice beyond stock is no longer refused
+        under FIFO by GD -- see 11. This step used to assert the refusal.)
      6. Editing an invoice's amount moves the stock by the difference.
      7. Deleting an invoice puts its amount back.
      8. A back-dated invoice entered now sells by value too. Every invoice
@@ -25,6 +26,11 @@ whatever order the GDs and invoices were typed in. One fresh company:
         create one, so the read-only production check proves that part.
      9. The bill cost check shows no gap on a sale by value.
     10. MCP: an invoice made through prepare_bill sells by value too.
+    11. Selling before the GD lands (2026-11-21): with "block selling beyond
+        stock" ON, an invoice for more than the stock holds still saves; the
+        item goes negative; the next GD pays the oldest pre-sale off first and
+        only the rest is new stock. A weighted-average company with the same
+        switch is still refused, and the company record says which blocks.
 
 Usage:
     python scripts/test_stock_sale_by_value.py --base http://localhost:5139 [--keep]
@@ -96,8 +102,8 @@ def main():
                                              "registrationType": "Unregistered"}).json()["id"]
     hs, name = "8481.1000", f"SBV VALVE {tag}"
 
-    def gd(number, gd_date, qty, selling):
-        line = {"gdNumber": number, "gdDate": gd_date, "description": name, "hsCode": hs, "quantity": qty,
+    def gd(number, gd_date, qty, selling, desc=None, code=None):
+        line = {"gdNumber": number, "gdDate": gd_date, "description": desc or name, "hsCode": code or hs, "quantity": qty,
                 "unit": "Pcs", "assessedValue": selling * 0.8, "customsDuty": 0, "acd": 0, "regulatoryDuty": 0,
                 "others": 0, "salesTaxRate": 18, "astRate": 3, "incomeTaxRate": 6, "addOnProfit": 0,
                 "sellingValue": selling}
@@ -170,12 +176,6 @@ def main():
               "SBV-GD-0" in g and near(g["SBV-GD-0"].get("remainingValueExcludingTax"), 75000, 0.05),
               json.dumps(g)[:400])
 
-        print("\n-- 5. More than the stock is worth is refused --")
-        r = invoice("2026-11-07", 1, 1000000)
-        check("an invoice of 1,000,000 against 140,010 of stock is refused (409)", r.status_code == 409, f"{r.status_code} {r.text[:200]}")
-        check("and says amount, value and to enter the GD first",
-              "stock value" in r.text and "GD" in r.text, r.text[:300])
-
         print("\n-- 6. Editing an invoice's amount --")
         cur = call("GET", f"/invoices/{inv1}").json()
         lines = [{"id": i["id"], "itemTypeId": i["itemTypeId"], "description": i["description"], "quantity": 1,
@@ -227,6 +227,79 @@ def main():
               plan and not refused and near(before["valueExcludingTax"] - after["valueExcludingTax"], 6000),
               (text[:300], before and before["valueExcludingTax"], after and after["valueExcludingTax"]))
         fx.remove_users(admin, "sbv_")
+
+        print("\n-- 11. Selling before the GD lands --")
+        co = call("GET", f"/companies/{cid}").json()
+        check("company record: switch ON, but FIFO by GD does not block a sale",
+              co.get("stockGuardHardBlock") is True and co.get("stockBlocksSale") is False,
+              {k: co.get(k) for k in ("stockGuardHardBlock", "stockBlocksSale")})
+        pump_name = f"SBV PUMP {tag}"
+        r = gd("SBV-PUMP-1", "2026-10-01", 10, 10000, pump_name, "8413.7090")
+        check("pump GD 1: 10 Pcs worth 10,000", r.ok, r.text[:300])
+        def pump():
+            rows = call("GET", f"/stock/company/{cid}/onhand").json()
+            return next((x for x in rows if x["itemTypeName"].upper().startswith("SBV PUMP")), None)
+        def pump_invoice(on, amount):
+            p = pump()
+            return call("POST", "/invoices/standalone", json={
+                "date": f"{on}T00:00:00Z", "companyId": cid, "clientId": client, "gstRate": 18,
+                "items": [{"itemTypeId": p["itemTypeId"], "description": pump_name, "quantity": 1, "uom": "Pcs",
+                           "unitPrice": amount}]})
+        r = pump_invoice("2026-11-08", 30000)
+        check("an invoice of 30,000 against 10,000 of stock SAVES (no 409)", r.ok, f"{r.status_code} {r.text[:300]}")
+        p = pump()
+        check("the pump is now negative: -20,000 owed to the next GD",
+              p and near(p["valueExcludingTax"], -20000) and float(p["onHand"]) < 0, p and (p["onHand"], p["valueExcludingTax"]))
+        r = pump_invoice("2026-11-09", 5000)
+        check("a second pre-sale of 5,000 saves too", r.ok, r.text[:300])
+        p = pump()
+        check("owed is now 25,000", p and near(p["valueExcludingTax"], -25000), p and p["valueExcludingTax"])
+        r = gd("SBV-PUMP-2", "2026-11-15", 50, 100000, pump_name, "8413.7090")
+        check("pump GD 2 arrives: 50 Pcs worth 100,000 (2,000 each)", r.ok, r.text[:300])
+        p = pump()
+        # 10,000 + 100,000 in - 35,000 invoiced = 75,000. Quantity: the first
+        # sale took GD 1's 10 Pcs (10,000) and 10 Pcs of GD 2 for its other
+        # 20,000; the second took 2.5 Pcs. 60 - 22.5 = 37.5 Pcs at 2,000.
+        check("value = 110,000 in - 35,000 invoiced = 75,000", p and near(p["valueExcludingTax"], 75000),
+              p and p["valueExcludingTax"])
+        check("on hand = 37.5 Pcs, all at GD 2's 2,000", p and near(p["onHand"], 37.5, 0.001), p and p["onHand"])
+        g = {x["gdNumber"]: x for x in call("GET", f"/stock/company/{cid}/gd-details",
+                                             params={"itemTypeId": p["itemTypeId"]}).json()}
+        check("GD 2 paid the pre-sales off first: 25,000 of it is consumed, 75,000 left",
+              "SBV-PUMP-2" in g and near(g["SBV-PUMP-2"].get("remainingValueExcludingTax"), 75000, 0.05),
+              json.dumps(g)[:400])
+        check("GD 1 is used up", "SBV-PUMP-1" not in g or near(g["SBV-PUMP-1"].get("remainingValueExcludingTax"), 0, 0.05),
+              json.dumps(g)[:400])
+
+        print("\n-- 11b. Weighted average with the same switch still blocks --")
+        r = call("POST", "/companies", json={
+            "name": f"_sale_by_value_wa {tag}", "brandName": "SBVWA", "fullAddress": "1 Test Street",
+            "phone": "021-0000000", "ntn": "1234567-8", "startingChallanNumber": 1, "startingInvoiceNumber": 1,
+            "startingPurchaseBillNumber": 1, "startingGoodsReceiptNumber": 1, "startingSalesQuoteNumber": 1,
+            "startingSalesOrderNumber": 1, "fbrEnabled": False, "inventoryTrackingEnabled": True,
+            "stockGuardHardBlock": True, "enableGl": False})
+        wa = r.json()["id"] if r.ok else None
+        try:
+            call("POST", f"/stock/company/{wa}/flow-version", json={"version": 2})
+            r = call("PUT", f"/stock/company/{wa}/costing-method", json={"method": "WeightedAverage"})
+            check("second company put on the weighted average", r.ok, r.text[:200])
+            co = call("GET", f"/companies/{wa}").json()
+            check("its record says a sale beyond stock is blocked", co.get("stockBlocksSale") is True, co.get("stockBlocksSale"))
+            wclient = call("POST", "/clients", json={"name": f"SBV WA Client {tag}", "address": "1 Test Road, Karachi",
+                                                     "phone": "021-1234567", "companyId": wa,
+                                                     "registrationType": "Unregistered"}).json()["id"]
+            ni = call("POST", "/itemtypes", params={"companyId": wa}, json={
+                "name": f"SBV WA ITEM {tag}", "hsCode": "8481.1000", "uom": "Pcs", "isFavorite": True})
+            it_id = ni.json().get("id") if ni.ok else None
+            check("an item with no stock is created on it", it_id is not None, ni.text[:200])
+            r = call("POST", "/invoices/standalone", json={
+                "date": "2026-11-10T00:00:00Z", "companyId": wa, "clientId": wclient, "gstRate": 18,
+                "items": [{"itemTypeId": it_id, "description": "WA item", "quantity": 5, "uom": "Pcs", "unitPrice": 100}]})
+            check("weighted average + switch on: selling with no stock is refused (409)", r.status_code == 409,
+                  f"{r.status_code} {r.text[:300]}")
+        finally:
+            if wa and not args.keep:
+                call("DELETE", f"/companies/{wa}")
     finally:
         if not args.keep:
             call("DELETE", f"/companies/{cid}")

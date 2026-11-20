@@ -1459,7 +1459,8 @@ GD panel and Excel export all say which GDs it took.
   `StockMovement`), nothing is stored per pool, and no save path consults it.
   Selling past every pool is applied in full; the uncovered quantity is a
   shortfall costed at the last pool used, and the next inward movement settles
-  it first. `StockGuardHardBlock` is the only oversell control and is unchanged.
+  it first. `StockGuardHardBlock` does not refuse a sale under FIFO by GD
+  (5b-24, 2026-11-21); it still governs the weighted average.
 - **The settled cost is cost of goods sold, and the relief must post it.**
   When a purchase settles an earlier oversale, the difference between what
   those units really cost and the sale's estimate is booked on the PURCHASE
@@ -1952,10 +1953,18 @@ sheet and the software drifted every month.
   `PostingService.PostInventoryPeriodsAsync`, which every stock change already
   calls -- so a late GD re-prices the earlier sales' quantities by itself. The
   walk ignores the stored quantity of a sale by value, so this is idempotent.
-- **The hard block measures VALUE** for these invoices
-  (`InvoiceService.AssertBillStockAvailabilityAsync`): refused when the amount
-  is more than the item's stock value, with "enter the GD first". The close-out
-  round-up is skipped (a sale by value never takes a whole bin).
+- **A sale beyond stock is never refused under FIFO by GD** (2026-11-21,
+  maintainer's decision; until then the hard block refused an amount above the
+  stock value). Importers sell goods whose GD has not landed: the item goes
+  negative (the amount is owed), and the next inward movement pays the oldest
+  owed sale off first, by value -- `GdFifoValuation`'s owed list.
+  `StockCostingMethod.BlocksSaleBeyondStock` is the ONE rule (tracking AND
+  `StockGuardHardBlock` AND not FIFO by GD); `AssertBillStockAvailabilityAsync`
+  and `CompanyDto.StockBlocksSale` both read it, and the invoice forms read the
+  DTO flag, never the switch, so they warn and save. Weighted-average companies
+  and sales-order reservations still block. The opening stock import no longer
+  switches the block on. The close-out round-up is skipped (a sale by value
+  never takes a whole bin).
 - **5b-23's one-unit bound does not apply here**: the stored quantity is the
   walk's, not a caller's. Lines before the date keep 5b-23 exactly.
 - Remaining differences against the sheet are real ones: an invoice on the wrong
@@ -2495,7 +2504,7 @@ them can be resolved from FBR.
 | FIFO by GD (claimed first, never blocks, WA unchanged) | `cd scripts/stock_fifo_harness && dotnet run -c Release`; `python scripts/test_stock_fifo.py`; `node scripts/test_fifo_pricing.mjs` | `248 checks, 0 failed`; `95/95 checks passed`; `26/26 checks passed` |
 | Import Tax Desk (register, input-tax worksheet, tie-out) | `python scripts/test_import_tax_desk.py` | `27/27 checks passed` |
 | Dashboards (shared sale filter, receivables, landed margin, tax position, drills tie, permissions) | `python scripts/test_dashboard_kpis.py` (add `--db "<conn>"` for the DB-backed cases); `node scripts/test_dashboard_ui.mjs` | `197/197 checks passed` (with `--db`); `20 passed, 0 failed` |
-| Invoices take their amount out of stock (5b-24): GD first, any quantity, late GD, value refusal, edit, delete, back-dated, MCP | `python scripts/test_stock_sale_by_value.py --base <url>` | `all sale-by-value checks passed` |
+| Invoices take their amount out of stock (5b-24): GD first, any quantity, late GD, edit, delete, back-dated, MCP, selling before the GD lands (no refusal; the next GD pays the oldest pre-sale first; weighted average still refuses) | `python scripts/test_stock_sale_by_value.py --base <url>` | `all sale-by-value checks passed` |
 | GD charges, customs units, letters of credit | `python scripts/test_import_charges_units_lcs.py` | `24/24 checks passed` |
 | Inventory Overlay (two books, one total; normal mode unchanged) | `python scripts/test_inventory_overlay.py` (add `--db <branch db>` for the submitted-lock case) | `71/71 checks passed` (1 skipped without `--db`) |
 | Hosted MCP: door, premium grant, company / division isolation, catalog, activity | `python scripts/test_mcp_isolation.py --base <url> --db <local db>` | `45/45 isolation checks passed` |
@@ -2561,7 +2570,7 @@ Excel export and its picker feed go in `scripts/test_client_ledger_report.py`
 2 = standard: ALL item types are inventory, HS code is FBR metadata only).
 Default 1, so existing tenants are untouched. Flip via
 `POST /api/stock/company/{id}/flow-version` (permission `stock.policy.manage`,
-reversible + audited; turning on V2 defaults `StockGuardHardBlock` on). The
+reversible + audited; it does not touch `StockGuardHardBlock`). The
 logical buckets (Committed / To-Deliver / Delivered / Incoming) are a DERIVED
 read model — never persisted, computed from live documents by
 `InventoryReadService`, so nothing can drift. Per-item opt-outs live in

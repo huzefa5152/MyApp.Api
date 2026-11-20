@@ -644,28 +644,9 @@ namespace MyApp.Api.Services.Implementations
         /// </summary>
         private async Task AssertBillStockAvailabilityAsync(Company company, int companyId, IEnumerable<InvoiceItem> items)
         {
-            if (!(company.InventoryTrackingEnabled && company.StockGuardHardBlock)) return;
+            if (!StockCostingMethod.BlocksSaleBeyondStock(company,
+                    await StockCostingMethod.IsGdFifoAsync(_context, companyId))) return;
             await MyApp.Api.Helpers.StockLock.AcquireCompanyAsync(_context, companyId);
-
-            // A sale by value (5b-24) takes its amount out, so what it needs is
-            // that much stock VALUE; the quantity typed on the line is free.
-            if (await SellsByValueAsync(companyId))
-            {
-                var need = items.Where(i => i.ItemTypeId.HasValue && !i.KeepInStock && i.LineTotal > 0m)
-                    .GroupBy(i => i.ItemTypeId!.Value)
-                    .ToDictionary(g => g.Key, g => (Name: g.First().ItemTypeName ?? "", Value: g.Sum(i => i.LineTotal)));
-                if (need.Count == 0) return;
-                var held = await _stock.GetValuationsAsync(companyId, need.Keys);
-                var short_ = need.Where(kv => kv.Value.Value > held.GetValueOrDefault(kv.Key).ValueExcludingTax + 0.005m)
-                    .Select(kv => $"{kv.Value.Name} (amount {kv.Value.Value:N2}, stock value {held.GetValueOrDefault(kv.Key).ValueExcludingTax:N2})")
-                    .ToList();
-                if (short_.Count > 0)
-                    throw new StockShortageException(
-                        "Not enough stock value to issue this invoice: " + string.Join(", ", short_)
-                        + ". Enter the GD these goods came in on first.",
-                        new List<StockShortageDetail>());
-                return;
-            }
 
             var requirements = items
                 .Where(i => i.ItemTypeId.HasValue && !i.KeepInStock)

@@ -1179,8 +1179,8 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                     <strong style={{ display: "block" }}>Hard-block over-commit / oversell</strong>
                     <span style={{ fontSize: "0.76rem", color: "#5f6d7e" }}>
                       ON — refuse a sales order or bill (409) when there isn't enough available
-                      stock. OFF — allow it with a soft warning. Enabled automatically when a
-                      company is switched to V2 inventory.
+                      stock. OFF — allow it with a soft warning. A company valued FIFO by GD never
+                      refuses a bill: it warns, and the next GD settles the sale.
                     </span>
                   </span>
                 </label>

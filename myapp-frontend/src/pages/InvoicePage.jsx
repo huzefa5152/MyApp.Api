@@ -2027,7 +2027,7 @@ export default function InvoicePage({ mode = "invoices" }) {
           invoiceId={editingId}
           billsMode
           fbrEnabled={fbrEnabled}
-          stockHardBlock={!!selectedCompany?.stockGuardHardBlock}
+          stockHardBlock={!!selectedCompany?.stockBlocksSale}
           inventoryOverlay={!!selectedCompany?.inventoryOverlayEnabled}
           onClose={() => setEditingId(null)}
           onSaved={() => {
@@ -2050,7 +2050,7 @@ export default function InvoicePage({ mode = "invoices" }) {
           readOnly
           billsMode
           fbrEnabled={fbrEnabled}
-          stockHardBlock={!!selectedCompany?.stockGuardHardBlock}
+          stockHardBlock={!!selectedCompany?.stockBlocksSale}
           inventoryOverlay={!!selectedCompany?.inventoryOverlayEnabled}
           onClose={() => setViewingId(null)}
           onSaved={() => setViewingId(null)}

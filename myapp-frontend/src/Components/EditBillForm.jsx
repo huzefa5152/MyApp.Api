@@ -1095,7 +1095,7 @@ export default function EditBillForm({
 
   // The stock guard as this form knows it (the page passes the company's hard
   // block). Only used for a pending NEW item, which has nothing on hand.
-  const stockCompany = { inventoryTrackingEnabled: true, stockGuardHardBlock: stockHardBlock };
+  const stockCompany = { inventoryTrackingEnabled: true, stockBlocksSale: stockHardBlock };
   // An FBR HS code the company has no item for: the line carries a PENDING
   // new item, made by the server inside the save's transaction.
   const pickNewItem = (index, pending) => {

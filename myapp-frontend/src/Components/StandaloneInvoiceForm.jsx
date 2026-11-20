@@ -1340,12 +1340,12 @@ export default function StandaloneInvoiceForm({
   // on-hand went to -209,256).
   //
   // Whether a shortfall STOPS the save follows the company's own policy
-  // (Company.StockGuardHardBlock), so the form never refuses something the
+  // (CompanyDto.StockBlocksSale), so the form never refuses something the
   // server would accept, nor waves through something it would reject with a
   // 409. With the policy off the operator still gets told, in as many words,
   // that the bill will drive on-hand negative -- silence is what let Alpha
   // Traders reach -209,256.
-  const stockHardBlock = !!company?.stockGuardHardBlock;
+  const stockHardBlock = !!company?.stockBlocksSale;
 
   // The quantity that empties a bin, by the unit's own rule: a decimal-capable
   // unit (KG) takes the exact on-hand, fraction and all; a whole-unit one (Pcs)

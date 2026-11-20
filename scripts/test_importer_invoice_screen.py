@@ -86,6 +86,15 @@ def make_company(base, token, name, hard_block=False):
     })
     if st not in (200, 201):
         sys.exit(f"FATAL: create company failed ({st} {co})")
+    if hard_block:
+        # FIFO by GD never refuses a sale beyond stock (a later GD settles it,
+        # 2026-11-21), so the hard-block cases here run on the weighted
+        # average, where the switch still refuses. test_stock_sale_by_value.py
+        # suite 11 covers the FIFO side.
+        st, _ = http("PUT", f"/api/stock/company/{co['id']}/costing-method", base, token=token,
+                     body={"method": "WeightedAverage"})
+        if st != 200:
+            sys.exit(f"FATAL: could not put the hard-block company on the weighted average ({st})")
     return co
 
 

@@ -124,6 +124,16 @@ def setup(base: str, admin_user: str, admin_pw: str):
         print(f"FATAL: flip to V2 failed ({status} {r})")
         sys.exit(2)
 
+    # Quantity semantics: this suite counts units reserved, delivered and
+    # billed. A new company is FIFO by GD, where an invoice takes its AMOUNT out
+    # (5b-24) and is never refused for stock (2026-11-21), so it runs on the
+    # weighted average, as test_stock_itemtype_reflow.py does.
+    status, r = http("PUT", f"/api/stock/company/{cid}/costing-method", base, token=token,
+                     body={"method": "WeightedAverage"})
+    if status != 200:
+        print(f"FATAL: could not put the company on the weighted average ({status} {r})")
+        sys.exit(2)
+
     status, client = http("POST", "/api/clients", base, token=token, body={
         "name": f"V2 Client {suffix}", "address": "1 Test Road, Karachi",
         "phone": "021-1234567", "companyId": cid,

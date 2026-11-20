@@ -36,6 +36,27 @@ namespace MyApp.Api.Helpers
         public static async Task<bool> IsGdFifoAsync(AppDbContext db, int companyId)
             => await GetAsync(db, companyId) == GdFifo;
 
+        /// <summary>The companies among <paramref name="companyIds"/> valued FIFO by GD.</summary>
+        public static async Task<HashSet<int>> GdFifoCompanyIdsAsync(AppDbContext db, IEnumerable<int> companyIds)
+        {
+            var keys = companyIds.Distinct().ToDictionary(SettingKey);
+            var rows = await db.SystemSettings.AsNoTracking()
+                .Where(s => keys.Keys.Contains(s.Key)).Select(s => new { s.Key, s.Value }).ToListAsync();
+            return rows.Where(r => string.Equals(r.Value, GdFifo, StringComparison.OrdinalIgnoreCase))
+                .Select(r => keys[r.Key]).ToHashSet();
+        }
+
+        /// <summary>
+        /// Whether an invoice is REFUSED for selling beyond stock (2026-11-21,
+        /// maintainer's decision). Never under FIFO by GD: importers sell goods
+        /// whose GD has not landed yet, the item goes negative, and the GD
+        /// settles those sales first when it arrives -- the walk is built for
+        /// it. The invoice forms still warn. Elsewhere it is the company's
+        /// "block selling beyond stock" switch, as before.
+        /// </summary>
+        public static bool BlocksSaleBeyondStock(Company company, bool gdFifo)
+            => company.InventoryTrackingEnabled && company.StockGuardHardBlock && !gdFifo;
+
         /// <summary>The method a NEW company starts on.</summary>
         public const string ForNewCompany = GdFifo;
 

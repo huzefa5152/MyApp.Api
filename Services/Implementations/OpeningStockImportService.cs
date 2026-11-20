@@ -1047,11 +1047,10 @@ namespace MyApp.Api.Services.Implementations
             if (company.InventoryFlowVersion < 2)
             {
                 company.InventoryFlowVersion = 2;
-                // V2 defaults the guard on — over-committing stock starts
-                // returning 409. That outlives the import, so say it plainly.
-                company.StockGuardHardBlock = true;
-                result.Messages.Add(
-                    "Every item type is now tracked as inventory, and selling more than is on hand is blocked.");
+                // The "block selling beyond stock" switch is left as it is:
+                // importers sell before a GD lands, and FIFO by GD settles
+                // those sales when it does (2026-11-21).
+                result.Messages.Add("Every item type is now tracked as inventory.");
             }
 
             await _db.SaveChangesAsync();

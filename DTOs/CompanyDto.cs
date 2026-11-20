@@ -67,6 +67,11 @@ namespace MyApp.Api.DTOs
         public bool InventoryTrackingEnabled { get; set; }
         // Hard-block over-commit/oversell (409) when tracking is on (Q4).
         public bool StockGuardHardBlock { get; set; }
+        /// <summary>Whether an invoice is actually refused for selling beyond
+        /// stock: the switch above, never under FIFO by GD
+        /// (<see cref="Helpers.StockCostingMethod.BlocksSaleBeyondStock"/>).
+        /// The invoice forms read this, not the switch.</summary>
+        public bool StockBlocksSale { get; set; }
         /// <summary>Two books per sale: a commercial bill and an FBR
         /// invoice that share a total. See Company.InventoryOverlayEnabled.</summary>
         public bool InventoryOverlayEnabled { get; set; }
