@@ -23,7 +23,8 @@ export function lineStock({ pending, item, quantity, company }) {
   if (!company || company.inventoryTrackingEnabled === false) return none;
   const qty = Number(quantity) || 0;
   let onHand = null;
-  if (pending) onHand = 0;                     // a brand-new item has no stock
+  if (pending)
+    onHand = 0; // a brand-new item has no stock
   else if (item && typeof item.availableQty === "number") {
     // Legacy tracking (version 1) moves stock for HS-coded items only.
     const tracked = company.inventoryFlowVersion === 2 || !!(item.hsCode && item.hsCode.trim());

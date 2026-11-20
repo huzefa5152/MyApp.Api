@@ -1,5 +1,14 @@
 import { Fragment, useState, useEffect, useMemo, useRef } from "react";
-import { MdAdd, MdDelete, MdCheck, MdInfo, MdLock, MdPersonAdd, MdExpandMore, MdExpandLess } from "react-icons/md";
+import {
+  MdAdd,
+  MdDelete,
+  MdCheck,
+  MdInfo,
+  MdLock,
+  MdPersonAdd,
+  MdExpandMore,
+  MdExpandLess,
+} from "react-icons/md";
 import { createStandaloneInvoice, getStockPricing } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
@@ -11,7 +20,12 @@ import { isDecimalUnit } from "../utils/formatQuantity";
 import { getSalesOrdersForPicker, getSalesOrderInvoicePrefill } from "../api/salesOrderApi";
 import { formStyles, modalSizes, formShell, formBodyFill, colors } from "../theme";
 import { todayYmd } from "../utils/dateInput";
-import { ADVANCE_TAX_OPTIONS, advanceTaxLabel, findAdvanceTax, advanceTaxAmount } from "../config/advanceTax";
+import {
+  ADVANCE_TAX_OPTIONS,
+  advanceTaxLabel,
+  findAdvanceTax,
+  advanceTaxAmount,
+} from "../config/advanceTax";
 import { defaultAccountPlaceholder } from "../utils/accountDisplay";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
@@ -23,10 +37,23 @@ import TaxRateNotice from "./TaxRateNotice";
 import BillStep from "./bill/BillStep";
 import BillChecklist from "./bill/BillChecklist";
 import BillTotals from "./bill/BillTotals";
-import { BILL_ANCHORS, lineAnchor, rateBlockText, billChecklist, billTotalsRows, salesTaxBase, isThirdScheduleSaleType } from "../utils/billEntry";
+import {
+  BILL_ANCHORS,
+  lineAnchor,
+  rateBlockText,
+  billChecklist,
+  billTotalsRows,
+  salesTaxBase,
+  isThirdScheduleSaleType,
+} from "../utils/billEntry";
 import useImportedTaxRates from "../hooks/useImportedTaxRates";
 import useScenarioFollowsGoods from "../hooks/useScenarioFollowsGoods";
-import BillTaxTreatmentField, { isOutsideFbr, taxLabel, outsideFbrRate, outsideFbrScenario } from "./BillTaxTreatmentField";
+import BillTaxTreatmentField, {
+  isOutsideFbr,
+  taxLabel,
+  outsideFbrRate,
+  outsideFbrScenario,
+} from "./BillTaxTreatmentField";
 import { itemTypesForBook, BOOK_BILL } from "../utils/itemTypeBooks";
 import { matchesScenarioSaleType, DEFAULT_SALE_TYPE } from "../utils/saleType";
 import BulkItemTypeBar from "./BulkItemTypeBar";
@@ -39,7 +66,11 @@ import ItemTypeForm from "./ItemTypeForm";
 import PermissionLackedHint from "./PermissionLackedHint";
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import AttachmentManager from "./AttachmentManager";
-import ManualFilingStep, { emptyManualFiling, keptCodes, manualFilingPayload } from "./ManualFilingStep";
+import ManualFilingStep, {
+  emptyManualFiling,
+  keptCodes,
+  manualFilingPayload,
+} from "./ManualFilingStep";
 import {
   amountStock,
   fifoQuantityForAmount,
@@ -60,7 +91,6 @@ import {
 // the picked Item Type. Operator can ALSO inline-create a Buyer or an
 // Item Type from this same form when permitted.
 
-
 // Per §9 + §10. Each entry annotates the backend's Scenario record so
 // the form's conditional rendering doesn't have to read SN codes.
 //   buyerKind — drives the buyer-pool filter:
@@ -71,40 +101,170 @@ import {
 //   needsMRP — line carries fixedNotifiedValueOrRetailPrice (3rd-Sched).
 //   needsSRO — line carries SRO Schedule + Item Serial #.
 const SCENARIO_META = {
-  SN001: { buyerKind: "b2b-registered",   needsMRP: false, needsSRO: false, hint: "Wholesale B2B to a registered buyer (NTN required, validated by FBR)." },
-  SN002: { buyerKind: "b2b-unregistered", needsMRP: false, needsSRO: false, hint: "B2B to an unregistered buyer. 4% further tax common at submit time." },
-  SN003: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale of Steel (Melted and Re-Rolled)." },
-  SN004: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale by Ship Breakers." },
-  SN005: { buyerKind: "either",           needsMRP: false, needsSRO: true,  hint: "Reduced rate sale — SRO reference required." },
-  SN006: { buyerKind: "either",           needsMRP: false, needsSRO: true,  hint: "Exempt goods (rate 0%) — SRO reference required." },
-  SN007: { buyerKind: "either",           needsMRP: false, needsSRO: true,  hint: "Zero rated sale — SRO reference required." },
-  SN008: { buyerKind: "either",           needsMRP: true,  needsSRO: false, hint: "3rd Schedule goods — FBR charges the tax on the printed retail price: 18% of MRP × Qty. Enter the MRP per unit." },
-  SN009: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Cotton ginners → spinners (Textile Sector)." },
-  SN010: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Telecom services rendered or provided." },
-  SN011: { buyerKind: "b2b-registered",   needsMRP: false, needsSRO: false, hint: "Toll Manufacturing sale by Steel sector (registered buyer only)." },
-  SN012: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale of Petroleum products." },
-  SN013: { buyerKind: "b2b-registered",   needsMRP: false, needsSRO: false, hint: "Electricity supply to retailers (registered buyer)." },
-  SN014: { buyerKind: "b2b-registered",   needsMRP: false, needsSRO: false, hint: "Sale of gas to CNG stations (registered buyer)." },
-  SN015: { buyerKind: "either",           needsMRP: false, needsSRO: true,  hint: "Sale of mobile phones — Ninth Schedule SRO reference required." },
-  SN016: { buyerKind: "b2b-registered",   needsMRP: false, needsSRO: false, hint: "Processing / Conversion of Goods (registered buyer)." },
-  SN017: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale of goods where FED is charged in ST mode." },
-  SN018: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Services rendered where FED is charged in ST mode." },
-  SN019: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Services rendered or provided (16% standard)." },
-  SN020: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale of Electric Vehicles (1%)." },
-  SN021: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale of Cement / Concrete Block." },
-  SN022: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale of Potassium Chlorate." },
-  SN023: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale of CNG." },
-  SN024: { buyerKind: "either",           needsMRP: false, needsSRO: true,  hint: "Goods listed in SRO 297(I)/2023 — SRO reference required." },
-  SN025: { buyerKind: "either",           needsMRP: false, needsSRO: true,  hint: "Drugs at fixed ST rate (Eighth Schedule Table 1, S.No 81)." },
-  SN026: { buyerKind: "walk-in",          needsMRP: false, needsSRO: false, hint: "Retail counter sale to an end consumer at standard rate." },
-  SN027: { buyerKind: "walk-in",          needsMRP: true,  needsSRO: false, hint: "Retail counter sale of 3rd Schedule goods. MRP × qty required." },
-  SN028: { buyerKind: "walk-in",          needsMRP: false, needsSRO: true,  hint: "Retail counter sale at reduced rate. SRO Schedule + Item No required." },
+  SN001: {
+    buyerKind: "b2b-registered",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Wholesale B2B to a registered buyer (NTN required, validated by FBR).",
+  },
+  SN002: {
+    buyerKind: "b2b-unregistered",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "B2B to an unregistered buyer. 4% further tax common at submit time.",
+  },
+  SN003: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Sale of Steel (Melted and Re-Rolled).",
+  },
+  SN004: { buyerKind: "either", needsMRP: false, needsSRO: false, hint: "Sale by Ship Breakers." },
+  SN005: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: true,
+    hint: "Reduced rate sale — SRO reference required.",
+  },
+  SN006: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: true,
+    hint: "Exempt goods (rate 0%) — SRO reference required.",
+  },
+  SN007: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: true,
+    hint: "Zero rated sale — SRO reference required.",
+  },
+  SN008: {
+    buyerKind: "either",
+    needsMRP: true,
+    needsSRO: false,
+    hint: "3rd Schedule goods — FBR charges the tax on the printed retail price: 18% of MRP × Qty. Enter the MRP per unit.",
+  },
+  SN009: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Cotton ginners → spinners (Textile Sector).",
+  },
+  SN010: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Telecom services rendered or provided.",
+  },
+  SN011: {
+    buyerKind: "b2b-registered",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Toll Manufacturing sale by Steel sector (registered buyer only).",
+  },
+  SN012: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Sale of Petroleum products.",
+  },
+  SN013: {
+    buyerKind: "b2b-registered",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Electricity supply to retailers (registered buyer).",
+  },
+  SN014: {
+    buyerKind: "b2b-registered",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Sale of gas to CNG stations (registered buyer).",
+  },
+  SN015: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: true,
+    hint: "Sale of mobile phones — Ninth Schedule SRO reference required.",
+  },
+  SN016: {
+    buyerKind: "b2b-registered",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Processing / Conversion of Goods (registered buyer).",
+  },
+  SN017: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Sale of goods where FED is charged in ST mode.",
+  },
+  SN018: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Services rendered where FED is charged in ST mode.",
+  },
+  SN019: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Services rendered or provided (16% standard).",
+  },
+  SN020: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Sale of Electric Vehicles (1%).",
+  },
+  SN021: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Sale of Cement / Concrete Block.",
+  },
+  SN022: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Sale of Potassium Chlorate.",
+  },
+  SN023: { buyerKind: "either", needsMRP: false, needsSRO: false, hint: "Sale of CNG." },
+  SN024: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: true,
+    hint: "Goods listed in SRO 297(I)/2023 — SRO reference required.",
+  },
+  SN025: {
+    buyerKind: "either",
+    needsMRP: false,
+    needsSRO: true,
+    hint: "Drugs at fixed ST rate (Eighth Schedule Table 1, S.No 81).",
+  },
+  SN026: {
+    buyerKind: "walk-in",
+    needsMRP: false,
+    needsSRO: false,
+    hint: "Retail counter sale to an end consumer at standard rate.",
+  },
+  SN027: {
+    buyerKind: "walk-in",
+    needsMRP: true,
+    needsSRO: false,
+    hint: "Retail counter sale of 3rd Schedule goods. MRP × qty required.",
+  },
+  SN028: {
+    buyerKind: "walk-in",
+    needsMRP: false,
+    needsSRO: true,
+    hint: "Retail counter sale at reduced rate. SRO Schedule + Item No required.",
+  },
 };
 
 const blankRow = () => ({
   localId: Math.random().toString(36).slice(2, 10),
   itemTypeId: "",
-  itemTypeName: "",       // mirrored from the picked ItemType for the read-only Description column
+  itemTypeName: "", // mirrored from the picked ItemType for the read-only Description column
   // A pending NEW item picked from the FBR HS codes ({ placeholderId, name,
   // hsCode, uom, ... }): sent as newItemType and made by the server on save.
   newItemType: null,
@@ -121,7 +281,7 @@ const blankRow = () => ({
   hsCode: "",
   uom: "",
   fbrUOMId: null,
-  saleType: "",           // overridden by scenario at save time, kept for display only
+  saleType: "", // overridden by scenario at save time, kept for display only
   quantity: "",
   unitPrice: "",
   // Scenario-specific extras
@@ -134,7 +294,15 @@ const blankRow = () => ({
   sroItemSerialNo: "",
 });
 
-export default function StandaloneInvoiceForm({ companyId, company, onClose, onSaved, billsMode = false, defaultDivisionId, canRecordManual = false }) {
+export default function StandaloneInvoiceForm({
+  companyId,
+  company,
+  onClose,
+  onSaved,
+  billsMode = false,
+  defaultDivisionId,
+  canRecordManual = false,
+}) {
   // billsMode: true when this form is mounted from the Bills tab. Hides
   // the FBR-only display columns (HS Code); the scenario UI stays
   // fbrEnabled-gated as usual. Item Type affordances — per-row picker,
@@ -146,7 +314,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // /lookup/items, so operators can pick from previously-entered values
   // or type free-text; picking an Item Type seeds it when blank.
   const { has } = usePermissions();
-  const canCreateClient   = has("clients.manage.create");
+  const canCreateClient = has("clients.manage.create");
   const canCreateItemType = has("itemtypes.manage.create");
   // FBR integration toggle (company-level). When off, this is a plain
   // non-FBR bill: no scenario step, editable GST, no scenario saved.
@@ -159,7 +327,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const [manualFiling, setManualFiling] = useState(emptyManualFiling);
   // Lines whose GD breakdown is open (localId -> true). Closed by default.
   const [gdOpen, setGdOpen] = useState({});
-  const keptByFiling = (r) => keptCodes(manualFiling).has(((r.newItemType?.hsCode || r.hsCode) || "").trim());
+  const keptByFiling = (r) =>
+    keptCodes(manualFiling).has((r.newItemType?.hsCode || r.hsCode || "").trim());
 
   const [clients, setClients] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
@@ -202,8 +371,14 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const [units, setUnits] = useState([]);
   useEffect(() => {
     let alive = true;
-    getAllUnits().then(({ data }) => { if (alive) setUnits(Array.isArray(data) ? data : []); }).catch(() => {});
-    return () => { alive = false; };
+    getAllUnits()
+      .then(({ data }) => {
+        if (alive) setUnits(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
   }, []);
   // The row whose item type was just picked. The next field to fill depends on
   // whether that item can be priced from stock, and pricing arrives one fetch
@@ -218,7 +393,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     if (priced === undefined) return;
     const key = priced.canPrice ? "amount" : "qty";
     const el = document.querySelector(`[data-row-${key}="${focusRow.localId}"]`);
-    if (el) { el.focus(); el.select?.(); }
+    if (el) {
+      el.focus();
+      el.select?.();
+    }
     setFocusRow(null);
   }, [focusRow, stockPricing]);
 
@@ -336,13 +514,21 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // Per-company Non-Inventory Items (GL-account shortcut lines: Freight,
   // Discount, …). A company with GL off / no items resolves to [] silently.
   useEffect(() => {
-    if (!companyId) { setNonInvItems([]); return; }
-    getNonInventoryItemsByCompany(companyId, true).then(({ data }) => setNonInvItems(data || [])).catch(() => setNonInvItems([]));
+    if (!companyId) {
+      setNonInvItems([]);
+      return;
+    }
+    getNonInventoryItemsByCompany(companyId, true)
+      .then(({ data }) => setNonInvItems(data || []))
+      .catch(() => setNonInvItems([]));
   }, [companyId]);
 
   // GL accounts (income side highlighted) for the per-line Account picker.
   useEffect(() => {
-    if (!companyId) { setAccounts([]); return; }
+    if (!companyId) {
+      setAccounts([]);
+      return;
+    }
     getAccountsFlat(companyId)
       .then(({ data }) => setAccounts((data || []).filter((a) => a.isActive)))
       .catch(() => setAccounts([]));
@@ -419,7 +605,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       // Prefill the customer PO from the order (operator can still edit it).
       setPoNumber(data.customerPoNumber || "");
       setPoDate(data.customerPoDate ? String(data.customerPoDate).slice(0, 10) : "");
-      setSoLoadedMsg(`Loaded ${mapped.length} item${mapped.length !== 1 ? "s" : ""} from Sales Order #${data.salesOrderNumber}`);
+      setSoLoadedMsg(
+        `Loaded ${mapped.length} item${mapped.length !== 1 ? "s" : ""} from Sales Order #${data.salesOrderNumber}`,
+      );
       setError("");
     } catch {
       setSoLoadedMsg("");
@@ -430,11 +618,16 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // Decorate scenarios with local meta. Falls back to a generic record
   // if the backend ever sends a code we don't know — form never crashes.
   const enrichedScenarios = useMemo(
-    () => scenarios.map((s) => ({
-      ...s,
-      meta: SCENARIO_META[s.code]
-        || { buyerKind: "either", needsMRP: false, needsSRO: false, hint: s.description || "" },
-    })),
+    () =>
+      scenarios.map((s) => ({
+        ...s,
+        meta: SCENARIO_META[s.code] || {
+          buyerKind: "either",
+          needsMRP: false,
+          needsSRO: false,
+          hint: s.description || "",
+        },
+      })),
     [scenarios],
   );
 
@@ -450,13 +643,18 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   }, [enrichedScenarios, scenarioCode]);
 
   const chosenScenario = useMemo(
-    () => outsideFbr ? outsideFbrScenario(taxTreatment) : enrichedScenarios.find((s) => s.code === scenarioCode) || null,
+    () =>
+      outsideFbr
+        ? outsideFbrScenario(taxTreatment)
+        : enrichedScenarios.find((s) => s.code === scenarioCode) || null,
     [enrichedScenarios, scenarioCode, outsideFbr, taxTreatment],
   );
   const changeTaxTreatment = (value) => {
     setTaxTreatment(value);
-    if (isOutsideFbr(value)) { setGstRate(outsideFbrRate(value)); setFurtherTaxRate(""); }
-    else setGstRate(enrichedScenarios.find((s) => s.code === scenarioCode)?.defaultRate ?? 18);
+    if (isOutsideFbr(value)) {
+      setGstRate(outsideFbrRate(value));
+      setFurtherTaxRate("");
+    } else setGstRate(enrichedScenarios.find((s) => s.code === scenarioCode)?.defaultRate ?? 18);
   };
 
   // GST rate auto-syncs to scenario's canonical rate when one is picked.
@@ -477,16 +675,25 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const [rateReason, setRateReason] = useState("");
   const pickedItemKey = rows.map((r) => r.itemTypeId || "").join(",");
   const pickedItemIds = useMemo(
-    () => pickedItemKey.split(",").map(Number).filter((n) => n > 0),
+    () =>
+      pickedItemKey
+        .split(",")
+        .map(Number)
+        .filter((n) => n > 0),
     [pickedItemKey],
   );
   // Under a non-standard scenario the picker keeps only items whose sale type IS
   // that scenario's; the goods imported at its rate carry none, so they are
   // fetched and let back in.
-  const widenForRate = !outsideFbr && chosenScenario
-    && (chosenScenario.saleType || "").trim().toLowerCase() !== DEFAULT_SALE_TYPE.toLowerCase()
-    ? Number(chosenScenario.defaultRate) : null;
-  const rateCheck = useImportedTaxRates(companyId, outsideFbr ? [] : pickedItemIds, gstRate, { widenForRate });
+  const widenForRate =
+    !outsideFbr &&
+    chosenScenario &&
+    (chosenScenario.saleType || "").trim().toLowerCase() !== DEFAULT_SALE_TYPE.toLowerCase()
+      ? Number(chosenScenario.defaultRate)
+      : null;
+  const rateCheck = useImportedTaxRates(companyId, outsideFbr ? [] : pickedItemIds, gstRate, {
+    widenForRate,
+  });
 
   // Buyer pool filter. The currently-selected buyer always stays visible
   // even when it doesn't match the scenario's buyer kind (e.g. seeded by
@@ -517,7 +724,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     if (!chosenScenario) return;
     const k = chosenScenario.meta.buyerKind;
     if (k === "walk-in") {
-      const walkIns = clients.filter((c) => (c.registrationType || "").toLowerCase() !== "registered");
+      const walkIns = clients.filter(
+        (c) => (c.registrationType || "").toLowerCase() !== "registered",
+      );
       if (walkIns.length > 0) setSelectedClientId(String(walkIns[0].id));
       else setSelectedClientId("");
     } else if (k === "b2b-registered" || k === "b2b-unregistered") {
@@ -592,7 +801,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const handleQuickAddKey = (e) => {
     if (e.key !== "Enter" || e.shiftKey || e.target.tagName !== "INPUT") return;
     const last = rows[rows.length - 1];
-    if (!last || !e.target.closest("tr")?.querySelector(`[data-row-picker="${last.localId}"]`)) return;
+    if (!last || !e.target.closest("tr")?.querySelector(`[data-row-picker="${last.localId}"]`))
+      return;
     if (rowErrors(last).length > 0) return;
     e.preventDefault();
     const fresh = blankRow();
@@ -607,46 +817,56 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // re-pick. Keeping it left "WEIGHT SCALE PARTS PLASTIC HOUSING" on a line
   // re-pointed at a juice blender. Anything typed, or carried in from a sales
   // order, still stays. utils/lineDescription.js is the one rule.
-  const seededDescription = (r, picked) => descriptionAfterPick(r.description, r.itemTypeName, picked);
+  const seededDescription = (r, picked) =>
+    descriptionAfterPick(r.description, r.itemTypeName, picked);
 
   const handleItemTypePick = (localId, picked) => {
     if (!picked) {
       // Clearing the item type also drops any non-inv binding (mutually exclusive)
       // and the auto-filled GL account.
       updateRow(localId, {
-        itemTypeId: "", itemTypeName: "", hsCode: "", uom: "", fbrUOMId: null, saleType: "", nonInventoryItemId: "", accountId: null,
+        itemTypeId: "",
+        itemTypeName: "",
+        hsCode: "",
+        uom: "",
+        fbrUOMId: null,
+        saleType: "",
+        nonInventoryItemId: "",
+        accountId: null,
         newItemType: null,
       });
       return;
     }
-    setRows((prev) => prev.map((r) => {
-      if (r.localId !== localId) return r;
-      return {
-        ...r,
-        itemTypeId: picked.id,
-        itemTypeName: picked.name || "",
-        newItemType: null,
-        hsCode: picked.hsCode || "",
-        uom: picked.uom || "",
-        fbrUOMId: picked.fbrUOMId || null,
-        saleType: picked.saleType || "",
-        // Auto-fill the line's GL income account from the item type's overlay.
-        accountId: picked.saleAccountId ?? null,
-        // Picking an item type clears any non-inventory selection.
-        nonInventoryItemId: "",
-        // Bills mode types the description directly — seed it from the
-        // picked type's name only when the operator hasn't typed one yet.
-        // Seed the description from the item type ONLY when the operator has not
-        // written one -- in either mode. Picking (or re-picking) an item type
-        // must never overwrite words someone typed, or a prefill carried in
-        // from a sales order.
-        description: seededDescription(r, picked),
-        // A line priced from an AMOUNT is re-priced at the new item's cost
-        // (the effect after deriveFromTotal); the old item's quantity and
-        // rate must not stand in for it meanwhile.
-        ...(r.lineTotal && r.itemTypeId !== picked.id ? { quantity: "", unitPrice: "" } : null),
-      };
-    }));
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.localId !== localId) return r;
+        return {
+          ...r,
+          itemTypeId: picked.id,
+          itemTypeName: picked.name || "",
+          newItemType: null,
+          hsCode: picked.hsCode || "",
+          uom: picked.uom || "",
+          fbrUOMId: picked.fbrUOMId || null,
+          saleType: picked.saleType || "",
+          // Auto-fill the line's GL income account from the item type's overlay.
+          accountId: picked.saleAccountId ?? null,
+          // Picking an item type clears any non-inventory selection.
+          nonInventoryItemId: "",
+          // Bills mode types the description directly — seed it from the
+          // picked type's name only when the operator hasn't typed one yet.
+          // Seed the description from the item type ONLY when the operator has not
+          // written one -- in either mode. Picking (or re-picking) an item type
+          // must never overwrite words someone typed, or a prefill carried in
+          // from a sales order.
+          description: seededDescription(r, picked),
+          // A line priced from an AMOUNT is re-priced at the new item's cost
+          // (the effect after deriveFromTotal); the old item's quantity and
+          // rate must not stand in for it meanwhile.
+          ...(r.lineTotal && r.itemTypeId !== picked.id ? { quantity: "", unitPrice: "" } : null),
+        };
+      }),
+    );
     // The operator's next step is the amount (or the quantity, when there is
     // no stock to price from), so put the cursor there.
     setFocusRow({ localId, itemTypeId: picked.id });
@@ -656,26 +876,40 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // item and nothing is written until the invoice is saved (the server makes
   // it in the invoice's transaction). Same description rule as any pick.
   const handleNewItemPick = (localId, pending) => {
-    setRows((prev) => prev.map((r) => r.localId !== localId ? r : {
-      ...r,
-      itemTypeId: "", nonInventoryItemId: "", accountId: null,
-      newItemType: pending,
-      itemTypeName: pending.name,
-      hsCode: pending.hsCode || "",
-      uom: r.uom || pending.uom || "",
-      fbrUOMId: pending.fbrUOMId || null,
-      saleType: pending.saleType || "",
-      description: descriptionAfterPick(r.description, r.itemTypeName, pending),
-    }));
+    setRows((prev) =>
+      prev.map((r) =>
+        r.localId !== localId
+          ? r
+          : {
+              ...r,
+              itemTypeId: "",
+              nonInventoryItemId: "",
+              accountId: null,
+              newItemType: pending,
+              itemTypeName: pending.name,
+              hsCode: pending.hsCode || "",
+              uom: r.uom || pending.uom || "",
+              fbrUOMId: pending.fbrUOMId || null,
+              saleType: pending.saleType || "",
+              description: descriptionAfterPick(r.description, r.itemTypeName, pending),
+            },
+      ),
+    );
   };
   const renameNewItem = (localId, name) => {
-    setRows((prev) => prev.map((r) => r.localId !== localId || !r.newItemType ? r : {
-      ...r,
-      newItemType: { ...r.newItemType, name },
-      itemTypeName: name,
-      // A description still reading the old name follows the rename.
-      description: descriptionAfterPick(r.description, r.itemTypeName, { name }),
-    }));
+    setRows((prev) =>
+      prev.map((r) =>
+        r.localId !== localId || !r.newItemType
+          ? r
+          : {
+              ...r,
+              newItemType: { ...r.newItemType, name },
+              itemTypeName: name,
+              // A description still reading the old name follows the rename.
+              description: descriptionAfterPick(r.description, r.itemTypeName, { name }),
+            },
+      ),
+    );
   };
   // "Add item and record stock" made the item now: the line becomes that
   // catalog item, with the on-hand just recorded.
@@ -688,21 +922,32 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // item-type binding + its FBR fields, records the non-inv id, and prefills
   // description / UOM / sale price only when those fields are still empty.
   const handleNonInventoryPick = (localId, n) => {
-    if (!n) { updateRow(localId, { nonInventoryItemId: "" }); return; }
-    setRows((prev) => prev.map((r) => {
-      if (r.localId !== localId) return r;
-      const next = {
-        ...r,
-        nonInventoryItemId: n.id,
-        itemTypeId: "", itemTypeName: "", hsCode: "", fbrUOMId: null, saleType: "", newItemType: null,
-        // Non-inventory posts to its own mapped account — clear any per-line override.
-        accountId: null,
-      };
-      next.description = descriptionAfterPick(r.description, r.itemTypeName, n);
-      if (!r.uom?.trim()) next.uom = n.unitName || "";
-      if ((!r.unitPrice || Number(r.unitPrice) === 0) && n.defaultSalePrice != null) next.unitPrice = String(n.defaultSalePrice);
-      return next;
-    }));
+    if (!n) {
+      updateRow(localId, { nonInventoryItemId: "" });
+      return;
+    }
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.localId !== localId) return r;
+        const next = {
+          ...r,
+          nonInventoryItemId: n.id,
+          itemTypeId: "",
+          itemTypeName: "",
+          hsCode: "",
+          fbrUOMId: null,
+          saleType: "",
+          newItemType: null,
+          // Non-inventory posts to its own mapped account — clear any per-line override.
+          accountId: null,
+        };
+        next.description = descriptionAfterPick(r.description, r.itemTypeName, n);
+        if (!r.uom?.trim()) next.uom = n.unitName || "";
+        if ((!r.unitPrice || Number(r.unitPrice) === 0) && n.defaultSalePrice != null)
+          next.unitPrice = String(n.defaultSalePrice);
+        return next;
+      }),
+    );
   };
 
   // Bulk-apply: stamp one Item Type onto every row (or only empty rows).
@@ -710,33 +955,35 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // when every line on the bill is the same FBR category.
   const applyItemTypeToRows = (picked, mode) => {
     if (!picked) return;
-    setRows((prev) => prev.map((r) => {
-      if (mode === "empty" && r.itemTypeId) return r;
-      return {
-        ...r,
-        itemTypeId: picked.id,
-        itemTypeName: picked.name || "",
-        hsCode: picked.hsCode || "",
-        uom: picked.uom || "",
-        fbrUOMId: picked.fbrUOMId || null,
-        saleType: picked.saleType || "",
-        // Auto-fill the line's GL income account from the item type's overlay.
-        accountId: picked.saleAccountId ?? null,
-        // Stamping an item type clears any non-inventory binding.
-        nonInventoryItemId: "",
-        newItemType: null,
-        // Same Bills-mode seeding rule as the per-row pick.
-        // Seed the description from the item type ONLY when the operator has not
-        // written one -- in either mode. Picking (or re-picking) an item type
-        // must never overwrite words someone typed, or a prefill carried in
-        // from a sales order.
-        description: seededDescription(r, picked),
-        // A line priced from an AMOUNT is re-priced at the new item's cost
-        // (the effect after deriveFromTotal); the old item's quantity and
-        // rate must not stand in for it meanwhile.
-        ...(r.lineTotal && r.itemTypeId !== picked.id ? { quantity: "", unitPrice: "" } : null),
-      };
-    }));
+    setRows((prev) =>
+      prev.map((r) => {
+        if (mode === "empty" && r.itemTypeId) return r;
+        return {
+          ...r,
+          itemTypeId: picked.id,
+          itemTypeName: picked.name || "",
+          hsCode: picked.hsCode || "",
+          uom: picked.uom || "",
+          fbrUOMId: picked.fbrUOMId || null,
+          saleType: picked.saleType || "",
+          // Auto-fill the line's GL income account from the item type's overlay.
+          accountId: picked.saleAccountId ?? null,
+          // Stamping an item type clears any non-inventory binding.
+          nonInventoryItemId: "",
+          newItemType: null,
+          // Same Bills-mode seeding rule as the per-row pick.
+          // Seed the description from the item type ONLY when the operator has not
+          // written one -- in either mode. Picking (or re-picking) an item type
+          // must never overwrite words someone typed, or a prefill carried in
+          // from a sales order.
+          description: seededDescription(r, picked),
+          // A line priced from an AMOUNT is re-priced at the new item's cost
+          // (the effect after deriveFromTotal); the old item's quantity and
+          // rate must not stand in for it meanwhile.
+          ...(r.lineTotal && r.itemTypeId !== picked.id ? { quantity: "", unitPrice: "" } : null),
+        };
+      }),
+    );
   };
 
   // Bulk-apply a NON-INVENTORY item (charge) to all / empty rows — mirrors
@@ -744,19 +991,27 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // the per-row one.
   const applyNonInvToRows = (n, mode) => {
     if (!n) return;
-    setRows((prev) => prev.map((r) => {
-      if (mode === "empty" && (r.itemTypeId || r.nonInventoryItemId)) return r;
-      const next = {
-        ...r,
-        nonInventoryItemId: n.id,
-        itemTypeId: "", itemTypeName: "", hsCode: "", fbrUOMId: null, saleType: "", newItemType: null,
-        accountId: null,
-      };
-      next.description = descriptionAfterPick(r.description, r.itemTypeName, n);
-      if (!r.uom?.trim()) next.uom = n.unitName || "";
-      if ((!r.unitPrice || Number(r.unitPrice) === 0) && n.defaultSalePrice != null) next.unitPrice = String(n.defaultSalePrice);
-      return next;
-    }));
+    setRows((prev) =>
+      prev.map((r) => {
+        if (mode === "empty" && (r.itemTypeId || r.nonInventoryItemId)) return r;
+        const next = {
+          ...r,
+          nonInventoryItemId: n.id,
+          itemTypeId: "",
+          itemTypeName: "",
+          hsCode: "",
+          fbrUOMId: null,
+          saleType: "",
+          newItemType: null,
+          accountId: null,
+        };
+        next.description = descriptionAfterPick(r.description, r.itemTypeName, n);
+        if (!r.uom?.trim()) next.uom = n.unitName || "";
+        if ((!r.unitPrice || Number(r.unitPrice) === 0) && n.defaultSalePrice != null)
+          next.unitPrice = String(n.defaultSalePrice);
+        return next;
+      }),
+    );
   };
 
   // Bulk-clear: drop the Item Type binding (and the inherited HS Code /
@@ -767,17 +1022,19 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // Unit Price / MRP / SRO refs are preserved — those are line-level
   // inputs, not catalog-derived.
   const clearAllItemTypes = () => {
-    setRows((prev) => prev.map((r) => ({
-      ...r,
-      itemTypeId: "",
-      itemTypeName: "",
-      hsCode: "",
-      uom: "",
-      fbrUOMId: null,
-      saleType: "",
-      accountId: null,
-      newItemType: null,
-    })));
+    setRows((prev) =>
+      prev.map((r) => ({
+        ...r,
+        itemTypeId: "",
+        itemTypeName: "",
+        hsCode: "",
+        uom: "",
+        fbrUOMId: null,
+        saleType: "",
+        accountId: null,
+        newItemType: null,
+      })),
+    );
   };
 
   // Item types compatible with the chosen scenario. When no scenario is
@@ -807,9 +1064,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     // in even though they carry no sale type of their own.
     const onBill = new Set(pickedItemIds);
     return forBook.filter(
-      (t) => matchesScenarioSaleType(t, chosenScenario.saleType)
-        || onBill.has(Number(t.id))
-        || rateCheck.importedAtRate.has(Number(t.id)),
+      (t) =>
+        matchesScenarioSaleType(t, chosenScenario.saleType) ||
+        onBill.has(Number(t.id)) ||
+        rateCheck.importedAtRate.has(Number(t.id)),
     );
   }, [itemTypes, chosenScenario, overlayOn, pickedItemIds, rateCheck.importedAtRate, outsideFbr]);
 
@@ -828,9 +1086,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       code: sc.code,
       rate: target,
       label: `Bill under ${sc.code} (${target}%)`,
-      hint: sc.meta?.needsSRO && sc.defaultSroScheduleNo
-        ? `Fills SRO schedule ${sc.defaultSroScheduleNo}. The serial is FBR's catalog default: confirm it for these goods.`
-        : null,
+      hint:
+        sc.meta?.needsSRO && sc.defaultSroScheduleNo
+          ? `Fills SRO schedule ${sc.defaultSroScheduleNo}. The serial is FBR's catalog default: confirm it for these goods.`
+          : null,
       // The SRO reference follows from the scenario (the effect below).
       onApply: () => setScenarioCode(sc.code),
     };
@@ -858,8 +1117,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const autoSro = useRef({ sched: "", serial: "" });
   useEffect(() => {
     const needs = !!chosenScenario?.meta.needsSRO;
-    const sched = needs ? (chosenScenario.defaultSroScheduleNo || "") : "";
-    const serial = needs ? (chosenScenario.defaultSroItemSerialNo || "") : "";
+    const sched = needs ? chosenScenario.defaultSroScheduleNo || "" : "";
+    const serial = needs ? chosenScenario.defaultSroItemSerialNo || "" : "";
     if (!sched && !serial) return;
     const prev = autoSro.current;
     autoSro.current = { sched, serial };
@@ -883,7 +1142,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // Account labels for the per-line Account (GL) column: the resolved company
   // default (named, shown when a line carries no explicit account) + a helper
   // naming a non-inventory line's own mapped sale account.
-  const defaultSaleAccountLabel = defaultAccountPlaceholder(accounts, company?.defaultSalesAccountId);
+  const defaultSaleAccountLabel = defaultAccountPlaceholder(
+    accounts,
+    company?.defaultSalesAccountId,
+  );
   const nonInvSaleAccountLabel = (nonInvId) => {
     const n = nonInvItems.find((x) => String(x.id) === String(nonInvId));
     return n?.saleAccountName ? `→ ${n.saleAccountName}` : "→ Suspense";
@@ -900,33 +1162,40 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // 3rd Schedule goods are taxed on MRP x Qty, not the sale value -- the base
   // the server charges and FBR is sent (Helpers/SalesTaxBase). The MRP is the
   // per-unit figure on the line; the payload sends it times the quantity.
-  const taxBase = salesTaxBase(rows.map((r) => {
-    const q = parseFloat(r.quantity) || 0;
-    return {
-      value: q * (parseFloat(r.unitPrice) || 0),
-      retail: chosenScenario?.meta.needsMRP && r.mrp && q ? Math.round(parseFloat(r.mrp) * q * 100) / 100 : 0,
-      thirdSchedule: !!chosenScenario?.isThirdSchedule || isThirdScheduleSaleType(effectiveSaleType(r)),
-    };
-  }));
-  const gstAmount = Math.round(taxBase * (parseFloat(gstRate) || 0) / 100 * 100) / 100;
+  const taxBase = salesTaxBase(
+    rows.map((r) => {
+      const q = parseFloat(r.quantity) || 0;
+      return {
+        value: q * (parseFloat(r.unitPrice) || 0),
+        retail:
+          chosenScenario?.meta.needsMRP && r.mrp && q
+            ? Math.round(parseFloat(r.mrp) * q * 100) / 100
+            : 0,
+        thirdSchedule:
+          !!chosenScenario?.isThirdSchedule || isThirdScheduleSaleType(effectiveSaleType(r)),
+      };
+    }),
+  );
+  const gstAmount = Math.round(((taxBase * (parseFloat(gstRate) || 0)) / 100) * 100) / 100;
   // Charged on the NET value of supply -- the same base as sales tax, which is
   // what FbrLineTax uses per line, so the document and the FBR payload cannot
   // disagree. Rounded the way the server rounds it.
   const furtherTaxAmount =
-    Math.round(subtotal * (parseFloat(furtherTaxRate) || 0) / 100 * 100) / 100;
+    Math.round(((subtotal * (parseFloat(furtherTaxRate) || 0)) / 100) * 100) / 100;
   const grandTotal = subtotal + gstAmount + furtherTaxAmount;
 
   // Withholding tax — rate-mode = % of the gross (subtotal + GST), rounded to
   // 2dp exactly like the backend (Math.round(x*100)/100). Fixed-amount mode =
   // the typed PKR value. Balance due the buyer pays = grandTotal − WHT.
   const computedWhtAmount = Math.round(grandTotal * (parseFloat(whtRate) || 0)) / 100;
-  const whtResolved = whtMode === "none" ? 0 : (whtMode === "rate" ? computedWhtAmount : (parseFloat(whtAmount) || 0));
+  const whtResolved =
+    whtMode === "none" ? 0 : whtMode === "rate" ? computedWhtAmount : parseFloat(whtAmount) || 0;
   const balanceDue = grandTotal - whtResolved;
 
   // One request per change of the picked set, not per keystroke.
   const pickedItemTypeIds = useMemo(
     () => [...new Set(rows.map((r) => r.itemTypeId).filter(Boolean))].sort().join(","),
-    [rows]
+    [rows],
   );
   useEffect(() => {
     if (!companyId || !pickedItemTypeIds) return;
@@ -936,15 +1205,22 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     // deriveFromTotal returns null, the Amount box stops driving anything and
     // focus lands on Quantity. The form falls back to its own qty x price
     // path, which is code that already existed and is already tested.
-    if (overlayOn) { setStockPricing({}); return; }
+    if (overlayOn) {
+      setStockPricing({});
+      return;
+    }
     let cancelled = false;
     getStockPricing(companyId, pickedItemTypeIds)
       .then(({ data }) => {
         if (cancelled) return;
         setStockPricing(Object.fromEntries((data || []).map((x) => [x.itemTypeId, x])));
       })
-      .catch(() => { /* pricing is a convenience; the operator can still type */ });
-    return () => { cancelled = true; };
+      .catch(() => {
+        /* pricing is a convenience; the operator can still type */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [companyId, pickedItemTypeIds, overlayOn]);
 
   // Line total -> quantity, at the stock's own unit price:
@@ -1037,7 +1313,13 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         const p = String(d.rate);
         if (q === r.quantity && p === r.unitPrice) return r;
         changed = true;
-        return { ...r, quantity: q, unitPrice: p, lineTotal: String(d.exact), amountStock: d.amountStock ?? null };
+        return {
+          ...r,
+          quantity: q,
+          unitPrice: p,
+          lineTotal: String(d.exact),
+          amountStock: d.amountStock ?? null,
+        };
       });
       return changed ? next : rs;
     });
@@ -1084,8 +1366,12 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     const want = parseFloat(row.quantity);
     const total = parseFloat(row.lineTotal);
     const fullValue = Math.round(Number(price.availableValueExcludingTax) * 100) / 100;
-    return have > 0 && Math.abs(want - closeOutQuantity(price, row)) < 1e-9
-      && fullValue > 0 && Math.abs(total - fullValue) < 0.005;
+    return (
+      have > 0 &&
+      Math.abs(want - closeOutQuantity(price, row)) < 1e-9 &&
+      fullValue > 0 &&
+      Math.abs(total - fullValue) < 0.005
+    );
   };
 
   const stockShortfall = (row, extraAvailable = 0) => {
@@ -1108,7 +1394,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
 
   const applyLineTotal = (localId, raw) => {
     const row = rows.find((r) => r.localId === localId);
-    if (!row?.itemTypeId) return;          // the field is disabled until one is picked
+    if (!row?.itemTypeId) return; // the field is disabled until one is picked
 
     const d = deriveFromTotal(row, parseFloat(raw));
     if (!d) {
@@ -1117,7 +1403,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       return;
     }
     updateRow(localId, {
-      lineTotal: raw,                      // verbatim, so typing works
+      lineTotal: raw, // verbatim, so typing works
       quantity: String(d.qty),
       unitPrice: String(d.rate),
       amountStock: d.amountStock ?? null,
@@ -1157,7 +1443,6 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     });
   };
 
-
   // Charged on the total INCLUDING sales tax, and ADDED to it -- the opposite of
   // withholding tax above, which is deducted. The server recomputes both from
   // the same table (Helpers/AdvanceTaxRates), so this is only what the operator
@@ -1174,7 +1459,11 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     if (!r.itemTypeId && !r.nonInventoryItemId && !r.newItemType) errs.push("itemType");
     // A brand-new item has nothing on hand; a hard-block company refuses the
     // sale (server guard, never loosened), so the form says so first.
-    if (r.newItemType && !keptByFiling(r) && lineStock({ pending: r.newItemType, quantity: r.quantity, company }).blocksSave)
+    if (
+      r.newItemType &&
+      !keptByFiling(r) &&
+      lineStock({ pending: r.newItemType, quantity: r.quantity, company }).blocksSave
+    )
       errs.push("new item has no stock");
     if (r.newItemType && !r.newItemType.name?.trim()) errs.push("new item name");
     // Bills mode: the operator types the description directly; in Invoices
@@ -1200,8 +1489,12 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const allRowsValid = rows.length > 0 && rows.every((r) => rowErrors(r).length === 0);
   // The lines as the "Already filed" step groups them by HS code.
   const filingLines = rows.map((r) => ({
-    itemTypeId: r.newItemType ? "new" : r.itemTypeId, itemTypeName: r.newItemType?.name || r.itemTypeName,
-    description: r.description, hsCode: r.newItemType?.hsCode || r.hsCode, quantity: r.quantity, uom: r.uom,
+    itemTypeId: r.newItemType ? "new" : r.itemTypeId,
+    itemTypeName: r.newItemType?.name || r.itemTypeName,
+    description: r.description,
+    hsCode: r.newItemType?.hsCode || r.hsCode,
+    quantity: r.quantity,
+    uom: r.uom,
   }));
 
   // What a line still needs, in the words on screen. "Some required fields are
@@ -1222,7 +1515,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       else parts.push(noQty ? "enter Qty" : "enter Unit Price");
     }
     if (errs.includes("qty exceeds stock on hand")) parts.push("it asks for more than is on hand");
-    if (errs.includes("new item has no stock")) parts.push("the new item has no stock — record its stock first");
+    if (errs.includes("new item has no stock"))
+      parts.push("the new item has no stock — record its stock first");
     if (errs.includes("new item name")) parts.push("name the new item");
     if (errs.includes("MRP>0")) parts.push("enter the MRP");
     if (errs.includes("sroSchedule")) parts.push("enter the SRO Schedule");
@@ -1236,12 +1530,15 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
 
     if (!selectedClientId) return setError("Select a buyer first.");
     if (!company || company.startingInvoiceNumber === 0)
-      return setError("Starting bill number not set for this company. Configure it on the Companies page first.");
+      return setError(
+        "Starting bill number not set for this company. Configure it on the Companies page first.",
+      );
     if (fbrEnabled && !chosenScenario) return setError("Pick an FBR scenario first.");
     if (rateCheck.enforced.length > 0 && !rateReason.trim())
       return setError(
         `Some goods came in at a different sales tax rate than the ${gstRate}% this bill charges. ` +
-        "Switch to the matching scenario, or give a reason for charging this rate.");
+          "Switch to the matching scenario, or give a reason for charging this rate.",
+      );
     if (billNumberMode === "custom" && !billNumberOk)
       return setError("Enter a bill number that isn't already in use, or switch back to Auto.");
     // Every line on a bill must be classified — an Item Type OR a Non-Inventory item.
@@ -1251,18 +1548,25 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     // A line asking for more than is on hand is not a missing field, so it gets
     // its own message with the figures rather than being listed as "missing".
     // Goods a hand filing keeps in stock never leave it, so they cannot run short.
-    const over = rows.filter((r) => !keptByFiling(r)).map((r) => stockShortfall(r)).filter(Boolean);
+    const over = rows
+      .filter((r) => !keptByFiling(r))
+      .map((r) => stockShortfall(r))
+      .filter(Boolean);
     if (stockHardBlock && over.length > 0) {
       return setError(
         "Not enough stock: " +
-        over.map((sf) =>
-          `${sf.name} — ${sf.have.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${sf.uom} on hand, ` +
-          `this bill needs ${sf.want.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${sf.uom}`
-        ).join("; ") + ". Lower the amount or the quantity."
+          over
+            .map(
+              (sf) =>
+                `${sf.name} — ${sf.have.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${sf.uom} on hand, ` +
+                `this bill needs ${sf.want.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${sf.uom}`,
+            )
+            .join("; ") +
+          ". Lower the amount or the quantity.",
       );
     }
     if (manualFiling.on && !manualFiling.portalNumber.trim())
-      return setError("Enter the invoice number used on FBR's portal, or untick \"Already filed\".");
+      return setError('Enter the invoice number used on FBR\'s portal, or untick "Already filed".');
     if (!allRowsValid) {
       const missing = rows.flatMap(rowErrors);
       return setError(`Fill all required fields. Missing: ${[...new Set(missing)].join(", ")}.`);
@@ -1281,11 +1585,12 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         invoiceNumber: billNumberPayload(billNumberMode, billNumber),
         // Withholding tax: rate-mode ships the %, fixed-amount mode ships null
         // rate + the typed amount. Backend recomputes/clamps the amount.
-        withholdingTaxRate: whtMode === "rate" ? (parseFloat(whtRate) || 0) : null,
+        withholdingTaxRate: whtMode === "rate" ? parseFloat(whtRate) || 0 : null,
         withholdingTaxAmount: whtResolved,
         // The server recomputes the amount from this rate; it never trusts a
         // client-side money figure.
-        furtherTaxRate: !outsideFbr && parseFloat(furtherTaxRate) > 0 ? parseFloat(furtherTaxRate) : null,
+        furtherTaxRate:
+          !outsideFbr && parseFloat(furtherTaxRate) > 0 ? parseFloat(furtherTaxRate) : null,
         advanceTaxSection: advTaxOption?.section ?? null,
         advanceTaxFilerActive: advTaxOption ? advTaxOption.filerActive : null,
         paymentTerms: paymentTerms || null,
@@ -1304,14 +1609,16 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
           itemTypeId: !r.newItemType && r.itemTypeId ? parseInt(r.itemTypeId) : null,
           // A pending new item: the server makes it (or reuses a match) in
           // the invoice's own transaction and fills itemTypeId.
-          newItemType: r.newItemType ? {
-            placeholderId: r.newItemType.placeholderId || null,
-            name: r.newItemType.name.trim(),
-            hsCode: r.newItemType.hsCode,
-            uom: r.uom?.trim() || r.newItemType.uom || null,
-            fbrUOMId: r.fbrUOMId || r.newItemType.fbrUOMId || null,
-            saleType: effectiveSaleType(r) || r.newItemType.saleType || null,
-          } : null,
+          newItemType: r.newItemType
+            ? {
+                placeholderId: r.newItemType.placeholderId || null,
+                name: r.newItemType.name.trim(),
+                hsCode: r.newItemType.hsCode,
+                uom: r.uom?.trim() || r.newItemType.uom || null,
+                fbrUOMId: r.fbrUOMId || r.newItemType.fbrUOMId || null,
+                saleType: effectiveSaleType(r) || r.newItemType.saleType || null,
+              }
+            : null,
           // Non-Inventory line (Freight / Discount / …) — mutually exclusive
           // with itemTypeId; the backend sources GL accounts from it.
           nonInventoryItemId: r.nonInventoryItemId ? parseInt(r.nonInventoryItemId) : null,
@@ -1350,15 +1657,31 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       // the bill is already saved.
       try {
         if (created?.id) await attachmentRef.current?.flush(created.id);
-      } catch { /* attachments are best-effort */ }
+      } catch {
+        /* attachments are best-effort */
+      }
       // A soft company saved a new item with nothing on hand: say where its
       // on-hand stands now (a hard-block company never reaches this point).
-      const madeNew = rows.filter((r) => r.newItemType && lineStock({ pending: r.newItemType, quantity: r.quantity, company }).noStock);
+      const madeNew = rows.filter(
+        (r) =>
+          r.newItemType &&
+          lineStock({ pending: r.newItemType, quantity: r.quantity, company }).noStock,
+      );
       if (madeNew.length > 0)
-        notify(madeNew.map((r) => `"${r.newItemType.name}" added to your catalog — on hand is now -${Number(r.quantity).toLocaleString("en-PK")}`).join("; "), "warning");
+        notify(
+          madeNew
+            .map(
+              (r) =>
+                `"${r.newItemType.name}" added to your catalog — on hand is now -${Number(r.quantity).toLocaleString("en-PK")}`,
+            )
+            .join("; "),
+          "warning",
+        );
       onSaved(created);
     } catch (err) {
-      setError(err.response?.data?.message || err.response?.data?.error || "Failed to create bill.");
+      setError(
+        err.response?.data?.message || err.response?.data?.error || "Failed to create bill.",
+      );
     } finally {
       setSaving(false);
     }
@@ -1393,47 +1716,81 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // lists what is left -- each item a link to its step or line.
   const selectedClient = clients.find((c) => String(c.id) === String(selectedClientId)) || null;
   const buyerRegistered = selectedClient
-    ? (selectedClient.registrationType || "").toLowerCase() === "registered" : null;
+    ? (selectedClient.registrationType || "").toLowerCase() === "registered"
+    : null;
   const linesVisible = (chosenScenario || !fbrEnabled) && !!selectedClientId;
   const checklist = billChecklist({
     needsScenario: fbrEnabled,
     hasScenario: !!chosenScenario,
     hasBuyer: !!selectedClientId,
     billNumberOk: !(billNumberMode === "custom" && !billNumberOk),
-    rateBlock: rateBlocked ? rateBlockText({ suggestion: rateSuggestion, splitNeeded: rateSplitNeeded }) : null,
+    rateBlock: rateBlocked
+      ? rateBlockText({ suggestion: rateSuggestion, splitNeeded: rateSplitNeeded })
+      : null,
     lines: linesVisible
-      ? rows.map((r, i) => ({ key: r.localId, n: i + 1, problem: rowProblem(r) })).filter((l) => l.problem)
+      ? rows
+          .map((r, i) => ({ key: r.localId, n: i + 1, problem: rowProblem(r) }))
+          .filter((l) => l.problem)
       : [],
   });
   const totalsRows = billTotalsRows({
-    subtotal, gstRate, gstAmount, taxBase, scenarioCode: chosenScenario?.code || null,
-    furtherTaxRate, furtherTaxAmount, buyerRegistered, outsideFbr, grandTotal,
-    withholdingAmount: whtResolved, withholdingRate: whtMode === "rate" ? whtRate : null, balanceDue,
-    advanceTaxAmount: advTaxResolved, advanceTaxSection: advTaxOption?.section,
-    advanceTaxRate: advTaxOption?.rate, totalWithAdvance: totalWithAdvTax,
-  }).map((r) => (r.key === "gst" && outsideFbr ? { ...r, label: `${taxLabel(taxTreatment)} (${gstRate}%)`, note: "Not sent to FBR" } : r));
+    subtotal,
+    gstRate,
+    gstAmount,
+    taxBase,
+    scenarioCode: chosenScenario?.code || null,
+    furtherTaxRate,
+    furtherTaxAmount,
+    buyerRegistered,
+    outsideFbr,
+    grandTotal,
+    withholdingAmount: whtResolved,
+    withholdingRate: whtMode === "rate" ? whtRate : null,
+    balanceDue,
+    advanceTaxAmount: advTaxResolved,
+    advanceTaxSection: advTaxOption?.section,
+    advanceTaxRate: advTaxOption?.rate,
+    totalWithAdvance: totalWithAdvTax,
+  }).map((r) =>
+    r.key === "gst" && outsideFbr
+      ? { ...r, label: `${taxLabel(taxTreatment)} (${gstRate}%)`, note: "Not sent to FBR" }
+      : r,
+  );
   // Without FBR there is no scenario step, so every later step moves up one.
   const stepNo = (k) => k - (fbrEnabled && !outsideFbr ? 0 : 1);
-  const money = (n) => `Rs. ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const money = (n) =>
+    `Rs. ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
     <div style={formStyles.backdrop}>
-      <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div style={formStyles.header}>
           <div style={{ minWidth: 0 }}>
             <h5 style={formStyles.title}>New invoice — without challan</h5>
             <div style={styles.headerSub}>
-              An invoice straight from stock: the goods leave inventory when you save. Each step turns green when it is complete.
+              An invoice straight from stock: the goods leave inventory when you save. Each step
+              turns green when it is complete.
             </div>
           </div>
-          <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
+          <button style={formStyles.closeButton} onClick={onClose}>
+            &times;
+          </button>
         </div>
         <form onSubmit={handleSubmit} style={formShell}>
           <div style={{ ...formStyles.body, ...formBodyFill }}>
-            {error && <div ref={errorRef} style={styles.errorAlert}>{error}</div>}
+            {error && (
+              <div ref={errorRef} style={styles.errorAlert}>
+                {error}
+              </div>
+            )}
 
             {loading ? (
-              <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>Loading…</div>
+              <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>
+                Loading…
+              </div>
             ) : (
               <>
                 {/* ── Sales-Order prefill (both FBR modes) ─────────────
@@ -1444,10 +1801,14 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                     scenario owns it otherwise). Clearing it resets
                     those details. */}
                 <div style={{ marginBottom: "1rem" }}>
-                  <label style={styles.label}>Sales Order <span style={{ fontWeight: 400 }}>(optional — loads buyer &amp; items)</span></label>
+                  <label style={styles.label}>
+                    Sales Order{" "}
+                    <span style={{ fontWeight: 400 }}>(optional — loads buyer &amp; items)</span>
+                  </label>
                   {salesOrderOptions.length === 0 ? (
                     <p style={{ color: colors.textSecondary, fontSize: "0.82rem", margin: 0 }}>
-                      No sales orders{divisionId ? " in this division" : ""} — enter the invoice below.
+                      No sales orders{divisionId ? " in this division" : ""} — enter the invoice
+                      below.
                     </p>
                   ) : (
                     <SearchableSelect
@@ -1459,7 +1820,18 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       placeholder="— Load from a sales order —"
                     />
                   )}
-                  {soLoadedMsg && <div style={{ fontSize: "0.72rem", color: colors.teal, marginTop: 4, fontWeight: 600 }}>{soLoadedMsg}</div>}
+                  {soLoadedMsg && (
+                    <div
+                      style={{
+                        fontSize: "0.72rem",
+                        color: colors.teal,
+                        marginTop: 4,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {soLoadedMsg}
+                    </div>
+                  )}
                 </div>
 
                 {/* ── Step 1: Pick FBR scenario ───────────────
@@ -1467,7 +1839,14 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                     of the auto-defaulted scenario and can expand to change
                     it. Auto-collapses again when a card is picked so the
                     flow keeps moving down to Buyer / Bill Details. */}
-                <BillTaxTreatmentField enabled={!!company?.allowNonFbrBills} value={taxTreatment} onChange={changeTaxTreatment} rate={gstRate} onRateChange={setGstRate} disabled={saving} />
+                <BillTaxTreatmentField
+                  enabled={!!company?.allowNonFbrBills}
+                  value={taxTreatment}
+                  onChange={changeTaxTreatment}
+                  rate={gstRate}
+                  onRateChange={setGstRate}
+                  disabled={saving}
+                />
                 {fbrEnabled && !outsideFbr && (
                   <BillStep
                     id={BILL_ANCHORS.scenario}
@@ -1477,43 +1856,64 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                     open={scenarioPickerOpen}
                     onToggle={() => setScenarioPickerOpen((v) => !v)}
                     help="The scenario tells FBR what kind of sale this is, and fixes the sale type and GST rate of every line. Goods imported at 25% switch it to SN024 by themselves, so open this only to choose differently."
-                    notice={scenarioFollow.source === "goods" && chosenScenario ? (
-                      <div style={{ ...styles.scenarioAutoNote, margin: 0 }}>
-                        <MdInfo size={15} style={{ flexShrink: 0, marginTop: 1 }} />
-                        <span>
-                          Set to <strong>{chosenScenario.code} ({chosenScenario.defaultRate}%)</strong> because these
-                          goods came in at {chosenScenario.defaultRate}%. Goods at another rate go on a separate
-                          bill. Press <strong>Change</strong> if this sale is different.
+                    notice={
+                      scenarioFollow.source === "goods" && chosenScenario ? (
+                        <div style={{ ...styles.scenarioAutoNote, margin: 0 }}>
+                          <MdInfo size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+                          <span>
+                            Set to{" "}
+                            <strong>
+                              {chosenScenario.code} ({chosenScenario.defaultRate}%)
+                            </strong>{" "}
+                            because these goods came in at {chosenScenario.defaultRate}%. Goods at
+                            another rate go on a separate bill. Press <strong>Change</strong> if
+                            this sale is different.
+                          </span>
+                        </div>
+                      ) : null
+                    }
+                    summary={
+                      chosenScenario ? (
+                        <>
+                          <span style={styles.scenarioCollapseCode}>{chosenScenario.code}</span>
+                          <span>·</span>
+                          <span>{chosenScenario.saleType}</span>
+                          <span>·</span>
+                          <span>{chosenScenario.defaultRate}% GST</span>
+                          {chosenScenario.meta.buyerKind === "b2b-registered" && (
+                            <span style={{ ...styles.scenarioBadge, ...styles.badgeBlue }}>
+                              Registered
+                            </span>
+                          )}
+                          {chosenScenario.meta.buyerKind === "b2b-unregistered" && (
+                            <span style={{ ...styles.scenarioBadge, ...styles.badgeOrange }}>
+                              Unregistered
+                            </span>
+                          )}
+                          {chosenScenario.meta.buyerKind === "walk-in" && (
+                            <span style={{ ...styles.scenarioBadge, ...styles.badgePurple }}>
+                              Walk-in
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span style={styles.scenarioCollapseSummaryMuted}>
+                          Pick an FBR scenario to start
                         </span>
-                      </div>
-                    ) : null}
-                    summary={chosenScenario ? (
-                      <>
-                        <span style={styles.scenarioCollapseCode}>{chosenScenario.code}</span>
-                        <span>·</span>
-                        <span>{chosenScenario.saleType}</span>
-                        <span>·</span>
-                        <span>{chosenScenario.defaultRate}% GST</span>
-                        {chosenScenario.meta.buyerKind === "b2b-registered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeBlue }}>Registered</span>}
-                        {chosenScenario.meta.buyerKind === "b2b-unregistered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeOrange }}>Unregistered</span>}
-                        {chosenScenario.meta.buyerKind === "walk-in" && <span style={{ ...styles.scenarioBadge, ...styles.badgePurple }}>Walk-in</span>}
-                      </>
-                    ) : (
-                      <span style={styles.scenarioCollapseSummaryMuted}>
-                        Pick an FBR scenario to start
-                      </span>
-                    )}
+                      )
+                    }
                   >
                     <div>
                       <p style={styles.stepHint}>
-                        Each scenario locks the Sale Type, GST rate, buyer type, and any extra fields FBR needs to validate this bill.
-                        Only the scenarios applicable to your company's profile
-                        ({company?.fbrBusinessActivity || "—"} · {company?.fbrSector || "—"}) are listed.
+                        Each scenario locks the Sale Type, GST rate, buyer type, and any extra
+                        fields FBR needs to validate this bill. Only the scenarios applicable to
+                        your company's profile ({company?.fbrBusinessActivity || "—"} ·{" "}
+                        {company?.fbrSector || "—"}) are listed.
                       </p>
                       {enrichedScenarios.length === 0 ? (
                         <div style={styles.warnAlert}>
-                          <MdInfo size={16} /> No FBR scenarios available. Configure Business Activity
-                          and Sector on the Company before creating a standalone bill.
+                          <MdInfo size={16} /> No FBR scenarios available. Configure Business
+                          Activity and Sector on the Company before creating a standalone bill.
                         </div>
                       ) : (
                         <div style={styles.scenarioGrid}>
@@ -1544,11 +1944,37 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                 <div style={styles.scenarioSaleType}>{s.saleType}</div>
                                 <div style={styles.scenarioRate}>{s.defaultRate}% GST</div>
                                 <div style={styles.scenarioBadges}>
-                                  {s.meta.buyerKind === "b2b-registered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeBlue }}>Registered buyer</span>}
-                                  {s.meta.buyerKind === "b2b-unregistered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeOrange }}>Unregistered buyer</span>}
-                                  {s.meta.buyerKind === "walk-in" && <span style={{ ...styles.scenarioBadge, ...styles.badgePurple }}>Walk-in retail</span>}
-                                  {s.meta.needsMRP && <span style={{ ...styles.scenarioBadge, ...styles.badgeYellow }}>MRP required</span>}
-                                  {s.meta.needsSRO && <span style={{ ...styles.scenarioBadge, ...styles.badgePink }}>SRO required</span>}
+                                  {s.meta.buyerKind === "b2b-registered" && (
+                                    <span style={{ ...styles.scenarioBadge, ...styles.badgeBlue }}>
+                                      Registered buyer
+                                    </span>
+                                  )}
+                                  {s.meta.buyerKind === "b2b-unregistered" && (
+                                    <span
+                                      style={{ ...styles.scenarioBadge, ...styles.badgeOrange }}
+                                    >
+                                      Unregistered buyer
+                                    </span>
+                                  )}
+                                  {s.meta.buyerKind === "walk-in" && (
+                                    <span
+                                      style={{ ...styles.scenarioBadge, ...styles.badgePurple }}
+                                    >
+                                      Walk-in retail
+                                    </span>
+                                  )}
+                                  {s.meta.needsMRP && (
+                                    <span
+                                      style={{ ...styles.scenarioBadge, ...styles.badgeYellow }}
+                                    >
+                                      MRP required
+                                    </span>
+                                  )}
+                                  {s.meta.needsSRO && (
+                                    <span style={{ ...styles.scenarioBadge, ...styles.badgePink }}>
+                                      SRO required
+                                    </span>
+                                  )}
                                 </div>
                               </button>
                             );
@@ -1569,108 +1995,145 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                     default because the operator must pick a buyer. The
                     summary bar shows the selected buyer name when collapsed
                     so the screen stays tidy on subsequent steps. */}
-                {(chosenScenario || !fbrEnabled) && (() => {
-                  const selectedBuyer = filteredClients.find((c) => String(c.id) === String(selectedClientId));
-                  return (
-                    <BillStep
-                      id={BILL_ANCHORS.buyer}
-                      n={stepNo(2)}
-                      title={buyerKind === "walk-in" ? "Walk-in Buyer" : "Buyer"}
-                      status={selectedBuyer ? "done" : "todo"}
-                      open={buyerOpen}
-                      onToggle={() => setBuyerOpen((v) => !v)}
-                      help={outsideFbr ? "Pick the customer. Outside FBR every buyer is listed and no further tax is charged."
-                        : fbrEnabled
-                        ? "Pick the customer. Only buyers that fit the scenario are listed: SN001 is for registered buyers, SN002 for unregistered ones. An unregistered buyer is also charged 4% further tax."
-                        : "Pick the customer. An unregistered buyer is charged 4% further tax."}
-                      summary={selectedBuyer ? (
-                        <>
-                          <span style={{ fontWeight: 600 }}>{selectedBuyer.name}</span>
-                          {(selectedBuyer.ntn || selectedBuyer.cnic) && (
-                            <span style={styles.scenarioCollapseMeta}>
-                              · {selectedBuyer.ntn ? `NTN ${selectedBuyer.ntn}` : `CNIC ${selectedBuyer.cnic}`}
-                            </span>
+                {(chosenScenario || !fbrEnabled) &&
+                  (() => {
+                    const selectedBuyer = filteredClients.find(
+                      (c) => String(c.id) === String(selectedClientId),
+                    );
+                    return (
+                      <BillStep
+                        id={BILL_ANCHORS.buyer}
+                        n={stepNo(2)}
+                        title={buyerKind === "walk-in" ? "Walk-in Buyer" : "Buyer"}
+                        status={selectedBuyer ? "done" : "todo"}
+                        open={buyerOpen}
+                        onToggle={() => setBuyerOpen((v) => !v)}
+                        help={
+                          outsideFbr
+                            ? "Pick the customer. Outside FBR every buyer is listed and no further tax is charged."
+                            : fbrEnabled
+                              ? "Pick the customer. Only buyers that fit the scenario are listed: SN001 is for registered buyers, SN002 for unregistered ones. An unregistered buyer is also charged 4% further tax."
+                              : "Pick the customer. An unregistered buyer is charged 4% further tax."
+                        }
+                        summary={
+                          selectedBuyer ? (
+                            <>
+                              <span style={{ fontWeight: 600 }}>{selectedBuyer.name}</span>
+                              {(selectedBuyer.ntn || selectedBuyer.cnic) && (
+                                <span style={styles.scenarioCollapseMeta}>
+                                  ·{" "}
+                                  {selectedBuyer.ntn
+                                    ? `NTN ${selectedBuyer.ntn}`
+                                    : `CNIC ${selectedBuyer.cnic}`}
+                                </span>
+                              )}
+                              {selectedBuyer.registrationType && (
+                                <span
+                                  style={{
+                                    ...styles.scenarioBadge,
+                                    ...((selectedBuyer.registrationType || "").toLowerCase() ===
+                                    "registered"
+                                      ? styles.badgeBlue
+                                      : styles.badgeOrange),
+                                  }}
+                                >
+                                  {selectedBuyer.registrationType}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span style={styles.scenarioCollapseSummaryMuted}>Choose a buyer</span>
+                          )
+                        }
+                      >
+                        <div style={styles.inlineRow}>
+                          {filteredClients.length === 0 ? (
+                            <div style={{ ...styles.warnAlert, flex: 1 }}>
+                              <MdInfo size={16} />
+                              No matching{" "}
+                              {buyerKind === "b2b-registered"
+                                ? "Registered"
+                                : buyerKind === "b2b-unregistered"
+                                  ? "Unregistered"
+                                  : buyerKind === "walk-in"
+                                    ? "Unregistered (Walk-in)"
+                                    : ""}{" "}
+                              clients yet.
+                            </div>
+                          ) : (
+                            <div style={{ flex: 1 }}>
+                              <SearchableSelect
+                                items={filteredClients.map((cl) => {
+                                  // A client with neither a registration type
+                                  // nor an NTN/CNIC used to read "Name (—)",
+                                  // so every row in the list carried an empty
+                                  // bracket. Show the bracket only when there
+                                  // is something to put in it.
+                                  const bits = [
+                                    cl.registrationType,
+                                    cl.ntn ? `NTN ${cl.ntn}` : cl.cnic ? `CNIC ${cl.cnic}` : null,
+                                  ].filter(Boolean);
+                                  return {
+                                    ...cl,
+                                    _label: bits.length
+                                      ? `${cl.name} (${bits.join(" · ")})`
+                                      : cl.name,
+                                  };
+                                })}
+                                value={selectedClientId}
+                                onChange={(id) => setSelectedClientId(id ? String(id) : "")}
+                                labelKey="_label"
+                                searchKeys={["name", "ntn", "cnic"]}
+                                placeholder="— Choose a buyer —"
+                              />
+                            </div>
                           )}
-                          {selectedBuyer.registrationType && (
-                            <span style={{
-                              ...styles.scenarioBadge,
-                              ...((selectedBuyer.registrationType || "").toLowerCase() === "registered" ? styles.badgeBlue : styles.badgeOrange),
-                            }}>
-                              {selectedBuyer.registrationType}
-                            </span>
-                          )}
-                        </>
-                      ) : (
-                        <span style={styles.scenarioCollapseSummaryMuted}>Choose a buyer</span>
-                      )}
-                    >
-                          <div style={styles.inlineRow}>
-                            {filteredClients.length === 0 ? (
-                              <div style={{ ...styles.warnAlert, flex: 1 }}>
-                                <MdInfo size={16} />
-                                No matching{" "}
-                                {buyerKind === "b2b-registered" ? "Registered"
-                                  : buyerKind === "b2b-unregistered" ? "Unregistered"
-                                  : buyerKind === "walk-in" ? "Unregistered (Walk-in)" : ""}{" "}
-                                clients yet.
-                              </div>
-                            ) : (
-                              <div style={{ flex: 1 }}>
-                                <SearchableSelect
-                                  items={filteredClients.map((cl) => {
-                                    // A client with neither a registration type
-                                    // nor an NTN/CNIC used to read "Name (—)",
-                                    // so every row in the list carried an empty
-                                    // bracket. Show the bracket only when there
-                                    // is something to put in it.
-                                    const bits = [
-                                      cl.registrationType,
-                                      cl.ntn ? `NTN ${cl.ntn}` : cl.cnic ? `CNIC ${cl.cnic}` : null,
-                                    ].filter(Boolean);
-                                    return { ...cl, _label: bits.length ? `${cl.name} (${bits.join(" · ")})` : cl.name };
-                                  })}
-                                  value={selectedClientId}
-                                  onChange={(id) => setSelectedClientId(id ? String(id) : "")}
-                                  labelKey="_label"
-                                  searchKeys={["name", "ntn", "cnic"]}
-                                  placeholder="— Choose a buyer —"
-                                />
-                              </div>
-                            )}
-                            {/* Inline-create. Hidden when caller can't create
+                          {/* Inline-create. Hidden when caller can't create
                                 clients — replaced by an inline hint instead. */}
-                            {canCreateClient ? (
-                              <button
-                                type="button"
-                                style={styles.inlineAddBtn}
-                                onClick={() => setShowAddClient(true)}
-                                title="Create a new buyer without leaving this form"
-                              >
-                                <MdPersonAdd size={14} /> New Buyer
-                              </button>
-                            ) : (
-                              <PermissionLackedHint perm="clients.manage.create" what="add a new buyer" />
-                            )}
-                          </div>
-                    </BillStep>
-                  );
-                })()}
+                          {canCreateClient ? (
+                            <button
+                              type="button"
+                              style={styles.inlineAddBtn}
+                              onClick={() => setShowAddClient(true)}
+                              title="Create a new buyer without leaving this form"
+                            >
+                              <MdPersonAdd size={14} /> New Buyer
+                            </button>
+                          ) : (
+                            <PermissionLackedHint
+                              perm="clients.manage.create"
+                              what="add a new buyer"
+                            />
+                          )}
+                        </div>
+                      </BillStep>
+                    );
+                  })()}
 
                 {/* Steps 3-5 wait for the scenario and the buyer. They show,
                     folded, so the operator can see the whole road ahead and
                     the numbers never jump from 2 to 6. */}
-                {!linesVisible && [["details", 3, "Invoice details"], ["items", 4, "Items"], ["taxes", 5, "Taxes & Total"]].map(([k, n, t]) => (
-                  <BillStep
-                    key={k}
-                    id={BILL_ANCHORS[k]}
-                    n={stepNo(n)}
-                    title={t}
-                    status="todo"
-                    summary={<span style={styles.scenarioCollapseSummaryMuted}>
-                      {fbrEnabled && !chosenScenario ? "Opens once a scenario is chosen" : "Opens when the buyer is chosen"}
-                    </span>}
-                  />
-                ))}
+                {!linesVisible &&
+                  [
+                    ["details", 3, "Invoice details"],
+                    ["items", 4, "Items"],
+                    ["taxes", 5, "Taxes & Total"],
+                  ].map(([k, n, t]) => (
+                    <BillStep
+                      key={k}
+                      id={BILL_ANCHORS[k]}
+                      n={stepNo(n)}
+                      title={t}
+                      status="todo"
+                      summary={
+                        <span style={styles.scenarioCollapseSummaryMuted}>
+                          {fbrEnabled && !chosenScenario
+                            ? "Opens once a scenario is chosen"
+                            : "Opens when the buyer is chosen"}
+                        </span>
+                      }
+                    />
+                  ))}
 
                 {/* ── Step 3: Bill header + items ───────────────
                     The header-fields row (Bill Date / GST / Payment Terms /
@@ -1690,71 +2153,137 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       onToggle={() => setBillHeaderOpen((v) => !v)}
                       toggleLabel={billHeaderOpen ? "Hide" : "Edit"}
                       help="The next bill number and today's date are already filled in. Change them only when this bill needs something different."
-                      summary={(
+                      summary={
                         <>
-                          <span>{billNumberMode === "custom" ? `#${billNumber || "—"}` : "Auto #"}</span>
+                          <span>
+                            {billNumberMode === "custom" ? `#${billNumber || "—"}` : "Auto #"}
+                          </span>
                           <span>·</span>
                           <span>{invoiceDate || "—"}</span>
                           <span>·</span>
-                          <span>{gstRate}% {outsideFbr ? taxLabel(taxTreatment) : "GST"}</span>
+                          <span>
+                            {gstRate}% {outsideFbr ? taxLabel(taxTreatment) : "GST"}
+                          </span>
                           <span>·</span>
-                          <span>{documentType === 4 ? "Sale Invoice" : documentType === 9 ? "Debit Note" : documentType === 10 ? "Credit Note" : "—"}</span>
-                          {paymentMode && <><span>·</span><span>{paymentMode}</span></>}
+                          <span>
+                            {documentType === 4
+                              ? "Sale Invoice"
+                              : documentType === 9
+                                ? "Debit Note"
+                                : documentType === 10
+                                  ? "Credit Note"
+                                  : "—"}
+                          </span>
+                          {paymentMode && (
+                            <>
+                              <span>·</span>
+                              <span>{paymentMode}</span>
+                            </>
+                          )}
                         </>
-                      )}
+                      }
                     >
-                          <div style={styles.row}>
-                            <div style={{ flex: 1, minWidth: 180 }}>
-                              <BillNumberField
-                                companyId={companyId}
-                                divisionId={divisionId}
-                                mode={billNumberMode}
-                                onModeChange={setBillNumberMode}
-                                number={billNumber}
-                                onNumberChange={setBillNumber}
-                                onValidityChange={setBillNumberOk}
-                                disabled={saving}
-                              />
-                            </div>
-                            <div style={{ flex: 1, minWidth: 140 }}>
-                              <label style={styles.label}>Invoice date</label>
-                              <input type="date" style={styles.input} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
-                            </div>
-                            <DivisionSelect companyId={companyId} value={divisionId} onChange={setDivisionId} mode="select" label={<>Division <span style={{ fontWeight: 400 }}>(optional)</span></>} labelStyle={styles.label} style={styles.input} wrapStyle={{ flex: 1, minWidth: 140 }} />
-                            <div style={{ flex: 1, minWidth: 140 }}>
-                              <label style={styles.label}>Payment Terms</label>
-                              <input type="text" style={styles.input} value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="Optional" />
-                            </div>
-                            <div style={{ flex: 1, minWidth: 140 }}>
-                              <label style={styles.label}>Customer PO # <span style={styles.optionalTag}>optional</span></label>
-                              <input type="text" style={styles.input} value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="From order, or manual" />
-                            </div>
-                            <div style={{ flex: 1, minWidth: 120 }}>
-                              <label style={styles.label}>PO Date</label>
-                              <input type="date" style={styles.input} value={poDate} onChange={(e) => setPoDate(e.target.value)} />
-                            </div>
-                            <div style={{ flex: 1, minWidth: 140 }}>
-                              <label style={styles.label}>Document Type <span style={styles.optionalTag}>FBR</span></label>
-                              <input
-                                type="text"
-                                style={{ ...styles.input, backgroundColor: colors.infoTint, cursor: "not-allowed" }}
-                                value="Sale Invoice"
-                                readOnly
-                                title="This screen creates Sale Invoices only. Credit / Debit Notes will get their own dedicated screens."
-                              />
-                            </div>
-                            <div style={{ flex: 1, minWidth: 140 }}>
-                              <label style={styles.label}>Payment Mode <span style={styles.optionalTag}>FBR</span></label>
-                              <select style={styles.input} value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)}>
-                                <option value="">— optional —</option>
-                                <option>Cash</option>
-                                <option>Credit</option>
-                                <option>Bank Transfer</option>
-                                <option>Cheque</option>
-                                <option>Online</option>
-                              </select>
-                            </div>
-                          </div>
+                      <div style={styles.row}>
+                        <div style={{ flex: 1, minWidth: 180 }}>
+                          <BillNumberField
+                            companyId={companyId}
+                            divisionId={divisionId}
+                            mode={billNumberMode}
+                            onModeChange={setBillNumberMode}
+                            number={billNumber}
+                            onNumberChange={setBillNumber}
+                            onValidityChange={setBillNumberOk}
+                            disabled={saving}
+                          />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 140 }}>
+                          <label style={styles.label}>Invoice date</label>
+                          <input
+                            type="date"
+                            style={styles.input}
+                            value={invoiceDate}
+                            onChange={(e) => setInvoiceDate(e.target.value)}
+                          />
+                        </div>
+                        <DivisionSelect
+                          companyId={companyId}
+                          value={divisionId}
+                          onChange={setDivisionId}
+                          mode="select"
+                          label={
+                            <>
+                              Division <span style={{ fontWeight: 400 }}>(optional)</span>
+                            </>
+                          }
+                          labelStyle={styles.label}
+                          style={styles.input}
+                          wrapStyle={{ flex: 1, minWidth: 140 }}
+                        />
+                        <div style={{ flex: 1, minWidth: 140 }}>
+                          <label style={styles.label}>Payment Terms</label>
+                          <input
+                            type="text"
+                            style={styles.input}
+                            value={paymentTerms}
+                            onChange={(e) => setPaymentTerms(e.target.value)}
+                            placeholder="Optional"
+                          />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 140 }}>
+                          <label style={styles.label}>
+                            Customer PO # <span style={styles.optionalTag}>optional</span>
+                          </label>
+                          <input
+                            type="text"
+                            style={styles.input}
+                            value={poNumber}
+                            onChange={(e) => setPoNumber(e.target.value)}
+                            placeholder="From order, or manual"
+                          />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 120 }}>
+                          <label style={styles.label}>PO Date</label>
+                          <input
+                            type="date"
+                            style={styles.input}
+                            value={poDate}
+                            onChange={(e) => setPoDate(e.target.value)}
+                          />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 140 }}>
+                          <label style={styles.label}>
+                            Document Type <span style={styles.optionalTag}>FBR</span>
+                          </label>
+                          <input
+                            type="text"
+                            style={{
+                              ...styles.input,
+                              backgroundColor: colors.infoTint,
+                              cursor: "not-allowed",
+                            }}
+                            value="Sale Invoice"
+                            readOnly
+                            title="This screen creates Sale Invoices only. Credit / Debit Notes will get their own dedicated screens."
+                          />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 140 }}>
+                          <label style={styles.label}>
+                            Payment Mode <span style={styles.optionalTag}>FBR</span>
+                          </label>
+                          <select
+                            style={styles.input}
+                            value={paymentMode}
+                            onChange={(e) => setPaymentMode(e.target.value)}
+                          >
+                            <option value="">— optional —</option>
+                            <option>Cash</option>
+                            <option>Credit</option>
+                            <option>Bank Transfer</option>
+                            <option>Cheque</option>
+                            <option>Online</option>
+                          </select>
+                        </div>
+                      </div>
                     </BillStep>
 
                     {/* ── Step 4: Items ─────────────── */}
@@ -1763,49 +2292,73 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       n={stepNo(4)}
                       title="Items"
                       status={!allRowsValid ? "todo" : rateBlocked ? "warn" : "done"}
-                      summary={<span>{rows.length} line{rows.length === 1 ? "" : "s"} · {money(subtotal)} before tax</span>}
-                      help={overlayOn
-                        ? "Add each item the customer ordered, with the quantity and price agreed."
-                        : "Find each item by name or HS code. Type the Line Total and the quantity and rate are worked out from stock at cost; with no stock on hand, type the quantity and rate. A line marked in red came in at a different sales tax rate."}
+                      summary={
+                        <span>
+                          {rows.length} line{rows.length === 1 ? "" : "s"} · {money(subtotal)}{" "}
+                          before tax
+                        </span>
+                      }
+                      help={
+                        overlayOn
+                          ? "Add each item the customer ordered, with the quantity and price agreed."
+                          : "Find each item by name or HS code. Type the Line Total and the quantity and rate are worked out from stock at cost; with no stock on hand, type the quantity and rate. A line marked in red came in at a different sales tax rate."
+                      }
                     >
-                    {chosenScenario && !outsideFbr && (
-                      <div style={styles.lockedSaleType}>
-                        <MdLock size={14} color={colors.teal} />
-                        <span><b>Sale Type locked:</b> {chosenScenario.saleType}</span>
-                        <span style={styles.lockedSaleTypeHint}>(every line uses this — required by {chosenScenario.code})</span>
-                      </div>
-                    )}
+                      {chosenScenario && !outsideFbr && (
+                        <div style={styles.lockedSaleType}>
+                          <MdLock size={14} color={colors.teal} />
+                          <span>
+                            <b>Sale Type locked:</b> {chosenScenario.saleType}
+                          </span>
+                          <span style={styles.lockedSaleTypeHint}>
+                            (every line uses this — required by {chosenScenario.code})
+                          </span>
+                        </div>
+                      )}
 
-                    {/* Items table */}
-                    <div>
-                      <div style={styles.itemsHeaderBar}>
-                        <span style={styles.itemsCount}>{rows.length} line{rows.length === 1 ? "" : "s"}</span>
-                        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-                          {/* 2026-05-13: previously hidden when billsMode
+                      {/* Items table */}
+                      <div>
+                        <div style={styles.itemsHeaderBar}>
+                          <span style={styles.itemsCount}>
+                            {rows.length} line{rows.length === 1 ? "" : "s"}
+                          </span>
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: "0.5rem",
+                              alignItems: "center",
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            {/* 2026-05-13: previously hidden when billsMode
                               was true. Operators asked for the New Item
                               Type shortcut on every bill-creation flow
                               (including New Bill / New Bill No Challan),
                               so it's now visible regardless of tab.
                               Permission still gates the button. */}
-                          {canCreateItemType ? (
-                            <button
-                              type="button"
-                              style={styles.inlineAddBtn}
-                              onClick={() => setShowAddItemType(true)}
-                              title="Add a new item type to your catalog"
-                            >
-                              <MdAdd size={14} /> New Item Type
+                            {canCreateItemType ? (
+                              <button
+                                type="button"
+                                style={styles.inlineAddBtn}
+                                onClick={() => setShowAddItemType(true)}
+                                title="Add a new item type to your catalog"
+                              >
+                                <MdAdd size={14} /> New Item Type
+                              </button>
+                            ) : (
+                              <PermissionLackedHint
+                                inline
+                                perm="itemtypes.manage.create"
+                                what="add a new item type"
+                              />
+                            )}
+                            <button type="button" style={styles.addRowBtn} onClick={addRow}>
+                              <MdAdd size={14} /> Add Row
                             </button>
-                          ) : (
-                            <PermissionLackedHint inline perm="itemtypes.manage.create" what="add a new item type" />
-                          )}
-                          <button type="button" style={styles.addRowBtn} onClick={addRow}>
-                            <MdAdd size={14} /> Add Row
-                          </button>
+                          </div>
                         </div>
-                      </div>
 
-                      {/* Bulk-apply toolbar — single dropdown stamps the
+                        {/* Bulk-apply toolbar — single dropdown stamps the
                           same catalog row across every line (or only the
                           empty ones). 'Clear all' wipes the Item Type
                           binding from every row in one click; useful when
@@ -1815,254 +2368,463 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                           row count = 1. Available in Bills mode too —
                           the pick is optional there but persists and
                           shows on the Invoices tab. */}
-                      <BulkItemTypeBar
-                        itemCount={rows.length}
-                        itemTypes={filteredItemTypes}
-                        nonInventoryItems={nonInvItems}
-                        divisionId={divisionId}
-                        onApplyItemType={(id, picked, mode) => applyItemTypeToRows(picked, mode)}
-                        onApplyNonInv={(n, mode) => applyNonInvToRows(n, mode)}
-                        onClearAll={() => clearAllItemTypes()}
-                        anyTagged={rows.some((r) => r.itemTypeId)}
-                      />
+                        <BulkItemTypeBar
+                          itemCount={rows.length}
+                          itemTypes={filteredItemTypes}
+                          nonInventoryItems={nonInvItems}
+                          divisionId={divisionId}
+                          onApplyItemType={(id, picked, mode) => applyItemTypeToRows(picked, mode)}
+                          onApplyNonInv={(n, mode) => applyNonInvToRows(n, mode)}
+                          onClearAll={() => clearAllItemTypes()}
+                          anyTagged={rows.some((r) => r.itemTypeId)}
+                        />
 
-                      <div style={styles.unifiedTableWrap}>
-                        {/* Sideways scroll only when the table genuinely needs
+                        <div style={styles.unifiedTableWrap}>
+                          {/* Sideways scroll only when the table genuinely needs
                             it. A flat 1200px floor forced a scrollbar for 32
                             unused pixels on a 1280 desktop; the OPTIONAL
                             columns (GL account, MRP, SRO) are what actually
                             make it wide, so they are what raise the floor. */}
-                        <table className="inv-lines" style={{ ...styles.unifiedTable, minWidth: 900 + (glOn ? 120 : 0) + (showMRP ? 110 : 0) + (showSRO ? 240 : 0) }}>
-                          <thead>
-                            <tr style={styles.unifiedThead}>
-                              {/* Optional in Bills mode — a type picked at
+                          <table
+                            className="inv-lines"
+                            style={{
+                              ...styles.unifiedTable,
+                              minWidth:
+                                900 + (glOn ? 120 : 0) + (showMRP ? 110 : 0) + (showSRO ? 240 : 0),
+                            }}
+                          >
+                            <thead>
+                              <tr style={styles.unifiedThead}>
+                                {/* Optional in Bills mode — a type picked at
                                   bill time persists to the Invoices tab. */}
-                              <th style={{ ...styles.unifiedTh, width: showMRP || showSRO ? "22%" : "26%" }}>Item Type *</th>
-                              <th style={{ ...styles.unifiedTh, width: showMRP || showSRO ? "16%" : "20%" }}>Description{billsMode ? " *" : ""}</th>
-                              <th style={{ ...styles.unifiedTh, width: "7%" }}>Qty *</th>
-                              <th style={{ ...styles.unifiedTh, width: "8%" }}>UOM</th>
-                              <th style={{ ...styles.unifiedTh, width: "9%" }}>Unit Price *</th>
-                              <th style={{ ...styles.unifiedTh, width: "10%" }}>Line Total</th>
-                              {/* Account (GL) — which income account this line's
+                                <th
+                                  style={{
+                                    ...styles.unifiedTh,
+                                    width: showMRP || showSRO ? "22%" : "26%",
+                                  }}
+                                >
+                                  Item Type *
+                                </th>
+                                <th
+                                  style={{
+                                    ...styles.unifiedTh,
+                                    width: showMRP || showSRO ? "16%" : "20%",
+                                  }}
+                                >
+                                  Description{billsMode ? " *" : ""}
+                                </th>
+                                <th style={{ ...styles.unifiedTh, width: "7%" }}>Qty *</th>
+                                <th style={{ ...styles.unifiedTh, width: "8%" }}>UOM</th>
+                                <th style={{ ...styles.unifiedTh, width: "9%" }}>Unit Price *</th>
+                                <th style={{ ...styles.unifiedTh, width: "10%" }}>Line Total</th>
+                                {/* Account (GL) — which income account this line's
                                   amount posts to. Shown in both modes when the
                                   company has a Chart of Accounts. */}
-                              {glOn && (
-                                <th style={{ ...styles.unifiedTh, width: "14%" }} title="GL income account this line posts to">Account (GL)</th>
-                              )}
-                              {/* HS Code is an FBR field — only relevant on
+                                {glOn && (
+                                  <th
+                                    style={{ ...styles.unifiedTh, width: "14%" }}
+                                    title="GL income account this line posts to"
+                                  >
+                                    Account (GL)
+                                  </th>
+                                )}
+                                {/* HS Code is an FBR field — only relevant on
                                   the Invoices tab. Bills mode is pre-FBR
                                   data entry, so hide the column. */}
-                              {!billsMode && (
-                                <th style={{ ...styles.unifiedTh, width: "10%" }}>HS Code</th>
-                              )}
-                              {showMRP && <th style={{ ...styles.unifiedTh, width: "9%", backgroundColor: colors.cautionSoft }}>MRP / unit *</th>}
-                              {showMRP && <th style={{ ...styles.unifiedTh, width: "9%", backgroundColor: colors.cautionSoft }}>MRP × Qty</th>}
-                              {showSRO && <th style={{ ...styles.unifiedTh, width: "10%", backgroundColor: colors.violetSoft }}>SRO Schedule *</th>}
-                              {showSRO && <th style={{ ...styles.unifiedTh, width: "8%", backgroundColor: colors.violetSoft }}>SRO Item No *</th>}
-                              <th style={{ ...styles.unifiedTh, width: "4%" }}></th>
-                            </tr>
-                          </thead>
-                          <tbody onKeyDown={handleQuickAddKey}>
-                            {rows.map((r) => {
-                              const q = parseFloat(r.quantity) || 0;
-                              const p = parseFloat(r.unitPrice) || 0;
-                              // Pricing from stock needs BOTH a quantity and a
-                              // value on hand. When the item has neither, the
-                              // amount box cannot work anything out -- so the
-                              // quantity and rate have to stay typeable.
-                              // Locking them on the mere presence of text in
-                              // the amount box left the row unfillable: the
-                              // operator typed 5,000, nothing was derived, and
-                              // both fields went read-only and empty.
-                              const priced = stockPricing[r.itemTypeId];
-                              const canDerive = !!r.itemTypeId && !!priced?.canPrice;
-                              const noStock = !!r.itemTypeId && !!priced && !priced.canPrice;
-                              const derivedFromAmount = canDerive && !!r.lineTotal;
-                              return (
-                                <Fragment key={r.localId}>
-                                <tr id={lineAnchor(r.localId)} style={styles.unifiedRow}>
-                                  <td data-label="Item" style={styles.unifiedTd}>
-                                    <div data-row-picker={r.localId}>
-                                    <SearchableItemTypeSelect
-                                      divisionId={divisionId}
-                                      items={filteredItemTypes}
-                                      value={r.itemTypeId}
-                                      onChange={(id, picked) => handleItemTypePick(r.localId, picked || null)}
-                                      nonInventoryItems={nonInvItems}
-                                      nonInventoryValue={r.nonInventoryItemId || ""}
-                                      onPickNonInventory={(n) => handleNonInventoryPick(r.localId, n)}
-                                      companyId={companyId}
-                                      offerFbrCodes
-                                      pendingNew={r.newItemType}
-                                      onPickNewItem={(n) => handleNewItemPick(r.localId, n)}
-                                      placeholder="Required — pick item or non-inventory…"
-                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
-                                    />
-                                    </div>
-                                    <NewItemChip
-                                      pending={r.newItemType}
-                                      onRename={(name) => renameNewItem(r.localId, name)}
-                                      stock={r.newItemType ? lineStock({ pending: r.newItemType, quantity: r.quantity, company }) : null}
-                                      quantity={r.quantity}
-                                      uom={r.uom}
-                                      companyId={companyId}
-                                      fbrOn={fbrEnabled}
-                                      onStocked={(item) => handleNewItemStocked(r.localId, item)}
-                                    />
-                                    {/* What this item is worth, right where it
+                                {!billsMode && (
+                                  <th style={{ ...styles.unifiedTh, width: "10%" }}>HS Code</th>
+                                )}
+                                {showMRP && (
+                                  <th
+                                    style={{
+                                      ...styles.unifiedTh,
+                                      width: "9%",
+                                      backgroundColor: colors.cautionSoft,
+                                    }}
+                                  >
+                                    MRP / unit *
+                                  </th>
+                                )}
+                                {showMRP && (
+                                  <th
+                                    style={{
+                                      ...styles.unifiedTh,
+                                      width: "9%",
+                                      backgroundColor: colors.cautionSoft,
+                                    }}
+                                  >
+                                    MRP × Qty
+                                  </th>
+                                )}
+                                {showSRO && (
+                                  <th
+                                    style={{
+                                      ...styles.unifiedTh,
+                                      width: "10%",
+                                      backgroundColor: colors.violetSoft,
+                                    }}
+                                  >
+                                    SRO Schedule *
+                                  </th>
+                                )}
+                                {showSRO && (
+                                  <th
+                                    style={{
+                                      ...styles.unifiedTh,
+                                      width: "8%",
+                                      backgroundColor: colors.violetSoft,
+                                    }}
+                                  >
+                                    SRO Item No *
+                                  </th>
+                                )}
+                                <th style={{ ...styles.unifiedTh, width: "4%" }}></th>
+                              </tr>
+                            </thead>
+                            <tbody onKeyDown={handleQuickAddKey}>
+                              {rows.map((r) => {
+                                const q = parseFloat(r.quantity) || 0;
+                                const p = parseFloat(r.unitPrice) || 0;
+                                // Pricing from stock needs BOTH a quantity and a
+                                // value on hand. When the item has neither, the
+                                // amount box cannot work anything out -- so the
+                                // quantity and rate have to stay typeable.
+                                // Locking them on the mere presence of text in
+                                // the amount box left the row unfillable: the
+                                // operator typed 5,000, nothing was derived, and
+                                // both fields went read-only and empty.
+                                const priced = stockPricing[r.itemTypeId];
+                                const canDerive = !!r.itemTypeId && !!priced?.canPrice;
+                                const noStock = !!r.itemTypeId && !!priced && !priced.canPrice;
+                                const derivedFromAmount = canDerive && !!r.lineTotal;
+                                return (
+                                  <Fragment key={r.localId}>
+                                    <tr id={lineAnchor(r.localId)} style={styles.unifiedRow}>
+                                      <td data-label="Item" style={styles.unifiedTd}>
+                                        <div data-row-picker={r.localId}>
+                                          <SearchableItemTypeSelect
+                                            divisionId={divisionId}
+                                            items={filteredItemTypes}
+                                            value={r.itemTypeId}
+                                            onChange={(id, picked) =>
+                                              handleItemTypePick(r.localId, picked || null)
+                                            }
+                                            nonInventoryItems={nonInvItems}
+                                            nonInventoryValue={r.nonInventoryItemId || ""}
+                                            onPickNonInventory={(n) =>
+                                              handleNonInventoryPick(r.localId, n)
+                                            }
+                                            companyId={companyId}
+                                            offerFbrCodes
+                                            pendingNew={r.newItemType}
+                                            onPickNewItem={(n) => handleNewItemPick(r.localId, n)}
+                                            placeholder="Required — pick item or non-inventory…"
+                                            style={{
+                                              ...styles.input,
+                                              padding: "0.3rem 0.5rem",
+                                              fontSize: "0.8rem",
+                                            }}
+                                          />
+                                        </div>
+                                        <NewItemChip
+                                          pending={r.newItemType}
+                                          onRename={(name) => renameNewItem(r.localId, name)}
+                                          stock={
+                                            r.newItemType
+                                              ? lineStock({
+                                                  pending: r.newItemType,
+                                                  quantity: r.quantity,
+                                                  company,
+                                                })
+                                              : null
+                                          }
+                                          quantity={r.quantity}
+                                          uom={r.uom}
+                                          companyId={companyId}
+                                          fbrOn={fbrEnabled}
+                                          onStocked={(item) =>
+                                            handleNewItemStocked(r.localId, item)
+                                          }
+                                        />
+                                        {/* What this item is worth, right where it
                                         was picked. Without it the operator only
                                         found out that a line could not be priced
                                         after typing an amount into a box that
                                         then did nothing. */}
-                                    {/* One short line: what is in stock, which GDs it
+                                        {/* One short line: what is in stock, which GDs it
                                         came on (folded), and Sell all. The per-GD
                                         detail opens below the line on demand -- a
                                         paragraph of GD numbers here buried the row. */}
-                                    {canDerive && (() => {
-                                      const gds = (priced.tiers || []).filter((t) => t.gdNumber);
-                                      const uomLabel = priced.uom || r.uom || "";
-                                      return (
-                                        <div style={styles.stockChipRow}>
-                                          <span style={styles.stockPill}>
-                                            {Number(priced.availableQuantity).toLocaleString(undefined, { maximumFractionDigits: 0 })} {uomLabel} in stock
-                                          </span>
-                                          {gds.length > 0 && (
-                                            <button
-                                              type="button"
-                                              style={styles.stockChipBtn}
-                                              aria-expanded={!!gdOpen[r.localId]}
-                                              title="Show which GDs this line takes stock from"
-                                              onClick={() => setGdOpen((o) => ({ ...o, [r.localId]: !o[r.localId] }))}
+                                        {canDerive &&
+                                          (() => {
+                                            const gds = (priced.tiers || []).filter(
+                                              (t) => t.gdNumber,
+                                            );
+                                            const uomLabel = priced.uom || r.uom || "";
+                                            return (
+                                              <div style={styles.stockChipRow}>
+                                                <span style={styles.stockPill}>
+                                                  {Number(priced.availableQuantity).toLocaleString(
+                                                    undefined,
+                                                    { maximumFractionDigits: 0 },
+                                                  )}{" "}
+                                                  {uomLabel} in stock
+                                                </span>
+                                                {gds.length > 0 && (
+                                                  <button
+                                                    type="button"
+                                                    style={styles.stockChipBtn}
+                                                    aria-expanded={!!gdOpen[r.localId]}
+                                                    title="Show which GDs this line takes stock from"
+                                                    onClick={() =>
+                                                      setGdOpen((o) => ({
+                                                        ...o,
+                                                        [r.localId]: !o[r.localId],
+                                                      }))
+                                                    }
+                                                  >
+                                                    {gds.length} GD{gds.length === 1 ? "" : "s"}
+                                                    {gdOpen[r.localId] ? (
+                                                      <MdExpandLess
+                                                        size={14}
+                                                        style={{ verticalAlign: "-3px" }}
+                                                      />
+                                                    ) : (
+                                                      <MdExpandMore
+                                                        size={14}
+                                                        style={{ verticalAlign: "-3px" }}
+                                                      />
+                                                    )}
+                                                  </button>
+                                                )}
+                                                {Number(priced.availableValueExcludingTax) > 0 && (
+                                                  <button
+                                                    type="button"
+                                                    style={styles.stockChipBtn}
+                                                    title={`Sell everything on hand: ${Number(priced.availableQuantity).toLocaleString(undefined, { maximumFractionDigits: 4 })} ${uomLabel} for ${Number(priced.availableValueExcludingTax).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                                    onClick={() => billAllOnHand(r.localId)}
+                                                  >
+                                                    Sell all
+                                                  </button>
+                                                )}
+                                              </div>
+                                            );
+                                          })()}
+                                        {noStock && (
+                                          <div style={styles.stockChipNone}>
+                                            No stock — type the quantity and rate
+                                          </div>
+                                        )}
+                                        {(() => {
+                                          // Which line the rate notice is about, right where
+                                          // the item was picked.
+                                          const rc = r.itemTypeId
+                                            ? rateCheck.checks[r.itemTypeId]
+                                            : null;
+                                          if (!rc?.warning) return null;
+                                          return (
+                                            <div
+                                              style={
+                                                rc.warning.enforce
+                                                  ? styles.rateChipBad
+                                                  : styles.rateChipCheck
+                                              }
                                             >
-                                              {gds.length} GD{gds.length === 1 ? "" : "s"}
-                                              {gdOpen[r.localId]
-                                                ? <MdExpandLess size={14} style={{ verticalAlign: "-3px" }} />
-                                                : <MdExpandMore size={14} style={{ verticalAlign: "-3px" }} />}
-                                            </button>
-                                          )}
-                                          {Number(priced.availableValueExcludingTax) > 0 && (
-                                            <button
-                                              type="button"
-                                              style={styles.stockChipBtn}
-                                              title={`Sell everything on hand: ${Number(priced.availableQuantity).toLocaleString(undefined, { maximumFractionDigits: 4 })} ${uomLabel} for ${Number(priced.availableValueExcludingTax).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                                              onClick={() => billAllOnHand(r.localId)}
+                                              {rc.mixed
+                                                ? `Came in at ${rc.rates.map((x) => `${x}%`).join(" and ")}`
+                                                : `Imported at ${rc.rate}%${rc.source ? ` · ${rc.source}` : ""}`}
+                                            </div>
+                                          );
+                                        })()}
+                                        {(() => {
+                                          // An amount that buys only part of the units the
+                                          // invoice will show: say what leaves stock.
+                                          const note = partUnitNote(
+                                            rowStockQuantity(r),
+                                            r.quantity,
+                                            r.uom,
+                                            r.lineTotal,
+                                          );
+                                          return note ? (
+                                            <div style={styles.rateChipCheck}>{note}</div>
+                                          ) : null;
+                                        })()}
+                                        {(() => {
+                                          // States the two numbers the operator needs: what
+                                          // they hold, and what this line would take. Saying
+                                          // only "not enough stock" leaves them to work out
+                                          // the amount that does fit, which is the whole
+                                          // difficulty when the quantity came from an amount.
+                                          const sf = stockShortfall(r);
+                                          if (!sf) return null;
+                                          const fits =
+                                            sf.unitCost > 0
+                                              ? Math.floor(sf.have) * sf.unitCost
+                                              : null;
+                                          return (
+                                            <div
+                                              style={
+                                                stockHardBlock
+                                                  ? styles.stockChipOver
+                                                  : styles.stockChipWarn
+                                              }
                                             >
-                                              Sell all
-                                            </button>
-                                          )}
-                                        </div>
-                                      );
-                                    })()}
-                                    {noStock && (
-                                      <div style={styles.stockChipNone}>
-                                        No stock — type the quantity and rate
-                                      </div>
-                                    )}
-                                    {(() => {
-                                      // Which line the rate notice is about, right where
-                                      // the item was picked.
-                                      const rc = r.itemTypeId ? rateCheck.checks[r.itemTypeId] : null;
-                                      if (!rc?.warning) return null;
-                                      return (
-                                        <div style={rc.warning.enforce ? styles.rateChipBad : styles.rateChipCheck}>
-                                          {rc.mixed
-                                            ? `Came in at ${rc.rates.map((x) => `${x}%`).join(" and ")}`
-                                            : `Imported at ${rc.rate}%${rc.source ? ` · ${rc.source}` : ""}`}
-                                        </div>
-                                      );
-                                    })()}
-                                    {(() => {
-                                      // An amount that buys only part of the units the
-                                      // invoice will show: say what leaves stock.
-                                      const note = partUnitNote(rowStockQuantity(r), r.quantity, r.uom, r.lineTotal);
-                                      return note ? <div style={styles.rateChipCheck}>{note}</div> : null;
-                                    })()}
-                                    {(() => {
-                                      // States the two numbers the operator needs: what
-                                      // they hold, and what this line would take. Saying
-                                      // only "not enough stock" leaves them to work out
-                                      // the amount that does fit, which is the whole
-                                      // difficulty when the quantity came from an amount.
-                                      const sf = stockShortfall(r);
-                                      if (!sf) return null;
-                                      const fits = sf.unitCost > 0
-                                        ? Math.floor(sf.have) * sf.unitCost
-                                        : null;
-                                      return (
-                                        <div style={stockHardBlock ? styles.stockChipOver : styles.stockChipWarn}>
-                                          {stockHardBlock
-                                            ? <>Only {sf.have.toLocaleString(undefined, { maximumFractionDigits: 2 })} {sf.uom} on hand — </>
-                                            : <>Stock will go negative: {sf.have.toLocaleString(undefined, { maximumFractionDigits: 2 })} {sf.uom} on hand, </>}
-                                          this line needs {sf.want.toLocaleString(undefined, { maximumFractionDigits: 2 })} {sf.uom}
-                                          {" "}({sf.short.toLocaleString(undefined, { maximumFractionDigits: 2 })} short).
-                                          {fits !== null && (
-                                            <> At {sf.unitCost.toLocaleString(undefined, { maximumFractionDigits: 4 })} each, {stockHardBlock ? "the most you can bill in whole units is" : "what you hold is worth"}{" "}
-                                              {fits.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.</>
-                                          )}
-                                          {Number(priced?.availableValueExcludingTax) > 0 && (
-                                            <>
-                                              {" "}Or{" "}
-                                              <button type="button" style={styles.stockChipBtn} onClick={() => billAllOnHand(r.localId)}>
-                                                bill everything on hand
-                                              </button>
-                                              {" "}— {closeOutQuantity(priced, r).toLocaleString(undefined, { maximumFractionDigits: 4 })} {sf.uom} for {Number(priced.availableValueExcludingTax).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}, which empties the bin.
-                                            </>
-                                          )}
-                                        </div>
-                                      );
-                                    })()}
-                                  </td>
-                                  {/* Description: in Invoices mode it stays locked to the
+                                              {stockHardBlock ? (
+                                                <>
+                                                  Only{" "}
+                                                  {sf.have.toLocaleString(undefined, {
+                                                    maximumFractionDigits: 2,
+                                                  })}{" "}
+                                                  {sf.uom} on hand —{" "}
+                                                </>
+                                              ) : (
+                                                <>
+                                                  Stock will go negative:{" "}
+                                                  {sf.have.toLocaleString(undefined, {
+                                                    maximumFractionDigits: 2,
+                                                  })}{" "}
+                                                  {sf.uom} on hand,{" "}
+                                                </>
+                                              )}
+                                              this line needs{" "}
+                                              {sf.want.toLocaleString(undefined, {
+                                                maximumFractionDigits: 2,
+                                              })}{" "}
+                                              {sf.uom} (
+                                              {sf.short.toLocaleString(undefined, {
+                                                maximumFractionDigits: 2,
+                                              })}{" "}
+                                              short).
+                                              {fits !== null && (
+                                                <>
+                                                  {" "}
+                                                  At{" "}
+                                                  {sf.unitCost.toLocaleString(undefined, {
+                                                    maximumFractionDigits: 4,
+                                                  })}{" "}
+                                                  each,{" "}
+                                                  {stockHardBlock
+                                                    ? "the most you can bill in whole units is"
+                                                    : "what you hold is worth"}{" "}
+                                                  {fits.toLocaleString(undefined, {
+                                                    minimumFractionDigits: 2,
+                                                    maximumFractionDigits: 2,
+                                                  })}
+                                                  .
+                                                </>
+                                              )}
+                                              {Number(priced?.availableValueExcludingTax) > 0 && (
+                                                <>
+                                                  {" "}
+                                                  Or{" "}
+                                                  <button
+                                                    type="button"
+                                                    style={styles.stockChipBtn}
+                                                    onClick={() => billAllOnHand(r.localId)}
+                                                  >
+                                                    bill everything on hand
+                                                  </button>{" "}
+                                                  —{" "}
+                                                  {closeOutQuantity(priced, r).toLocaleString(
+                                                    undefined,
+                                                    { maximumFractionDigits: 4 },
+                                                  )}{" "}
+                                                  {sf.uom} for{" "}
+                                                  {Number(
+                                                    priced.availableValueExcludingTax,
+                                                  ).toLocaleString(undefined, {
+                                                    minimumFractionDigits: 2,
+                                                    maximumFractionDigits: 2,
+                                                  })}
+                                                  , which empties the bin.
+                                                </>
+                                              )}
+                                            </div>
+                                          );
+                                        })()}
+                                      </td>
+                                      {/* Description: in Invoices mode it stays locked to the
                                       picked item type's name (text display). In Bills mode
                                       it becomes a LookupAutocomplete tied to /lookup/items —
                                       same UX the challan item form uses — so the operator
                                       can pick from previously-typed descriptions or type
                                       free-text. Picking an Item Type seeds it when blank. */}
-                                  {billsMode ? (
-                                    <td data-label="Description" style={styles.unifiedTd}>
-                                      <LookupAutocomplete
-                                        label="Description"
-                                        endpoint="/lookup/items"
-                                        value={r.description || ""}
-                                        onChange={(val) => updateRow(r.localId, { description: val })}
-                                        inputStyle={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
-                                        multiline
-                                      />
-                                    </td>
-                                  ) : (() => {
-                                    // Invoices-mode description is read-only, and it shows what
-                                    // will actually be SAVED: the line's own description, falling
-                                    // back to the item type's name. It used to show itemTypeName
-                                    // first, which disagreed with the saved value for any line that
-                                    // carried a description of its own -- one prefilled from a sales
-                                    // order, for instance.
-                                    const display = r.description?.trim()
-                                      || r.itemTypeName
-                                      || "";
-                                    return (
-                                      <td data-label="Description" style={{ ...styles.unifiedTd, color: display ? colors.textPrimary : colors.textSecondary, fontStyle: display ? "normal" : "italic" }}>
-                                        {display || "(pick an item type)"}
+                                      {billsMode ? (
+                                        <td data-label="Description" style={styles.unifiedTd}>
+                                          <LookupAutocomplete
+                                            label="Description"
+                                            endpoint="/lookup/items"
+                                            value={r.description || ""}
+                                            onChange={(val) =>
+                                              updateRow(r.localId, { description: val })
+                                            }
+                                            inputStyle={{
+                                              ...styles.input,
+                                              padding: "0.3rem 0.5rem",
+                                              fontSize: "0.8rem",
+                                            }}
+                                            multiline
+                                          />
+                                        </td>
+                                      ) : (
+                                        (() => {
+                                          // Invoices-mode description is read-only, and it shows what
+                                          // will actually be SAVED: the line's own description, falling
+                                          // back to the item type's name. It used to show itemTypeName
+                                          // first, which disagreed with the saved value for any line that
+                                          // carried a description of its own -- one prefilled from a sales
+                                          // order, for instance.
+                                          const display =
+                                            r.description?.trim() || r.itemTypeName || "";
+                                          return (
+                                            <td
+                                              data-label="Description"
+                                              style={{
+                                                ...styles.unifiedTd,
+                                                color: display
+                                                  ? colors.textPrimary
+                                                  : colors.textSecondary,
+                                                fontStyle: display ? "normal" : "italic",
+                                              }}
+                                            >
+                                              {display || "(pick an item type)"}
+                                            </td>
+                                          );
+                                        })()
+                                      )}
+                                      <td data-label="Qty" style={styles.unifiedTd}>
+                                        <input
+                                          type="number"
+                                          min={0}
+                                          step="any"
+                                          style={{
+                                            ...styles.input,
+                                            padding: "0.3rem 0.5rem",
+                                            fontSize: "0.8rem",
+                                            ...(derivedFromAmount ? styles.derivedInput : null),
+                                            minWidth: `calc(${Math.min(20, Math.max(4, String(r.quantity ?? "").length + 1))}ch + 2.4rem)`,
+                                          }}
+                                          value={r.quantity}
+                                          data-row-qty={r.localId}
+                                          onChange={(e) =>
+                                            updateRow(r.localId, {
+                                              quantity: e.target.value,
+                                              lineTotal: "",
+                                            })
+                                          }
+                                          placeholder="0"
+                                          readOnly={derivedFromAmount}
+                                          title={
+                                            derivedFromAmount
+                                              ? "Worked out from the amount. Clear the amount to type a quantity yourself."
+                                              : noStock
+                                                ? "Nothing on hand to price from — type the quantity here."
+                                                : ""
+                                          }
+                                        />
                                       </td>
-                                    );
-                                  })()}
-                                  <td data-label="Qty" style={styles.unifiedTd}>
-                                    <input
-                                      type="number" min={0} step="any"
-                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", ...(derivedFromAmount ? styles.derivedInput : null), minWidth: `calc(${Math.min(20, Math.max(4, String(r.quantity ?? "").length + 1))}ch + 2.4rem)` }}
-                                      value={r.quantity}
-                                      data-row-qty={r.localId}
-                                      onChange={(e) => updateRow(r.localId, { quantity: e.target.value, lineTotal: "" })}
-                                      placeholder="0"
-                                      readOnly={derivedFromAmount}
-                                      title={derivedFromAmount
-                                        ? "Worked out from the amount. Clear the amount to type a quantity yourself."
-                                        : noStock
-                                          ? "Nothing on hand to price from — type the quantity here."
-                                          : ""}
-                                    />
-                                  </td>
-                                  <td data-label="UOM" style={styles.unifiedTd}>
-                                    {/* Bills mode (no challan): Unit autocomplete
+                                      <td data-label="UOM" style={styles.unifiedTd}>
+                                        {/* Bills mode (no challan): Unit autocomplete
                                         bound to /lookup/units — same UX the
                                         challan item form uses. New units the
                                         operator types are upserted into the
@@ -2070,52 +2832,85 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                         Invoices mode keeps the locked-when-
                                         itemTypeId input because UOM there is
                                         derived from the picked Item Type. */}
-                                    {billsMode ? (
-                                      <LookupAutocomplete
-                                        label="Unit"
-                                        endpoint="/lookup/units"
-                                        value={r.uom || ""}
-                                        onChange={(val) => updateRow(r.localId, { uom: val })}
-                                        inputStyle={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
-                                      />
-                                    ) : (
-                                      <input
-                                        type="text"
-                                        readOnly={!!r.itemTypeId}
-                                        style={{
-                                          ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem",
-                                          backgroundColor: r.itemTypeId ? colors.infoTint : colors.inputBg,
-                                          cursor: r.itemTypeId ? "not-allowed" : "text",
-                                        }}
-                                        value={r.uom}
-                                        onChange={(e) => updateRow(r.localId, { uom: e.target.value })}
-                                        placeholder="auto from item type"
-                                        title={r.itemTypeId ? "Inherited from the picked item type" : ""}
-                                      />
-                                    )}
-                                  </td>
-                                  <td data-label="Unit price" style={styles.unifiedTd}>
-                                    <input
-                                      type="number" min={0} step="any"
-                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", ...(derivedFromAmount ? styles.derivedInput : null), minWidth: `calc(${Math.min(20, Math.max(4, String((derivedFromAmount && r.unitPrice !== "" ? String(Math.round(Number(r.unitPrice) * 10000) / 10000) : r.unitPrice) ?? "").length + 1))}ch + 2.4rem)` }}
-                                      // A rate worked out from the amount carries 12 decimals so the
-                                      // line multiplies back to the exact figure typed; showing all of
-                                      // them read as "206.20879" cut off mid-number. Read-only then, so
-                                      // the display can round without touching what is saved.
-                                      value={derivedFromAmount && r.unitPrice !== ""
-                                        ? String(Math.round(Number(r.unitPrice) * 10000) / 10000)
-                                        : r.unitPrice}
-                                      onChange={(e) => updateRow(r.localId, { unitPrice: e.target.value, lineTotal: "" })}
-                                      placeholder="0.00"
-                                      readOnly={derivedFromAmount}
-                                      title={derivedFromAmount
-                                        ? "Worked out from the amount. Clear the amount to type a rate yourself."
-                                        : noStock
-                                          ? "Nothing on hand to price from — type the rate here."
-                                          : ""}
-                                    />
-                                  </td>
-                                  {/* Enter the AMOUNT and the quantity follows,
+                                        {billsMode ? (
+                                          <LookupAutocomplete
+                                            label="Unit"
+                                            endpoint="/lookup/units"
+                                            value={r.uom || ""}
+                                            onChange={(val) => updateRow(r.localId, { uom: val })}
+                                            inputStyle={{
+                                              ...styles.input,
+                                              padding: "0.3rem 0.5rem",
+                                              fontSize: "0.8rem",
+                                            }}
+                                          />
+                                        ) : (
+                                          <input
+                                            type="text"
+                                            readOnly={!!r.itemTypeId}
+                                            style={{
+                                              ...styles.input,
+                                              padding: "0.3rem 0.5rem",
+                                              fontSize: "0.8rem",
+                                              backgroundColor: r.itemTypeId
+                                                ? colors.infoTint
+                                                : colors.inputBg,
+                                              cursor: r.itemTypeId ? "not-allowed" : "text",
+                                            }}
+                                            value={r.uom}
+                                            onChange={(e) =>
+                                              updateRow(r.localId, { uom: e.target.value })
+                                            }
+                                            placeholder="auto from item type"
+                                            title={
+                                              r.itemTypeId
+                                                ? "Inherited from the picked item type"
+                                                : ""
+                                            }
+                                          />
+                                        )}
+                                      </td>
+                                      <td data-label="Unit price" style={styles.unifiedTd}>
+                                        <input
+                                          type="number"
+                                          min={0}
+                                          step="any"
+                                          style={{
+                                            ...styles.input,
+                                            padding: "0.3rem 0.5rem",
+                                            fontSize: "0.8rem",
+                                            ...(derivedFromAmount ? styles.derivedInput : null),
+                                            minWidth: `calc(${Math.min(20, Math.max(4, String((derivedFromAmount && r.unitPrice !== "" ? String(Math.round(Number(r.unitPrice) * 10000) / 10000) : r.unitPrice) ?? "").length + 1))}ch + 2.4rem)`,
+                                          }}
+                                          // A rate worked out from the amount carries 12 decimals so the
+                                          // line multiplies back to the exact figure typed; showing all of
+                                          // them read as "206.20879" cut off mid-number. Read-only then, so
+                                          // the display can round without touching what is saved.
+                                          value={
+                                            derivedFromAmount && r.unitPrice !== ""
+                                              ? String(
+                                                  Math.round(Number(r.unitPrice) * 10000) / 10000,
+                                                )
+                                              : r.unitPrice
+                                          }
+                                          onChange={(e) =>
+                                            updateRow(r.localId, {
+                                              unitPrice: e.target.value,
+                                              lineTotal: "",
+                                            })
+                                          }
+                                          placeholder="0.00"
+                                          readOnly={derivedFromAmount}
+                                          title={
+                                            derivedFromAmount
+                                              ? "Worked out from the amount. Clear the amount to type a rate yourself."
+                                              : noStock
+                                                ? "Nothing on hand to price from — type the rate here."
+                                                : ""
+                                          }
+                                        />
+                                      </td>
+                                      {/* Enter the AMOUNT and the quantity follows,
                                       priced at what the stock is worth. Typing a
                                       quantity or a unit price instead clears this and
                                       the cell shows quantity x price again, so neither
@@ -2126,244 +2921,469 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       enough of a narrow column to make the figure
                                       unreadable, and this is a money field nobody
                                       wants to step by 0.01. */}
-                                  {(() => {
-                                    const price = priced;
-                                    const ready = canDerive;
-                                    const shown = r.lineTotal !== undefined && r.lineTotal !== ""
-                                      ? r.lineTotal
-                                      : (q * p ? (q * p).toFixed(2) : "");
-                                    const typed = parseFloat(r.lineTotal);
-                                    const overStock = ready && typed > 0
-                                      && typed > Number(price.availableValueExcludingTax) + 0.005;
-                                    const rateMoved = ready && typed > 0 && p > 0
-                                      && Math.abs(p - Number(price.unitCost)) > 0.005;
-                                    return (
-                                      <td data-label="Line total" style={{ ...styles.unifiedTd, textAlign: "right" }}>
-                                        <input
-                                          type="text"
-                                          inputMode="decimal"
-                                          data-row-amount={r.localId}
-                                          // Off until there is stock to price
-                                          // against. An enabled box that can
-                                          // never work anything out is the
-                                          // dead end this replaces.
-                                          disabled={!r.itemTypeId || noStock}
-                                          style={{
-                                            ...styles.input,
-                                            padding: "0.35rem 0.5rem",
-                                            fontSize: "0.92rem",
-                                            fontWeight: 700,
-                                            textAlign: "right",
-                                            minWidth: 108,
-                                            fontVariantNumeric: "tabular-nums",
-                                            backgroundColor: (!r.itemTypeId || noStock) ? colors.surface : colors.inputBg,
-                                            cursor: (!r.itemTypeId || noStock) ? "not-allowed" : "text",
-                                            borderColor: overStock ? colors.warn : undefined,
-                                          }}
-                                          value={shown}
-                                          // Digits and a single decimal point only, so a
-                                          // stray character cannot reach the arithmetic.
-                                          onChange={(e) => {
-                                            const cleaned = e.target.value
-                                              .replace(/[^\d.]/g, "")
-                                              .replace(/(\..*)\./g, "$1");
-                                            applyLineTotal(r.localId, cleaned);
-                                          }}
-                                          onBlur={() => commitLineTotal(r.localId)}
-                                          placeholder={r.newItemType ? "qty × rate" : !r.itemTypeId ? "pick an item" : noStock ? "qty × rate" : "0.00"}
-                                          title={!r.itemTypeId
-                                            ? "Pick an item type first — the quantity is worked out from what that stock is worth"
-                                            : ready
-                                              ? `Enter the amount; quantity is worked out at ${Number(price.unitCost).toLocaleString()} per ${price.uom || "unit"}`
-                                              : price?.note || "Type a quantity and unit price instead"}
-                                        />
-                                        {/* The reason lives on the chip under the
+                                      {(() => {
+                                        const price = priced;
+                                        const ready = canDerive;
+                                        const shown =
+                                          r.lineTotal !== undefined && r.lineTotal !== ""
+                                            ? r.lineTotal
+                                            : q * p
+                                              ? (q * p).toFixed(2)
+                                              : "";
+                                        const typed = parseFloat(r.lineTotal);
+                                        const overStock =
+                                          ready &&
+                                          typed > 0 &&
+                                          typed > Number(price.availableValueExcludingTax) + 0.005;
+                                        const rateMoved =
+                                          ready &&
+                                          typed > 0 &&
+                                          p > 0 &&
+                                          Math.abs(p - Number(price.unitCost)) > 0.005;
+                                        return (
+                                          <td
+                                            data-label="Line total"
+                                            style={{ ...styles.unifiedTd, textAlign: "right" }}
+                                          >
+                                            <input
+                                              type="text"
+                                              inputMode="decimal"
+                                              data-row-amount={r.localId}
+                                              // Off until there is stock to price
+                                              // against. An enabled box that can
+                                              // never work anything out is the
+                                              // dead end this replaces.
+                                              disabled={!r.itemTypeId || noStock}
+                                              style={{
+                                                ...styles.input,
+                                                padding: "0.35rem 0.5rem",
+                                                fontSize: "0.92rem",
+                                                fontWeight: 700,
+                                                textAlign: "right",
+                                                minWidth: 108,
+                                                fontVariantNumeric: "tabular-nums",
+                                                backgroundColor:
+                                                  !r.itemTypeId || noStock
+                                                    ? colors.surface
+                                                    : colors.inputBg,
+                                                cursor:
+                                                  !r.itemTypeId || noStock ? "not-allowed" : "text",
+                                                borderColor: overStock ? colors.warn : undefined,
+                                              }}
+                                              value={shown}
+                                              // Digits and a single decimal point only, so a
+                                              // stray character cannot reach the arithmetic.
+                                              onChange={(e) => {
+                                                const cleaned = e.target.value
+                                                  .replace(/[^\d.]/g, "")
+                                                  .replace(/(\..*)\./g, "$1");
+                                                applyLineTotal(r.localId, cleaned);
+                                              }}
+                                              onBlur={() => commitLineTotal(r.localId)}
+                                              placeholder={
+                                                r.newItemType
+                                                  ? "qty × rate"
+                                                  : !r.itemTypeId
+                                                    ? "pick an item"
+                                                    : noStock
+                                                      ? "qty × rate"
+                                                      : "0.00"
+                                              }
+                                              title={
+                                                !r.itemTypeId
+                                                  ? "Pick an item type first — the quantity is worked out from what that stock is worth"
+                                                  : ready
+                                                    ? `Enter the amount; quantity is worked out at ${Number(price.unitCost).toLocaleString()} per ${price.uom || "unit"}`
+                                                    : price?.note ||
+                                                      "Type a quantity and unit price instead"
+                                              }
+                                            />
+                                            {/* The reason lives on the chip under the
                                             item picker; five wrapped lines of it
                                             in this narrow column only crushed the
                                             row. Here the box just reports what
                                             quantity x rate came to. */}
-                                        {noStock && (
-                                          <div style={{ fontSize: "0.68rem", color: colors.textSecondary, marginTop: 3, lineHeight: 1.3 }}>
-                                            qty × rate
-                                          </div>
-                                        )}
-                                        {ready && (
-                                          <div style={{ fontSize: "0.7rem", color: overStock ? colors.warn : colors.textSecondary, marginTop: 3, lineHeight: 1.3 }}>
-                                            {overStock
-                                              ? `only ${Number(price.availableValueExcludingTax).toLocaleString(undefined, { maximumFractionDigits: 0 })} in stock`
-                                              : price.tiers?.length
-                                                ? "at cost, oldest claimed GD first"
-                                                : rateMoved
-                                                  ? `${q} x ${p.toLocaleString(undefined, { maximumFractionDigits: 6 })}`
-                                                  : `${Number(price.unitCost).toLocaleString()} each`}
-                                          </div>
-                                        )}
-                                      </td>
-                                    );
-                                  })()}
-                                  {glOn && (
-                                    <td data-label="Account (GL)" style={styles.unifiedTd}>
-                                      <AccountSelect
-                                        accounts={accounts}
-                                        value={r.accountId ?? null}
-                                        onChange={(v) => updateRow(r.localId, { accountId: v })}
-                                        side="income"
-                                        disabled={!!r.nonInventoryItemId}
-                                        placeholder={r.nonInventoryItemId ? nonInvSaleAccountLabel(r.nonInventoryItemId) : defaultSaleAccountLabel}
-                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.76rem" }}
-                                      />
-                                    </td>
-                                  )}
-                                  {!billsMode && (
-                                    <td
-                                      style={{
-                                        ...styles.unifiedTd,
-                                        backgroundColor: colors.surface,
-                                        fontFamily: "monospace",
-                                        fontSize: "0.78rem",
-                                        color: r.hsCode ? colors.textPrimary : colors.textSecondary,
-                                        fontStyle: r.hsCode ? "normal" : "italic",
-                                      }}
-                                      title="HS Code auto-fills from the picked Item Type"
-                                    >
-                                      {r.hsCode || "—"}
-                                    </td>
-                                  )}
-                                  {showMRP && (
-                                    <td data-label="MRP / unit" style={{ ...styles.unifiedTd, backgroundColor: colors.cautionTint }}>
-                                      <input
-                                        type="number" min={0} step="any"
-                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
-                                        value={r.mrp}
-                                        onChange={(e) => updateRow(r.localId, { mrp: e.target.value })}
-                                        placeholder="MRP / unit"
-                                        title="Printed retail price PER UNIT. The MRP × Qty total is computed automatically."
-                                      />
-                                    </td>
-                                  )}
-                                  {showMRP && (
-                                    <td data-label="MRP × Qty" style={{ ...styles.unifiedTd, backgroundColor: colors.cautionTint, textAlign: "right", fontWeight: 600, fontSize: "0.82rem" }}>
-                                      {(() => {
-                                        const m = parseFloat(r.mrp) || 0;
-                                        const total = m * q;
-                                        return total > 0
-                                          ? total.toLocaleString(undefined, { minimumFractionDigits: 2 })
-                                          : "—";
+                                            {noStock && (
+                                              <div
+                                                style={{
+                                                  fontSize: "0.68rem",
+                                                  color: colors.textSecondary,
+                                                  marginTop: 3,
+                                                  lineHeight: 1.3,
+                                                }}
+                                              >
+                                                qty × rate
+                                              </div>
+                                            )}
+                                            {ready && (
+                                              <div
+                                                style={{
+                                                  fontSize: "0.7rem",
+                                                  color: overStock
+                                                    ? colors.warn
+                                                    : colors.textSecondary,
+                                                  marginTop: 3,
+                                                  lineHeight: 1.3,
+                                                }}
+                                              >
+                                                {overStock
+                                                  ? `only ${Number(price.availableValueExcludingTax).toLocaleString(undefined, { maximumFractionDigits: 0 })} in stock`
+                                                  : price.tiers?.length
+                                                    ? "at cost, oldest claimed GD first"
+                                                    : rateMoved
+                                                      ? `${q} x ${p.toLocaleString(undefined, { maximumFractionDigits: 6 })}`
+                                                      : `${Number(price.unitCost).toLocaleString()} each`}
+                                              </div>
+                                            )}
+                                          </td>
+                                        );
                                       })()}
-                                    </td>
-                                  )}
-                                  {showSRO && (
-                                    <td data-label="SRO schedule" style={{ ...styles.unifiedTd, backgroundColor: colors.surface }}>
-                                      <input
-                                        type="text"
-                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
-                                        value={r.sroScheduleNo}
-                                        onChange={(e) => updateRow(r.localId, { sroScheduleNo: e.target.value })}
-                                        // FBR's own spelling, which is NOT the SRO's legal name
-                                        // ("297(I)/2023-Table-I", no "SRO" prefix) -- a legal-name
-                                        // example here taught operators a value FBR refuses [0077].
-                                        placeholder={chosenScenario?.defaultSroScheduleNo || "FBR schedule"}
-                                        title="FBR's schedule string for this scenario. Filled in for you; change it only if FBR gave these goods a different one."
-                                      />
-                                    </td>
-                                  )}
-                                  {showSRO && (
-                                    <td data-label="SRO item no" style={{ ...styles.unifiedTd, backgroundColor: colors.surface }}>
-                                      <input
-                                        type="text"
-                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
-                                        value={r.sroItemSerialNo}
-                                        onChange={(e) => updateRow(r.localId, { sroItemSerialNo: e.target.value })}
-                                        placeholder={chosenScenario?.defaultSroItemSerialNo || "serial"}
-                                        title="The item's serial in that schedule. Filled with FBR's catalog default: confirm it for these goods."
-                                      />
-                                    </td>
-                                  )}
-                                  <td data-label="" className="inv-line-remove" style={{ ...styles.unifiedTd, textAlign: "center" }}>
-                                    <button
-                                      type="button"
-                                      style={styles.removeRowBtn}
-                                      onClick={() => removeRow(r.localId)}
-                                      disabled={rows.length === 1}
-                                      title={rows.length === 1 ? "At least one row is required" : "Remove this row"}
-                                    >
-                                      <MdDelete size={14} />
-                                    </button>
-                                  </td>
-                                </tr>
-                                {canDerive && gdOpen[r.localId] && (() => {
-                                  const takes = fifoTierTakes(priced, rowStockQuantity(r) ?? q, r.lineTotal);
-                                  if (!takes) return null;
-                                  const n2 = (v) => Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                                  const nq = (v) => Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 });
-                                  const span = 7 + (glOn ? 1 : 0) + (billsMode ? 0 : 1) + (showMRP ? 2 : 0) + (showSRO ? 2 : 0);
-                                  return (
-                                    <tr style={styles.unifiedRow}>
-                                      <td colSpan={span} style={{ ...styles.unifiedTd, paddingTop: 0 }}>
-                                        <div style={styles.gdDrawer}>
-                                          <div style={styles.gdDrawerHead}>
-                                            {q > 0 ? "This line takes stock from these GDs, in this order" : "The next sale takes stock from these GDs, in this order"}
-                                          </div>
-                                          <div style={{ overflowX: "auto" }}>
-                                            <table style={styles.gdTable}>
-                                              <thead>
-                                                <tr>
-                                                  <th style={styles.gdTh}>GD</th>
-                                                  <th style={styles.gdTh}>Claimed</th>
-                                                  <th style={{ ...styles.gdTh, textAlign: "right" }}>In stock</th>
-                                                  <th style={{ ...styles.gdTh, textAlign: "right" }}>Cost each</th>
-                                                  {q > 0 && <th style={{ ...styles.gdTh, textAlign: "right" }}>This line takes</th>}
-                                                  {q > 0 && <th style={{ ...styles.gdTh, textAlign: "right" }}>Value</th>}
-                                                </tr>
-                                              </thead>
-                                              <tbody>
-                                                {takes.map((t, k) => (
-                                                  <tr key={k} style={q > 0 && !t.take ? { color: colors.textSecondary } : undefined}>
-                                                    <td style={styles.gdTd}>{t.gdNumber || "Other stock"}</td>
-                                                    <td style={styles.gdTd}>{t.claimed ? "Yes" : "No"}</td>
-                                                    <td style={{ ...styles.gdTd, textAlign: "right" }}>{nq(t.quantity)}</td>
-                                                    <td style={{ ...styles.gdTd, textAlign: "right" }}>{n2(t.unitCost)}</td>
-                                                    {q > 0 && <td style={{ ...styles.gdTd, textAlign: "right" }}>{t.take ? nq(t.take) : "-"}</td>}
-                                                    {q > 0 && <td style={{ ...styles.gdTd, textAlign: "right" }}>{t.take ? n2(t.takeValue) : "-"}</td>}
-                                                  </tr>
-                                                ))}
-                                              </tbody>
-                                            </table>
-                                          </div>
-                                        </div>
+                                      {glOn && (
+                                        <td data-label="Account (GL)" style={styles.unifiedTd}>
+                                          <AccountSelect
+                                            accounts={accounts}
+                                            value={r.accountId ?? null}
+                                            onChange={(v) => updateRow(r.localId, { accountId: v })}
+                                            side="income"
+                                            disabled={!!r.nonInventoryItemId}
+                                            placeholder={
+                                              r.nonInventoryItemId
+                                                ? nonInvSaleAccountLabel(r.nonInventoryItemId)
+                                                : defaultSaleAccountLabel
+                                            }
+                                            style={{
+                                              ...styles.input,
+                                              padding: "0.3rem 0.5rem",
+                                              fontSize: "0.76rem",
+                                            }}
+                                          />
+                                        </td>
+                                      )}
+                                      {!billsMode && (
+                                        <td
+                                          style={{
+                                            ...styles.unifiedTd,
+                                            backgroundColor: colors.surface,
+                                            fontFamily: "monospace",
+                                            fontSize: "0.78rem",
+                                            color: r.hsCode
+                                              ? colors.textPrimary
+                                              : colors.textSecondary,
+                                            fontStyle: r.hsCode ? "normal" : "italic",
+                                          }}
+                                          title="HS Code auto-fills from the picked Item Type"
+                                        >
+                                          {r.hsCode || "—"}
+                                        </td>
+                                      )}
+                                      {showMRP && (
+                                        <td
+                                          data-label="MRP / unit"
+                                          style={{
+                                            ...styles.unifiedTd,
+                                            backgroundColor: colors.cautionTint,
+                                          }}
+                                        >
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            step="any"
+                                            style={{
+                                              ...styles.input,
+                                              padding: "0.3rem 0.5rem",
+                                              fontSize: "0.8rem",
+                                            }}
+                                            value={r.mrp}
+                                            onChange={(e) =>
+                                              updateRow(r.localId, { mrp: e.target.value })
+                                            }
+                                            placeholder="MRP / unit"
+                                            title="Printed retail price PER UNIT. The MRP × Qty total is computed automatically."
+                                          />
+                                        </td>
+                                      )}
+                                      {showMRP && (
+                                        <td
+                                          data-label="MRP × Qty"
+                                          style={{
+                                            ...styles.unifiedTd,
+                                            backgroundColor: colors.cautionTint,
+                                            textAlign: "right",
+                                            fontWeight: 600,
+                                            fontSize: "0.82rem",
+                                          }}
+                                        >
+                                          {(() => {
+                                            const m = parseFloat(r.mrp) || 0;
+                                            const total = m * q;
+                                            return total > 0
+                                              ? total.toLocaleString(undefined, {
+                                                  minimumFractionDigits: 2,
+                                                })
+                                              : "—";
+                                          })()}
+                                        </td>
+                                      )}
+                                      {showSRO && (
+                                        <td
+                                          data-label="SRO schedule"
+                                          style={{
+                                            ...styles.unifiedTd,
+                                            backgroundColor: colors.surface,
+                                          }}
+                                        >
+                                          <input
+                                            type="text"
+                                            style={{
+                                              ...styles.input,
+                                              padding: "0.3rem 0.5rem",
+                                              fontSize: "0.78rem",
+                                            }}
+                                            value={r.sroScheduleNo}
+                                            onChange={(e) =>
+                                              updateRow(r.localId, {
+                                                sroScheduleNo: e.target.value,
+                                              })
+                                            }
+                                            // FBR's own spelling, which is NOT the SRO's legal name
+                                            // ("297(I)/2023-Table-I", no "SRO" prefix) -- a legal-name
+                                            // example here taught operators a value FBR refuses [0077].
+                                            placeholder={
+                                              chosenScenario?.defaultSroScheduleNo || "FBR schedule"
+                                            }
+                                            title="FBR's schedule string for this scenario. Filled in for you; change it only if FBR gave these goods a different one."
+                                          />
+                                        </td>
+                                      )}
+                                      {showSRO && (
+                                        <td
+                                          data-label="SRO item no"
+                                          style={{
+                                            ...styles.unifiedTd,
+                                            backgroundColor: colors.surface,
+                                          }}
+                                        >
+                                          <input
+                                            type="text"
+                                            style={{
+                                              ...styles.input,
+                                              padding: "0.3rem 0.5rem",
+                                              fontSize: "0.78rem",
+                                            }}
+                                            value={r.sroItemSerialNo}
+                                            onChange={(e) =>
+                                              updateRow(r.localId, {
+                                                sroItemSerialNo: e.target.value,
+                                              })
+                                            }
+                                            placeholder={
+                                              chosenScenario?.defaultSroItemSerialNo || "serial"
+                                            }
+                                            title="The item's serial in that schedule. Filled with FBR's catalog default: confirm it for these goods."
+                                          />
+                                        </td>
+                                      )}
+                                      <td
+                                        data-label=""
+                                        className="inv-line-remove"
+                                        style={{ ...styles.unifiedTd, textAlign: "center" }}
+                                      >
+                                        <button
+                                          type="button"
+                                          style={styles.removeRowBtn}
+                                          onClick={() => removeRow(r.localId)}
+                                          disabled={rows.length === 1}
+                                          title={
+                                            rows.length === 1
+                                              ? "At least one row is required"
+                                              : "Remove this row"
+                                          }
+                                        >
+                                          <MdDelete size={14} />
+                                        </button>
                                       </td>
                                     </tr>
-                                  );
-                                })()}
-                                </Fragment>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                      <p style={styles.fbrToggleHint}>
-                        <b>*</b> required ·
-                        {billsMode ? (
-                          <> every line needs an <b>item type</b> or a <b>non-inventory item</b> — an item type also classifies the line (HS Code / UOM / Sale Type ride along)</>
-                        ) : (
-                          <> <b>Description, UOM, HS Code, Sale Type</b> all auto-fill from the picked Item Type</>
-                        )}
-                        {showMRP && " · enter the per-unit MRP — FBR charges 3rd Schedule tax on the MRP × Qty total"}
-                        {showSRO && " · SRO Schedule + Item No referenced for reduced-rate items"}
-                      </p>
+                                    {canDerive &&
+                                      gdOpen[r.localId] &&
+                                      (() => {
+                                        const takes = fifoTierTakes(
+                                          priced,
+                                          rowStockQuantity(r) ?? q,
+                                          r.lineTotal,
+                                        );
+                                        if (!takes) return null;
+                                        const n2 = (v) =>
+                                          Number(v).toLocaleString(undefined, {
+                                            minimumFractionDigits: 2,
+                                            maximumFractionDigits: 2,
+                                          });
+                                        const nq = (v) =>
+                                          Number(v).toLocaleString(undefined, {
+                                            maximumFractionDigits: 2,
+                                          });
+                                        const span =
+                                          7 +
+                                          (glOn ? 1 : 0) +
+                                          (billsMode ? 0 : 1) +
+                                          (showMRP ? 2 : 0) +
+                                          (showSRO ? 2 : 0);
+                                        return (
+                                          <tr style={styles.unifiedRow}>
+                                            <td
+                                              colSpan={span}
+                                              style={{ ...styles.unifiedTd, paddingTop: 0 }}
+                                            >
+                                              <div style={styles.gdDrawer}>
+                                                <div style={styles.gdDrawerHead}>
+                                                  {q > 0
+                                                    ? "This line takes stock from these GDs, in this order"
+                                                    : "The next sale takes stock from these GDs, in this order"}
+                                                </div>
+                                                <div style={{ overflowX: "auto" }}>
+                                                  <table style={styles.gdTable}>
+                                                    <thead>
+                                                      <tr>
+                                                        <th style={styles.gdTh}>GD</th>
+                                                        <th style={styles.gdTh}>Claimed</th>
+                                                        <th
+                                                          style={{
+                                                            ...styles.gdTh,
+                                                            textAlign: "right",
+                                                          }}
+                                                        >
+                                                          In stock
+                                                        </th>
+                                                        <th
+                                                          style={{
+                                                            ...styles.gdTh,
+                                                            textAlign: "right",
+                                                          }}
+                                                        >
+                                                          Cost each
+                                                        </th>
+                                                        {q > 0 && (
+                                                          <th
+                                                            style={{
+                                                              ...styles.gdTh,
+                                                              textAlign: "right",
+                                                            }}
+                                                          >
+                                                            This line takes
+                                                          </th>
+                                                        )}
+                                                        {q > 0 && (
+                                                          <th
+                                                            style={{
+                                                              ...styles.gdTh,
+                                                              textAlign: "right",
+                                                            }}
+                                                          >
+                                                            Value
+                                                          </th>
+                                                        )}
+                                                      </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                      {takes.map((t, k) => (
+                                                        <tr
+                                                          key={k}
+                                                          style={
+                                                            q > 0 && !t.take
+                                                              ? { color: colors.textSecondary }
+                                                              : undefined
+                                                          }
+                                                        >
+                                                          <td style={styles.gdTd}>
+                                                            {t.gdNumber || "Other stock"}
+                                                          </td>
+                                                          <td style={styles.gdTd}>
+                                                            {t.claimed ? "Yes" : "No"}
+                                                          </td>
+                                                          <td
+                                                            style={{
+                                                              ...styles.gdTd,
+                                                              textAlign: "right",
+                                                            }}
+                                                          >
+                                                            {nq(t.quantity)}
+                                                          </td>
+                                                          <td
+                                                            style={{
+                                                              ...styles.gdTd,
+                                                              textAlign: "right",
+                                                            }}
+                                                          >
+                                                            {n2(t.unitCost)}
+                                                          </td>
+                                                          {q > 0 && (
+                                                            <td
+                                                              style={{
+                                                                ...styles.gdTd,
+                                                                textAlign: "right",
+                                                              }}
+                                                            >
+                                                              {t.take ? nq(t.take) : "-"}
+                                                            </td>
+                                                          )}
+                                                          {q > 0 && (
+                                                            <td
+                                                              style={{
+                                                                ...styles.gdTd,
+                                                                textAlign: "right",
+                                                              }}
+                                                            >
+                                                              {t.take ? n2(t.takeValue) : "-"}
+                                                            </td>
+                                                          )}
+                                                        </tr>
+                                                      ))}
+                                                    </tbody>
+                                                  </table>
+                                                </div>
+                                              </div>
+                                            </td>
+                                          </tr>
+                                        );
+                                      })()}
+                                  </Fragment>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                        <p style={styles.fbrToggleHint}>
+                          <b>*</b> required ·
+                          {billsMode ? (
+                            <>
+                              {" "}
+                              every line needs an <b>item type</b> or a <b>non-inventory item</b> —
+                              an item type also classifies the line (HS Code / UOM / Sale Type ride
+                              along)
+                            </>
+                          ) : (
+                            <>
+                              {" "}
+                              <b>Description, UOM, HS Code, Sale Type</b> all auto-fill from the
+                              picked Item Type
+                            </>
+                          )}
+                          {showMRP &&
+                            " · enter the per-unit MRP — FBR charges 3rd Schedule tax on the MRP × Qty total"}
+                          {showSRO && " · SRO Schedule + Item No referenced for reduced-rate items"}
+                        </p>
 
-                      <div id={BILL_ANCHORS.rate}>
-                        <TaxRateNotice
-                          enforced={rateCheck.enforced}
-                          advisory={rateCheck.advisory}
-                          billRate={gstRate}
-                          suggestion={rateSuggestion}
-                          splitNeeded={rateSplitNeeded}
-                          reason={rateReason}
-                          onReasonChange={setRateReason}
-                        />
+                        <div id={BILL_ANCHORS.rate}>
+                          <TaxRateNotice
+                            enforced={rateCheck.enforced}
+                            advisory={rateCheck.advisory}
+                            billRate={gstRate}
+                            suggestion={rateSuggestion}
+                            splitNeeded={rateSplitNeeded}
+                            reason={rateReason}
+                            onReasonChange={setRateReason}
+                          />
+                        </div>
                       </div>
-                    </div>
                     </BillStep>
 
                     {/* ── Step 5: Taxes & total ─────────────── */}
@@ -2372,80 +3392,129 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       n={stepNo(5)}
                       title="Taxes & Total"
                       status="done"
-                      summary={<span>Grand total <strong>{money(grandTotal)}</strong></span>}
-                      help={outsideFbr ? "Outside FBR: the tax rate is set at the top of the form, and no further tax is charged. Withholding and advance income tax (236G / 236H) work as on any invoice." : "GST follows the scenario. Further tax is added for an unregistered buyer. Withholding is what the buyer deducts from your payment; advance income tax (236G / 236H) is collected on top of the bill."}
+                      summary={
+                        <span>
+                          Grand total <strong>{money(grandTotal)}</strong>
+                        </span>
+                      }
+                      help={
+                        outsideFbr
+                          ? "Outside FBR: the tax rate is set at the top of the form, and no further tax is charged. Withholding and advance income tax (236G / 236H) work as on any invoice."
+                          : "GST follows the scenario. Further tax is added for an unregistered buyer. Withholding is what the buyer deducts from your payment; advance income tax (236G / 236H) is collected on top of the bill."
+                      }
                     >
                       <div style={styles.taxGrid}>
-                            <div style={{ flex: 1, minWidth: 100, display: outsideFbr ? "none" : undefined }}>
-                              <label style={{ ...styles.label, whiteSpace: "nowrap" }}>
-                                GST Rate (%) {chosenScenario && <span style={styles.lockedTag} title={`Locked by ${chosenScenario.code}`}><MdLock size={10} /> locked</span>}
-                              </label>
-                              <input
-                                type="number"
-                                style={{ ...styles.input, backgroundColor: chosenScenario ? colors.infoTint : undefined, cursor: chosenScenario ? "not-allowed" : "text" }}
-                                value={gstRate}
-                                onChange={(e) => setGstRate(e.target.value)}
-                                readOnly={!!chosenScenario}
-                                title={chosenScenario ? `Locked by ${chosenScenario.code}. Switch scenario to change.` : "Set the GST rate for this bill"}
-                              />
-                            </div>
-                            <div style={{ flex: 1, minWidth: 140 }}>
-                              <label style={styles.label}>Withholding Tax</label>
-                              <select style={styles.input} value={whtMode} onChange={(e) => setWhtMode(e.target.value)} title="Income tax withheld on top of GST — reduces the balance due, not the invoice total">
-                                <option value="none">None</option>
-                                <option value="rate">Rate %</option>
-                                <option value="amount">Fixed amount</option>
-                              </select>
-                            </div>
-                            <div style={{ flex: 1, minWidth: 190 }}>
-                              <label style={styles.label}>Advance Income Tax</label>
-                              <select
-                                style={styles.input}
-                                value={advTaxKey}
-                                onChange={(e) => setAdvTaxKey(e.target.value)}
-                                title="Advance income tax collected from the buyer under s.236G / s.236H. Charged on the amount including sales tax and added to the total. Leave as None to charge nothing."
+                        <div
+                          style={{
+                            flex: 1,
+                            minWidth: 100,
+                            display: outsideFbr ? "none" : undefined,
+                          }}
+                        >
+                          <label style={{ ...styles.label, whiteSpace: "nowrap" }}>
+                            GST Rate (%){" "}
+                            {chosenScenario && (
+                              <span
+                                style={styles.lockedTag}
+                                title={`Locked by ${chosenScenario.code}`}
                               >
-                                <option value="">None</option>
-                                {ADVANCE_TAX_OPTIONS.map((o) => (
-                                  <option key={o.key} value={o.key}>{advanceTaxLabel(o)}</option>
-                                ))}
-                              </select>
-                            </div>
-                            <div style={{ flex: 1, minWidth: 120, display: outsideFbr ? "none" : undefined }}>
-                              <label style={styles.label}>Further Tax (%)</label>
-                              <input
-                                type="number" min={0} step={0.01}
-                                style={styles.input}
-                                value={furtherTaxRate}
-                                onChange={(e) => setFurtherTaxRate(e.target.value)}
-                                placeholder="0"
-                                title="Further tax under s.3(1A), charged on the value excluding sales tax and ADDED to the grand total. 4% when the buyer is unregistered, none when registered; change it if this sale differs."
-                              />
-                            </div>
-                            {whtMode === "rate" && (
-                              <div style={{ flex: 1, minWidth: 120 }}>
-                                <label style={styles.label}>WHT Rate (%)</label>
-                                <input
-                                  type="number" min={0} step={0.01}
-                                  style={styles.input}
-                                  value={whtRate}
-                                  onChange={(e) => setWhtRate(e.target.value)}
-                                  placeholder="e.g. 5.5"
-                                />
-                              </div>
+                                <MdLock size={10} /> locked
+                              </span>
                             )}
-                            {whtMode === "amount" && (
-                              <div style={{ flex: 1, minWidth: 120 }}>
-                                <label style={styles.label}>WHT Amount (Rs.)</label>
-                                <input
-                                  type="number" min={0} step={0.01}
-                                  style={styles.input}
-                                  value={whtAmount}
-                                  onChange={(e) => setWhtAmount(e.target.value)}
-                                  placeholder="0.00"
-                                />
-                              </div>
-                            )}
+                          </label>
+                          <input
+                            type="number"
+                            style={{
+                              ...styles.input,
+                              backgroundColor: chosenScenario ? colors.infoTint : undefined,
+                              cursor: chosenScenario ? "not-allowed" : "text",
+                            }}
+                            value={gstRate}
+                            onChange={(e) => setGstRate(e.target.value)}
+                            readOnly={!!chosenScenario}
+                            title={
+                              chosenScenario
+                                ? `Locked by ${chosenScenario.code}. Switch scenario to change.`
+                                : "Set the GST rate for this bill"
+                            }
+                          />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 140 }}>
+                          <label style={styles.label}>Withholding Tax</label>
+                          <select
+                            style={styles.input}
+                            value={whtMode}
+                            onChange={(e) => setWhtMode(e.target.value)}
+                            title="Income tax withheld on top of GST — reduces the balance due, not the invoice total"
+                          >
+                            <option value="none">None</option>
+                            <option value="rate">Rate %</option>
+                            <option value="amount">Fixed amount</option>
+                          </select>
+                        </div>
+                        <div style={{ flex: 1, minWidth: 190 }}>
+                          <label style={styles.label}>Advance Income Tax</label>
+                          <select
+                            style={styles.input}
+                            value={advTaxKey}
+                            onChange={(e) => setAdvTaxKey(e.target.value)}
+                            title="Advance income tax collected from the buyer under s.236G / s.236H. Charged on the amount including sales tax and added to the total. Leave as None to charge nothing."
+                          >
+                            <option value="">None</option>
+                            {ADVANCE_TAX_OPTIONS.map((o) => (
+                              <option key={o.key} value={o.key}>
+                                {advanceTaxLabel(o)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div
+                          style={{
+                            flex: 1,
+                            minWidth: 120,
+                            display: outsideFbr ? "none" : undefined,
+                          }}
+                        >
+                          <label style={styles.label}>Further Tax (%)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            step={0.01}
+                            style={styles.input}
+                            value={furtherTaxRate}
+                            onChange={(e) => setFurtherTaxRate(e.target.value)}
+                            placeholder="0"
+                            title="Further tax under s.3(1A), charged on the value excluding sales tax and ADDED to the grand total. 4% when the buyer is unregistered, none when registered; change it if this sale differs."
+                          />
+                        </div>
+                        {whtMode === "rate" && (
+                          <div style={{ flex: 1, minWidth: 120 }}>
+                            <label style={styles.label}>WHT Rate (%)</label>
+                            <input
+                              type="number"
+                              min={0}
+                              step={0.01}
+                              style={styles.input}
+                              value={whtRate}
+                              onChange={(e) => setWhtRate(e.target.value)}
+                              placeholder="e.g. 5.5"
+                            />
+                          </div>
+                        )}
+                        {whtMode === "amount" && (
+                          <div style={{ flex: 1, minWidth: 120 }}>
+                            <label style={styles.label}>WHT Amount (Rs.)</label>
+                            <input
+                              type="number"
+                              min={0}
+                              step={0.01}
+                              style={styles.input}
+                              value={whtAmount}
+                              onChange={(e) => setWhtAmount(e.target.value)}
+                              placeholder="0.00"
+                            />
+                          </div>
+                        )}
                       </div>
                       <BillTotals rows={totalsRows} />
                     </BillStep>
@@ -2485,18 +3554,46 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
           </div>
           <div style={formStyles.footer}>
             <BillChecklist items={checklist} />
-            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            <button
+              type="button"
+              style={{ ...formStyles.button, ...formStyles.cancel }}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
             <button
               type="submit"
               style={{
-                ...formStyles.button, ...formStyles.submit,
-                opacity: saving || !(chosenScenario || !fbrEnabled) || !selectedClientId || !allRowsValid || !billNumberOk || rateBlocked ? 0.6 : 1,
+                ...formStyles.button,
+                ...formStyles.submit,
+                opacity:
+                  saving ||
+                  !(chosenScenario || !fbrEnabled) ||
+                  !selectedClientId ||
+                  !allRowsValid ||
+                  !billNumberOk ||
+                  rateBlocked
+                    ? 0.6
+                    : 1,
                 cursor: rateBlocked ? "not-allowed" : undefined,
               }}
-              disabled={saving || !(chosenScenario || !fbrEnabled) || !selectedClientId || !allRowsValid || !billNumberOk || rateBlocked}
-              title={rateBlocked ? "These goods came in at a different sales tax rate. Switch to the matching scenario, or write a reason in the red box." : undefined}
+              disabled={
+                saving ||
+                !(chosenScenario || !fbrEnabled) ||
+                !selectedClientId ||
+                !allRowsValid ||
+                !billNumberOk ||
+                rateBlocked
+              }
+              title={
+                rateBlocked
+                  ? "These goods came in at a different sales tax rate. Switch to the matching scenario, or write a reason in the red box."
+                  : undefined
+              }
             >
-              {saving ? "Creating…" : `Save invoice${chosenScenario ? ` · ${chosenScenario.code}` : ""}`}
+              {saving
+                ? "Creating…"
+                : `Save invoice${chosenScenario ? ` · ${chosenScenario.code}` : ""}`}
             </button>
           </div>
         </form>
@@ -2526,7 +3623,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
           scenarioSaleType={chosenScenario?.saleType}
           showGlMapping
           defaultDivisionId={divisionId || null}
-          onClose={() => { setShowAddItemType(false); setPendingItemTypeRow(null); }}
+          onClose={() => {
+            setShowAddItemType(false);
+            setPendingItemTypeRow(null);
+          }}
           onSaved={onItemTypeSaved}
         />
       )}
@@ -2539,100 +3639,358 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
 // so InvoiceForm (with-challan) can import the same pieces.
 
 const styles = {
-  headerSub: { marginTop: 2, fontSize: "0.78rem", lineHeight: 1.35, color: "rgba(255,255,255,0.88)" },
+  headerSub: {
+    marginTop: 2,
+    fontSize: "0.78rem",
+    lineHeight: 1.35,
+    color: "rgba(255,255,255,0.88)",
+  },
   itemsCount: { fontSize: "0.8rem", fontWeight: 600, color: colors.textSecondary },
   // The tax inputs sit above the totals they change.
   taxGrid: {
-    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(170px, 100%), 1fr))",
-    gap: "0.65rem", marginBottom: "0.85rem",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(170px, 100%), 1fr))",
+    gap: "0.65rem",
+    marginBottom: "0.85rem",
   },
   // Stock at a glance under the item picker: what is on hand and what it is
   // worth per unit, or that there is none.
   stockChipOk: {
-    marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: colors.tealDark,
+    marginTop: 3,
+    fontSize: "0.68rem",
+    lineHeight: 1.3,
+    color: colors.tealDark,
     fontVariantNumeric: "tabular-nums",
   },
   stockChipRow: {
-    marginTop: 4, display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.15rem 0.6rem",
-    fontSize: "0.72rem", lineHeight: 1.3,
+    marginTop: 4,
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: "0.15rem 0.6rem",
+    fontSize: "0.72rem",
+    lineHeight: 1.3,
   },
   stockPill: {
-    background: colors.tealSoft, color: colors.tealDark, borderRadius: 6,
-    padding: "1px 7px", fontWeight: 600, fontVariantNumeric: "tabular-nums",
+    background: colors.tealSoft,
+    color: colors.tealDark,
+    borderRadius: 6,
+    padding: "1px 7px",
+    fontWeight: 600,
+    fontVariantNumeric: "tabular-nums",
   },
   // The GD breakdown, opened from the stock line under the item.
   gdDrawer: {
-    border: `1px solid ${colors.inputBorder}`, borderRadius: 8, background: colors.surface,
+    border: `1px solid ${colors.inputBorder}`,
+    borderRadius: 8,
+    background: colors.surface,
     padding: "0.45rem 0.7rem",
   },
   gdDrawerHead: { fontSize: "0.74rem", color: colors.textSecondary, marginBottom: 4 },
-  gdTable: { width: "100%", borderCollapse: "collapse", fontSize: "0.76rem", fontVariantNumeric: "tabular-nums" },
-  gdTh: { textAlign: "left", fontWeight: 600, color: colors.textSecondary, padding: "3px 8px", borderBottom: `1px solid ${colors.inputBorder}`, whiteSpace: "nowrap" },
-  gdTd: { padding: "3px 8px", borderBottom: `1px solid ${colors.inputBorder}`, whiteSpace: "nowrap" },
+  gdTable: {
+    width: "100%",
+    borderCollapse: "collapse",
+    fontSize: "0.76rem",
+    fontVariantNumeric: "tabular-nums",
+  },
+  gdTh: {
+    textAlign: "left",
+    fontWeight: 600,
+    color: colors.textSecondary,
+    padding: "3px 8px",
+    borderBottom: `1px solid ${colors.inputBorder}`,
+    whiteSpace: "nowrap",
+  },
+  gdTd: {
+    padding: "3px 8px",
+    borderBottom: `1px solid ${colors.inputBorder}`,
+    whiteSpace: "nowrap",
+  },
   stockChipNone: {
-    marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: colors.cautionInk,
+    marginTop: 3,
+    fontSize: "0.68rem",
+    lineHeight: 1.3,
+    color: colors.cautionInk,
     fontWeight: 600,
   },
   rateChipBad: {
-    marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: colors.danger,
+    marginTop: 3,
+    fontSize: "0.68rem",
+    lineHeight: 1.3,
+    color: colors.danger,
     fontWeight: 600,
   },
   rateChipCheck: {
-    marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: colors.caution,
+    marginTop: 3,
+    fontSize: "0.68rem",
+    lineHeight: 1.3,
+    color: colors.caution,
     fontWeight: 600,
   },
   // The scenario was set from the goods' own records, not by the operator.
   scenarioAutoNote: {
-    display: "flex", gap: "0.45rem", alignItems: "flex-start",
-    margin: "0.45rem 0 0", padding: "0.5rem 0.75rem",
-    border: `1px solid ${colors.blue}33`, background: colors.infoSoft, borderRadius: 8,
-    fontSize: "0.8rem", lineHeight: 1.4, color: colors.textPrimary,
+    display: "flex",
+    gap: "0.45rem",
+    alignItems: "flex-start",
+    margin: "0.45rem 0 0",
+    padding: "0.5rem 0.75rem",
+    border: `1px solid ${colors.blue}33`,
+    background: colors.infoSoft,
+    borderRadius: 8,
+    fontSize: "0.8rem",
+    lineHeight: 1.4,
+    color: colors.textPrimary,
   },
   // Qty / Unit Price worked out from the amount: visibly not a box to type in.
   derivedInput: {
-    backgroundColor: colors.surface, color: colors.textSecondary, cursor: "not-allowed",
+    backgroundColor: colors.surface,
+    color: colors.textSecondary,
+    cursor: "not-allowed",
     fontVariantNumeric: "tabular-nums",
   },
   stockChipWarn: {
-    marginTop: 3, fontSize: "0.68rem", lineHeight: 1.35, color: colors.cautionInk,
-    fontWeight: 600, fontVariantNumeric: "tabular-nums",
+    marginTop: 3,
+    fontSize: "0.68rem",
+    lineHeight: 1.35,
+    color: colors.cautionInk,
+    fontWeight: 600,
+    fontVariantNumeric: "tabular-nums",
   },
   stockChipOver: {
-    marginTop: 3, fontSize: "0.68rem", lineHeight: 1.35, color: colors.error,
-    fontWeight: 600, fontVariantNumeric: "tabular-nums",
+    marginTop: 3,
+    fontSize: "0.68rem",
+    lineHeight: 1.35,
+    color: colors.error,
+    fontWeight: 600,
+    fontVariantNumeric: "tabular-nums",
   },
   stockChipBtn: {
-    background: "none", border: "none", padding: 0, margin: 0, font: "inherit", fontWeight: 700,
-    color: colors.blue, textDecoration: "underline", cursor: "pointer", minHeight: 24,
+    background: "none",
+    border: "none",
+    padding: 0,
+    margin: 0,
+    font: "inherit",
+    fontWeight: 700,
+    color: colors.blue,
+    textDecoration: "underline",
+    cursor: "pointer",
+    minHeight: 24,
   },
 
-  row: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.85rem 1rem", marginBottom: "1rem", alignItems: "end" },
+  row: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))",
+    gap: "0.85rem 1rem",
+    marginBottom: "1rem",
+    alignItems: "end",
+  },
   inlineRow: { display: "flex", gap: "0.5rem", alignItems: "stretch", flexWrap: "wrap" },
-  label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
-  input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", boxSizing: "border-box" },
-  select: { width: "100%", padding: "0.6rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", cursor: "pointer" },
-  errorAlert: { backgroundColor: colors.dangerLight, color: colors.danger, padding: "0.65rem 1rem", borderRadius: 8, marginBottom: "1rem", fontWeight: 500, border: `1px solid ${colors.danger}30`, fontSize: "0.85rem" },
-  warnAlert: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.65rem 0.85rem", borderRadius: 8, backgroundColor: colors.cautionSoft, border: `1px solid ${colors.warn}30`, color: colors.warn, fontSize: "0.85rem" },
-  totalsBox: { display: "flex", flexDirection: "column", gap: "0.35rem", alignItems: "flex-end", padding: "1rem", backgroundColor: colors.inputBg, borderRadius: 8, border: `1px solid ${colors.cardBorder}`, marginTop: "0.5rem" },
-  totalRow: { display: "flex", gap: "2rem", justifyContent: "flex-end", fontSize: "0.9rem", minWidth: 280 },
+  label: {
+    display: "block",
+    marginBottom: "0.35rem",
+    fontWeight: 600,
+    fontSize: "0.85rem",
+    color: colors.textSecondary,
+  },
+  input: {
+    width: "100%",
+    padding: "0.55rem 0.75rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    fontSize: "0.9rem",
+    backgroundColor: colors.inputBg,
+    color: colors.textPrimary,
+    outline: "none",
+    boxSizing: "border-box",
+  },
+  select: {
+    width: "100%",
+    padding: "0.6rem 0.75rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.inputBorder}`,
+    fontSize: "0.9rem",
+    backgroundColor: colors.inputBg,
+    color: colors.textPrimary,
+    outline: "none",
+    cursor: "pointer",
+  },
+  errorAlert: {
+    backgroundColor: colors.dangerLight,
+    color: colors.danger,
+    padding: "0.65rem 1rem",
+    borderRadius: 8,
+    marginBottom: "1rem",
+    fontWeight: 500,
+    border: `1px solid ${colors.danger}30`,
+    fontSize: "0.85rem",
+  },
+  warnAlert: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    padding: "0.65rem 0.85rem",
+    borderRadius: 8,
+    backgroundColor: colors.cautionSoft,
+    border: `1px solid ${colors.warn}30`,
+    color: colors.warn,
+    fontSize: "0.85rem",
+  },
+  totalsBox: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.35rem",
+    alignItems: "flex-end",
+    padding: "1rem",
+    backgroundColor: colors.inputBg,
+    borderRadius: 8,
+    border: `1px solid ${colors.cardBorder}`,
+    marginTop: "0.5rem",
+  },
+  totalRow: {
+    display: "flex",
+    gap: "2rem",
+    justifyContent: "flex-end",
+    fontSize: "0.9rem",
+    minWidth: 280,
+  },
   fbrToggleHint: { margin: "0.3rem 0 0", fontSize: "0.75rem", color: colors.textSecondary },
-  optionalTag: { marginLeft: "0.3rem", padding: "0.05rem 0.35rem", borderRadius: 4, backgroundColor: colors.warnSoft, color: colors.warn, fontSize: "0.62rem", fontWeight: 800, letterSpacing: "0.03em", textTransform: "uppercase" },
-  lockedTag: { marginLeft: "0.3rem", padding: "0.05rem 0.35rem", borderRadius: 4, backgroundColor: colors.tealSoft, color: colors.tealDark, fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", display: "inline-flex", alignItems: "center", gap: 2 },
-  itemsHeaderBar: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.5rem" },
-  addRowBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.35rem 0.75rem", borderRadius: 6, border: "none", backgroundColor: colors.blue, color: colors.white, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
-  inlineAddBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.45rem 0.75rem", borderRadius: 6, border: `1px solid ${colors.blue}`, backgroundColor: colors.white, color: colors.blue, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
-  tinyAddBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0.25rem", borderRadius: 6, border: `1px solid ${colors.blue}`, backgroundColor: colors.white, color: colors.blue, cursor: "pointer", flexShrink: 0 },
-  removeRowBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0.3rem", borderRadius: 6, border: `1px solid ${colors.cardBorder}`, backgroundColor: colors.white, color: colors.danger, cursor: "pointer" },
-  unifiedTableWrap: { width: "100%", overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 8 },
-  unifiedTable: { width: "100%", borderCollapse: "collapse" },   // minWidth is computed at the call site
+  optionalTag: {
+    marginLeft: "0.3rem",
+    padding: "0.05rem 0.35rem",
+    borderRadius: 4,
+    backgroundColor: colors.warnSoft,
+    color: colors.warn,
+    fontSize: "0.62rem",
+    fontWeight: 800,
+    letterSpacing: "0.03em",
+    textTransform: "uppercase",
+  },
+  lockedTag: {
+    marginLeft: "0.3rem",
+    padding: "0.05rem 0.35rem",
+    borderRadius: 4,
+    backgroundColor: colors.tealSoft,
+    color: colors.tealDark,
+    fontSize: "0.62rem",
+    fontWeight: 700,
+    letterSpacing: "0.03em",
+    textTransform: "uppercase",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 2,
+  },
+  itemsHeaderBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: "0.5rem",
+    marginBottom: "0.5rem",
+  },
+  addRowBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.25rem",
+    padding: "0.35rem 0.75rem",
+    borderRadius: 6,
+    border: "none",
+    backgroundColor: colors.blue,
+    color: colors.white,
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+  inlineAddBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    padding: "0.45rem 0.75rem",
+    borderRadius: 6,
+    border: `1px solid ${colors.blue}`,
+    backgroundColor: colors.white,
+    color: colors.blue,
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+  tinyAddBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "0.25rem",
+    borderRadius: 6,
+    border: `1px solid ${colors.blue}`,
+    backgroundColor: colors.white,
+    color: colors.blue,
+    cursor: "pointer",
+    flexShrink: 0,
+  },
+  removeRowBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "0.3rem",
+    borderRadius: 6,
+    border: `1px solid ${colors.cardBorder}`,
+    backgroundColor: colors.white,
+    color: colors.danger,
+    cursor: "pointer",
+  },
+  unifiedTableWrap: {
+    width: "100%",
+    overflowX: "auto",
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 8,
+  },
+  unifiedTable: { width: "100%", borderCollapse: "collapse" }, // minWidth is computed at the call site
   unifiedThead: { backgroundColor: colors.surface },
-  unifiedTh: { padding: "0.5rem 0.45rem", textAlign: "left", fontSize: "0.7rem", fontWeight: 800, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", borderBottom: `1px solid ${colors.cardBorder}` },
+  unifiedTh: {
+    padding: "0.5rem 0.45rem",
+    textAlign: "left",
+    fontSize: "0.7rem",
+    fontWeight: 800,
+    color: colors.textSecondary,
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+  },
   unifiedRow: { backgroundColor: colors.white },
-  unifiedTd: { padding: "0.3rem 0.4rem", fontSize: "0.8rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "middle" },
+  unifiedTd: {
+    padding: "0.3rem 0.4rem",
+    fontSize: "0.8rem",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+    verticalAlign: "middle",
+  },
 
-  stepLabel: { display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.95rem", fontWeight: 700, color: colors.textPrimary, marginBottom: "0.4rem" },
-  stepNum: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", backgroundColor: colors.blue, color: colors.white, fontSize: "0.78rem", fontWeight: 800, flexShrink: 0 },
-  stepHint: { margin: "0 0 0.6rem 30px", fontSize: "0.78rem", color: colors.textSecondary, lineHeight: 1.4 },
+  stepLabel: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    fontSize: "0.95rem",
+    fontWeight: 700,
+    color: colors.textPrimary,
+    marginBottom: "0.4rem",
+  },
+  stepNum: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 22,
+    height: 22,
+    borderRadius: "50%",
+    backgroundColor: colors.blue,
+    color: colors.white,
+    fontSize: "0.78rem",
+    fontWeight: 800,
+    flexShrink: 0,
+  },
+  stepHint: {
+    margin: "0 0 0.6rem 30px",
+    fontSize: "0.78rem",
+    color: colors.textSecondary,
+    lineHeight: 1.4,
+  },
   // Collapsible Step 1 (FBR Scenario picker) — clickable header bar that
   // shows the auto-defaulted scenario summary and toggles the card grid.
   // Operator only opens this when they need to switch scenarios; the rest
@@ -2704,37 +4062,192 @@ const styles = {
     backgroundColor: colors.white,
   },
 
-  scenarioGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "0.6rem", marginTop: "0.25rem" },
-  scenarioCard: { textAlign: "left", padding: "0.7rem 0.85rem", borderRadius: 10, border: "2px solid", cursor: "pointer", display: "flex", flexDirection: "column", gap: "0.3rem", transition: "all 0.15s", backgroundColor: colors.white, fontFamily: "inherit" },
+  scenarioGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+    gap: "0.6rem",
+    marginTop: "0.25rem",
+  },
+  scenarioCard: {
+    textAlign: "left",
+    padding: "0.7rem 0.85rem",
+    borderRadius: 10,
+    border: "2px solid",
+    cursor: "pointer",
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.3rem",
+    transition: "all 0.15s",
+    backgroundColor: colors.white,
+    fontFamily: "inherit",
+  },
   scenarioCardHeader: { display: "flex", justifyContent: "space-between", alignItems: "center" },
-  scenarioCode: { fontWeight: 800, fontSize: "0.95rem", color: colors.blue, fontFamily: "monospace" },
-  scenarioSaleType: { fontSize: "0.82rem", color: colors.textPrimary, fontWeight: 600, lineHeight: 1.25 },
+  scenarioCode: {
+    fontWeight: 800,
+    fontSize: "0.95rem",
+    color: colors.blue,
+    fontFamily: "monospace",
+  },
+  scenarioSaleType: {
+    fontSize: "0.82rem",
+    color: colors.textPrimary,
+    fontWeight: 600,
+    lineHeight: 1.25,
+  },
   scenarioRate: { fontSize: "0.74rem", color: colors.textSecondary },
   scenarioBadges: { display: "flex", flexWrap: "wrap", gap: "0.25rem", marginTop: "0.15rem" },
-  scenarioBadge: { fontSize: "0.65rem", padding: "0.1rem 0.4rem", borderRadius: 4, fontWeight: 700, letterSpacing: "0.02em" },
-  badgeBlue:   { backgroundColor: colors.infoSoft, color: colors.blue },
+  scenarioBadge: {
+    fontSize: "0.65rem",
+    padding: "0.1rem 0.4rem",
+    borderRadius: 4,
+    fontWeight: 700,
+    letterSpacing: "0.02em",
+  },
+  badgeBlue: { backgroundColor: colors.infoSoft, color: colors.blue },
   badgeOrange: { backgroundColor: colors.warnSoft, color: colors.warn },
   badgePurple: { backgroundColor: colors.violetSoft, color: colors.violetInk },
   badgeYellow: { backgroundColor: colors.cautionSoft, color: colors.cautionInk },
-  badgePink:   { backgroundColor: colors.violetSoft, color: colors.violetInk },
-  scenarioHint: { display: "flex", alignItems: "flex-start", gap: "0.4rem", marginTop: "0.6rem", padding: "0.5rem 0.75rem", borderRadius: 8, backgroundColor: colors.infoSoft, border: `1px solid ${colors.infoLine}`, color: colors.blue, fontSize: "0.82rem", lineHeight: 1.4 },
+  badgePink: { backgroundColor: colors.violetSoft, color: colors.violetInk },
+  scenarioHint: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: "0.4rem",
+    marginTop: "0.6rem",
+    padding: "0.5rem 0.75rem",
+    borderRadius: 8,
+    backgroundColor: colors.infoSoft,
+    border: `1px solid ${colors.infoLine}`,
+    color: colors.blue,
+    fontSize: "0.82rem",
+    lineHeight: 1.4,
+  },
 
-  lockedSaleType: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0.85rem", marginBottom: "0.6rem", borderRadius: 8, backgroundColor: colors.tealSoft, border: `1px solid ${colors.tealLine}`, color: colors.tealDark, fontSize: "0.82rem" },
+  lockedSaleType: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: "0.5rem",
+    padding: "0.5rem 0.85rem",
+    marginBottom: "0.6rem",
+    borderRadius: 8,
+    backgroundColor: colors.tealSoft,
+    border: `1px solid ${colors.tealLine}`,
+    color: colors.tealDark,
+    fontSize: "0.82rem",
+  },
   lockedSaleTypeHint: { color: colors.tealDark, opacity: 0.8, fontSize: "0.75rem" },
 
-  permHintBlock: { display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.75rem", borderRadius: 6, backgroundColor: colors.cautionSoft, border: `1px solid ${colors.warn}30`, color: colors.warn, fontSize: "0.78rem", lineHeight: 1.35, flexWrap: "wrap" },
-  permHintInline: { display: "inline-flex", alignItems: "center", gap: "0.25rem", color: colors.warn, fontSize: "0.72rem", flexWrap: "wrap" },
-  permCode: { fontFamily: "monospace", padding: "0 0.25rem", borderRadius: 3, backgroundColor: colors.surface, fontWeight: 700, fontSize: "0.74rem" },
+  permHintBlock: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.35rem",
+    padding: "0.45rem 0.75rem",
+    borderRadius: 6,
+    backgroundColor: colors.cautionSoft,
+    border: `1px solid ${colors.warn}30`,
+    color: colors.warn,
+    fontSize: "0.78rem",
+    lineHeight: 1.35,
+    flexWrap: "wrap",
+  },
+  permHintInline: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.25rem",
+    color: colors.warn,
+    fontSize: "0.72rem",
+    flexWrap: "wrap",
+  },
+  permCode: {
+    fontFamily: "monospace",
+    padding: "0 0.25rem",
+    borderRadius: 3,
+    backgroundColor: colors.surface,
+    fontWeight: 700,
+    fontSize: "0.74rem",
+  },
 
   // ── HS code typeahead inside ItemTypeForm ─────────────────────────
-  scenarioPillSmall: { marginLeft: "0.5rem", padding: "0.1rem 0.4rem", borderRadius: 4, backgroundColor: colors.infoSoft, color: colors.blue, fontSize: "0.7rem", fontWeight: 800, fontFamily: "monospace" },
-  hsDropdown: { position: "absolute", top: "100%", left: 0, right: 0, marginTop: "0.2rem", maxHeight: 260, overflowY: "auto", backgroundColor: colors.white, border: `1px solid ${colors.cardBorder}`, borderRadius: 8, boxShadow: "0 6px 20px rgba(0,0,0,0.08)", zIndex: 1200 },
+  scenarioPillSmall: {
+    marginLeft: "0.5rem",
+    padding: "0.1rem 0.4rem",
+    borderRadius: 4,
+    backgroundColor: colors.infoSoft,
+    color: colors.blue,
+    fontSize: "0.7rem",
+    fontWeight: 800,
+    fontFamily: "monospace",
+  },
+  hsDropdown: {
+    position: "absolute",
+    top: "100%",
+    left: 0,
+    right: 0,
+    marginTop: "0.2rem",
+    maxHeight: 260,
+    overflowY: "auto",
+    backgroundColor: colors.white,
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 8,
+    boxShadow: "0 6px 20px rgba(0,0,0,0.08)",
+    zIndex: 1200,
+  },
   hsLoading: { padding: "0.6rem 0.85rem", fontSize: "0.82rem", color: colors.textSecondary },
-  hsOption: { display: "flex", flexDirection: "column", alignItems: "flex-start", width: "100%", padding: "0.5rem 0.75rem", border: "none", borderBottom: `1px solid ${colors.cardBorder}`, backgroundColor: colors.white, textAlign: "left", cursor: "pointer", fontFamily: "inherit" },
-  hsOptionCode: { fontWeight: 700, color: colors.blue, fontFamily: "monospace", fontSize: "0.85rem" },
-  hsOptionDesc: { fontSize: "0.74rem", color: colors.textSecondary, marginTop: 2, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" },
+  hsOption: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    width: "100%",
+    padding: "0.5rem 0.75rem",
+    border: "none",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+    backgroundColor: colors.white,
+    textAlign: "left",
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+  hsOptionCode: {
+    fontWeight: 700,
+    color: colors.blue,
+    fontFamily: "monospace",
+    fontSize: "0.85rem",
+  },
+  hsOptionDesc: {
+    fontSize: "0.74rem",
+    color: colors.textSecondary,
+    marginTop: 2,
+    lineHeight: 1.3,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    maxWidth: "100%",
+  },
 
   // Bulk-apply Item Type toolbar — surfaces above the items table when 2+ rows exist
-  bulkApplyBar: { display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap", padding: "0.55rem 0.85rem", marginBottom: "0.5rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, backgroundColor: colors.infoTint },
-  bulkClearBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.35rem 0.7rem", borderRadius: 6, border: `1px solid ${colors.danger}`, backgroundColor: colors.white, color: colors.danger, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 },
+  bulkApplyBar: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.65rem",
+    flexWrap: "wrap",
+    padding: "0.55rem 0.85rem",
+    marginBottom: "0.5rem",
+    borderRadius: 8,
+    border: `1px solid ${colors.cardBorder}`,
+    backgroundColor: colors.infoTint,
+  },
+  bulkClearBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    padding: "0.35rem 0.7rem",
+    borderRadius: 6,
+    border: `1px solid ${colors.danger}`,
+    backgroundColor: colors.white,
+    color: colors.danger,
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    flexShrink: 0,
+  },
 };

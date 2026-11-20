@@ -15,8 +15,14 @@ const { autoDescription, descriptionAfterPick } = await import(src("utils/lineDe
 let pass = 0;
 const failures = [];
 function check(label, fn) {
-  try { fn(); pass++; console.log("  PASS", label); }
-  catch (e) { failures.push(label); console.log("  FAIL", label, "\n      ", e.message); }
+  try {
+    fn();
+    pass++;
+    console.log("  PASS", label);
+  } catch (e) {
+    failures.push(label);
+    console.log("  FAIL", label, "\n      ", e.message);
+  }
 }
 
 const valve = { id: 1, name: "Ball Valve 2in" };
@@ -25,82 +31,185 @@ const charge = { id: 9, name: "Freight", defaultLineDescription: "Freight and ha
 
 console.log("\n=== line description (D6) ===");
 check("15: picking an item fills an empty description", () =>
-  assert.strictEqual(descriptionAfterPick("", "", valve), "Ball Valve 2in"));
+  assert.strictEqual(descriptionAfterPick("", "", valve), "Ball Valve 2in"),
+);
 check("15: whitespace-only counts as empty", () =>
-  assert.strictEqual(descriptionAfterPick("   ", "", valve), "Ball Valve 2in"));
+  assert.strictEqual(descriptionAfterPick("   ", "", valve), "Ball Valve 2in"),
+);
 check("16: a description typed first is kept", () =>
-  assert.strictEqual(descriptionAfterPick("Brass valve, export grade", "", valve), "Brass valve, export grade"));
+  assert.strictEqual(
+    descriptionAfterPick("Brass valve, export grade", "", valve),
+    "Brass valve, export grade",
+  ),
+);
 check("17: the auto text follows a swap to another item", () =>
-  assert.strictEqual(descriptionAfterPick("Ball Valve 2in", "Ball Valve 2in", pump), "Water Pump 1HP"));
+  assert.strictEqual(
+    descriptionAfterPick("Ball Valve 2in", "Ball Valve 2in", pump),
+    "Water Pump 1HP",
+  ),
+);
 check("17: the auto text follows even with outer spaces", () =>
-  assert.strictEqual(descriptionAfterPick(" Ball Valve 2in ", "Ball Valve 2in", pump), "Water Pump 1HP"));
+  assert.strictEqual(
+    descriptionAfterPick(" Ball Valve 2in ", "Ball Valve 2in", pump),
+    "Water Pump 1HP",
+  ),
+);
 check("18: an edited auto text survives a swap", () =>
-  assert.strictEqual(descriptionAfterPick("Ball Valve 2in - blue", "Ball Valve 2in", pump), "Ball Valve 2in - blue"));
+  assert.strictEqual(
+    descriptionAfterPick("Ball Valve 2in - blue", "Ball Valve 2in", pump),
+    "Ball Valve 2in - blue",
+  ),
+);
 check("19: clearing the item keeps the description", () =>
-  assert.strictEqual(descriptionAfterPick("Ball Valve 2in", "Ball Valve 2in", null), "Ball Valve 2in"));
+  assert.strictEqual(
+    descriptionAfterPick("Ball Valve 2in", "Ball Valve 2in", null),
+    "Ball Valve 2in",
+  ),
+);
 check("default line text wins over the name", () =>
-  assert.strictEqual(autoDescription(charge), "Freight and handling"));
+  assert.strictEqual(autoDescription(charge), "Freight and handling"),
+);
 check("non-inventory pick fills an empty line with its default text", () =>
-  assert.strictEqual(descriptionAfterPick("", "", charge), "Freight and handling"));
+  assert.strictEqual(descriptionAfterPick("", "", charge), "Freight and handling"),
+);
 check("an item with no text leaves the description alone", () =>
-  assert.strictEqual(descriptionAfterPick("kept", "", { id: 3, name: "" }), "kept"));
+  assert.strictEqual(descriptionAfterPick("kept", "", { id: 3, name: "" }), "kept"),
+);
 check("26: a challan line's own text is kept when an item is picked", () =>
-  assert.strictEqual(descriptionAfterPick("As per challan 41, 12 cartons", "", valve), "As per challan 41, 12 cartons"));
+  assert.strictEqual(
+    descriptionAfterPick("As per challan 41, 12 cartons", "", valve),
+    "As per challan 41, 12 cartons",
+  ),
+);
 
-const { lineStock, isHardBlock, pendingFromFbrCode, applyFbrHint } = await import(src("utils/lineStock.js"));
+const { lineStock, isHardBlock, pendingFromFbrCode, applyFbrHint } = await import(
+  src("utils/lineStock.js")
+);
 check("FBR's unit hint (an object) becomes the line's unit text and UOM id", () => {
   // The exact shape the live server returns where the HS master holds units.
-  const live = { uoms: [{ uoM_ID: 69, description: "Numbers, pieces, units" }], defaultUom: { uoM_ID: 69, description: "Numbers, pieces, units" }, catalogUomSuggestion: null };
+  const live = {
+    uoms: [{ uoM_ID: 69, description: "Numbers, pieces, units" }],
+    defaultUom: { uoM_ID: 69, description: "Numbers, pieces, units" },
+    catalogUomSuggestion: null,
+  };
   const p = applyFbrHint({ hsCode: "8410.1100", uom: "", fbrUOMId: null }, live);
   assert.strictEqual(p.uom, "Numbers, pieces, units");
   assert.strictEqual(typeof p.uom, "string");
   assert.strictEqual(p.fbrUOMId, 69);
 });
-check("with no FBR unit, the catalog suggestion (a string) is used; with neither, nothing changes", () => {
-  assert.strictEqual(applyFbrHint({ uom: "" }, { defaultUom: null, catalogUomSuggestion: "Pcs" }).uom, "Pcs");
-  assert.deepStrictEqual(applyFbrHint({ uom: "" }, { defaultUom: null, catalogUomSuggestion: null }), { uom: "" });
-  assert.deepStrictEqual(applyFbrHint({ uom: "" }, undefined), { uom: "" });
-});
+check(
+  "with no FBR unit, the catalog suggestion (a string) is used; with neither, nothing changes",
+  () => {
+    assert.strictEqual(
+      applyFbrHint({ uom: "" }, { defaultUom: null, catalogUomSuggestion: "Pcs" }).uom,
+      "Pcs",
+    );
+    assert.deepStrictEqual(
+      applyFbrHint({ uom: "" }, { defaultUom: null, catalogUomSuggestion: null }),
+      { uom: "" },
+    );
+    assert.deepStrictEqual(applyFbrHint({ uom: "" }, undefined), { uom: "" });
+  },
+);
 const hard = { inventoryTrackingEnabled: true, stockGuardHardBlock: true, inventoryFlowVersion: 1 };
-const soft = { inventoryTrackingEnabled: true, stockGuardHardBlock: false, inventoryFlowVersion: 1 };
+const soft = {
+  inventoryTrackingEnabled: true,
+  stockGuardHardBlock: false,
+  inventoryFlowVersion: 1,
+};
 const off = { inventoryTrackingEnabled: false, stockGuardHardBlock: true };
 const pending = { name: "Check valve", hsCode: "8481.3000" };
 
 console.log("\n=== stock before save (D8) ===");
 check("41: a pending new item on a hard-block company: No stock, Save blocked", () =>
-  assert.deepStrictEqual(lineStock({ pending, quantity: 1, company: hard }), { noStock: true, blocksSave: true, onHand: 0 }));
+  assert.deepStrictEqual(lineStock({ pending, quantity: 1, company: hard }), {
+    noStock: true,
+    blocksSave: true,
+    onHand: 0,
+  }),
+);
 check("41d: the same on a soft company: No stock, Save allowed", () => {
   const r = lineStock({ pending, quantity: 1, company: soft });
   assert.ok(r.noStock && !r.blocksSave);
 });
 check("41c: a catalog item with less on hand than the line: blocked when hard", () =>
-  assert.ok(lineStock({ item: { hsCode: "8481.3000", availableQty: 2 }, quantity: 5, company: hard }).blocksSave));
+  assert.ok(
+    lineStock({ item: { hsCode: "8481.3000", availableQty: 2 }, quantity: 5, company: hard })
+      .blocksSave,
+  ),
+);
 check("a catalog item with enough stock is fine", () =>
-  assert.ok(!lineStock({ item: { hsCode: "8481.3000", availableQty: 5 }, quantity: 5, company: hard }).noStock));
+  assert.ok(
+    !lineStock({ item: { hsCode: "8481.3000", availableQty: 5 }, quantity: 5, company: hard })
+      .noStock,
+  ),
+);
 check("v1 tracking ignores an item with no HS code", () =>
-  assert.ok(!lineStock({ item: { hsCode: "", availableQty: 0 }, quantity: 5, company: hard }).noStock));
+  assert.ok(
+    !lineStock({ item: { hsCode: "", availableQty: 0 }, quantity: 5, company: hard }).noStock,
+  ),
+);
 check("v2 tracking counts an item with no HS code", () =>
-  assert.ok(lineStock({ item: { hsCode: "", availableQty: 0 }, quantity: 5, company: { ...hard, inventoryFlowVersion: 2 } }).blocksSave));
+  assert.ok(
+    lineStock({
+      item: { hsCode: "", availableQty: 0 },
+      quantity: 5,
+      company: { ...hard, inventoryFlowVersion: 2 },
+    }).blocksSave,
+  ),
+);
 check("tracking off: never a stock message", () =>
-  assert.ok(!lineStock({ pending, quantity: 1, company: off }).noStock && !isHardBlock(off)));
+  assert.ok(!lineStock({ pending, quantity: 1, company: off }).noStock && !isHardBlock(off)),
+);
 check("an item with no on-hand figure is left to the server", () =>
-  assert.ok(!lineStock({ item: { hsCode: "8481.3000" }, quantity: 5, company: hard }).noStock));
+  assert.ok(!lineStock({ item: { hsCode: "8481.3000" }, quantity: 5, company: hard }).noStock),
+);
 
 console.log("\n=== FBR code -> pending new item (D7) ===");
 check("32: name is the FBR description, trimmed to 100 characters", () => {
-  const p = pendingFromFbrCode({ id: 7, hsCode: "8481.3000", fbrDescription: "x".repeat(150), uom: "" });
+  const p = pendingFromFbrCode({
+    id: 7,
+    hsCode: "8481.3000",
+    fbrDescription: "x".repeat(150),
+    uom: "",
+  });
   assert.strictEqual(p.name.length, 100);
   assert.strictEqual(p.placeholderId, 7);
   assert.strictEqual(p.hsCode, "8481.3000");
 });
 check("32: no FBR description falls back to the row name", () =>
-  assert.strictEqual(pendingFromFbrCode({ id: null, hsCode: "1", name: "HS Code 1" }).name, "HS Code 1"));
+  assert.strictEqual(
+    pendingFromFbrCode({ id: null, hsCode: "1", name: "HS Code 1" }).name,
+    "HS Code 1",
+  ),
+);
 
-const { buildInvoiceActions, statusReason, fbrChip, stockGroups } = await import(src("utils/invoiceActions.js"));
-const all = { canEdit: true, canPrint: true, canVoid: true, canDelete: true, canCopy: true, canCreateChallan: true,
-  canRecordReceipt: true, canReverse: true, canFbrPreview: true, canFbrValidate: true, canFbrSubmit: true,
-  canFbrExclude: true, canFbrReset: true };
-const ctx = (over = {}) => ({ perms: all, fbrEnabled: true, hasFbrToken: true, validated: false, hasExcel: true, ...over });
+const { buildInvoiceActions, statusReason, fbrChip, stockGroups } = await import(
+  src("utils/invoiceActions.js")
+);
+const all = {
+  canEdit: true,
+  canPrint: true,
+  canVoid: true,
+  canDelete: true,
+  canCopy: true,
+  canCreateChallan: true,
+  canRecordReceipt: true,
+  canReverse: true,
+  canFbrPreview: true,
+  canFbrValidate: true,
+  canFbrSubmit: true,
+  canFbrExclude: true,
+  canFbrReset: true,
+};
+const ctx = (over = {}) => ({
+  perms: all,
+  fbrEnabled: true,
+  hasFbrToken: true,
+  validated: false,
+  hasExcel: true,
+  ...over,
+});
 const unfiled = { id: 1, invoiceNumber: 7, fbrStatus: null, fbrReady: true, isCancelled: false };
 const filed = { ...unfiled, fbrStatus: "Submitted", fbrIRN: "IRN-1" };
 const keys = (inv, c) => buildInvoiceActions(inv, c).map((x) => x.key);
@@ -113,20 +222,34 @@ check("64: every action has a label and a one-line tooltip", () => {
 check("65: order is primary, FBR, money, danger last", () => {
   const order = { primary: 0, fbr: 1, money: 2, danger: 3 };
   const g = buildInvoiceActions(unfiled, ctx()).map((x) => order[x.group]);
-  assert.deepStrictEqual(g, [...g].sort((x, y) => x - y));
+  assert.deepStrictEqual(
+    g,
+    [...g].sort((x, y) => x - y),
+  );
 });
 check("66: Void and Delete are the danger actions, and come last", () => {
   const a = buildInvoiceActions(unfiled, ctx());
-  assert.deepStrictEqual(a.filter((x) => x.danger).map((x) => x.key), ["void", "delete"]);
-  assert.deepStrictEqual(a.slice(-2).map((x) => x.key), ["void", "delete"]);
+  assert.deepStrictEqual(
+    a.filter((x) => x.danger).map((x) => x.key),
+    ["void", "delete"],
+  );
+  assert.deepStrictEqual(
+    a.slice(-2).map((x) => x.key),
+    ["void", "delete"],
+  );
 });
 check("43: a filed invoice offers no Edit / Void / Delete / Validate / Submit", () => {
   const k = keys(filed, ctx());
-  for (const gone of ["edit", "void", "delete", "validate", "submit", "exclude"]) assert.ok(!k.includes(gone), gone);
+  for (const gone of ["edit", "void", "delete", "validate", "submit", "exclude"])
+    assert.ok(!k.includes(gone), gone);
   assert.ok(k.includes("creditNote") && k.includes("print"));
 });
 check("43: and the status line says why", () =>
-  assert.strictEqual(statusReason(filed), "Filed with FBR — correct it with a credit or debit note."));
+  assert.strictEqual(
+    statusReason(filed),
+    "Filed with FBR — correct it with a credit or debit note.",
+  ),
+);
 check("10: only bills.* keys -> no FBR actions", () => {
   const perms = { canEdit: true, canPrint: true, canVoid: true, canDelete: true, canCopy: true };
   const k = keys(unfiled, ctx({ perms }));
@@ -136,7 +259,9 @@ check("10: only bills.* keys -> no FBR actions", () => {
 check("11: only invoices.* keys -> FBR + print, no Edit / Void", () => {
   const perms = { canPrint: true, canFbrValidate: true, canFbrSubmit: true, canFbrPreview: true };
   const k = keys(unfiled, ctx({ perms }));
-  assert.ok(k.includes("validate") && k.includes("print") && !k.includes("edit") && !k.includes("void"));
+  assert.ok(
+    k.includes("validate") && k.includes("print") && !k.includes("edit") && !k.includes("void"),
+  );
 });
 check("13: no print key -> no Print / PDF / Excel", () => {
   const k = keys(unfiled, ctx({ perms: { ...all, canPrint: false } }));
@@ -145,79 +270,159 @@ check("13: no print key -> no Print / PDF / Excel", () => {
 check("Submit waits for Validate", () => {
   const sub = buildInvoiceActions(unfiled, ctx()).find((x) => x.key === "submit");
   assert.ok(sub.disabled);
-  assert.ok(!buildInvoiceActions(unfiled, ctx({ validated: true })).find((x) => x.key === "submit").disabled);
+  assert.ok(
+    !buildInvoiceActions(unfiled, ctx({ validated: true })).find((x) => x.key === "submit")
+      .disabled,
+  );
 });
 check("FBR off -> no FBR actions at all", () =>
-  assert.ok(!keys(unfiled, ctx({ fbrEnabled: false })).some((x) => ["validate", "submit", "preview", "exclude"].includes(x))));
+  assert.ok(
+    !keys(unfiled, ctx({ fbrEnabled: false })).some((x) =>
+      ["validate", "submit", "preview", "exclude"].includes(x),
+    ),
+  ),
+);
 check("a stuck submission offers Reset and nothing to submit", () => {
   const k = keys({ ...unfiled, fbrStatus: "Uncertain" }, ctx());
   assert.ok(k.includes("reset") && !k.includes("submit") && !k.includes("validate"));
 });
 check("a voided invoice offers only View and printing", () =>
-  assert.deepStrictEqual(keys({ ...unfiled, isCancelled: true }, ctx({ perms: { ...all, canFbrPreview: false } })), ["print", "view", "pdf", "excel"]));
-const inline = (inv, c) => buildInvoiceActions(inv, c).filter((x) => x.primary).map((x) => x.key);
+  assert.deepStrictEqual(
+    keys({ ...unfiled, isCancelled: true }, ctx({ perms: { ...all, canFbrPreview: false } })),
+    ["print", "view", "pdf", "excel"],
+  ),
+);
+const inline = (inv, c) =>
+  buildInvoiceActions(inv, c)
+    .filter((x) => x.primary)
+    .map((x) => x.key);
 check("an open invoice shows Edit, Print, PDF and Validate on the card", () =>
-  assert.deepStrictEqual(inline(unfiled, ctx()), ["edit", "print", "pdf", "validate"]));
+  assert.deepStrictEqual(inline(unfiled, ctx()), ["edit", "print", "pdf", "validate"]),
+);
 check("once validated, Submit takes Validate's place inline", () =>
-  assert.deepStrictEqual(inline(unfiled, ctx({ validated: true })), ["edit", "print", "pdf", "submit"]));
+  assert.deepStrictEqual(inline(unfiled, ctx({ validated: true })), [
+    "edit",
+    "print",
+    "pdf",
+    "submit",
+  ]),
+);
 check("a filed invoice shows Print, View and PDF inline (no Edit)", () =>
-  assert.deepStrictEqual(inline(filed, ctx()), ["print", "view", "pdf"]));
+  assert.deepStrictEqual(inline(filed, ctx()), ["print", "view", "pdf"]),
+);
 const manual = { ...filed, fbrIRN: null, fbrFiledManually: true, fbrInvoiceNumber: "ABC-1" };
 check("53: an unsent invoice offers 'Filed on FBR portal' to a reset-key holder", () =>
-  assert.ok(keys(unfiled, ctx()).includes("recordManual")));
+  assert.ok(keys(unfiled, ctx()).includes("recordManual")),
+);
 check("53: ...not without invoices.fbr.reset, and not with FBR off", () => {
-  assert.ok(!keys(unfiled, ctx({ perms: { ...all, canFbrReset: false } })).includes("recordManual"));
+  assert.ok(
+    !keys(unfiled, ctx({ perms: { ...all, canFbrReset: false } })).includes("recordManual"),
+  );
   assert.ok(!keys(unfiled, ctx({ fbrEnabled: false })).includes("recordManual"));
 });
 check("53: ...not on a filed, stuck or voided invoice", () => {
-  for (const inv of [filed, { ...unfiled, fbrStatus: "Uncertain" }, { ...unfiled, isCancelled: true }])
+  for (const inv of [
+    filed,
+    { ...unfiled, fbrStatus: "Uncertain" },
+    { ...unfiled, isCancelled: true },
+  ])
     assert.ok(!keys(inv, ctx()).includes("recordManual"), JSON.stringify(inv));
 });
 check("a manually filed invoice keeps Edit, offers no credit note or correction", () => {
   const k = keys(manual, ctx());
-  assert.ok(k.includes("edit") && !k.includes("creditNote") && !k.includes("correct") && !k.includes("void"));
+  assert.ok(
+    k.includes("edit") &&
+      !k.includes("creditNote") &&
+      !k.includes("correct") &&
+      !k.includes("void"),
+  );
 });
 check("a manually filed invoice says where it was filed", () =>
-  assert.match(statusReason(manual), /by hand on FBR's portal as ABC-1/));
-check("67: its chip reads Filed manually", () => assert.strictEqual(fbrChip(manual).label, "Filed manually"));
+  assert.match(statusReason(manual), /by hand on FBR's portal as ABC-1/),
+);
+check("67: its chip reads Filed manually", () =>
+  assert.strictEqual(fbrChip(manual).label, "Filed manually"),
+);
 check("a manually filed invoice names the HS codes it kept in stock", () =>
-  assert.match(statusReason({ ...manual, items: [{ hsCode: "7307.1190", keepInStock: true }, { hsCode: "8481.8090" }] }), /HS 7307\.1190 kept in stock\.$/));
+  assert.match(
+    statusReason({
+      ...manual,
+      items: [{ hsCode: "7307.1190", keepInStock: true }, { hsCode: "8481.8090" }],
+    }),
+    /HS 7307\.1190 kept in stock\.$/,
+  ),
+);
 check("the stock choice lists one row per HS code on item lines, summing quantity", () => {
   const g = stockGroups([
     { itemTypeId: 1, itemTypeName: "Valve", hsCode: "8481.8090", quantity: 2, uom: "Pcs" },
     { itemTypeId: 1, itemTypeName: "Valve", hsCode: "8481.8090", quantity: 3, uom: "Pcs" },
-    { itemTypeId: 2, itemTypeName: "Elbow", hsCode: "7307.1190", quantity: 1.5, uom: "KG", keepInStock: true },
-    { itemTypeId: null, hsCode: "9999.0000", quantity: 9 }, { itemTypeId: 3, hsCode: "", quantity: 9 }]);
-  assert.deepStrictEqual(g.map((r) => [r.code, r.qtyLabel, r.names.join(), r.keep]),
-    [["8481.8090", "5 Pcs", "Valve", false], ["7307.1190", "1.5 KG", "Elbow", true]]);
+    {
+      itemTypeId: 2,
+      itemTypeName: "Elbow",
+      hsCode: "7307.1190",
+      quantity: 1.5,
+      uom: "KG",
+      keepInStock: true,
+    },
+    { itemTypeId: null, hsCode: "9999.0000", quantity: 9 },
+    { itemTypeId: 3, hsCode: "", quantity: 9 },
+  ]);
+  assert.deepStrictEqual(
+    g.map((r) => [r.code, r.qtyLabel, r.names.join(), r.keep]),
+    [
+      ["8481.8090", "5 Pcs", "Valve", false],
+      ["7307.1190", "1.5 KG", "Elbow", true],
+    ],
+  );
 });
 
 console.log("\n=== FBR chip (67) ===");
 const chip = (inv, o) => fbrChip(inv, o)?.label ?? null;
 check("unfiled -> Not filed", () => assert.strictEqual(chip(unfiled), "Not filed"));
-check("validated -> Checked", () => assert.strictEqual(chip(unfiled, { validated: true }), "Checked"));
+check("validated -> Checked", () =>
+  assert.strictEqual(chip(unfiled, { validated: true }), "Checked"),
+);
 check("filed -> Filed, with the IRN", () => assert.strictEqual(fbrChip(filed).irn, "IRN-1"));
-check("filed manually -> Filed manually", () => assert.strictEqual(chip({ ...filed, fbrFiledManually: true }), "Filed manually"));
-check("excluded -> Kept out of FBR", () => assert.strictEqual(chip({ ...unfiled, isFbrExcluded: true }), "Kept out of FBR"));
-check("withdrawn -> Withdrawn", () => assert.strictEqual(chip({ ...filed, fbrCancelledAt: "2026-10-01" }), "Withdrawn"));
-check("voided -> Voided", () => assert.strictEqual(chip({ ...unfiled, isCancelled: true }), "Voided"));
-check("FBR off and never filed -> no chip", () => assert.strictEqual(chip(unfiled, { fbrEnabled: false }), null));
-check("FBR off but filed -> still Filed", () => assert.strictEqual(chip(filed, { fbrEnabled: false }), "Filed"));
+check("filed manually -> Filed manually", () =>
+  assert.strictEqual(chip({ ...filed, fbrFiledManually: true }), "Filed manually"),
+);
+check("excluded -> Kept out of FBR", () =>
+  assert.strictEqual(chip({ ...unfiled, isFbrExcluded: true }), "Kept out of FBR"),
+);
+check("withdrawn -> Withdrawn", () =>
+  assert.strictEqual(chip({ ...filed, fbrCancelledAt: "2026-10-01" }), "Withdrawn"),
+);
+check("voided -> Voided", () =>
+  assert.strictEqual(chip({ ...unfiled, isCancelled: true }), "Voided"),
+);
+check("FBR off and never filed -> no chip", () =>
+  assert.strictEqual(chip(unfiled, { fbrEnabled: false }), null),
+);
+check("FBR off but filed -> still Filed", () =>
+  assert.strictEqual(chip(filed, { fbrEnabled: false }), "Filed"),
+);
 
 console.log("\n=== SRB / no-tax bills: outside FBR ===");
 const srb = { ...unfiled, taxTreatment: "SRB", fbrReady: false };
 check("SRB -> SRB · Outside FBR chip", () => assert.strictEqual(chip(srb), "SRB · Outside FBR"));
 check("no tax -> No tax · Outside FBR chip, even with FBR off", () =>
-  assert.strictEqual(chip({ ...srb, taxTreatment: "NoTax" }, { fbrEnabled: false }), "No tax · Outside FBR"));
+  assert.strictEqual(
+    chip({ ...srb, taxTreatment: "NoTax" }, { fbrEnabled: false }),
+    "No tax · Outside FBR",
+  ),
+);
 check("SRB bill offers no FBR action", () => {
   const k = keys(srb, ctx());
-  for (const f of ["validate", "submit", "preview", "exclude", "recordManual"]) assert.ok(!k.includes(f), f);
+  for (const f of ["validate", "submit", "preview", "exclude", "recordManual"])
+    assert.ok(!k.includes(f), f);
 });
 check("SRB bill keeps Edit, Print and Receipt", () => {
   const k = keys(srb, ctx());
   for (const f of ["edit", "print", "receipt"]) assert.ok(k.includes(f), f);
 });
-check("an FBR bill still offers Validate", () => assert.ok(keys({ ...unfiled, taxTreatment: "FBR" }, ctx()).includes("validate")));
+check("an FBR bill still offers Validate", () =>
+  assert.ok(keys({ ...unfiled, taxTreatment: "FBR" }, ctx()).includes("validate")),
+);
 
 // A filed invoice offers only its line descriptions (2026-11-16).
 const filedLines = { ...filed, items: [{ id: 1, description: "Industrial Equipments" }] };
@@ -230,7 +435,9 @@ check("an unfiled invoice offers Edit, not Edit descriptions", () => {
   assert.ok(k.includes("edit") && !k.includes("editDescriptions"), k.join(","));
 });
 check("Edit descriptions needs the edit key, a live invoice and lines", () => {
-  assert.ok(!keys(filedLines, ctx({ perms: { ...all, canEdit: false } })).includes("editDescriptions"));
+  assert.ok(
+    !keys(filedLines, ctx({ perms: { ...all, canEdit: false } })).includes("editDescriptions"),
+  );
   assert.ok(!keys({ ...filedLines, isCancelled: true }, ctx()).includes("editDescriptions"));
   assert.ok(!keys({ ...filedLines, items: [] }, ctx()).includes("editDescriptions"));
 });
