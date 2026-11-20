@@ -2,7 +2,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
-import App from "./App";
+import App, { preloadScreenFor } from "./App";
 import { AuthProvider } from "./contexts/AuthContext";
 import { PermissionsProvider } from "./contexts/PermissionsContext";
 import { CompanyProvider } from "./contexts/CompanyContext";
@@ -45,6 +45,22 @@ if (isPublicPortal) {
   );
 } else {
 startVersionWatch();
+
+// Fetch a screen's code before it is needed (see utils/lazyScreen.js):
+//  - the screen this page load is heading for, alongside the sign-in check,
+//    for a visitor who has a saved sign-in;
+//  - the screen behind a link, the moment the pointer or focus reaches it.
+// Code only. Nothing renders, and no data is asked for, any earlier.
+const appBase = (import.meta.env.BASE_URL || "/").replace(/\/+$/, "");
+const routerPath = (pathname) =>
+  (appBase && pathname.startsWith(appBase) ? pathname.slice(appBase.length) : pathname) || "/";
+if (localStorage.getItem("token")) preloadScreenFor(routerPath(window.location.pathname));
+const onIntent = (event) => {
+  const link = event.target?.closest?.("a[href]");
+  if (link && link.origin === window.location.origin) preloadScreenFor(routerPath(link.pathname));
+};
+for (const type of ["pointerover", "focusin", "touchstart"])
+  document.addEventListener(type, onIntent, { passive: true });
 root.render(
   <React.StrictMode>
     <ErrorBoundary>

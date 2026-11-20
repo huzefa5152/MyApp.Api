@@ -1,5 +1,5 @@
 // src/layouts/DashboardLayout.jsx
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, Suspense } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   MdDashboard,
@@ -951,7 +951,12 @@ export default function DashboardLayout() {
 
         {/* Page Content */}
         <main className="dl-main" id="main-content" ref={mainRef}>
-          {showNoCompany ? <NoCompanyConfigured /> : <Outlet />}
+          {/* Screens load on demand (App.jsx); the sidebar stays while one does. */}
+          {showNoCompany ? <NoCompanyConfigured /> : (
+            <Suspense fallback={<div className="dl-page-loading" role="status" aria-label="Loading" />}>
+              <Outlet />
+            </Suspense>
+          )}
         </main>
       </div>
     </div>
