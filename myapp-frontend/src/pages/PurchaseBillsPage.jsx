@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import CardActions from "../Components/CardActions";
 import { useSearchParams } from "react-router-dom";
 import { MdShoppingCart, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdReceipt, MdClose, MdPayments, MdAssignment, MdPrint, MdPictureAsPdf, MdLocalShipping, MdCopyAll } from "react-icons/md";
@@ -316,7 +316,16 @@ export default function PurchaseBillsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCompany]);
 
-  useEffect(() => { if (selectedCompany) fetchBills(page); }, [page, size, search, supplierFilter, divisionFilter, dateFrom, dateTo]);
+  // The company effect above already loads page 1 when the screen opens;
+  // without this the list was fetched twice on every visit.
+  const filtersMounted = useRef(false);
+  useEffect(() => {
+    if (!filtersMounted.current) {
+      filtersMounted.current = true;
+      return;
+    }
+    if (selectedCompany) fetchBills(page);
+  }, [page, size, search, supplierFilter, divisionFilter, dateFrom, dateTo]);
   const copy = useDocumentCopy({ sourceType: DOC_COPY_TYPES.purchaseBill, onRefresh: () => fetchBills(page) });
 
   const onFilterChange = (setter) => (e) => { setter(e.target.value); setPage(1); };

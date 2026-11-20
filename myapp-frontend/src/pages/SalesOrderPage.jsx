@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { MdAssignment, MdAdd, MdBusiness, MdSearch, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdLocalShipping, MdUploadFile, MdVisibility, MdReceiptLong, MdLink, MdCopyAll } from "react-icons/md";
 import SalesOrderForm from "../Components/SalesOrderForm";
@@ -133,7 +133,16 @@ export default function SalesOrderPage() {
     } else { setClients([]); setOrders([]); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCompany]);
-  useEffect(() => { if (selectedCompany) fetchOrders(selectedCompany.id, page); }, [page, size, search, statusFilter, divisionFilter, clientFilter]);
+  // The company effect above already loads page 1 when the screen opens;
+  // without this the list was fetched twice on every visit.
+  const filtersMounted = useRef(false);
+  useEffect(() => {
+    if (!filtersMounted.current) {
+      filtersMounted.current = true;
+      return;
+    }
+    if (selectedCompany) fetchOrders(selectedCompany.id, page);
+  }, [page, size, search, statusFilter, divisionFilter, clientFilter]);
 
   const reload = () => selectedCompany && fetchOrders(selectedCompany.id, page);
   const copy = useDocumentCopy({ sourceType: DOC_COPY_TYPES.salesOrder, onRefresh: reload });

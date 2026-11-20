@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import CardActions from "../Components/CardActions";
 import { MdInventory2, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdPrint, MdPictureAsPdf, MdCopyAll } from "react-icons/md";
 import { getGoodsReceiptsByCompanyPaged, deleteGoodsReceipt, getGoodsReceiptPrintData } from "../api/goodsReceiptApi";
@@ -104,7 +104,16 @@ export default function GoodsReceiptsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCompany]);
 
-  useEffect(() => { if (selectedCompany) fetchReceipts(page); }, [page, size, search, supplierFilter, divisionFilter]);
+  // The company effect above already loads page 1 when the screen opens;
+  // without this the list was fetched twice on every visit.
+  const filtersMounted = useRef(false);
+  useEffect(() => {
+    if (!filtersMounted.current) {
+      filtersMounted.current = true;
+      return;
+    }
+    if (selectedCompany) fetchReceipts(page);
+  }, [page, size, search, supplierFilter, divisionFilter]);
   const copy = useDocumentCopy({ sourceType: DOC_COPY_TYPES.goodsReceipt, onRefresh: () => fetchReceipts(page) });
 
   const onFilterChange = (setter) => (e) => { setter(e.target.value); setPage(1); };

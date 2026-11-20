@@ -194,8 +194,15 @@ export default function ChallanPage() {
     }
   }, [selectedCompany]);
 
-  // Re-fetch when filters or page change
+  // Re-fetch when filters or page change. The company effect above already
+  // loads page 1 when the screen opens; without this the list was fetched
+  // twice on every visit.
+  const filtersMounted = useRef(false);
   useEffect(() => {
+    if (!filtersMounted.current) {
+      filtersMounted.current = true;
+      return;
+    }
     if (selectedCompany) fetchChallans(selectedCompany.id, page);
   }, [page, size, search, statusFilter, divisionFilter, clientFilter, salesOrderFilter, dateFrom, dateTo]);
 
