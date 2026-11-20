@@ -748,7 +748,9 @@ Console.WriteLine("\n=== Monthly sheet: one row per GD line ===");
 {
     var monthly = new StockMonthlyExportDto
     {
-        CompanyName = "Harness Traders", Month = new DateTime(2026, 8, 1), GeneratedAt = new DateTime(2026, 9, 2, 10, 0, 0),
+        CompanyName = "Harness Traders",
+        Month = new DateTime(2026, 8, 1),
+        GeneratedAt = new DateTime(2026, 9, 2, 10, 0, 0),
         FiltersApplied = { "Costing: FIFO by GD (claimed GDs first)" },
         Lines =
         {

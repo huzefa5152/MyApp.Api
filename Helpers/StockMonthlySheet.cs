@@ -106,8 +106,10 @@ namespace MyApp.Api.Helpers
                     var costed = includeActualCost && (openAct > 0m || p.ActualValue > 0m);
                     output.Lines.Add(new StockMonthlyLineDto
                     {
-                        ItemTypeId = item.ItemTypeId, ItemTypeName = item.Name,
-                        ClaimMonth = p.ClaimMonth, GdNumber = p.GdNumber,
+                        ItemTypeId = item.ItemTypeId,
+                        ItemTypeName = item.Name,
+                        ClaimMonth = p.ClaimMonth,
+                        GdNumber = p.GdNumber,
                         GdDate = p.GdNumber != null ? p.OrderDate : null,
                         Description = p.Kind switch
                         {
@@ -118,13 +120,17 @@ namespace MyApp.Api.Helpers
                         HsCode = string.IsNullOrWhiteSpace(hs) ? item.HsCode : hs.Trim(),
                         Unit = item.Unit,
                         SalesTaxRate = p.Rate,
-                        OpeningQuantity = openQty, OpeningValueExcludingTax = Money(openVal),
-                        ConsumedQuantity = c.Qty, ConsumedValueExcludingTax = Money(c.Value),
-                        BalanceQuantity = p.Quantity, BalanceValueExcludingTax = Money(p.Value),
+                        OpeningQuantity = openQty,
+                        OpeningValueExcludingTax = Money(openVal),
+                        ConsumedQuantity = c.Qty,
+                        ConsumedValueExcludingTax = Money(c.Value),
+                        BalanceQuantity = p.Quantity,
+                        BalanceValueExcludingTax = Money(p.Value),
                         // Born this month (not by a restatement): it opened at what it brought in.
                         ReceivedQuantity = s == null && !restatedHere ? p.InQuantity : 0m,
                         ReceivedValueExcludingTax = s == null && !restatedHere ? Money(p.InValue) : 0m,
-                        SoldQuantity = sd.Qty, SoldValueExcludingTax = Money(sd.Value),
+                        SoldQuantity = sd.Qty,
+                        SoldValueExcludingTax = Money(sd.Value),
                         OpeningActualCostExcludingTax = costed ? Money(openAct) : null,
                         BalanceActualCostExcludingTax = costed ? Money(p.ActualValue) : null,
                     });
@@ -137,13 +143,20 @@ namespace MyApp.Api.Helpers
                 if (end.ShortfallQuantity > 0m || startShort > 0m || sc.Qty != 0m)
                     output.Lines.Add(new StockMonthlyLineDto
                     {
-                        ItemTypeId = item.ItemTypeId, ItemTypeName = item.Name,
+                        ItemTypeId = item.ItemTypeId,
+                        ItemTypeName = item.Name,
                         Description = $"{item.Name} (sold beyond stock — not covered by a GD yet)",
-                        HsCode = item.HsCode, Unit = item.Unit, SalesTaxRate = item.SalesTaxRate,
-                        OpeningQuantity = -startShort, OpeningValueExcludingTax = -Money(start?.ShortfallValue ?? 0m),
-                        ConsumedQuantity = sc.Qty, ConsumedValueExcludingTax = Money(sc.Value),
-                        SoldQuantity = ss.Qty, SoldValueExcludingTax = Money(ss.Value),
-                        BalanceQuantity = -end.ShortfallQuantity, BalanceValueExcludingTax = -Money(end.ShortfallValue),
+                        HsCode = item.HsCode,
+                        Unit = item.Unit,
+                        SalesTaxRate = item.SalesTaxRate,
+                        OpeningQuantity = -startShort,
+                        OpeningValueExcludingTax = -Money(start?.ShortfallValue ?? 0m),
+                        ConsumedQuantity = sc.Qty,
+                        ConsumedValueExcludingTax = Money(sc.Value),
+                        SoldQuantity = ss.Qty,
+                        SoldValueExcludingTax = Money(ss.Value),
+                        BalanceQuantity = -end.ShortfallQuantity,
+                        BalanceValueExcludingTax = -Money(end.ShortfallValue),
                     });
             }
 
