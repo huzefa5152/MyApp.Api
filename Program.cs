@@ -565,6 +565,9 @@ try
     // past Fbr:LogSoftPurgeDays (default 180), hard-deletes past
     // Fbr:LogRetentionDays (default 365).
     builder.Services.AddHostedService<MyApp.Api.Services.HostedServices.FbrCommunicationLogPurgeService>();
+    // Performance audit 2026-11-20: keeps the host from unloading an idle site
+    // (the first page after an idle spell measured 37 s on this line).
+    builder.Services.AddHostedService<MyApp.Api.Services.HostedServices.KeepWarmService>();
 
     // HttpContextAccessor — needed by FbrService etc. so they can pull the
     // current request's CorrelationId without taking HttpContext directly.
@@ -2482,6 +2485,31 @@ try
     });
 
     // Global exception handling — logs to AuditLogs table
+    // Performance audit 2026-11-20. API responses went out uncompressed: the
+    // host compresses static files but not what the app writes, so the full
+    // invoice list went out as 232 KB of plain text.
+    //
+    // Compress what the API reads back, and only that. GET only, and never the
+    // sign-in or agent-token routes: a response that carries a secret is not
+    // compressed, which keeps compression-ratio attacks (BREACH) off the table.
+    // Static files are left to the host, which already compresses them.
+    // ApiCompressionMiddleware, not the framework's UseResponseCompression:
+    // measured on the Trader line, that one made every small call ~170 ms slower.
+    app.UseWhen(
+        ctx => HttpMethods.IsGet(ctx.Request.Method)
+            && ctx.Request.Path.StartsWithSegments("/api")
+            && !ctx.Request.Path.StartsWithSegments("/api/auth")
+            && !ctx.Request.Path.StartsWithSegments("/api/mcp"),
+        branch => branch.UseMiddleware<ApiCompressionMiddleware>());
+
+    // The keep-warm ping needs the site's own address; learn it from a request.
+    var keepWarmHost = app.Configuration["KeepWarm:Host"];
+    app.Use(async (ctx, next) =>
+    {
+        MyApp.Api.Services.HostedServices.KeepWarmOrigin.Observe(ctx.Request, keepWarmHost);
+        await next();
+    });
+
     app.UseMiddleware<GlobalExceptionMiddleware>();
 
     // Only redirect to HTTPS in production if not behind a reverse proxy (Render handles SSL)
@@ -2507,8 +2535,16 @@ try
     //
     // The fingerprinted assets are the opposite case: their names change whenever
     // their contents do, so they can be cached hard and for a long time.
+    //
+    // Performance audit 2026-11-20: the assets rule matched "/assets" only, but
+    // this site serves the app under /admin, so the bundle went out with NO
+    // Cache-Control and every load re-asked for it. runtime-env.js keeps its
+    // name across deploys, so it is re-checked every time like the shell.
     static bool IsHtmlShell(string? path) =>
-        path != null && path.EndsWith(".html", StringComparison.OrdinalIgnoreCase);
+        path != null && (path.EndsWith(".html", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("runtime-env.js", StringComparison.OrdinalIgnoreCase));
+    static bool IsFingerprintedAsset(PathString path) =>
+        path.StartsWithSegments("/assets") || path.StartsWithSegments("/admin/assets");
 
     var noCacheHtml = new StaticFileOptions
     {
@@ -2523,13 +2559,17 @@ try
                     MustRevalidate = true,
                 };
             }
-            else if (ctx.Context.Request.Path.StartsWithSegments("/assets"))
+            else if (IsFingerprintedAsset(ctx.Context.Request.Path))
             {
-                headers.CacheControl = new Microsoft.Net.Http.Headers.CacheControlHeaderValue
+                var cache = new Microsoft.Net.Http.Headers.CacheControlHeaderValue
                 {
                     Public = true,
                     MaxAge = TimeSpan.FromDays(365),
                 };
+                // A fingerprinted file never changes under its name, so the
+                // browser need not even revalidate it.
+                cache.Extensions.Add(new Microsoft.Net.Http.Headers.NameValueHeaderValue("immutable"));
+                headers.CacheControl = cache;
             }
         },
     };
