@@ -176,20 +176,27 @@ function pinTargetFor(anchor, body) {
  * The document's line-item table: the one with the most body rows. The
  * reservation has to live in the table that actually spans the page breaks, so
  * that its <tfoot> repeats the reserved strip onto every page.
+ *
+ * A table with column headings (<th>) outranks one without. On a one-line
+ * invoice the supplier box's label table has as many rows as the item table,
+ * and taking it put the signature-width spacer inside the supplier box, which
+ * pushed its text over the buyer box.
  */
 function itemTableOf(doc) {
   let best = null;
-  let bestRows = 0;
+  let bestScore = [0, 0];
   for (const table of doc.querySelectorAll("table")) {
     // A table nested in another table's cell paginates with its parent.
     if (table.parentElement && table.parentElement.closest("table")) continue;
     const rows = table.querySelectorAll("tr").length;
-    if (rows > bestRows) {
+    if (!rows) continue;
+    const score = [table.querySelector("th") ? 1 : 0, rows];
+    if (score[0] > bestScore[0] || (score[0] === bestScore[0] && score[1] > bestScore[1])) {
       best = table;
-      bestRows = rows;
+      bestScore = score;
     }
   }
-  return bestRows > 0 ? best : null;
+  return best;
 }
 
 /** Widest row in the table, so the spacer cell spans the full width. */

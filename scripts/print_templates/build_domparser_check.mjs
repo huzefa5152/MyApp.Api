@@ -105,6 +105,11 @@ ${layoutSrc}
     if (r.hadTable && spacers.length && !spacers[0].closest("tfoot")) {
       r.ok = false; r.problems.push("spacer not inside a tfoot");
     }
+    // A table with column headings is the item table; the spacer must not land
+    // in a heading-less one (the supplier box's label table on a 1-line bill).
+    if (srcDoc.querySelector("table th") && spacers.length && !spacers[0].closest("table").querySelector("th")) {
+      r.ok = false; r.problems.push("spacer put in a table without column headings");
+    }
     if (doc.querySelectorAll("tfoot").length !== new Set(
         Array.prototype.map.call(doc.querySelectorAll("tfoot"), function (t) { return t.parentElement; })).size) {
       r.ok = false; r.problems.push("a table has more than one tfoot");
