@@ -95,18 +95,41 @@ const ANCHORS = [
 // strapline. Keeps `.types-footer` / `.bot-line` with the signature they were
 // drawn under.
 const CLIMBABLE = [
-  ".footer-section", ".footer-sect", ".doc-footer", ".page-footer",
-  ".footer-band", ".footer-lh", ".footer", ".foot",
-  ".sigs", ".sig-row", ".signatures", ".sig-table",
+  ".footer-section",
+  ".footer-sect",
+  ".doc-footer",
+  ".page-footer",
+  ".footer-band",
+  ".footer-lh",
+  ".footer",
+  ".foot",
+  ".sigs",
+  ".sig-row",
+  ".signatures",
+  ".sig-table",
 ];
 
 // Content that must stay in the flow and print exactly once. A candidate
 // wrapper holding any of it is not climbed into, so amount-in-words, the totals
 // block and the FBR IRN/QR panel keep printing once, after the items.
 const FLOW_ONLY = [
-  ".totals-wrap", ".totals-section", ".totals-table", ".totals", ".totals-area",
-  ".total-row", ".ttbl", ".qtot", ".grand", ".words", ".words-side",
-  ".words-section", ".amount-words", ".summary", ".fbr", ".fbr-block", "table",
+  ".totals-wrap",
+  ".totals-section",
+  ".totals-table",
+  ".totals",
+  ".totals-area",
+  ".total-row",
+  ".ttbl",
+  ".qtot",
+  ".grand",
+  ".words",
+  ".words-side",
+  ".words-section",
+  ".amount-words",
+  ".summary",
+  ".fbr",
+  ".fbr-block",
+  "table",
 ].join(",");
 
 const MARK = "mpl"; // merged-print-layout

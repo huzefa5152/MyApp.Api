@@ -55,7 +55,13 @@ for (const file of fs.readdirSync(templateDir).filter((f) => f.endsWith(".html")
         });
       }
     }
-    cases.push({ id: Number(id), companyId: Number(companyId), type, n, html: mergeTemplate(tpl, data) });
+    cases.push({
+      id: Number(id),
+      companyId: Number(companyId),
+      type,
+      n,
+      html: mergeTemplate(tpl, data),
+    });
   }
 }
 
