@@ -145,13 +145,19 @@ export const getPurchaseTemplate = (invoiceId) =>
 // into a quantity. The unit price is the stock's weighted-average cost, read
 // from the server's one valuation walk -- the same figure the stock dashboard
 // shows. Gated by the bill-create permission, like getLastRatesForChallan.
-export const getStockPricing = (companyId, itemTypeIds) =>
+// `date` is the invoice's own date (yyyy-mm-dd): FIFO by GD counts a GD as
+// claimed only from its claim month, so a back-dated invoice is priced on the
+// GDs claimed by then, not today.
+export const getStockPricing = (companyId, itemTypeIds, date) =>
   httpClient.get(`/invoices/company/${companyId}/stock-pricing`, {
     // The endpoint binds ONE comma-separated string. Handing it an array made
     // axios send `itemTypeIds[]=84`, which binds to nothing and comes back as
     // an empty list with a 200 -- so a line amount silently stopped pricing
     // itself from stock, with no error anywhere to say why.
-    params: { itemTypeIds: Array.isArray(itemTypeIds) ? itemTypeIds.join(",") : itemTypeIds },
+    params: {
+      itemTypeIds: Array.isArray(itemTypeIds) ? itemTypeIds.join(",") : itemTypeIds,
+      ...(date ? { date } : {}),
+    },
   });
 
 // What this company's own GD lines / opening stock say each item's sales tax

@@ -418,7 +418,7 @@ namespace MyApp.Api.Controllers
         [HasPermission("bills.manage.create")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<StockLinePricingDto>>> GetStockPricing(
-            int companyId, [FromQuery] string? itemTypeIds)
+            int companyId, [FromQuery] string? itemTypeIds, [FromQuery] DateTime? date = null)
         {
             var ids = (itemTypeIds ?? "")
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -434,8 +434,11 @@ namespace MyApp.Api.Controllers
             // so they must be priced on the stock they can actually see.
             var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
             var positions = await _stock.GetValuationsAsync(companyId, ids, divScope);
-            // FIFO by GD: the order the next sale will drain this stock in.
-            var tiers = await _stock.GetFifoPriceTiersAsync(companyId, ids, PakistanClock.Today, divScope);
+            // FIFO by GD: the order a sale ON THE INVOICE'S DATE drains this
+            // stock in -- a GD counts as claimed only from its claim month, so
+            // pricing a back-dated invoice as of today put a GD claimed later
+            // first (Prime demo: 50.6 units quoted, 47.6 left).
+            var tiers = await _stock.GetFifoPriceTiersAsync(companyId, ids, date?.Date ?? PakistanClock.Today, divScope);
 
             var names = await _context.ItemTypes
                 .Where(it => ids.Contains(it.Id))

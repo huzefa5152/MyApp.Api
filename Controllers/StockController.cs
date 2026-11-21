@@ -575,14 +575,21 @@ namespace MyApp.Api.Controllers
                         : r.ConsignmentLineId is int cid && r.Quantity.HasValue ? $"arrival-{cid}" : null;
                     var pool = key == null ? null : res.Pools.FirstOrDefault(p => p.Key == key);
                     if (pool == null) continue;
-                    r.ConsumedQuantity = pool.ConsumedQuantity;
-                    r.ConsumedValueExcludingTax = Money(pool.ConsumedValue);
+                    // What the line handed straight to sales made before it
+                    // arrived (owed or oversold): that went to sales too, so it
+                    // is consumed -- the panel showed 0 against a GD that paid
+                    // 29,000 of an earlier sale (Prime demo, Nov 2026).
+                    var handed = pool.MovementId is int mid && res.Takes.TryGetValue(mid, out var own)
+                        ? own.Where(t => t.PoolKey == GdFifoValuation.ShortfallKey).ToList()
+                        : new List<GdFifoValuation.Take>();
+                    r.ConsumedQuantity = pool.ConsumedQuantity + handed.Sum(t => t.Quantity);
+                    r.ConsumedValueExcludingTax = Money(pool.ConsumedValue + handed.Sum(t => t.Value));
                     r.RemainingQuantity = pool.Quantity;
                     r.RemainingValueExcludingTax = Money(pool.Value);
                     // What the line's goods cost, sold and still held: a GD costing
                     // imported after the goods came in reaches the pool later, so
                     // InActualValue alone can read zero on a costed line.
-                    r.ActualCostExcludingTax = Money(pool.ConsumedActualValue + pool.ActualValue);
+                    r.ActualCostExcludingTax = Money(pool.ConsumedActualValue + pool.ActualValue + handed.Sum(t => t.ActualValue));
                 }
             }
 

@@ -102,11 +102,13 @@ def main():
                                              "registrationType": "Unregistered"}).json()["id"]
     hs, name = "8481.1000", f"SBV VALVE {tag}"
 
-    def gd(number, gd_date, qty, selling, desc=None, code=None):
+    def gd(number, gd_date, qty, selling, desc=None, code=None, claim=None):
         line = {"gdNumber": number, "gdDate": gd_date, "description": desc or name, "hsCode": code or hs, "quantity": qty,
                 "unit": "Pcs", "assessedValue": selling * 0.8, "customsDuty": 0, "acd": 0, "regulatoryDuty": 0,
                 "others": 0, "salesTaxRate": 18, "astRate": 3, "incomeTaxRate": 6, "addOnProfit": 0,
                 "sellingValue": selling}
+        if claim:
+            line["claimMonth"] = f"{claim}-01"
         p = call("POST", "/spreadsheet-import/gd-costing/preview-manual",
                  params={"companyId": cid, "mode": "new-arrivals"}, json={"lines": [line]})
         if not p.ok:
@@ -298,6 +300,32 @@ def main():
               gd2 and near(gd2[10], 100000) and near(gd2[34], 25000) and near(gd2[18], 75000), gd2)
         check("monthly sheet Nov: every pump row adds up (Opening - Consumed - Other = Balance)",
               rows and all(near((x[10] or 0) - (x[14] or 0) - (x[34] or 0), x[18] or 0) for x in rows), rows)
+
+        g2 = next((x for x in call("GET", f"/stock/company/{cid}/gd-details", params={"itemTypeId": p["itemTypeId"]}).json()
+                   if x["gdNumber"] == "SBV-PUMP-2"), {})
+        check("GD panel: GD 2 shows the 25,000 it paid to the pre-sales as consumed (12.5 Pcs), 75,000 left",
+              near(g2.get("consumedValueExcludingTax"), 25000) and near(g2.get("consumedQuantity"), 12.5, 0.001)
+              and near(g2.get("remainingValueExcludingTax"), 75000), g2)
+
+        print("\n-- 12. Pricing an invoice from an amount follows the invoice's own date --")
+        relay = f"SBV RELAY {tag}"
+        for num, on, value, claim in (("SBV-RLY-1", "2026-09-10", 10000, "2026-09"),
+                                      ("SBV-RLY-2", "2026-10-05", 12000, "2026-11"),
+                                      ("SBV-RLY-3", "2026-10-20", 14000, "2026-10")):
+            r = gd(num, on, 10, value, relay, "8481.8090", claim)
+            check(f"{num} ({on}, claimed {claim}) commits", r.ok, r.text[:300])
+        rows = call("GET", f"/stock/company/{cid}/onhand").json()
+        rid = next((x["itemTypeId"] for x in rows if x["itemTypeName"].upper().startswith("SBV RELAY")), None)
+
+        def tier_costs(on):
+            body = call("GET", f"/invoices/company/{cid}/stock-pricing",
+                        params={"itemTypeIds": str(rid), "date": on}).json()
+            return [round(float(t["unitCost"])) for t in (body[0].get("tiers") or [])] if body else []
+        oct_ = tier_costs("2026-10-28")
+        check("dated 28 Oct: claimed GDs first -- 1 (Sep) then 3 (claimed Oct), then 2 (claimed only in Nov)",
+              oct_[:3] == [1000, 1400, 1200], oct_)
+        nov = tier_costs("2026-11-20")
+        check("dated 20 Nov: all three claimed, oldest GD first -- 1, 2, 3", nov[:3] == [1000, 1200, 1400], nov)
 
         print("\n-- 11b. Weighted average with the same switch still blocks --")
         r = call("POST", "/companies", json={

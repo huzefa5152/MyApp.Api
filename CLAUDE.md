@@ -1497,7 +1497,12 @@ GD panel and Excel export all say which GDs it took.
 - **Bill pricing walks the tiers.** `stock-pricing` returns `tiers` (the pools
   the next sale drains) for a FIFO company; `utils/fifoPricing.js` turns an
   amount into the quantity it buys across them. No tiers = weighted average,
-  and the forms' arithmetic is untouched.
+  and the forms' arithmetic is untouched. The tiers are ordered for the
+  INVOICE's date (`?date=`, sent by both forms and MCP `prepare_bill`), so a GD
+  claimed after that month is not drained first; without a date it is today
+  (2026-11-21: a 28 Oct invoice was quoted 50.6 units from a GD claimed in
+  November, and 47.6 left). The GD panel counts what a GD handed to sales made
+  before it arrived (its `ShortfallKey` takes) as consumed.
 - **A stock sheet is applied by RESTATEMENT, never by adjustments** (2026-09-28).
   Reconciling a FIFO company to a client's stock sheet with ordinary stock
   adjustments lands the TOTAL but not the GDs: stock put back by an adjustment

@@ -1210,7 +1210,7 @@ export default function StandaloneInvoiceForm({
       return;
     }
     let cancelled = false;
-    getStockPricing(companyId, pickedItemTypeIds)
+    getStockPricing(companyId, pickedItemTypeIds, invoiceDate)
       .then(({ data }) => {
         if (cancelled) return;
         setStockPricing(Object.fromEntries((data || []).map((x) => [x.itemTypeId, x])));
@@ -1221,7 +1221,7 @@ export default function StandaloneInvoiceForm({
     return () => {
       cancelled = true;
     };
-  }, [companyId, pickedItemTypeIds, overlayOn]);
+  }, [companyId, pickedItemTypeIds, overlayOn, invoiceDate]);
 
   // Line total -> quantity, at the stock's own unit price:
   //     UnitPrice = stock value excluding tax / stock quantity

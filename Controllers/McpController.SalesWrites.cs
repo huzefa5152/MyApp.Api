@@ -193,7 +193,7 @@ namespace MyApp.Api.Controllers
         /// whole billed quantity, a rate that makes the line the amount, and
         /// the stock quantity the amount buys.
         /// </summary>
-        private async Task<List<Line>> PriceAmountLinesAsync(int companyId, List<Line> lines)
+        private async Task<List<Line>> PriceAmountLinesAsync(int companyId, DateTime billDate, List<Line> lines)
         {
             if (lines.All(l => l.Amount == null)) return lines;
             if (lines.Any(l => l.Amount != null && l.ItemTypeId == null))
@@ -201,7 +201,7 @@ namespace MyApp.Api.Controllers
             if (await _context.Companies.AsNoTracking().Where(c => c.Id == companyId).Select(c => c.InventoryOverlayEnabled).FirstAsync())
                 throw new ToolError("This company keeps a separate commercial bill, which is not priced from stock. Give quantity and unitPrice.");
             var ids = lines.Where(l => l.Amount != null).Select(l => l.ItemTypeId!.Value).Distinct().ToList();
-            var answer = await Screen<InvoicesController>().GetStockPricing(companyId, string.Join(",", ids));
+            var answer = await Screen<InvoicesController>().GetStockPricing(companyId, string.Join(",", ids), billDate);
             var pricing = ((answer.Result as Microsoft.AspNetCore.Mvc.OkObjectResult)?.Value as List<StockLinePricingDto> ?? new List<StockLinePricingDto>())
                 .ToDictionary(p => p.ItemTypeId);
             var decimalUnits = (await _context.Units.AsNoTracking().Where(u => u.AllowsDecimalQuantity).Select(u => u.Name).ToListAsync())
@@ -662,7 +662,7 @@ namespace MyApp.Api.Controllers
             }
 
             if (Has(args, "prices")) throw new ToolError("prices applies to challan lines. For a standalone bill give items.");
-            var lines = await PriceAmountLinesAsync(companyId, await DocLinesAsync(args, companyId, pricesRequired: true, allowNewItem: true, allowAmount: true));
+            var lines = await PriceAmountLinesAsync(companyId, date, await DocLinesAsync(args, companyId, pricesRequired: true, allowNewItem: true, allowAmount: true));
             if (lines.Any(l => l.ItemTypeId == null && l.NewItem == null)) throw new ToolError("Every bill line needs an itemTypeId (search_item_types) or a newItemType.");
             if (lines.Any(l => l.NewItem != null)) await Need("itemtypes.manage.create");
             var sdto = new CreateStandaloneInvoiceDto

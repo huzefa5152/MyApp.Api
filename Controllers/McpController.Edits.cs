@@ -97,7 +97,7 @@ namespace MyApp.Api.Controllers
             if (moving && division != existing.DivisionId) await AssertDivisionWriteAsync(companyId, division);
             var date = DateArg(args, "date") ?? existing.Date;
             if (PakistanClock.IsFutureInvoiceDate(date)) throw new ToolError("A bill cannot be dated in the future (FBR rule 0043).");
-            var lines = await PriceAmountLinesAsync(companyId, await DocLinesAsync(args, companyId, pricesRequired: true, allowNewItem: true, allowAmount: true));
+            var lines = await PriceAmountLinesAsync(companyId, date, await DocLinesAsync(args, companyId, pricesRequired: true, allowNewItem: true, allowAmount: true));
             if (lines.Any(l => l.ItemTypeId == null && l.NewItem == null)) throw new ToolError("Every bill line needs an itemTypeId (search_item_types) or a newItemType.");
             if (lines.Any(l => l.NewItem != null)) await Need("itemtypes.manage.create");
             KeepOwnLines(lines.Select(l => l.Id), existing.Items.Select(i => i.Id), "bill");

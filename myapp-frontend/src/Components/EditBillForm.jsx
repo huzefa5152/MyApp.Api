@@ -707,7 +707,7 @@ export default function EditBillForm({
     const companyId = invoice?.companyId;
     if (!companyId || !pricedItemTypeIds) return;
     let cancelled = false;
-    getStockPricing(companyId, pricedItemTypeIds)
+    getStockPricing(companyId, pricedItemTypeIds, billDate)
       .then(({ data }) => {
         if (cancelled) return;
         setStockPricing(Object.fromEntries((data || []).map((x) => [x.itemTypeId, x])));
@@ -718,7 +718,7 @@ export default function EditBillForm({
     return () => {
       cancelled = true;
     };
-  }, [invoice?.companyId, pricedItemTypeIds]);
+  }, [invoice?.companyId, pricedItemTypeIds, billDate]);
 
   const updateItem = (index, field, value) => {
     setItems((prev) => {
