@@ -2099,6 +2099,39 @@ using (var scope = app.Services.CreateScope())
         }
     }
 
+    // Saved copies of the old default Sales Tax Invoice give the Supplier and
+    // Buyer boxes `flex: 1`, so a box grows to its content's minimum width and
+    // the PDF prints them unequal. The built-in default already uses a zero
+    // basis; bring the saved copies in line. Exact-text match only, so a row
+    // an operator has edited there is left alone.
+    if (!db.AuditLogs.Any(a => a.ExceptionType == "TAXINVOICE_PARTY_WIDTH_V1"))
+    {
+        try
+        {
+            const string oldRule = ".party { flex: 1; border: 1px solid #000; padding: 6px 10px; font-size: 10pt; line-height: 1.5; }";
+            const string newRule = ".party { flex: 1 1 0; width: 0; min-width: 0; overflow-wrap: anywhere; border: 1px solid #000; padding: 6px 10px; font-size: 10pt; line-height: 1.5; }";
+            var rows = db.PrintTemplates
+                .Where(t => t.TemplateType == "TaxInvoice" && t.HtmlContent.Contains(oldRule))
+                .ToList();
+            foreach (var row in rows)
+            {
+                row.HtmlContent = row.HtmlContent.Replace(oldRule, newRule);
+                row.UpdatedAt = DateTime.UtcNow;
+            }
+            db.SaveChanges();
+
+            db.Database.ExecuteSqlRaw(
+                "INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp]) " +
+                "VALUES ('Info', 'TAXINVOICE_PARTY_WIDTH_V1', {0}, 'STARTUP', '/seed/printtemplates/taxinvoice-party-width', 200, SYSUTCDATETIME())",
+                $"Equal-width supplier/buyer boxes applied to {rows.Count} saved tax invoice template(s): " +
+                string.Join(", ", rows.Select(r => $"#{r.Id} (company {r.CompanyId})")));
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Tax invoice party width patch failed (non-fatal).");
+        }
+    }
+
     // Division RBAC (Phase 4): StockMovements now denormalize the source
     // document's DivisionId (stamped at record time for new rows). Backfill
     // existing rows from their source Invoice / PurchaseBill / GoodsReceipt —
