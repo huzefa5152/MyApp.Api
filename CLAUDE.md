@@ -448,7 +448,7 @@ working rule for every agent on this branch:
 | Deleting an item type that still holds stock is refused | `python scripts/test_item_type_delete_guard.py` | `5/5 checks passed` |
 | Bill / invoice numbering — Auto vs a hand-typed number, both create paths + renumbering on edit | `python scripts/test_custom_bill_number.py` (add `--db "<conn>"` for the FBR-filed lock suite) | `47/47 checks passed` (5 skipped without `--db`) |
 | Admin scope isolation (seed / Administrator trees, Tenant Access, IDOR) | `python scripts/test_admin_scope_isolation.py` | `all checks passed` (currently `115/115`) |
-| FBR cancellation + reversal releases challans | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `26/26 checks passed` |
+| FBR cancellation + reversal releases challans, note reason rules | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `30/30 checks passed` (27/27 with no classified item type) |
 | Valued stock entries (isolated local SQL only) | `py -3.14 scripts/test_stock_entry_workflow.py --base http://localhost:5191 --database <isolated-local-test-db>` | `41 stock-entry workflow checks passed` |
 | Commercial costs + local purchases: one pool for challan / bill / form / dialog, races, edits, sale-side floor, IDOR | `python scripts/test_trader_commercial_costs.py --base <url> --db "<conn>"` | `124/124 commercial cost checks passed` |
 | Costs book supplier purchases automatically: create/edit/move/clear, lock once paid or credited, entered bills win, closed period, cancel/delete, tenant | `python scripts/test_cost_purchase_sync.py --base <url> --db "<conn>"` | `49/49 cost purchase sync checks passed` |
@@ -624,8 +624,25 @@ because the challans stayed `Invoiced` against a bill reversed to nothing.
   entirely. A partly reversed bill stays. The Tax Sheet and the pending-FBR list
   need no such filter: both select `FbrSubmittedAt == null`, so a filed-then-
   withdrawn bill cannot appear in either.
-- Suite: `scripts/test_fbr_cancellation.py` (26 checks). It needs `--db` to fake
-  the filing, because none of these paths is reachable on an unfiled bill.
+- **A note needs a reason, and "Others" needs remarks** (2026-11-25).
+  `Helpers/NoteReasonRule` is the one rule, used when the note is made
+  (`CreateNoteAsync`) and in the FBR pre-validate. FBR refuses both [0027] and
+  [0028] (seen in the sandbox); `/api/invoices/notes` used to save a note with
+  no reason that could then never be filed.
+- **FBR's DI API does not accept `invoiceType: "Credit Note"`** (2026-11-25,
+  sandbox, and every production validate tried Jul–Sep 2026): it answers
+  `[0003] Provided invoice type is not valid`, whatever else the note carries.
+  `doctypecode` lists only 4 Sale Invoice and 9 Debit Note, and spec v1.12's
+  `invoiceType` table lists only those two; error 0071 says credit notes are
+  "allowed only for specific users". A credit note is still the right DOCUMENT
+  (stock, ledger, print); it just cannot be filed until FBR enables it. The
+  sandbox cannot test a Debit Note past its 0026/0027/0028 header checks either:
+  everything after them, including a bogus reference, is `[0510] Execption
+  occured`. So 0029/0034/0035/0036/0057/0064/0067/0068 are unproven at FBR and
+  rest on our own guards.
+- Suite: `scripts/test_fbr_cancellation.py` (30 checks; 27 when the test company
+  has no classified item type, which skips the 3 stock checks). It needs `--db`
+  to fake the filing, because none of these paths is reachable on an unfiled bill.
 
 ## The accounting module and the two editions (2026-09-19)
 

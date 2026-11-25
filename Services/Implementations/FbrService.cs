@@ -562,6 +562,8 @@ namespace MyApp.Api.Services.Implementations
                 var refIrn = invoice.OriginalInvoiceRefIRN?.Trim();
                 if (string.IsNullOrWhiteSpace(refIrn))
                     errors.Add($"Invoice Reference Number is required for {invoiceTypeStr}s. The original invoice must be submitted to FBR first. [FBR 0026]");
+                var reasonProblem = NoteReasonRule.Problem(invoiceTypeStr, invoice.NoteReason, invoice.NoteReasonRemarks);
+                if (reasonProblem != null) errors.Add(reasonProblem);
 
                 // FBR 0034: a note is only accepted within 180 days of the
                 // original invoice date, and 0035: not dated before it.

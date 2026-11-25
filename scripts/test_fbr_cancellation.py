@@ -222,10 +222,23 @@ def main() -> int:
         inv2 = bill_challan(dc2, 250)
         if check("a second challan is billed", inv2 is not None, f"{inv2}"):
             file_at_fbr(inv2["id"], f"IRN-{tag}-2")
+            # FBR refuses a note with no reason [0027], and reason "Others" with
+            # no remarks [0028] (both seen in the sandbox), so neither is made.
+            for reason, code in ((None, "0027"), ("  ", "0027"), ("Others", "0028")):
+                st, bad = http("POST", "/api/invoices/notes", api, token=token, body={
+                    "originalInvoiceId": inv2["id"], "documentType": 10, "reason": reason})
+                check(f"a note with reason {reason!r} and no remarks is refused [{code}]",
+                      st == 400 and code in json.dumps(bad), f"got {st} {bad}")
             st, note = http("POST", "/api/invoices/notes", api, token=token, body={
                 "originalInvoiceId": inv2["id"], "documentType": 10,
                 "reason": "Return of goods", "affectsStock": True})
             check("a full credit note is created", st in (200, 201), f"got {st} {note}")
+            if st in (200, 201):
+                # A note saved before the rule (no reason) is stopped before FBR is called.
+                sql(args.db, f"UPDATE Invoices SET NoteReason=NULL WHERE Id={note['id']}")
+                st, v = http("POST", f"/api/fbr/{note['id']}/validate", api, token=token)
+                check("validating a note with no reason stops at pre-validate [0027]",
+                      "[FBR 0027]" in str((v or {}).get("errorMessage")), f"got {st} {v}")
 
             status, linked = challan_state(dc2["id"])
             check("the challan is released by the credit note alone",

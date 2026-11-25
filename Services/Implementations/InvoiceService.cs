@@ -3338,6 +3338,8 @@ namespace MyApp.Api.Services.Implementations
             // numbering sequences and their own tabs.
             var docType = dto.DocumentType == 9 ? 9 : 10;
             var label = docType == 10 ? "Credit Note" : "Debit Note";
+            var reasonProblem = NoteReasonRule.Problem(label, dto.Reason, dto.Remarks);
+            if (reasonProblem != null) throw new InvalidOperationException(reasonProblem);
 
             // FBR 0064: only one live note of a given type per original invoice.
             var alreadyExists = await _context.Invoices.AnyAsync(i =>
