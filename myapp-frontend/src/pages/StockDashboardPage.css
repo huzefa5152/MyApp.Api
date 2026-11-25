@@ -76,12 +76,6 @@
 .inventory-summary .inventory-attention {
   color: #995012;
 }
-.inventory-panel {
-  background: var(--k-surface);
-  border: 1px solid var(--k-line);
-  border-radius: var(--k-card-radius);
-  min-width: 0;
-}
 .inventory-tabs {
   display: flex;
   gap: 20px;
@@ -259,7 +253,7 @@
   color: #a32c36;
   background: var(--k-danger-bg);
 }
-.inventory-panel > .inventory-entry-history > p[role] {
+.inventory-records > .inventory-entry-history > p[role] {
   margin: 8px 18px;
 }
 /* The kit table (k-table) gives the look in every theme; these rules keep only
@@ -625,10 +619,10 @@ html:not([data-ui-layout="workspace"]) .inventory-page .stock-table td {
   .inventory-tabs,
   .inventory-toolbar,
   .inventory-pagination,
-  .inventory-panel > .pagination-bar {
+  .inventory-records > .pagination-bar {
     flex-shrink: 0;
   }
-  .inventory-panel {
+  .inventory-records {
     display: flex;
     flex-direction: column;
     flex: 1;

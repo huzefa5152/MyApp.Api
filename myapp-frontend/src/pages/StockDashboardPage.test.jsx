@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
 import { it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import StockDashboardPage from "./StockDashboardPage";
@@ -198,6 +199,21 @@ it("drops drafts and old rows when company changes", async () => {
   expect(screen.queryByRole("region", { name: "Valued stock form" })).toBeNull();
   await waitFor(() => expect(stock.getStockOnHand).toHaveBeenCalledWith(8));
   expect(screen.queryByText("Rs. 260")).toBeNull();
+});
+
+// jsdom has no layout, so this pins the contract the layout rests on: the desktop
+// frame's sizing rule names a class the records section really carries. When the
+// section lost its class the records grew past the locked page and could not scroll.
+it("lets the desktop frame size the records section", async () => {
+  await show();
+  // Read from disk: vitest stubs stylesheet imports, `?raw` included.
+  const css = readFileSync("src/pages/StockDashboardPage.css", "utf8");
+  const frame = css.slice(css.indexOf("@media screen and (min-width: 768px)"));
+  const section = screen.getByRole("region", { name: "Stock on hand records" }).parentElement;
+  const sized = [...section.classList].filter((c) =>
+    new RegExp(`\\.${c} \\{[^}]*min-height: 0;[^}]*overflow: hidden;`).test(frame),
+  );
+  expect(sized).not.toHaveLength(0);
 });
 
 it("keeps movement pagination outside the keyboard-scrollable records", async () => {

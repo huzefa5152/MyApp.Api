@@ -267,7 +267,7 @@ function CompanyStockDashboard() {
             idPrefix="stock-tab"
           />
 
-          <section aria-label="Inventory records">
+          <section aria-label="Inventory records" className="inventory-records">
             {tab !== "entries" && (
               <Toolbar>
                 {tab === "onhand" ? (
@@ -368,7 +368,7 @@ function CompanyStockDashboard() {
                             <th className="k-num">Total OUT</th>
                             <th className="k-num">On-Hand</th>
                             <th>Last Movement</th>
-                            {canAdjust && <th style={{ width: 92 }} aria-label="Actions"></th>}
+                            {canAdjust && <th style={{ width: 112 }} aria-label="Actions"></th>}
                           </tr>
                         </thead>
                         <tbody>
