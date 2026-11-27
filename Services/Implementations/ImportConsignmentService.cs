@@ -513,9 +513,10 @@ namespace MyApp.Api.Services.Implementations
         /// consignment exactly as it was.
         /// </summary>
         public async Task<ImportConsignmentLineUpdateResultDto> UpdateLineAsync(
-            int consignmentId, int lineId, UpdateImportConsignmentLineDto dto, int userId)
+            int consignmentId, int lineId, UpdateImportConsignmentLineDto dto, int userId,
+            bool partOfRevision = false)
         {
-            await using var tx = await _db.Database.BeginTransactionAsync();
+            await using var tx = partOfRevision ? null : await _db.Database.BeginTransactionAsync();
             try
             {
                 var consignment = await _db.ImportConsignments
@@ -713,7 +714,7 @@ namespace MyApp.Api.Services.Implementations
                 var hadJournalEntry = await _db.JournalEntries.AnyAsync(e =>
                     e.CompanyId == companyId && e.SourceDocType == SourceDocType.ImportConsignment
                     && e.SourceDocId == consignment.Id);
-                if (hadJournalEntry)
+                if (hadJournalEntry && !partOfRevision)
                 {
                     // Withdraw and re-post rather than patch: the entry is
                     // idempotent on (CompanyId, SourceDocType, SourceDocId), and
@@ -736,9 +737,9 @@ namespace MyApp.Api.Services.Implementations
                 result.ImportClearingCredited = consignment.ImportClearingCredited;
 
                 await _db.SaveChangesAsync();
-                if (arrival != null)
+                if (arrival != null && !partOfRevision)
                     await _posting.PostInventoryPeriodsAsync(companyId, null);
-                await tx.CommitAsync();
+                if (tx != null) await tx.CommitAsync();
 
                 if (result.ArrivalUpdated)
                     result.Messages.Add("The stock this GD line brought in was corrected to match.");
@@ -760,7 +761,7 @@ namespace MyApp.Api.Services.Implementations
             }
             catch
             {
-                await tx.RollbackAsync();
+                if (tx != null) await tx.RollbackAsync();
                 throw;
             }
         }

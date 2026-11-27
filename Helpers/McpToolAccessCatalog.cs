@@ -70,6 +70,7 @@ public static class McpToolAccessCatalog
         new("prepare_gd_costing", "Import costing", "Prepare a hand-entered GD costing", new[] { "importcosting.sheet.run" }, McpScopes.Gds, Write: true),
         new("prepare_gd_charge", "Import costing", "Prepare adding or removing a GD charge", new[] { "importcosting.sheet.run" }, McpScopes.Gds, Write: true),
         new("prepare_gd_line_correction", "Import costing", "Prepare a correction to one GD line", new[] { "importcosting.sheet.run" }, McpScopes.Gds, Write: true),
+        new("prepare_gd_revision", "Import costing", "Prepare revising a whole recorded GD", new[] { "importcosting.sheet.run" }, McpScopes.Gds, Write: true),
         new("prepare_gd_claim_month", "Import costing", "Prepare a GD or GD line claim month", new[] { "stock.opening.manage" }, McpScopes.Gds, Write: true),
         new("search_lcs", "Import costing", "Find letters of credit", new[] { "importcosting.lc.view" }),
         new("prepare_lc", "Import costing", "Prepare a letter of credit or a GD link", new[] { "importcosting.lc.manage" }, McpScopes.Lcs, Write: true),

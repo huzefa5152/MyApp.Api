@@ -26,17 +26,23 @@ namespace MyApp.Api.Controllers
     public class ImportConsignmentsController : ControllerBase
     {
         private readonly IImportConsignmentService _consignments;
+        private readonly IGdRevisionService _revisions;
+        private readonly IImportProfileService _profiles;
         private readonly ICompanyAccessGuard _access;
         private readonly IDivisionAccessGuard _divisionAccess;
         private readonly ILogger<ImportConsignmentsController> _logger;
 
         public ImportConsignmentsController(
             IImportConsignmentService consignments,
+            IGdRevisionService revisions,
+            IImportProfileService profiles,
             ICompanyAccessGuard access,
             IDivisionAccessGuard divisionAccess,
             ILogger<ImportConsignmentsController> logger)
         {
             _consignments = consignments;
+            _revisions = revisions;
+            _profiles = profiles;
             _access = access;
             _divisionAccess = divisionAccess;
             _logger = logger;
@@ -83,6 +89,99 @@ namespace MyApp.Api.Controllers
         /// create a consignment you can correct one. The company comes from the
         /// STORED row, never the caller.
         /// </summary>
+        // -- Revise a recorded GD from one sheet (2026-11-27) -----------------
+
+        /// <summary>
+        /// The recorded GD as a workbook in the upload layout: the file a
+        /// consultant edits and uploads back with Revise from sheet. Company
+        /// from the STORED consignment.
+        /// </summary>
+        [HttpGet("{id:int}/sheet")]
+        [HasPermission("importcosting.consignments.view")]
+        public async Task<IActionResult> Sheet(int id)
+        {
+            var file = await _revisions.ExportAsync(id);
+            if (file == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, file.Value.CompanyId);
+            return File(file.Value.Bytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", file.Value.FileName);
+        }
+
+        /// <summary>
+        /// Reads a revised sheet for this GD and says what it would change, add
+        /// and remove. Writes nothing. The layout is the built-in costing
+        /// layout unless a saved one is named.
+        /// </summary>
+        [HttpPost("{id:int}/revise/preview")]
+        [HasPermission("importcosting.sheet.run")]
+        [RequestSizeLimit(ExcelUploadValidator.MaxBytes)]
+        public async Task<IActionResult> RevisePreview(int id, [FromForm] IFormFile file, [FromQuery] int? profileId)
+        {
+            var existing = await _consignments.GetDetailAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+
+            var validated = await ExcelUploadValidator.ValidateAsync(file, HttpContext.RequestAborted);
+            if (!validated.Ok) return BadRequest(new { message = validated.Error });
+
+            var mappingJson = Helpers.ExcelImport.GdCostingLayout.MappingJson;
+            int? profileVersion = null;
+            if (profileId.HasValue)
+            {
+                var profile = await _profiles.GetAsync(profileId.Value);
+                if (profile == null || (profile.CompanyId != null && profile.CompanyId != existing.CompanyId)
+                    || !string.Equals(profile.Kind, Models.ImportKinds.GdCosting, StringComparison.OrdinalIgnoreCase))
+                    return NotFound(new { message = "That layout does not exist." });
+                mappingJson = profile.MappingJson;
+                profileVersion = profile.CurrentVersion;
+            }
+
+            try
+            {
+                return Ok(await _revisions.PreviewAsync(
+                    id, validated.Bytes, validated.Extension, validated.FileName, validated.Sha256,
+                    mappingJson, profileId, profileVersion));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Reading a revision sheet for import consignment {Id} failed", id);
+                return StatusCode(500, new { message = "The file could not be read. Please check it and try again." });
+            }
+        }
+
+        /// <summary>
+        /// Applies a reviewed revision: every changed, new and removed line in
+        /// one transaction, or none. Same write scope as a single-line
+        /// correction.
+        /// </summary>
+        [HttpPost("{id:int}/revise/commit")]
+        [HasPermission("importcosting.sheet.run")]
+        public async Task<IActionResult> ReviseCommit(int id, [FromBody] DTOs.GdRevisionCommitDto dto)
+        {
+            var existing = await _consignments.GetDetailAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, existing.CompanyId, null);
+
+            try
+            {
+                return Ok(await _revisions.CommitAsync(id, dto, CurrentUserId));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Revising import consignment {Id} failed", id);
+                return StatusCode(500, new { message = "The GD could not be revised. Nothing was changed." });
+            }
+        }
+
         [HttpPut("{id:int}/lines/{lineId:int}")]
         [HasPermission("importcosting.sheet.run")]
         public async Task<IActionResult> UpdateLine(

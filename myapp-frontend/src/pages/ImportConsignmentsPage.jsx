@@ -1,5 +1,13 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
-import { MdExpandMore, MdChevronRight, MdDelete, MdWarning, MdPayments, MdEdit } from "react-icons/md";
+import {
+  MdExpandMore,
+  MdChevronRight,
+  MdDelete,
+  MdWarning,
+  MdPayments,
+  MdEdit,
+  MdUploadFile,
+} from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useCompany } from "../contexts/CompanyContext";
 import { useConfirm } from "../Components/ConfirmDialog";
@@ -8,6 +16,7 @@ import { colors } from "../theme";
 import Pagination from "../Components/Pagination";
 import SettleConsignmentDialog from "../Components/SettleConsignmentDialog";
 import CorrectConsignmentLineDialog from "../Components/CorrectConsignmentLineDialog";
+import ReviseConsignmentDialog from "../Components/ReviseConsignmentDialog";
 import { getImportConsignments, getImportConsignment, deleteImportConsignment } from "../api/importConsignmentApi";
 import usePersistentFilter from "../hooks/usePersistentFilter";
 import ConsignmentExtras from "../Components/costing/ConsignmentExtras";
@@ -293,6 +302,7 @@ export default function ImportConsignmentsPage() {
   const [onlyOutstanding, setOnlyOutstanding] = usePersistentFilter("importConsignments", "onlyOutstanding", false);
   const [settlingRow, setSettlingRow] = useState(null);
   const [correcting, setCorrecting] = useState(null);
+  const [revising, setRevising] = useState(null);
 
   const canView = has("importcosting.consignments.view");
   const canDelete = has("importcosting.sheet.run");
@@ -356,6 +366,16 @@ export default function ImportConsignmentsPage() {
       "success");
     load();
     if (consignmentId && expandedId === consignmentId) await loadDetail(consignmentId);
+  };
+
+  // A revision moves lines, stock and the journal entry at once: re-read the
+  // list and the open detail, and report what the server says it did.
+  const onRevised = async (result) => {
+    const id = revising?.id;
+    setRevising(null);
+    notify((result.messages || []).join(" ") || `GD ${result.gdNumber} revised.`, "success");
+    load();
+    if (id && expandedId === id) await loadDetail(id);
   };
 
   const onDelete = async (row) => {
@@ -510,6 +530,16 @@ export default function ImportConsignmentsPage() {
                                 <MdPayments size={18} />
                               </button>
                             )}
+                            {canCorrect && row.mode === "new-arrivals" && (
+                              <button
+                                onClick={() => setRevising(row)}
+                                title={`Revise GD ${row.gdNumber} from a sheet`}
+                                aria-label={`Revise GD ${row.gdNumber} from a sheet`}
+                                style={iconBtn(colors.blue, false)}
+                              >
+                                <MdUploadFile size={18} />
+                              </button>
+                            )}
                             {canDelete && (
                               <button
                                 onClick={() => onDelete(row)}
@@ -565,6 +595,14 @@ export default function ImportConsignmentsPage() {
           consignment={settlingRow}
           onClose={() => setSettlingRow(null)}
           onSaved={() => onSettled(settlingRow)}
+        />
+      )}
+
+      {revising && (
+        <ReviseConsignmentDialog
+          consignment={revising}
+          onClose={() => setRevising(null)}
+          onRevised={onRevised}
         />
       )}
 

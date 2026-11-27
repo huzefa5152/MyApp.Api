@@ -596,6 +596,10 @@ namespace MyApp.Api.DTOs
 
     public class GdCostingCommitResultDto
     {
+        /// <summary>Items the written lines brought stock in for. Server-side only.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public List<int> ArrivalItemTypeIds { get; set; } = new();
+
         public int ImportRunId { get; set; }
         public int ConsignmentsWritten { get; set; }
         public int LinesWritten { get; set; }

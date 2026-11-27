@@ -142,6 +142,11 @@ re-import the GD through the screen (New Arrivals) or Step 2 (Backfill).
 **Fix one line's figures:** `PUT /api/import-consignments/{id}/lines/{lineId}`;
 a New Arrivals line's stock movement follows.
 
+**A New Arrivals GD that changed as a whole (re-assessed, lines added or
+dropped):** Consignments > Revise from sheet (CLAUDE.md 5b-25). Download the GD
+as a sheet, edit it, upload it, read the plan, apply. It works after sales, and
+is refused only when an item would end up holding less than what was sold.
+
 **Wrong item on a New Arrivals line (already committed):** delete the consignment
 and re-import with the right item / New item chosen, if nothing has been sold
 from it; otherwise use Stock Dashboard → Split to move that GD line to the right

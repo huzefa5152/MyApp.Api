@@ -42,7 +42,8 @@ namespace MyApp.Api.Services.Interfaces
             int companyId,
             int? profileId,
             int? profileVersion,
-            string? mode);
+            string? mode,
+            string? revisingGd = null);
 
         /// <summary>
         /// Builds ONE consignment line from a hand-typed form (Task 18:
@@ -65,9 +66,12 @@ namespace MyApp.Api.Services.Interfaces
         /// keeps that file's name and SHA-256, so the import is recorded against
         /// the file and the file still cannot be imported twice.
         /// </summary>
+        /// <paramref name="revisingGd"/>: the lines are a revision of that recorded GD, so its
+        /// existing consignment is not an error.
         Task<GdCostingPreviewDto> PreviewManualAsync(
             IReadOnlyList<GdCostingManualLineDto> lines, int companyId, string? mode,
-            GdCostingSourceDto? source = null);
+            GdCostingSourceDto? source = null,
+            string? revisingGd = null);
 
         /// <summary>
         /// Writes the reviewed lines in one transaction: the import run, one
@@ -76,6 +80,10 @@ namespace MyApp.Api.Services.Interfaces
         /// actual cost (and, under New Arrivals, the quantity and selling
         /// value too) onto every matched (cost-only) balance.
         /// </summary>
-        Task<GdCostingCommitResultDto> CommitAsync(GdCostingCommitDto dto, int userId);
+        /// <paramref name="appendToConsignmentId"/> (a GD revision): the lines are
+        /// ADDED to that recorded consignment instead of opening a new one. The
+        /// caller owns the transaction, re-posts the GD once and re-matches
+        /// stock sheets afterwards (see <see cref="IGdRevisionService"/>).
+        Task<GdCostingCommitResultDto> CommitAsync(GdCostingCommitDto dto, int userId, int? appendToConsignmentId = null);
     }
 }

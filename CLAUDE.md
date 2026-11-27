@@ -1994,6 +1994,42 @@ sheet and the software drifted every month.
   needed). The late-GD re-match those sections pin exists for the quantity
   invoices entered before the watermark.
 
+### 5b-25. Revise a recorded GD from one sheet (2026-11-27)
+
+A GD that customs re-assessed used to be corrected one line at a time, and a
+line it gained or lost could not be handled at all once its goods had sold
+(delete-and-reimport is refused then). Consignments now has **Revise from
+sheet** on every New Arrivals GD, and MCP has `prepare_gd_revision`.
+
+- **The sheet is the whole GD as it should now read.** The dialog downloads the
+  recorded GD in the built-in costing layout (`GET /import-consignments/{id}/sheet`):
+  that file IS the template. A selling value the costing gives is left blank in
+  it, so it follows an edited row; only a typed-over one is stated.
+- **`GdRevisionService` builds one plan, on preview and again on apply.** A sheet
+  row is paired with a recorded line by the same description under the same HS
+  code, else by the same item; a paired row is unchanged or changed, an unpaired
+  row is new, a recorded line left over is removed. Apply rebuilds the plan from
+  the submitted lines against the GD as it then stands, so a stale review
+  cannot land.
+- **It reuses the three existing writers, in one transaction.** New lines go
+  through `GdCostingImportService.CommitAsync(appendToConsignmentId)`, changed
+  lines through `ImportConsignmentService.UpdateLineAsync(partOfRevision: true)`,
+  removed lines lose their arrival movement. The GD's entry is withdrawn and
+  re-posted ONCE, and the monthly stock relief recomputed once, at the end.
+  Never add a second place that writes a GD line.
+- **Nothing ends up holding less than nothing.** Per item, what the revised GD
+  brings must cover what has already left. A quantity cut below what was sold,
+  or a sold line removed, blocks the WHOLE revision and names the item and the
+  figures. Filed invoices are never touched.
+- **Scope, on purpose:** New Arrivals GDs only (a Backfill GD priced stock that
+  was already held; its lines are corrected singly), and a GD with charges is
+  refused until they are removed (they are spread by assessed value). Rows for
+  another GD are ignored with a warning.
+- Routes take the company from the STORED consignment; preview and apply need
+  `importcosting.sheet.run`, the sheet `importcosting.consignments.view`.
+- Suites: `scripts/test_gd_revision.py` (45), `test_mcp_writes.py` (4 cases),
+  `test_tenant_isolation.py` suite 19 (2 probes).
+
 ### 5c. Customer Portal — the only anonymous surface
 
 `Controllers/PublicCustomerPortalController.cs` is one of just two
@@ -2512,6 +2548,7 @@ them can be resolved from FBR.
 | One Invoices screen: descriptions, new items on save, stock guard, MCP prepare_bill, retired Bill print type | `python scripts/test_importer_invoice_screen.py --base <url>` | `56/56 importer invoice screen checks passed` |
 | Invoice screen decisions (offline): description fill, stock before save, card/table actions, FBR chip | `node scripts/test_invoice_screen.mjs` | `51/51 checks passed` |
 | GD costing import: line rules on both paths, leave-out, choose item, file identity | `python scripts/test_gd_import_costing.py`; `node scripts/test_gd_costing_entry.mjs`; `cd scripts/gd_costing_harness && dotnet run -c Release` | `476 passed, 0 failed`; `54/54 checks passed`; `145 checks, 0 failed` |
+| Revise a recorded GD from one sheet: round trip, changed / new / removed together, sold quantity cannot be revised away, Backfill refused, other company refused | `python scripts/test_gd_revision.py --base <url>` | `45 passed, 0 failed` |
 | Invoice Sales Detail: periods, filters, Excel = screen, Excel format pinned, access | `python scripts/test_invoice_sales_detail.py` (add `--db "<conn>"` for the FBR-submitted cases); `node scripts/test_invoice_sales_detail.mjs` | `64/64 checks passed` (with `--db`; 61 + 3 skipped without); `45/45 checks passed` |
 | FIFO by GD (claimed first, never blocks, WA unchanged) | `cd scripts/stock_fifo_harness && dotnet run -c Release`; `python scripts/test_stock_fifo.py`; `node scripts/test_fifo_pricing.mjs` | `248 checks, 0 failed`; `95/95 checks passed`; `26/26 checks passed` |
 | Import Tax Desk (register, input-tax worksheet, tie-out) | `python scripts/test_import_tax_desk.py` | `27/27 checks passed` |
@@ -2521,7 +2558,7 @@ them can be resolved from FBR.
 | Inventory Overlay (two books, one total; normal mode unchanged) | `python scripts/test_inventory_overlay.py` (add `--db <branch db>` for the submitted-lock case) | `71/71 checks passed` (1 skipped without `--db`) |
 | Hosted MCP: door, premium grant, company / division isolation, catalog, activity | `python scripts/test_mcp_isolation.py --base <url> --db <local db>` | `45/45 isolation checks passed` |
 | MCP render bundle: chunks + sha256, data equals the screen, template choice, signed / unsigned, own stamp inlined, cross-company and Bill refused, rides on the print-data grant | `python scripts/test_mcp_render_bundle.py --base <url>` | `17/17 render bundle checks passed` |
-| Hosted MCP writes: prepare saves nothing, commit once, gates re-checked at commit, every write tool, cross-company links refused | `python scripts/test_mcp_writes.py --base <url> --db <local db>` | `88/88 MCP write checks passed` (89 when the company has a bank or cash account) |
+| Hosted MCP writes: prepare saves nothing, commit once, gates re-checked at commit, every write tool, cross-company links refused | `python scripts/test_mcp_writes.py --base <url> --db <local db>` | `102/102 MCP write checks passed` (89 when the company has a bank or cash account) |
 | Hosted MCP reads equal the screens, every tool swept against another company, tokens, self service, OAuth | `python scripts/test_mcp_reads.py`; `test_mcp_tenant_sweep.py`; `test_mcp_agent_tokens.py`; `test_mcp_self_service.py`; `test_mcp_oauth.py` (see `docs/MCP_AGENT_ACCESS.md`) | `24/24`; `14/14`; `55/55`; `33/33`; `69/69` |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |

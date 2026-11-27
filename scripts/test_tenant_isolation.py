@@ -1461,6 +1461,12 @@ else:
         status_check(suite19, "alice GET another tenant's consignment by id", s, 403)
         s, _ = request("DELETE", f"/api/import-consignments/{beta_cid}", token=tokens["alice"])
         status_check(suite19, "alice DELETE another tenant's consignment by id", s, 403)
+        # Revising a GD from a sheet: the same bare-id shape, read and write.
+        s, _ = request("GET", f"/api/import-consignments/{beta_cid}/sheet", token=tokens["alice"])
+        status_check(suite19, "alice GET another tenant's GD as a sheet", s, 403)
+        s, _ = request("POST", f"/api/import-consignments/{beta_cid}/revise/commit", token=tokens["alice"],
+                       body={"lines": [], "reason": "x"})
+        status_check(suite19, "alice revise another tenant's GD", s, 403)
 
         # Sanity: bob (has Beta access) reads the same row fine, proving the
         # 403s above are the tenant guard, not a broken route.

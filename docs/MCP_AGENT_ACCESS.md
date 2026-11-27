@@ -184,6 +184,7 @@ Writes (scope in brackets; the commit calls the service shown):
 | `prepare_gd_costing` (`gds.write`) | `importcosting.sheet.run` | `IGdCostingImportService.PreviewManualAsync` at prepare and at commit, then `CommitAsync`; the GD Costing screen's checklist (problems, ambiguous lines, unconfirmed new stock) must be clear |
 | `prepare_gd_charge` (`gds.write`) | `importcosting.sheet.run` | `IImportConsignmentService.AddChargeAsync` / `DeleteChargeAsync` |
 | `prepare_gd_line_correction` (`gds.write`) | `importcosting.sheet.run` | `IImportConsignmentService.UpdateLineAsync` |
+| `prepare_gd_revision` (`gds.write`) | `importcosting.sheet.run` | `IGdCostingImportService.PreviewManualAsync` then `IGdRevisionService.PreviewLinesAsync` at prepare; `IGdRevisionService.CommitAsync` at commit, which rebuilds the plan against the GD as it then stands. The whole GD is sent; changed, new and removed lines apply together or not at all |
 | `prepare_gd_claim_month` (`gds.write`) | `stock.opening.manage` | `StockRecordService.SetGdClaimMonthAsync` / `SetLineClaimMonthAsync` (first day of a month) |
 | `prepare_lc` (`lcs.write`) | `importcosting.lc.manage` | `ImportLcService.Create/Update/LinkAsync` |
 | `prepare_opening_stock` (`stock.write`) | `stock.opening.manage` | `StockRecordService.UpsertOpeningBalanceAsync` (plan shows before and after) |

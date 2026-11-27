@@ -489,6 +489,7 @@ try
     builder.Services.AddScoped<ICustomerLedgerImportService, CustomerLedgerImportService>();
     builder.Services.AddScoped<IGdCostingImportService, GdCostingImportService>();
     builder.Services.AddScoped<IImportConsignmentService, ImportConsignmentService>();
+    builder.Services.AddScoped<IGdRevisionService, GdRevisionService>();
     builder.Services.AddScoped<IStockCostAuditService, StockCostAuditService>();
     builder.Services.AddScoped<INonInventoryItemService, NonInventoryItemService>();
     builder.Services.AddScoped<IAuditLogService, AuditLogService>();

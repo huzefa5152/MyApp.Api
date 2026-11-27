@@ -60,7 +60,8 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<GdCostingPreviewDto> PreviewAsync(
             byte[] bytes, string extension, string fileName, string fileSha256,
-            string mappingJson, int companyId, int? profileId, int? profileVersion, string? mode)
+            string mappingJson, int companyId, int? profileId, int? profileVersion, string? mode,
+            string? revisingGd = null)
         {
             var mapping = GdCostingMapping.Parse(mappingJson);
 
@@ -86,7 +87,8 @@ namespace MyApp.Api.Services.Implementations
 
             return await BuildPreviewAsync(
                 sheetResult.Rows, sheetResult.Warnings, fileName, fileSha256, bytes.LongLength,
-                companyId, profileId, profileVersion, GdCostingImportModeNames.Normalize(mode));
+                companyId, profileId, profileVersion, GdCostingImportModeNames.Normalize(mode),
+                revisingGd: revisingGd);
         }
 
         /// <inheritdoc cref="IGdCostingImportService.PreviewManualAsync"/>
@@ -106,7 +108,7 @@ namespace MyApp.Api.Services.Implementations
         /// </remarks>
         public async Task<GdCostingPreviewDto> PreviewManualAsync(
             IReadOnlyList<GdCostingManualLineDto> lines, int companyId, string? mode,
-            GdCostingSourceDto? source = null)
+            GdCostingSourceDto? source = null, string? revisingGd = null)
         {
             if (lines == null || lines.Count == 0)
                 throw new InvalidOperationException("Add at least one line before previewing.");
@@ -151,7 +153,7 @@ namespace MyApp.Api.Services.Implementations
                     profileId: source.ImportProfileId,
                     profileVersion: source.ProfileVersion,
                     mode: GdCostingImportModeNames.Normalize(mode),
-                    choices: choices);
+                    choices: choices, revisingGd: revisingGd);
             }
 
             var (sha256, sizeBytes) = ManualEntryFingerprint(companyId, lines);
@@ -176,7 +178,7 @@ namespace MyApp.Api.Services.Implementations
                 profileId: null,
                 profileVersion: null,
                 mode: GdCostingImportModeNames.Normalize(mode),
-                choices: choices);
+                choices: choices, revisingGd: revisingGd);
         }
 
         /// <summary>
@@ -199,7 +201,7 @@ namespace MyApp.Api.Services.Implementations
             List<GdCostingSheetRow> rows, List<string> warnings,
             string fileName, string fileSha256, long fileSizeBytes,
             int companyId, int? profileId, int? profileVersion, string mode,
-            IReadOnlyList<LineChoice>? choices = null)
+            IReadOnlyList<LineChoice>? choices = null, string? revisingGd = null)
         {
             var preview = new GdCostingPreviewDto
             {
@@ -397,6 +399,8 @@ namespace MyApp.Api.Services.Implementations
             // so before commit hits the unique index and surfaces as a raw 500.
             var gdNumbers = preview.Lines.Select(l => l.GdNumber).ToList();
             var existingGds = await FindExistingGdNumbersAsync(companyId, gdNumbers);
+            // A revision is the one upload that is ABOUT a recorded GD.
+            if (revisingGd != null) existingGds.RemoveAll(g => NormalizeGd(g) == NormalizeGd(revisingGd));
             if (existingGds.Count > 0)
                 preview.BlockingErrors.Add(
                     $"GD {string.Join(", ", existingGds)} already {(existingGds.Count == 1 ? "has" : "have")} a consignment recorded for this company. Open the Consignments screen and delete the existing one first if you need to re-import it.");
@@ -1240,9 +1244,14 @@ namespace MyApp.Api.Services.Implementations
 
         // ── Commit ───────────────────────────────────────────────────────────
 
-        public async Task<GdCostingCommitResultDto> CommitAsync(GdCostingCommitDto dto, int userId)
+        public async Task<GdCostingCommitResultDto> CommitAsync(
+            GdCostingCommitDto dto, int userId, int? appendToConsignmentId = null)
         {
             var result = new GdCostingCommitResultDto();
+            var appendTo = appendToConsignmentId is int appendId
+                ? await _db.ImportConsignments.FirstOrDefaultAsync(c => c.Id == appendId && c.CompanyId == dto.CompanyId)
+                  ?? throw new InvalidOperationException("That consignment no longer exists.")
+                : null;
 
             // Defence in depth — the filtered unique index on ImportRun is the
             // real guarantee, but failing here gives a message the operator can
@@ -1262,7 +1271,11 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException("Too many rows in one import. Split the file and try again.");
 
             var gdNumbers = lines.Select(l => l.GdNumber).ToList();
-            var existingGds = await FindExistingGdNumbersAsync(dto.CompanyId, gdNumbers);
+            if (appendTo != null && lines.Any(l => NormalizeGd(l.GdNumber) != NormalizeGd(appendTo.GdNumber)))
+                throw new InvalidOperationException($"Every added line must be for GD {appendTo.GdNumber}.");
+            var existingGds = appendTo != null
+                ? new List<string>()
+                : await FindExistingGdNumbersAsync(dto.CompanyId, gdNumbers);
             if (existingGds.Count > 0)
                 throw new InvalidOperationException(
                     $"GD {string.Join(", ", existingGds)} already {(existingGds.Count == 1 ? "has" : "have")} a consignment recorded for this company. Nothing was changed. Open the Consignments screen and delete the existing one first if you need to re-import it.");
@@ -1271,12 +1284,13 @@ namespace MyApp.Api.Services.Implementations
             // has no bearing on matching, verification or either duplicate
             // guard just above/below, all of which run identically in both
             // modes.
-            var mode = GdCostingImportModeNames.Normalize(dto.Mode);
+            var mode = GdCostingImportModeNames.Normalize(appendTo?.Mode ?? dto.Mode);
             // Same never-blank claim month as the preview, for an API caller that
             // did not echo one back.
             var fifoCompany = await StockCostingMethod.IsGdFifoAsync(_db, dto.CompanyId);
 
-            await using var tx = await _db.Database.BeginTransactionAsync();
+            // Appending runs inside the revision's own transaction.
+            await using var tx = appendTo != null ? null : await _db.Database.BeginTransactionAsync();
             try
             {
                 // Server truth, never the client's claim: a fresh, company-
@@ -1299,6 +1313,11 @@ namespace MyApp.Api.Services.Implementations
                 var consignmentsByGd = new Dictionary<string, ImportConsignment>(StringComparer.OrdinalIgnoreCase);
                 foreach (var group in lines.GroupBy(l => l.GdNumber.Trim(), StringComparer.OrdinalIgnoreCase))
                 {
+                    if (appendTo != null)
+                    {
+                        consignmentsByGd[group.Key] = appendTo;
+                        continue;
+                    }
                     var gdDate = group.Select(l => l.GdDate).FirstOrDefault(d => d.HasValue);
                     var consignment = new ImportConsignment
                     {
@@ -1703,7 +1722,9 @@ namespace MyApp.Api.Services.Implementations
                 // a line or consignment never carries a null pointing at
                 // nothing (brief, Task 10 step 4).
                 foreach (var line in writtenLines) line.ImportRunId = run.Id;
-                foreach (var consignment in consignmentsByGd.Values) consignment.ImportRunId = run.Id;
+                // An appended-to GD keeps the run that first recorded it.
+                if (appendTo == null)
+                    foreach (var consignment in consignmentsByGd.Values) consignment.ImportRunId = run.Id;
                 await _db.SaveChangesAsync();
 
                 // GL posting (Task 20). New Arrivals only — a Backfill GD is
@@ -1716,7 +1737,7 @@ namespace MyApp.Api.Services.Implementations
                 // with no entry, or an entry with no consignment, is worse
                 // than a refused import.
                 var postedEntries = new List<GdCostingJournalEntryDto>();
-                if (mode == GdCostingImportModeNames.NewArrivals)
+                if (mode == GdCostingImportModeNames.NewArrivals && appendTo == null)
                 {
                     foreach (var consignment in consignmentsByGd.Values)
                         await _posting.PostImportConsignmentAsync(consignment);
@@ -1745,7 +1766,7 @@ namespace MyApp.Api.Services.Implementations
                         });
                 }
 
-                await tx.CommitAsync();
+                if (tx != null) await tx.CommitAsync();
 
                 // A back-dated GD lands before its items' last stock-sheet match or
                 // value correction, which then leaves its units short or valued at
@@ -1756,7 +1777,9 @@ namespace MyApp.Api.Services.Implementations
                 // traced to a GD), the GD stays saved and the panel is the fallback.
                 var gdItems = writtenLines.Where(l => l.StockMovementId != null && l.ItemTypeId != null)
                     .Select(l => l.ItemTypeId!.Value).Distinct().ToList();
-                if (gdItems.Count > 0)
+                result.ArrivalItemTypeIds = gdItems;
+                // Inside a revision the re-match waits for the revision's own commit.
+                if (gdItems.Count > 0 && appendTo == null)
                 {
                     try
                     {
@@ -1837,7 +1860,7 @@ namespace MyApp.Api.Services.Implementations
                 // A half-imported consignment set is worse than none — roll
                 // back everything rather than leave some lines written and
                 // others not.
-                await tx.RollbackAsync();
+                if (tx != null) await tx.RollbackAsync();
                 throw;
             }
         }

@@ -24,6 +24,24 @@ export const deleteImportConsignment = (id) => httpClient.delete(`/import-consig
 export const updateImportConsignmentLine = (id, lineId, body) =>
   httpClient.put(`/import-consignments/${id}/lines/${lineId}`, body);
 
+// Revise a recorded GD from one sheet: download it in the upload layout, read
+// the edited sheet into a plan (nothing written), then apply the reviewed
+// lines -- every change together or none.
+export const downloadImportConsignmentSheet = (id) =>
+  httpClient.get(`/import-consignments/${id}/sheet`, { responseType: "blob" });
+
+export const previewImportConsignmentRevision = (id, file) => {
+  const form = new FormData();
+  form.append("file", file);
+  return httpClient.post(`/import-consignments/${id}/revise/preview`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+    timeout: 180000,
+  });
+};
+
+export const commitImportConsignmentRevision = (id, body) =>
+  httpClient.post(`/import-consignments/${id}/revise/commit`, body, { timeout: 180000 });
+
 // GD-level charges (2026-10-05): freight, clearing, wharfage, demurrage, port,
 // other. Spread by assessed value into the lines' landed cost; owed through
 // Import Clearing on a New Arrivals GD with the ledger on.

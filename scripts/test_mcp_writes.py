@@ -297,6 +297,17 @@ line_id = one(f"SELECT TOP 1 Id FROM ImportConsignmentLines WHERE ImportConsignm
 plan, text = prepare(T, "prepare_gd_line_correction", {"companyId": A, "gdId": gd_id, "lineId": line_id, "assessedValue": "12000", "reason": "MCP test"})
 res, text = commit(T, plan) if plan else (None, text)
 check("GD line correction goes through the screen's service", res and one(f"SELECT CAST(AssessedValue AS INT) FROM ImportConsignmentLines WHERE Id = {line_id}") == 12000, text)
+# The whole GD, revised in one go: the recorded line changes and a second line is added.
+rev_lines = [{**gd_line, "quantity": "12", "assessedValue": "12000"},
+             {**gd_line, "description": f"MCP GD ITEM SECOND {RUN}", "quantity": "4", "assessedValue": "2000"}]
+refused, text = call(T, "prepare_gd_revision", {"companyId": A, "gdId": gd_id, "reason": "MCP test", "lines": [{**gd_line, "assessedValue": "12000"}]})
+check("a GD revision that changes nothing is refused", refused and "nothing to change" in text.lower(), text)
+plan, text = prepare(T, "prepare_gd_revision", {"companyId": A, "gdId": gd_id, "reason": "MCP test", "lines": rev_lines})
+check("a GD revision plan says what changes", plan is not None and plan["details"]["changed"] == 1 and plan["details"]["added"] == 1 and plan["details"]["removed"] == 0, text)
+res, text = commit(T, plan) if plan else (None, text)
+check("a GD revision applies the changed and the new line together",
+      res and count("ImportConsignmentLines", f"ImportConsignmentId = {gd_id or 0}") == 2
+      and one(f"SELECT CAST(Quantity AS INT) FROM ImportConsignmentLines WHERE Id = {line_id}") == 12, text)
 plan, text = prepare(T, "prepare_gd_claim_month", {"companyId": A, "lineId": line_id, "claimMonth": "2026-09"})
 res, text = commit(T, plan) if plan else (None, text)
 check("line claim month set", res and one(f"SELECT COUNT(*) FROM ImportConsignmentLines WHERE Id = {line_id} AND ClaimMonth = '2026-09-01'") == 1, text)
@@ -348,6 +359,7 @@ cases = [
     ("receipt allocating B's bill", "prepare_receipt", {"companyId": A, "clientId": client_a, "amount": "10", "allocations": [{"invoiceId": b_bill, "amount": "10"}]}),
     ("charge on B's GD", "prepare_gd_charge", {"companyId": A, "gdId": b_gd, "action": "add", "kind": "freight", "amount": "1"}),
     ("correction of B's GD", "prepare_gd_line_correction", {"companyId": A, "gdId": b_gd, "lineId": b_line, "reason": "x"}),
+    ("revision of B's GD", "prepare_gd_revision", {"companyId": A, "gdId": b_gd, "reason": "x", "lines": [gd_line]}),
     ("claim month on B's GD line", "prepare_gd_claim_month", {"companyId": A, "lineId": b_line, "claimMonth": "2026-08"}),
     ("link to B's LC", "prepare_lc", {"companyId": A, "action": "link", "gdId": gd_id, "lcId": b_lc}),
     ("update of B's LC", "prepare_lc", {"companyId": A, "action": "update", "lcId": b_lc, "status": "closed"}),

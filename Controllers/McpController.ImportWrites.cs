@@ -124,6 +124,13 @@ namespace MyApp.Api.Controllers
                         sellingValue = MoneyProp, descriptionOnSheet = Str(500), idempotencyKey = IdemProp,
                     }, "companyId", "gdId", "lineId", "reason"),
                     Build: BuildGdLineCorrectionAsync, PerHour: 20, Noun: "GD line corrections"),
+                new("prepare_gd_revision", "Prepare revising a recorded GD in one go: send the WHOLE GD as it should now read (lines as for prepare_gd_costing). Each line is matched to a recorded line and corrected, or added as new; a recorded line you leave out is removed. Refused if an item would end up holding less than what has already been sold. New Arrivals GDs only; a reason is required.",
+                    Obj(new
+                    {
+                        companyId = CompanyProp, gdId = Int("From search_gds or get_gd."), reason = Str(300),
+                        lines = new { type = "array", minItems = 1, maxItems = MaxGdLines, items = gdLine }, idempotencyKey = IdemProp,
+                    }, "companyId", "gdId", "reason", "lines"),
+                    Build: BuildGdRevisionAsync, PerHour: 5, Noun: "GD revisions"),
                 new("prepare_gd_claim_month", "Prepare the month a GD's input tax is claimed: for a whole GD (gdNumber), or for one line (lineId from get_gd, or lotId of an opening-stock lot). A line's month wins over the GD's. Give claimMonth as yyyy-MM, or null to clear.",
                     Obj(new { companyId = CompanyProp, gdNumber = Str(100), lineId = Int(), lotId = Int(), claimMonth = new { type = new[] { "string", "null" }, maxLength = 10 }, idempotencyKey = IdemProp }, "companyId"),
                     Build: BuildClaimMonthAsync, PerHour: 50, Noun: "claim month changes"),
@@ -436,42 +443,7 @@ namespace MyApp.Api.Controllers
             var gdNumber = OptText(args, "gdNumber", 100) is { Length: > 0 } g ? g : throw new ToolError("gdNumber is required.");
             var gdDate = DateArg(args, "gdDate") ?? throw new ToolError("gdDate is required.");
             var mode = GdCostingImportModeNames.Normalize(OptText(args, "mode", 20));
-            var lines = new List<GdCostingManualLineDto>();
-            var row = 0;
-            foreach (var l in Items(args, "lines", 1, MaxGdLines))
-            {
-                row++;
-                decimal Money(string n) => OptDec(l, n, 0m, 99_999_999_999m, 2) ?? 0m;
-                decimal Rate(string n) => OptDec(l, n, 0m, 100m, 4) ?? 0m;
-                var chosen = OptId(l, "chosenOpeningStockBalanceId");
-                if (chosen is int bal && !await _context.OpeningStockBalances.AsNoTracking().AnyAsync(o => o.Id == bal && o.CompanyId == companyId))
-                    throw new ToolError($"Line {row}: that opening balance is not one of this company's.");
-                lines.Add(new GdCostingManualLineDto
-                {
-                    SourceRow = row,
-                    GdNumber = gdNumber,
-                    GdDate = gdDate,
-                    ClaimMonth = MonthArg(l, "claimMonth"),
-                    Description = OptText(l, "description", 500) ?? "",
-                    HsCode = OptText(l, "hsCode", 20) ?? "",
-                    Quantity = ReqDec(l, "quantity", 0m, 999_999_999m, 4),
-                    Unit = OptText(l, "unit", 50),
-                    AssessedValue = Money("assessedValue"),
-                    CustomsDuty = Money("customsDuty"),
-                    Acd = Money("acd"),
-                    RegulatoryDuty = Money("regulatoryDuty"),
-                    Others = Money("others"),
-                    SalesTaxRate = Rate("salesTaxRate"),
-                    AstRate = Rate("astRate"),
-                    IncomeTaxRate = Rate("incomeTaxRate"),
-                    AddOnProfit = Money("addOnProfit"),
-                    SellingValue = OptDec(l, "sellingValue", 0m, 99_999_999_999m, 2),
-                    LeaveOut = OptBool(l, "leaveOut"),
-                    ChosenOpeningStockBalanceId = chosen,
-                    ConfirmNewStock = OptBool(l, "confirmNewStock"),
-                    AsNewItem = OptBool(l, "asNewItem"),
-                });
-            }
+            var lines = await GdLinesArgAsync(companyId, args, gdNumber, gdDate);
             var costing = Svc<IGdCostingImportService>();
             GdCostingPreviewDto pv;
             try { pv = await costing.PreviewManualAsync(lines, companyId, mode); }
@@ -589,6 +561,117 @@ namespace MyApp.Api.Controllers
                 {
                     var r = await service.AddChargeAsync(gd.Id, dto);
                     return ($"ImportConsignment:{gd.Id}", $"Added a {kind} charge to GD {gd.GdNumber}; charges now {r.TotalCharges:0.00} PKR, landed cost {r.LandedCostWithCharges:0.00} PKR");
+                });
+        }
+
+        /// <summary>The lines argument of a GD tool, as the hand-entry form's own lines.</summary>
+        private async Task<List<GdCostingManualLineDto>> GdLinesArgAsync(int companyId, JsonElement args, string gdNumber, DateTime gdDate)
+        {
+            var lines = new List<GdCostingManualLineDto>();
+            var row = 0;
+            foreach (var l in Items(args, "lines", 1, MaxGdLines))
+            {
+                row++;
+                decimal Money(string n) => OptDec(l, n, 0m, 99_999_999_999m, 2) ?? 0m;
+                decimal Rate(string n) => OptDec(l, n, 0m, 100m, 4) ?? 0m;
+                var chosen = OptId(l, "chosenOpeningStockBalanceId");
+                if (chosen is int bal && !await _context.OpeningStockBalances.AsNoTracking().AnyAsync(o => o.Id == bal && o.CompanyId == companyId))
+                    throw new ToolError($"Line {row}: that opening balance is not one of this company's.");
+                lines.Add(new GdCostingManualLineDto
+                {
+                    SourceRow = row,
+                    GdNumber = gdNumber,
+                    GdDate = gdDate,
+                    ClaimMonth = MonthArg(l, "claimMonth"),
+                    Description = OptText(l, "description", 500) ?? "",
+                    HsCode = OptText(l, "hsCode", 20) ?? "",
+                    Quantity = ReqDec(l, "quantity", 0m, 999_999_999m, 4),
+                    Unit = OptText(l, "unit", 50),
+                    AssessedValue = Money("assessedValue"),
+                    CustomsDuty = Money("customsDuty"),
+                    Acd = Money("acd"),
+                    RegulatoryDuty = Money("regulatoryDuty"),
+                    Others = Money("others"),
+                    SalesTaxRate = Rate("salesTaxRate"),
+                    AstRate = Rate("astRate"),
+                    IncomeTaxRate = Rate("incomeTaxRate"),
+                    AddOnProfit = Money("addOnProfit"),
+                    SellingValue = OptDec(l, "sellingValue", 0m, 99_999_999_999m, 2),
+                    LeaveOut = OptBool(l, "leaveOut"),
+                    ChosenOpeningStockBalanceId = chosen,
+                    ConfirmNewStock = OptBool(l, "confirmNewStock"),
+                    AsNewItem = OptBool(l, "asNewItem"),
+                });
+            }
+            return lines;
+        }
+
+        private async Task<Built> BuildGdRevisionAsync(int companyId, JsonElement args)
+        {
+            await Need("importcosting.sheet.run");
+            await AssertDivisionWriteAsync(companyId, null);
+            var gd = await OwnGdAsync(companyId, IdArg(args, "gdId"));
+            var reason = OptText(args, "reason", 300) is { Length: > 0 } r0 ? r0 : throw new ToolError("reason is required.");
+            var lines = await GdLinesArgAsync(companyId, args, gd.GdNumber, gd.GdDate);
+            var revisions = Svc<IGdRevisionService>();
+            GdRevisionPreviewDto plan;
+            try
+            {
+                var sheet = await Svc<IGdCostingImportService>().PreviewManualAsync(
+                    lines, companyId, GdCostingImportModeNames.NewArrivals, revisingGd: gd.GdNumber);
+                plan = await revisions.PreviewLinesAsync(gd.Id, sheet);
+            }
+            catch (InvalidOperationException ex) { throw new ToolError(ex.Message); }
+
+            var rows = plan.Rows.Where(r => r.Action != GdRevisionActions.Unchanged).Select(r => new
+            {
+                r.Action,
+                r.LineId,
+                r.SheetRow,
+                r.HsCode,
+                r.Description,
+                r.ItemTypeName,
+                r.OldQuantity,
+                r.NewQuantity,
+                r.OldCost,
+                r.NewCost,
+                r.OldSellingValue,
+                r.NewSellingValue,
+                r.Problems,
+            }).ToList();
+            if (plan.BlockingErrors.Count > 0)
+                throw new ToolError("The GD cannot be revised as sent: " + string.Join(" | ", plan.BlockingErrors.Take(8))
+                    + " Rows to review: " + Trunc(JsonSerializer.Serialize(rows.Where(r => r.Problems.Count > 0).Take(15), Json), 3000));
+            if (rows.Count == 0) throw new ToolError("The lines match the recorded GD. There is nothing to change.");
+            var preview = new
+            {
+                gdId = gd.Id,
+                gd.GdNumber,
+                reason,
+                plan.Unchanged,
+                plan.Changed,
+                plan.Added,
+                plan.Removed,
+                plan.OldTotalCost,
+                plan.NewTotalCost,
+                warnings = plan.Warnings,
+                rows,
+                note = "Every change applies together or not at all. The ERP re-derives costs, stock and the GD's journal entry when committed.",
+                currency = "PKR",
+            };
+            return new Built(preview,
+                $"Revise GD {gd.GdNumber} in company {companyId}: {plan.Changed} line(s) changed, {plan.Added} added, {plan.Removed} removed; cost {plan.OldTotalCost:0.00} -> {plan.NewTotalCost:0.00} PKR. {reason}",
+                async () =>
+                {
+                    var r = await revisions.CommitAsync(gd.Id, new GdRevisionCommitDto
+                    {
+                        Lines = plan.Sheet.Lines,
+                        FileSha256 = plan.Sheet.FileSha256,
+                        FileName = plan.Sheet.FileName,
+                        FileSizeBytes = plan.Sheet.FileSizeBytes,
+                        Reason = reason,
+                    }, CurrentUserId);
+                    return ($"ImportConsignment:{gd.Id}", $"Revised GD {r.GdNumber}: {r.LinesChanged} changed, {r.LinesAdded} added, {r.LinesRemoved} removed; cost {r.OldTotalCost:0.00} -> {r.NewTotalCost:0.00} PKR");
                 });
         }
 

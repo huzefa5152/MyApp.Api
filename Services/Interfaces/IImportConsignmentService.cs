@@ -52,8 +52,12 @@ namespace MyApp.Api.Services.Interfaces
         /// notably when it would take a balance negative, or drop the GD's
         /// posted liability below what has already been settled against it.
         /// </summary>
+        /// <paramref name="partOfRevision"/>: the caller owns the transaction and
+        /// re-posts the GD and the monthly stock relief once, after every line
+        /// (see <see cref="IGdRevisionService"/>).
         Task<ImportConsignmentLineUpdateResultDto> UpdateLineAsync(
-            int consignmentId, int lineId, UpdateImportConsignmentLineDto dto, int userId);
+            int consignmentId, int lineId, UpdateImportConsignmentLineDto dto, int userId,
+            bool partOfRevision = false);
     
         /// <summary>GD-level charges (2026-10-05): list, add, delete. Add and
         /// delete re-spread every charge by assessed value into the lines'
