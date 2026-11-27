@@ -1,6 +1,7 @@
 import ChallanPrivateCosts, { useChallanSuppliers } from "./ChallanPrivateCosts";
 import BillTaxTreatmentField from "./BillTaxTreatmentField";
 import ManualChallanNumberField from "./ManualChallanNumberField";
+import BillSiteField from "./BillSiteField";
 import DocumentCopyPicker from "./DocumentCopyPicker";
 import { copyLine } from "../utils/documentCopy";
 import { defaultFurtherTaxRate, isUnregisteredBuyer } from "../utils/furtherTax";
@@ -354,6 +355,7 @@ export default function StandaloneInvoiceForm({
   const [manualChallanNumber, setManualChallanNumber] = useState("");
   const [poNumber, setPoNumber] = useState("");
   const [poDate, setPoDate] = useState("");
+  const [site, setSite] = useState("");
 
   useEffect(() => {
     if (!billsMode || !canUseOrders || !companyId) {
@@ -388,6 +390,7 @@ export default function StandaloneInvoiceForm({
       if (data.gstRate != null) setGstRate(data.gstRate);
       setPoNumber(data.customerPoNumber || "");
       setPoDate(data.customerPoDate ? data.customerPoDate.slice(0, 10) : "");
+      setSite(data.site || "");
       const mapped = (data.lines || []).map((l) => ({
         ...blankRow(),
         description: l.description || "",
@@ -808,6 +811,7 @@ export default function StandaloneInvoiceForm({
         manualChallanNumber: billsMode ? manualChallanNumber.trim() || null : null,
         poNumber: billsMode ? poNumber.trim() || null : null,
         poDate: billsMode && poDate ? new Date(poDate).toISOString() : null,
+        site: billsMode ? site.trim() || null : null,
         items: rows.map((r) => ({
           actualUnitCost:
             r.actualUnitCost === "" || r.actualUnitCost == null ? null : Number(r.actualUnitCost),
@@ -990,6 +994,16 @@ export default function StandaloneInvoiceForm({
                       <ManualChallanNumberField
                         value={manualChallanNumber}
                         onChange={setManualChallanNumber}
+                      />
+                    </div>
+                    <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+                      <BillSiteField
+                        value={site}
+                        onChange={setSite}
+                        clientSites={
+                          clients.find((c) => String(c.id) === String(selectedClientId))?.site
+                        }
+                        disabled={!selectedClientId}
                       />
                     </div>
                     {/* Copy joins the order / PO row instead of a row of its own;

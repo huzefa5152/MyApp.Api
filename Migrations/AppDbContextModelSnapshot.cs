@@ -2350,6 +2350,10 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("PoNumber")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("Site")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<decimal>("Subtotal")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");

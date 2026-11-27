@@ -382,6 +382,9 @@ namespace MyApp.Api.DTOs
     {
         [System.ComponentModel.DataAnnotations.MaxLength(100)]
         public string? ManualChallanNumber { get; set; }
+        /// <summary>Site / department, usually one of the client's sites. Optional.</summary>
+        [System.ComponentModel.DataAnnotations.MaxLength(200)]
+        public string? Site { get; set; }
         public decimal FreightCharges { get; set; }
         public bool? GroupTaxInvoiceByItemType { get; set; }
         // ── Document taxes — both optional, both default to NONE ──
@@ -613,6 +616,17 @@ namespace MyApp.Api.DTOs
     {
         [System.ComponentModel.DataAnnotations.MaxLength(100)]
         public string? ManualChallanNumber { get; set; }
+        /// <summary>Standalone bills only. Null leaves it as it is; blank clears it.</summary>
+        [System.ComponentModel.DataAnnotations.MaxLength(200)]
+        public string? Site { get; set; }
+        /// <summary>
+        /// Standalone bills only (a challan-linked bill takes its PO from its
+        /// challans). Null leaves PO number AND date as they are; any other value,
+        /// blank included, sets both, so the form sends the pair together.
+        /// </summary>
+        [System.ComponentModel.DataAnnotations.MaxLength(100)]
+        public string? PoNumber { get; set; }
+        public DateTime? PoDate { get; set; }
         public decimal? FreightCharges { get; set; }
         public bool? GroupTaxInvoiceByItemType { get; set; }
         // ── Document taxes — both optional, both default to NONE ──

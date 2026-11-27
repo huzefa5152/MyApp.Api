@@ -199,6 +199,14 @@ namespace MyApp.Api.Models
         // (their DTO PoNumber still derives from the challans).
         [System.ComponentModel.DataAnnotations.MaxLength(100)]
         public string? ManualChallanNumber { get; set; }
+
+        /// <summary>
+        /// Site / department of a STANDALONE bill, picked from the client's sites
+        /// on the bill form. A challan-linked bill shows its challans' sites
+        /// instead (Helpers/BillSite); this stays null for it.
+        /// </summary>
+        [System.ComponentModel.DataAnnotations.MaxLength(200)]
+        public string? Site { get; set; }
         public string? PoNumber { get; set; }
         public DateTime? PoDate { get; set; }
 

@@ -431,6 +431,7 @@ working rule for every agent on this branch:
 | Bill print merges the same item across challans of one PO (print data only; lines stay per challan) | `python scripts/test_bill_print_merge.py --base <url>` | `8/8 bill print merge checks passed` |
 | HS code on both prints + FBR-ready without a quantity adjustment | `python scripts/test_hscode_on_prints.py` | `21/21 checks` |
 | A company saves with a name only, FBR details added later | `python scripts/test_company_create_minimal.py` | `8/8 checks` |
+| Standalone bill keeps its own site, PO number and PO date: create, edit, clear, both prints; a challan bill takes the challan's and refuses its own | `python scripts/test_standalone_bill_site.py --base <url>` | `13/13 standalone bill site checks passed` |
 | Cross-tenant leak sweep — both editions against a company they were never given | `python scripts/test_tenant_leak_sweep.py` | `126/126 checks` |
 | Every permission module lands in a navbar section (offline) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
 | Quote discounts: per line and whole quote before GST, refusals, print fields, net price on the bill prefill, whole-quote reminder, cross-company refusal | `python scripts/test_quote_discount.py --base <url>` | `33/33 quote discount checks passed` |

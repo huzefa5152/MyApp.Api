@@ -1,5 +1,6 @@
 import BillTaxTreatmentField from "./BillTaxTreatmentField";
 import ManualChallanNumberField from "./ManualChallanNumberField";
+import BillSiteField from "./BillSiteField";
 import { withTaxUom, taxGroupKey } from "../utils/taxInvoiceGrouping";
 import FreightChargesField from "./FreightChargesField";
 import BillChallansEditor from "./BillChallansEditor";
@@ -255,6 +256,11 @@ function CommercialBillEditor({
   const [billNumberOk, setBillNumberOk] = useState(true);
   const [paymentTerms, setPaymentTerms] = useState("");
   const [manualChallanNumber, setManualChallanNumber] = useState("");
+  // A standalone bill keeps its own PO and site; a challan-linked one takes
+  // them from its challans and does not send these.
+  const [poNumber, setPoNumber] = useState("");
+  const [poDate, setPoDate] = useState("");
+  const [site, setSite] = useState("");
   const [notes, setNotes] = useState("");
   const [freightCharges, setFreightCharges] = useState(0);
   const [paymentMode, setPaymentMode] = useState("");
@@ -415,6 +421,10 @@ function CommercialBillEditor({
         const pt = data.paymentTerms ?? "";
         setPaymentTerms(pt);
         setManualChallanNumber(data.manualChallanNumber || "");
+        const standalone = !(data.challanNumbers && data.challanNumbers.length > 0);
+        setPoNumber(standalone ? data.poNumber || "" : "");
+        setPoDate(standalone && data.poDate ? toLocalYmd(data.poDate) : "");
+        setSite(standalone ? data.site || "" : "");
         setNotes(data.notes || "");
         setFreightCharges(data.freightCharges ?? 0);
         setPaymentMode(data.paymentMode ?? "");
@@ -1673,6 +1683,13 @@ function CommercialBillEditor({
           groupTaxInvoiceByItemType: invoice.groupTaxInvoiceByItemType,
           paymentTerms: ptToSave,
           manualChallanNumber: isChallanLinked ? undefined : manualChallanNumber.trim(),
+          ...(billsMode && !isChallanLinked
+            ? {
+                site: site.trim(),
+                poNumber: poNumber.trim(),
+                poDate: poNumber.trim() && poDate ? poDate : null,
+              }
+            : {}),
           notes: notes.trim() || null,
           ...(billsMode ? { freightCharges: Number(freightCharges || 0) } : {}),
           documentType: documentType || null,
@@ -3153,11 +3170,47 @@ function CommercialBillEditor({
                 )}
 
                 {billsMode && !isChallanLinked && (
-                  <ManualChallanNumberField
-                    value={manualChallanNumber}
-                    onChange={setManualChallanNumber}
-                    readOnly={lockNonItemType || !invoice?.isEditable}
-                  />
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))",
+                      gap: "0 1rem",
+                    }}
+                  >
+                    <div style={{ ...formStyles.formGroup, minWidth: 0 }}>
+                      <label style={formStyles.label}>PO Number (optional)</label>
+                      <input
+                        type="text"
+                        maxLength={100}
+                        value={poNumber}
+                        onChange={(e) => setPoNumber(e.target.value)}
+                        readOnly={lockNonItemType || !invoice?.isEditable}
+                        style={{ ...formStyles.input, width: "100%", boxSizing: "border-box" }}
+                      />
+                    </div>
+                    <div style={{ ...formStyles.formGroup, minWidth: 0 }}>
+                      <label style={formStyles.label}>PO Date</label>
+                      <input
+                        type="date"
+                        value={poDate}
+                        onChange={(e) => setPoDate(e.target.value)}
+                        readOnly={lockNonItemType || !invoice?.isEditable}
+                        disabled={!poNumber.trim()}
+                        style={{ ...formStyles.input, width: "100%", boxSizing: "border-box" }}
+                      />
+                    </div>
+                    <BillSiteField
+                      value={site}
+                      onChange={setSite}
+                      clientSites={clients.find((c) => String(c.id) === String(clientId))?.site}
+                      readOnly={lockNonItemType || !invoice?.isEditable}
+                    />
+                    <ManualChallanNumberField
+                      value={manualChallanNumber}
+                      onChange={setManualChallanNumber}
+                      readOnly={lockNonItemType || !invoice?.isEditable}
+                    />
+                  </div>
                 )}
                 {billsMode && (
                   <FreightChargesField

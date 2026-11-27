@@ -457,10 +457,7 @@ namespace MyApp.Api.Services.Implementations
                 .Select(dc => dc.IndentNo)
                 .Where(s => !string.IsNullOrWhiteSpace(s))
                 .Distinct()),
-                Site = string.Join("; ", inv.DeliveryChallans
-                .Select(dc => dc.Site)
-                .Where(s => !string.IsNullOrWhiteSpace(s))
-                .Distinct()),
+                Site = BillSite.Of(inv, "; "),
             };
         }
 
@@ -1472,6 +1469,7 @@ namespace MyApp.Api.Services.Implementations
                         // Standalone bill has no challan to carry the PO — store it
                         // on the invoice when set at bill time (e.g. from a Sales Order).
                         ManualChallanNumber = string.IsNullOrWhiteSpace(dto.ManualChallanNumber) ? null : dto.ManualChallanNumber.Trim(),
+                        Site = BillSite.Clean(dto.Site),
                         PoNumber = string.IsNullOrWhiteSpace(dto.PoNumber) ? null : dto.PoNumber.Trim(),
                         PoDate = dto.PoDate,
                         FbrInvoiceNumber = string.IsNullOrEmpty(company.InvoiceNumberPrefix)
@@ -1782,6 +1780,20 @@ namespace MyApp.Api.Services.Implementations
                     if (invoice.DeliveryChallans.Count > 0 && !string.IsNullOrWhiteSpace(dto.ManualChallanNumber))
                         throw new InvalidOperationException("Manual challan references are only available on bills without linked challans.");
                     invoice.ManualChallanNumber = string.IsNullOrWhiteSpace(dto.ManualChallanNumber) ? null : dto.ManualChallanNumber.Trim();
+                }
+                if (dto.Site != null)
+                {
+                    // A challan-linked bill shows its challans' sites; its site is changed on the challan.
+                    if (invoice.DeliveryChallans.Count > 0 && !string.IsNullOrWhiteSpace(dto.Site))
+                        throw new InvalidOperationException("This bill takes its site from its delivery challans. Change the site on the challan.");
+                    invoice.Site = BillSite.Clean(dto.Site);
+                }
+                if (dto.PoNumber != null)
+                {
+                    if (invoice.DeliveryChallans.Count > 0 && (!string.IsNullOrWhiteSpace(dto.PoNumber) || dto.PoDate.HasValue))
+                        throw new InvalidOperationException("This bill takes its PO from its delivery challans. Change the PO on the challan.");
+                    invoice.PoNumber = string.IsNullOrWhiteSpace(dto.PoNumber) ? null : dto.PoNumber.Trim();
+                    invoice.PoDate = invoice.PoNumber == null ? null : dto.PoDate?.Date;
                 }
                 invoice.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
                 invoice.DocumentType = dto.DocumentType ?? invoice.DocumentType;
@@ -3935,18 +3947,14 @@ namespace MyApp.Api.Services.Implementations
                 ChallanNumbers = inv.DeliveryChallans.Select(dc => dc.ChallanNumber).ToList(),
                 ChallanDates = inv.DeliveryChallans.Select(dc => dc.DeliveryDate).ToList(),
                 PoNumber = string.Join(", ", poNumbers),
-                Site = string.Join(", ", inv.DeliveryChallans.OrderBy(c => c.ChallanNumber).ThenBy(c => c.Id)
-                    .Select(c => c.Site?.Trim()).Where(site => !string.IsNullOrWhiteSpace(site)).Distinct(StringComparer.OrdinalIgnoreCase)),
+                Site = BillSite.Of(inv, ", "),
                 // Same fallback as the number above: a standalone bill's PO
                 // date lives on the invoice.
                 PoDate = inv.PoDate ?? inv.DeliveryChallans.Select(dc => dc.PoDate).FirstOrDefault(),
                 ClientName = inv.Client?.Name ?? "",
                 ClientAddress = inv.Client?.Address,
                 ClientPhone = inv.Client?.Phone,
-                ConcernDepartment = string.Join(", ", inv.DeliveryChallans
-                    .Select(dc => dc.Site)
-                    .Where(s => !string.IsNullOrEmpty(s))
-                    .Distinct()),
+                ConcernDepartment = BillSite.Of(inv, ", "),
                 ClientNTN = inv.Client?.NTN,
                 ClientSTRN = inv.Client?.STRN,
                 Subtotal = inv.Subtotal,
@@ -4062,8 +4070,7 @@ namespace MyApp.Api.Services.Implementations
                 ManualChallanNumber = inv.ManualChallanNumber,
                 ChallanNumbers = inv.DeliveryChallans.Select(dc => dc.ChallanNumber).ToList(),
                 PoNumber = string.Join(", ", poNumbers),
-                Site = string.Join(", ", inv.DeliveryChallans.OrderBy(c => c.ChallanNumber).ThenBy(c => c.Id)
-                    .Select(c => c.Site?.Trim()).Where(site => !string.IsNullOrWhiteSpace(site)).Distinct(StringComparer.OrdinalIgnoreCase)),
+                Site = BillSite.Of(inv, ", "),
                 Subtotal = inv.Subtotal,
                 GSTRate = inv.GSTRate,
                 GSTAmount = inv.GSTAmount,

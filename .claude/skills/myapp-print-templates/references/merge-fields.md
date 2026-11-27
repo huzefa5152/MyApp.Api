@@ -276,4 +276,4 @@ These are C# property names from `DTOs/PrintDtos.cs`, retained exactly to avoid 
 
 ## Challan sites on bills and tax invoices
 
-Bill and TaxInvoice print data expose `{{site}}`: trimmed, distinct sites from linked challans, in challan-number order. Empty when no linked challan has a site. Bill retains `{{concernDepartment}}` for existing layouts.
+Bill and TaxInvoice print data expose `{{site}}`: trimmed, distinct sites from linked challans, in challan-number order. A standalone bill (no challan) has its own site, chosen on the bill form, and `{{site}}` is that (2026-11-27, `Helpers/BillSite`). Empty when there is none. Bill retains `{{concernDepartment}}` for existing layouts; it is the same value, so a layout should print one or the other, not both.
