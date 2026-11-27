@@ -3204,6 +3204,7 @@ function CommercialBillEditor({
                       onChange={setSite}
                       clientSites={clients.find((c) => String(c.id) === String(clientId))?.site}
                       readOnly={lockNonItemType || !invoice?.isEditable}
+                      remembers={has("clients.manage.update")}
                     />
                     <ManualChallanNumberField
                       value={manualChallanNumber}

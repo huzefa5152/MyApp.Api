@@ -1004,6 +1004,7 @@ export default function StandaloneInvoiceForm({
                           clients.find((c) => String(c.id) === String(selectedClientId))?.site
                         }
                         disabled={!selectedClientId}
+                        remembers={has("clients.manage.update")}
                       />
                     </div>
                     {/* Copy joins the order / PO row instead of a row of its own;

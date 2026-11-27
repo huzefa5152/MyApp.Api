@@ -32,5 +32,12 @@ namespace MyApp.Api.Services.Interfaces
 
         Task<ClientDto> UpdateAsync(ClientDto dto);
         Task DeleteAsync(int id);
+
+        /// <summary>
+        /// Adds <paramref name="site"/> to the client's ";"-separated site list
+        /// unless it is already there (ignoring case and outer spaces). Only a
+        /// client of <paramref name="companyId"/> is touched. True when it was added.
+        /// </summary>
+        Task<bool> AddSiteAsync(int clientId, int companyId, string? site);
     }
 }

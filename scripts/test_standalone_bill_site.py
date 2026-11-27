@@ -10,6 +10,9 @@ has no challan, so it keeps its own, set on the bill form and changed on Edit:
      leaves them alone; a blank PO number clears the PO date with it
   3. a bill billed from a challan takes the challan's site, and refuses a site or
      PO of its own
+  4. a new site typed on a standalone bill joins the customer's site list (create
+     and edit), a known one is not added twice, and a user who may not edit
+     customers keeps the site on the bill but leaves the customer alone
 
 Local database only. A throwaway company, removed at the end.
 
@@ -116,6 +119,54 @@ def main() -> int:
                 check("a site of its own is refused", st == 400 and "challan" in b.err_text(out).lower(), f"{st} {out}")
                 st, out = edit(got, poNumber="PO-X")
                 check("a PO of its own is refused", st == 400 and "challan" in b.err_text(out).lower(), f"{st} {out}")
+
+        print("\n=== 4. A new site joins the customer's sites ===")
+
+        def client_sites():
+            _, c = b.http("GET", f"/api/clients/{client['id']}", base, token=token)
+            return [s.strip() for s in ((c or {}).get("site") or "").split(";") if s.strip()]
+
+        def standalone(tok, site):
+            return b.http("POST", "/api/invoices/standalone", base, token=tok, body={
+                "date": b.TODAY, "companyId": company["id"], "clientId": client["id"], "gstRate": 18,
+                "items": [line], "site": site})
+
+        st, nb = standalone(token, "Warehouse 9")
+        check("a bill with a new site saves", st in (200, 201), f"{st} {nb}")
+        check("the new site is added to the customer's sites",
+              client_sites() == ["Plant F-319", "Head Office", "Warehouse 9"], f"{client_sites()}")
+        st, _ = standalone(token, "  warehouse 9 ")
+        check("a site the customer already has is not added again",
+              st in (200, 201) and client_sites() == ["Plant F-319", "Head Office", "Warehouse 9"], f"{st} {client_sites()}")
+        st, _ = edit(get(nb["id"]), site="Gate 2")
+        check("a new site typed on Edit is added too",
+              st == 200 and client_sites()[-1] == "Gate 2", f"{st} {client_sites()}")
+
+        # A user who may raise and edit bills but not edit customers.
+        before = client_sites()
+        st, role = b.http("POST", "/api/roles", base, token=token, body={
+            "name": f"_site_biller_{company['id']}", "description": "temp - bills only",
+            "permissionKeys": ["bills.list.view", "bills.manage.create.standalone", "bills.manage.update"]})
+        uname = f"sitebiller{company['id']}"
+        st_u, user = b.http("POST", "/api/users", base, token=token, body={
+            "username": uname, "fullName": uname, "password": "Passw0rd!23", "role": "User"})
+        try:
+            sc, copies = b.http("POST", f"/api/roles/{role['id']}/copy", base, token=token,
+                                body={"tenantAdminUserIds": [user["id"]]})
+            use_role = copies[0] if sc == 200 and copies else role
+            b.http("PUT", f"/api/users/{user['id']}/roles", base, token=token, body={"roleIds": [use_role["id"]]})
+            b.http("PUT", f"/api/usercompanies/user/{user['id']}", base, token=token, body={"companyIds": [company["id"]]})
+            _, login = b.http("POST", "/api/auth/login", base, body={"username": uname, "password": "Passw0rd!23"})
+            st, own = standalone((login or {}).get("token"), "Dock 4")
+            check("a bills-only user saves a bill with a new site", st in (200, 201), f"{st} {own}")
+            check("the bill keeps it", st in (200, 201) and get(own["id"]).get("site") == "Dock 4", f"{own}")
+            check("but the customer's sites are left alone", client_sites() == before, f"{before} -> {client_sites()}")
+        finally:
+            if isinstance(user, dict) and user.get("id"):
+                b.http("DELETE", f"/api/users/{user['id']}", base, token=token)
+            for r in [role] + (copies if 'copies' in dir() and isinstance(copies, list) else []):
+                if isinstance(r, dict) and r.get("id"):
+                    b.http("DELETE", f"/api/roles/{r['id']}", base, token=token)
     finally:
         if not args.keep:
             st, _ = b.http("DELETE", f"/api/companies/{company['id']}", base, token=token)

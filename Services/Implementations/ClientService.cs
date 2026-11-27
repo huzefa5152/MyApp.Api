@@ -10,6 +10,20 @@ namespace MyApp.Api.Services.Implementations
 {
     public class ClientService : IClientService
     {
+        public async Task<bool> AddSiteAsync(int clientId, int companyId, string? site)
+        {
+            var name = site?.Trim();
+            if (string.IsNullOrEmpty(name) || name.Contains(';')) return false;
+            var client = await _context.Clients.FirstOrDefaultAsync(c => c.Id == clientId && c.CompanyId == companyId);
+            if (client == null) return false;
+            var sites = (client.Site ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+            if (sites.Any(s => string.Equals(s, name, StringComparison.OrdinalIgnoreCase))) return false;
+            sites.Add(name);
+            client.Site = string.Join(";", sites);
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
         private readonly IClientRepository _repo;
         private readonly IInvoiceRepository _invoiceRepo;
         private readonly IDeliveryChallanService _challanService;
