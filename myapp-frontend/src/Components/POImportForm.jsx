@@ -41,6 +41,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import SearchableSelect from "./SearchableSelect";
 import SearchableClientSelect from "./SearchableClientSelect";
 import { Alert, Button, EmptyState, Field, IconButton, Tabs } from "../ui/Kit";
+import SiteField from "./SiteField";
 
 const colors = {
   textSecondary: "var(--k-muted)",
@@ -397,12 +398,6 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
   };
 
   const selectedClient = clients.find((c) => c.id === parseInt(selectedClientId));
-  const clientSites = selectedClient?.site
-    ? selectedClient.site
-        .split(";")
-        .map((s) => s.trim())
-        .filter(Boolean)
-    : [];
   // Quote status on the paged list is DERIVED server-side — Active / Accepted
   // / Expired. Only OPEN (Active) quotes are candidates for linking an
   // imported PO — never Expired, never Accepted (already linked). Before a
@@ -925,29 +920,12 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                 </Field>
                 {target !== "salesquote" && (
                   <Field label="Site / Department">
-                    {clientSites.length > 0 ? (
-                      <select
-                        className="k-select"
-                        value={site}
-                        onChange={(e) => setSite(e.target.value)}
-                      >
-                        <option value="">— Select Site —</option>
-                        {clientSites.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        type="text"
-                        className="k-input"
-                        placeholder={selectedClientId ? "Optional" : "Pick a client first"}
-                        value={site}
-                        onChange={(e) => setSite(e.target.value)}
-                        disabled={!selectedClientId}
-                      />
-                    )}
+                    <SiteField
+                      value={site}
+                      onChange={setSite}
+                      clientSites={selectedClient?.site}
+                      disabled={!selectedClientId}
+                    />
                   </Field>
                 )}
                 <Field label={cfg.dateLabel}>

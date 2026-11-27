@@ -438,6 +438,7 @@ try
     builder.Services.AddScoped<ICompanyService, CompanyService>();
     builder.Services.AddScoped<IDeliveryChallanService, DeliveryChallanService>();
     builder.Services.AddScoped<IClientService, ClientService>();
+    builder.Services.AddScoped<ICustomerSiteMemory, CustomerSiteMemory>();
     // "Common Clients" grouping — the same legal entity (matched by NTN, then
     // fallback to normalised name) shared across multiple companies. Sits
     // alongside the per-company ClientService; existing per-company flows

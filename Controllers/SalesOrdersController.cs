@@ -18,15 +18,17 @@ namespace MyApp.Api.Controllers
         private readonly ICompanyAccessGuard _access;
         private readonly IInvoiceService _invoices;
         private readonly IPermissionService _permissions;
+        private readonly ICustomerSiteMemory _sites;
         private readonly int _defaultPageSize;
         private readonly ILogger<SalesOrdersController> _logger;
 
-        public SalesOrdersController(ISalesOrderService service, ICompanyAccessGuard access, IInvoiceService invoices, IPermissionService permissions,
+        public SalesOrdersController(ISalesOrderService service, ICompanyAccessGuard access, IInvoiceService invoices, IPermissionService permissions, ICustomerSiteMemory sites,
             IConfiguration configuration, ILogger<SalesOrdersController> logger)
         {
             _service = service;
             _invoices = invoices;
             _permissions = permissions;
+            _sites = sites;
             _access = access;
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
             _logger = logger;
@@ -115,6 +117,7 @@ namespace MyApp.Api.Controllers
             try
             {
                 var created = await _service.CreateAsync(companyId, dto);
+                await _sites.RememberAsync(CurrentUserId, created.ClientId, created.CompanyId, created.Site);
                 return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
             }
             catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
@@ -141,7 +144,9 @@ namespace MyApp.Api.Controllers
             try
             {
                 var updated = await _service.UpdateAsync(id, dto);
-                return updated == null ? NotFound() : Ok(updated);
+                if (updated == null) return NotFound();
+                await _sites.RememberAsync(CurrentUserId, updated.ClientId, existing.CompanyId, updated.Site);
+                return Ok(updated);
             }
             catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
         }
@@ -175,6 +180,7 @@ namespace MyApp.Api.Controllers
             try
             {
                 var challan = await _service.CreateChallanFromOrderAsync(id, dto);
+                await _sites.RememberAsync(CurrentUserId, challan.ClientId, existing.CompanyId, challan.Site);
                 return Ok(challan);
             }
             catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }

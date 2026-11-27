@@ -20,6 +20,7 @@ import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import ChallanPrivateCosts, { useChallanSuppliers } from "./ChallanPrivateCosts";
 import SearchableClientSelect from "./SearchableClientSelect";
 import { Button, Field } from "../ui/Kit";
+import SiteField from "./SiteField";
 
 export default function ChallanForm({ onClose, onSaved, companyId }) {
   const { has } = usePermissions();
@@ -341,37 +342,12 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                 )}
               </Field>
               <Field label="Site / Department">
-                {(() => {
-                  const clientSites = client?.site
-                    ? client.site
-                        .split(";")
-                        .map((s) => s.trim())
-                        .filter(Boolean)
-                    : [];
-                  return clientSites.length > 0 ? (
-                    <select
-                      className="k-select"
-                      value={site}
-                      onChange={(e) => setSite(e.target.value)}
-                    >
-                      <option value="">(none)</option>
-                      {clientSites.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      className="k-input"
-                      placeholder={client ? "Optional" : "Pick a client first"}
-                      value={site}
-                      onChange={(e) => setSite(e.target.value)}
-                      disabled={!client}
-                    />
-                  );
-                })()}
+                <SiteField
+                  value={site}
+                  onChange={setSite}
+                  clientSites={client?.site}
+                  disabled={!client}
+                />
               </Field>
               <Field label="Delivery Date">
                 <input

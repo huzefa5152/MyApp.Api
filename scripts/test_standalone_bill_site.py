@@ -13,6 +13,8 @@ has no challan, so it keeps its own, set on the bill form and changed on Edit:
   4. a new site typed on a standalone bill joins the customer's site list (create
      and edit), a known one is not added twice, and a user who may not edit
      customers keeps the site on the bill but leaves the customer alone
+  5. the same on every other document that takes a customer site: challan
+     (create and edit), sales order (create and edit), challan from an order
 
 Local database only. A throwaway company, removed at the end.
 
@@ -141,6 +143,33 @@ def main() -> int:
         st, _ = edit(get(nb["id"]), site="Gate 2")
         check("a new site typed on Edit is added too",
               st == 200 and client_sites()[-1] == "Gate 2", f"{st} {client_sites()}")
+
+        print("\n=== 5. Challans and sales orders remember a new site too ===")
+        item = {"description": "Site item", "quantity": 1, "unit": "Pcs",
+                **({"itemTypeId": item_type["id"]} if item_type else {})}
+        st, dc2 = b.http("POST", f"/api/deliverychallans/company/{company['id']}", base, token=token, body={
+            "companyId": company["id"], "clientId": client["id"], "deliveryDate": b.TODAY, "poNumber": "PO-S5",
+            "site": "Challan Site A", "items": [item]})
+        check("a challan with a new site saves", st in (200, 201), f"{st} {dc2}")
+        check("the challan's new site joins the customer's sites", "Challan Site A" in client_sites(), f"{client_sites()}")
+        if st in (200, 201):
+            _, full = b.http("GET", f"/api/deliverychallans/{dc2['id']}", base, token=token)
+            st, _ = b.http("PUT", f"/api/deliverychallans/{dc2['id']}", base, token=token, body={**full, "site": "Challan Site B"})
+            check("a new site typed on challan Edit joins too", st == 200 and "Challan Site B" in client_sites(), f"{st} {client_sites()}")
+        st, so = b.http("POST", f"/api/salesorders/company/{company['id']}", base, token=token, body={
+            "clientId": client["id"], "orderDate": b.TODAY, "site": "Order Site A",
+            "items": [{"description": "Order item", "quantity": 2, "unit": "Pcs", "unitPrice": 100}]})
+        check("a sales order with a new site saves", st in (200, 201), f"{st} {so}")
+        check("the order's new site joins the customer's sites", "Order Site A" in client_sites(), f"{client_sites()}")
+        if st in (200, 201):
+            _, full = b.http("GET", f"/api/salesorders/{so['id']}", base, token=token)
+            st, _ = b.http("PUT", f"/api/salesorders/{so['id']}", base, token=token, body={**full, "site": "Order Site B"})
+            check("a new site typed on sales order Edit joins too", st == 200 and "Order Site B" in client_sites(), f"{st} {client_sites()}")
+            st, ch = b.http("POST", f"/api/salesorders/{so['id']}/create-challan", base, token=token, body={
+                "deliveryDate": b.TODAY, "site": "From Order Site",
+                "lines": [{"salesOrderItemId": full["items"][0]["id"], "quantity": 1}]})
+            check("a challan made from the order with a new site joins too",
+                  st == 200 and "From Order Site" in client_sites(), f"{st} {ch} {client_sites()}")
 
         # A user who may raise and edit bills but not edit customers.
         before = client_sites()

@@ -17,11 +17,13 @@ namespace MyApp.Api.Controllers
         private readonly IDeliveryChallanService _service;
         private readonly ICompanyAccessGuard _access;
         private readonly IPermissionService _permissions;
+        private readonly ICustomerSiteMemory _sites;
         private readonly int _defaultPageSize;
         private readonly ILogger<DeliveryChallansController> _logger;
 
-        public DeliveryChallansController(IDeliveryChallanService service, ICompanyAccessGuard access, IPermissionService permissions, IConfiguration configuration, ILogger<DeliveryChallansController> logger)
+        public DeliveryChallansController(IDeliveryChallanService service, ICompanyAccessGuard access, IPermissionService permissions, ICustomerSiteMemory sites, IConfiguration configuration, ILogger<DeliveryChallansController> logger)
         {
+            _sites = sites;
             _service = service;
             _permissions = permissions;
             _access = access;
@@ -124,6 +126,7 @@ namespace MyApp.Api.Controllers
                     return BadRequest(new { error = "Item quantity must be greater than zero." });
 
                 var created = await _service.CreateDeliveryChallanAsync(companyId, dto);
+                await _sites.RememberAsync(CurrentUserId, created.ClientId, created.CompanyId, created.Site);
                 return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
             }
             catch (InvalidOperationException ex)
@@ -266,6 +269,7 @@ namespace MyApp.Api.Controllers
 
                 var updated = await _service.UpdateChallanAsync(id, dto);
                 if (updated == null) return NotFound();
+                await _sites.RememberAsync(CurrentUserId, updated.ClientId, existing.CompanyId, updated.Site);
                 return Ok(updated);
             }
             catch (InvalidOperationException ex)

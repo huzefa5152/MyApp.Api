@@ -22,6 +22,7 @@ import { formStyles, modalSizes } from "../theme";
 import { todayYmd } from "../utils/dateInput";
 import SearchableClientSelect from "./SearchableClientSelect";
 import { Button, Field } from "../ui/Kit";
+import SiteField from "./SiteField";
 
 const blankItem = () => ({
   id: 0,
@@ -410,44 +411,12 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
                   </>
                 }
               >
-                {(() => {
-                  // Derive sites from the loaded `clients` list by id — the
-                  // `client` object is only { id, label } in edit mode (no
-                  // `.site`), so reading client.site directly leaves the
-                  // dropdown empty when editing. Look up the full record.
-                  const selectedClientFull = clients.find(
-                    (c) => String(c.id) === String(client?.id),
-                  );
-                  const sites = selectedClientFull?.site
-                    ? selectedClientFull.site
-                        .split(";")
-                        .map((x) => x.trim())
-                        .filter(Boolean)
-                    : [];
-                  return sites.length > 0 ? (
-                    <select
-                      className="k-select"
-                      value={site}
-                      onChange={(e) => setSite(e.target.value)}
-                    >
-                      <option value="">(none)</option>
-                      {sites.map((x) => (
-                        <option key={x} value={x}>
-                          {x}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      className="k-input"
-                      value={site}
-                      onChange={(e) => setSite(e.target.value)}
-                      placeholder={client ? "Optional" : "Pick a client first"}
-                      disabled={!client}
-                    />
-                  );
-                })()}
+                <SiteField
+                  value={site}
+                  onChange={setSite}
+                  clientSites={clients.find((c) => String(c.id) === String(client?.id))?.site}
+                  disabled={!client}
+                />
               </Field>
             </div>
             <div data-admin-form-row="" className="k-form-grid" style={s.grid}>

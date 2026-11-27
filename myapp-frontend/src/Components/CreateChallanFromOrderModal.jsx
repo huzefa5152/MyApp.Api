@@ -7,6 +7,7 @@ import useScrollToError from "../hooks/useScrollToError";
 
 import { todayYmd } from "../utils/dateInput";
 import { Field, TableWrap } from "../ui/Kit";
+import SiteField from "./SiteField";
 
 // Raise a delivery challan that fulfils a Sales Order. Pre-fills each line's
 // quantity with what's still remaining; the operator can deliver less (partial)
@@ -46,12 +47,6 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
   }, [companyId]);
 
   const client = clients.find((c) => String(c.id) === String(order?.clientId));
-  const sites = client?.site
-    ? client.site
-        .split(";")
-        .map((x) => x.trim())
-        .filter(Boolean)
-    : [];
 
   const setQty = (id, val) => setQtys((p) => ({ ...p, [id]: val }));
   const anyToDeliver = Object.values(qtys).some((q) => Number(q) > 0);
@@ -115,24 +110,7 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
                 </>
               }
             >
-              {sites.length > 0 ? (
-                <select className="k-select" value={site} onChange={(e) => setSite(e.target.value)}>
-                  <option value="">(none)</option>
-                  {sites.map((x) => (
-                    <option key={x} value={x}>
-                      {x}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  className="k-input"
-                  value={site}
-                  onChange={(e) => setSite(e.target.value)}
-                  placeholder="Optional"
-                />
-              )}
+              <SiteField value={site} onChange={setSite} clientSites={client?.site} />
             </Field>
           </div>
 

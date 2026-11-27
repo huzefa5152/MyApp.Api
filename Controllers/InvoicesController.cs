@@ -17,7 +17,7 @@ namespace MyApp.Api.Controllers
         private readonly IInvoiceService _service;
         private readonly ICompanyAccessGuard _access;
         private readonly IPermissionService _permissions;
-        private readonly IClientService _clients;
+        private readonly ICustomerSiteMemory _sites;
         private readonly int _defaultPageSize;
 
         // Ceiling on one batch print-data request. Each id costs a full invoice
@@ -25,9 +25,9 @@ namespace MyApp.Api.Controllers
         // calls rather than asking the server for a year in one go.
         private const int BatchPrintMaxIds = 100;
 
-        public InvoicesController(IInvoiceService service, ICompanyAccessGuard access, IPermissionService permissions, IClientService clients, IConfiguration configuration)
+        public InvoicesController(IInvoiceService service, ICompanyAccessGuard access, IPermissionService permissions, ICustomerSiteMemory sites, IConfiguration configuration)
         {
-            _clients = clients;
+            _sites = sites;
             _service = service;
             _access = access;
             _permissions = permissions;
@@ -355,20 +355,6 @@ namespace MyApp.Api.Controllers
         /// permission so a role can be granted ONLY this without also
         /// gaining the regular create-from-challan flow, or vice-versa.
         /// </summary>
-        /// <summary>
-        /// A site typed on a standalone bill joins the customer's own site list,
-        /// so it is offered next time. Editing the customer is its own permission:
-        /// without `clients.manage.update` the bill keeps the site and the
-        /// customer is left as it is. The bill's STORED client and company are
-        /// used, never the request's.
-        /// </summary>
-        private async Task RememberSiteAsync(int clientId, int companyId, string? site)
-        {
-            if (string.IsNullOrWhiteSpace(site)) return;
-            if (!await _permissions.HasPermissionAsync(CurrentUserId, "clients.manage.update")) return;
-            await _clients.AddSiteAsync(clientId, companyId, site);
-        }
-
         [HttpPost("standalone")]
         [HasPermission("bills.manage.create.standalone")]
         public async Task<ActionResult<InvoiceDto>> CreateStandalone([FromBody] CreateStandaloneInvoiceDto dto)
@@ -386,7 +372,7 @@ namespace MyApp.Api.Controllers
                     return BadRequest(new { error = "GST rate must be between 0 and 100." });
 
                 var created = await _service.CreateStandaloneAsync(dto);
-                await RememberSiteAsync(created.ClientId, created.CompanyId, dto.Site);
+                await _sites.RememberAsync(CurrentUserId, created.ClientId, created.CompanyId, dto.Site);
                 return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
             }
             catch (KeyNotFoundException ex)
@@ -420,7 +406,7 @@ namespace MyApp.Api.Controllers
                 var updated = await _service.UpdateAsync(id, dto);
                 if (updated == null) return NotFound(new { error = "Bill not found." });
                 if (updated.ChallanNumbers.Count == 0)
-                    await RememberSiteAsync(updated.ClientId, updated.CompanyId, dto.Site);
+                    await _sites.RememberAsync(CurrentUserId, updated.ClientId, updated.CompanyId, dto.Site);
                 return Ok(updated);
             }
             catch (InvalidOperationException ex)

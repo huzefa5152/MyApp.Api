@@ -1,6 +1,6 @@
 import BillTaxTreatmentField from "./BillTaxTreatmentField";
 import ManualChallanNumberField from "./ManualChallanNumberField";
-import BillSiteField from "./BillSiteField";
+import SiteField from "./SiteField";
 import { withTaxUom, taxGroupKey } from "../utils/taxInvoiceGrouping";
 import FreightChargesField from "./FreightChargesField";
 import BillChallansEditor from "./BillChallansEditor";
@@ -3199,12 +3199,12 @@ function CommercialBillEditor({
                         style={{ ...formStyles.input, width: "100%", boxSizing: "border-box" }}
                       />
                     </div>
-                    <BillSiteField
+                    <SiteField
                       value={site}
                       onChange={setSite}
                       clientSites={clients.find((c) => String(c.id) === String(clientId))?.site}
                       readOnly={lockNonItemType || !invoice?.isEditable}
-                      remembers={has("clients.manage.update")}
+                      label="Site / Department"
                     />
                     <ManualChallanNumberField
                       value={manualChallanNumber}

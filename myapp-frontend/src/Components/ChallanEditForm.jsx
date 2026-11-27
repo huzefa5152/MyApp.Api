@@ -6,6 +6,7 @@ import { MdInfo, MdContentCopy } from "react-icons/md";
 import SearchableClientSelect from "./SearchableClientSelect";
 import LineItemsEditor from "./LineItemsEditor";
 import { Alert, Field } from "../ui/Kit";
+import SiteField from "./SiteField";
 import { updateChallan } from "../api/challanApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getAllUnits } from "../api/unitsApi";
@@ -351,30 +352,12 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
                   </>
                 }
               >
-                {clientSites.length > 0 ? (
-                  <select
-                    className="k-select"
-                    value={site}
-                    onChange={(e) => setSite(e.target.value)}
-                    disabled={isDuplicate}
-                  >
-                    <option value="">(none)</option>
-                    {clientSites.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    className="k-input"
-                    placeholder="Optional"
-                    value={site}
-                    onChange={(e) => setSite(e.target.value)}
-                    disabled={isDuplicate}
-                  />
-                )}
+                <SiteField
+                  value={site}
+                  onChange={setSite}
+                  clientSites={selectedClient?.site}
+                  readOnly={isDuplicate}
+                />
               </Field>
               <Field
                 label={

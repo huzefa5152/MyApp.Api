@@ -1,7 +1,7 @@
 import ChallanPrivateCosts, { useChallanSuppliers } from "./ChallanPrivateCosts";
 import BillTaxTreatmentField from "./BillTaxTreatmentField";
 import ManualChallanNumberField from "./ManualChallanNumberField";
-import BillSiteField from "./BillSiteField";
+import SiteField from "./SiteField";
 import DocumentCopyPicker from "./DocumentCopyPicker";
 import { copyLine } from "../utils/documentCopy";
 import { defaultFurtherTaxRate, isUnregisteredBuyer } from "../utils/furtherTax";
@@ -997,14 +997,14 @@ export default function StandaloneInvoiceForm({
                       />
                     </div>
                     <div style={{ flex: "1 1 220px", minWidth: 0 }}>
-                      <BillSiteField
+                      <SiteField
                         value={site}
                         onChange={setSite}
                         clientSites={
                           clients.find((c) => String(c.id) === String(selectedClientId))?.site
                         }
                         disabled={!selectedClientId}
-                        remembers={has("clients.manage.update")}
+                        label="Site / Department"
                       />
                     </div>
                     {/* Copy joins the order / PO row instead of a row of its own;
