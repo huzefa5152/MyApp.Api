@@ -431,7 +431,7 @@ working rule for every agent on this branch:
 | Bill print merges the same item across challans of one PO (print data only; lines stay per challan) | `python scripts/test_bill_print_merge.py --base <url>` | `8/8 bill print merge checks passed` |
 | HS code on both prints + FBR-ready without a quantity adjustment | `python scripts/test_hscode_on_prints.py` | `21/21 checks` |
 | A company saves with a name only, FBR details added later | `python scripts/test_company_create_minimal.py` | `8/8 checks` |
-| Cross-tenant leak sweep — both editions against a company they were never given | `python scripts/test_tenant_leak_sweep.py` | `105/105 checks` |
+| Cross-tenant leak sweep — both editions against a company they were never given | `python scripts/test_tenant_leak_sweep.py` | `126/126 checks` |
 | Every permission module lands in a navbar section (offline) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
 | Quote discounts: per line and whole quote before GST, refusals, print fields, net price on the bill prefill, whole-quote reminder, cross-company refusal | `python scripts/test_quote_discount.py --base <url>` | `33/33 quote discount checks passed` |
 | Quote discount arithmetic + copying a discounted line (offline) | `node scripts/test_quote_discount.mjs` | `25 passed, 0 failed` |
@@ -448,7 +448,7 @@ working rule for every agent on this branch:
 | Deleting an item type that still holds stock is refused | `python scripts/test_item_type_delete_guard.py` | `5/5 checks passed` |
 | Bill / invoice numbering — Auto vs a hand-typed number, both create paths + renumbering on edit | `python scripts/test_custom_bill_number.py` (add `--db "<conn>"` for the FBR-filed lock suite) | `47/47 checks passed` (5 skipped without `--db`) |
 | Admin scope isolation (seed / Administrator trees, Tenant Access, IDOR) | `python scripts/test_admin_scope_isolation.py` | `all checks passed` (currently `115/115`) |
-| FBR cancellation + reversal releases challans, note reason rules | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `30/30 checks passed` (27/27 with no classified item type) |
+| FBR cancellation + reversal releases challans, note reason rules, reopening a withdrawn bill to file it again | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `44/44 checks passed` (40/40 with no classified item type) |
 | Valued stock entries (isolated local SQL only) | `py -3.14 scripts/test_stock_entry_workflow.py --base http://localhost:5191 --database <isolated-local-test-db>` | `41 stock-entry workflow checks passed` |
 | Commercial costs + local purchases: one pool for challan / bill / form / dialog, races, edits, sale-side floor, IDOR | `python scripts/test_trader_commercial_costs.py --base <url> --db "<conn>"` | `124/124 commercial cost checks passed` |
 | Costs book supplier purchases automatically: create/edit/move/clear, lock once paid or credited, entered bills win, closed period, cancel/delete, tenant | `python scripts/test_cost_purchase_sync.py --base <url> --db "<conn>"` | `49/49 cost purchase sync checks passed` |
@@ -640,8 +640,15 @@ because the challans stayed `Invoiced` against a bill reversed to nothing.
   everything after them, including a bogus reference, is `[0510] Execption
   occured`. So 0029/0034/0035/0036/0057/0064/0067/0068 are unproven at FBR and
   rest on our own guards.
-- Suite: `scripts/test_fbr_cancellation.py` (30 checks; 27 when the test company
-  has no classified item type, which skips the 3 stock checks). It needs `--db`
+- **A withdrawal made only to correct the filing can be undone** (2026-11-27).
+  `POST /invoices/{id}/fbr-reopen` (`InvoiceService.ReopenFbrCancelledAsync`,
+  gated like the cancellation by `bills.manage.void`) puts the bill back to
+  "not filed" under the SAME number: it takes its challans back, its stock goes
+  out again and it is posted again, so the consultant can adjust and submit it.
+  The withdrawn IRN leaves the row and stays in the audit log. Refused when a
+  challan has been billed again or a note stands against the bill.
+- Suite: `scripts/test_fbr_cancellation.py` (44 checks; 40 when the test company
+  has no classified item type, which skips the 4 stock checks). It needs `--db`
   to fake the filing, because none of these paths is reachable on an unfiled bill.
 
 ## The accounting module and the two editions (2026-09-19)

@@ -313,6 +313,60 @@ def main() -> int:
             check("an unfiled bill cannot be marked cancelled at FBR",
                   st == 400 and "never filed" in json.dumps(err).lower(),
                   f"got {st} {err}")
+
+        # ── 6. Withdrawn only to be corrected: reopen and file again ────────
+        print("\n-- 6. Reopened for filing under the same number --")
+        st, err = http("POST", f"/api/invoices/{inv4['id']}/fbr-reopen", api, token=token) if inv4 else (0, None)
+        check("a bill that was not cancelled at FBR cannot be reopened", st == 400, f"got {st} {err}")
+
+        dc5 = make_challan(5, 100)
+        inv5 = bill_challan(dc5, 100)
+        if check("a fifth challan is billed", inv5 is not None, f"{inv5}"):
+            billed = on_hand(item_type_id) if item_type_id else 0.0
+            file_at_fbr(inv5["id"], f"IRN-{tag}-5")
+            st, _ = http("POST", f"/api/invoices/{inv5['id']}/fbr-cancelled", api, token=token,
+                         body={"reason": "wrong quantity filed"})
+            check("it is withdrawn at FBR", st == 200, f"got {st}")
+            st, re5 = http("POST", f"/api/invoices/{inv5['id']}/fbr-reopen", api, token=token)
+            check("it is reopened", st == 200, f"got {st} {re5}")
+            re5 = re5 or {}
+            check("the marker is gone and it is no longer filed",
+                  not re5.get("fbrCancelledAt") and re5.get("fbrStatus") != "Submitted"
+                  and not re5.get("fbrIRN") and not re5.get("fbrInvoiceNumber"),
+                  f"cancelledAt={re5.get('fbrCancelledAt')} status={re5.get('fbrStatus')} "
+                  f"irn={re5.get('fbrIRN')} / {re5.get('fbrInvoiceNumber')}")
+            check("it keeps its bill number",
+                  re5.get("invoiceNumber") == inv5["invoiceNumber"],
+                  f"{inv5['invoiceNumber']} -> {re5.get('invoiceNumber')}")
+            status, linked = challan_state(dc5["id"])
+            check("its challan is back on the bill",
+                  status == "Invoiced" and linked == inv5["id"], f"status={status} invoiceId={linked}")
+            if item_type_id:
+                check("its stock has gone out again, once",
+                      abs(on_hand(item_type_id) - billed) < 0.0001,
+                      f"on hand after billing {billed}, after reopen {on_hand(item_type_id)}")
+            st, again = http("POST", f"/api/invoices/{inv5['id']}/fbr-reopen", api, token=token)
+            check("a second reopen is refused", st == 400, f"got {st} {again}")
+            st, edit5 = http("GET", f"/api/invoices/{inv5['id']}", api, token=token)
+            check("it reads as an ordinary unfiled bill again",
+                  st == 200 and not edit5.get("fbrCancelledAt") and edit5.get("isCancelled") is False,
+                  f"got {st}")
+
+        # The goods were billed again in the meantime: the old bill stays withdrawn.
+        dc6 = make_challan(2, 100)
+        inv6 = bill_challan(dc6, 100)
+        if check("a sixth challan is billed", inv6 is not None, f"{inv6}"):
+            file_at_fbr(inv6["id"], f"IRN-{tag}-6")
+            http("POST", f"/api/invoices/{inv6['id']}/fbr-cancelled", api, token=token, body={"reason": "re-billing"})
+            _, dc6_now = http("GET", f"/api/deliverychallans/{dc6['id']}", api, token=token)
+            inv7 = bill_challan(dc6_now or dc6, 100)
+            if check("its challan is billed again on a new bill", inv7 is not None, f"{inv7}"):
+                st, err = http("POST", f"/api/invoices/{inv6['id']}/fbr-reopen", api, token=token)
+                check("the withdrawn bill cannot take the challan back",
+                      st == 400 and "billed again" in json.dumps(err), f"got {st} {err}")
+                status, linked = challan_state(dc6["id"])
+                check("and the challan stays on the new bill",
+                      status == "Invoiced" and linked == inv7["id"], f"status={status} invoiceId={linked}")
     finally:
         if args.keep:
             print(f"\nkeeping company {cid}")

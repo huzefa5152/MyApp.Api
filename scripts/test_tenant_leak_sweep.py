@@ -313,6 +313,13 @@ def main() -> int:
                 for who, tok in editions:
                     st, body = http("PUT", selection_path, base, token=tok, body=selection_body)
                     check("3", f"{who}: foreign bill challan save refused", st in (403, 404), f"{st} {err(body)}")
+            # Reopening a bill withdrawn at FBR is reached by id alone.
+            reopen_path = f"/api/invoices/{foreign_bill['id']}/fbr-reopen"
+            st, body = http("POST", reopen_path, base, token=seed)
+            check("3", "fbr-reopen route answers for seed admin (bill not withdrawn)", st == 400, f"{st} {err(body)}")
+            for who, tok in editions:
+                st, body = http("POST", reopen_path, base, token=tok)
+                check("3", f"{who}: foreign bill fbr-reopen refused", st in (403, 404), f"{st} {err(body)}")
 
         st, foreign_challan = http("POST", f"/api/deliverychallans/company/{b_id}", base, token=seed, body={
             "clientId": b_client["id"], "poNumber": "TENANT-PROBE", "deliveryDate": "2026-10-08",

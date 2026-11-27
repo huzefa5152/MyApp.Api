@@ -78,6 +78,12 @@ namespace MyApp.Api.Services.Interfaces
         /// </summary>
         Task<InvoiceDto?> MarkFbrCancelledAsync(int id, string? reason, string? actorUserName = null);
         /// <summary>
+        /// Puts a bill that was withdrawn at FBR back to "not filed" so it can be
+        /// corrected and filed again under the same number: it takes its challans
+        /// back, its stock goes out again and it is posted again.
+        /// </summary>
+        Task<InvoiceDto?> ReopenFbrCancelledAsync(int id, string? actorUserName = null);
+        /// <summary>
         /// Reverse an FBR-SUBMITTED invoice by auto-generating the correct
         /// adjustment note as a new, UNSUBMITTED invoice row:
         ///   • Credit Note (DocumentType 10) for a return/reversal — the usual

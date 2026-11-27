@@ -194,6 +194,7 @@ export default function InvoiceTable({
   onToggleFbrExcluded,
   onDelete,
   onVoid,
+  onReopenFbrCancelled,
   onReverse,
   onCorrect,
   onMarkHandover,
@@ -758,6 +759,16 @@ export default function InvoiceTable({
             label="Void bill — keeps the bill number (no gap), marks it cancelled and reverts its delivery challan(s) to Pending so they can be re-billed."
           >
             <MdCancel size={14} />
+          </IconButton>
+        )}
+        {perms.canVoid && inv.fbrCancelledAt && !inv.isCancelled && (
+          <IconButton
+            data-label="Reopen for filing"
+            style={btn.reverse}
+            onClick={() => onReopenFbrCancelled?.(inv)}
+            label="Reopen for filing — for a bill cancelled on the FBR portal only to be corrected. It goes back to Not filed with its challan(s) and stock, so it can be adjusted and submitted again under the same number."
+          >
+            <MdRestore size={14} />
           </IconButton>
         )}
         {perms.canReverse &&

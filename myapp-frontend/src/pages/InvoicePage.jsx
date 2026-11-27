@@ -62,6 +62,7 @@ import {
   getInvoicePrintTaxInvoice,
   deleteInvoice,
   cancelInvoice,
+  reopenFbrCancelledInvoice,
   setInvoiceFbrExcluded,
   markInvoiceHandover,
   revertInvoiceHandover,
@@ -1003,6 +1004,26 @@ export default function InvoicePage({ mode = "invoices" }) {
     }
   };
 
+  // A bill withdrawn at FBR inside their 72 hours, to be corrected and filed
+  // again under the same number.
+  const handleReopenFbrCancelled = async (inv) => {
+    const ok = await confirm({
+      title: `Reopen Bill #${inv.invoiceNumber} for filing?`,
+      message:
+        "Use this when you cancelled the invoice on the FBR portal only to correct it. The bill goes back to Not filed, takes its delivery challan(s) back and its stock goes out again. You can then adjust it on the Invoices tab and submit it to FBR again under the same number.",
+      variant: "warning",
+      confirmText: "Reopen for filing",
+    });
+    if (!ok) return;
+    try {
+      await reopenFbrCancelledInvoice(inv.id);
+      notify(`Bill #${inv.invoiceNumber} is open for filing again.`, "success");
+      fetchInvoices(selectedCompany.id, page);
+    } catch (err) {
+      notify(err.response?.data?.error || "Failed to reopen the bill.", "error");
+    }
+  };
+
   // Reverse an FBR-submitted bill → opens the Credit Note screen prefilled
   // with this invoice (industry pattern: Odoo's Reverse dialog / SAP credit
   // memo by reference). The operator trims lines/quantities for a partial
@@ -1820,6 +1841,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                   onToggleFbrExcluded={handleToggleFbrExcluded}
                   onDelete={handleDeleteInvoice}
                   onVoid={handleVoidInvoice}
+                  onReopenFbrCancelled={handleReopenFbrCancelled}
                   onReverse={handleReverseInvoice}
                   onCorrect={setCorrectTarget}
                   onMarkHandover={(inv) => setHandoverTarget({ mode: "single", inv })}
@@ -2360,6 +2382,16 @@ export default function InvoicePage({ mode = "invoices" }) {
                                 <MdCancel size={14} /> Void
                               </Button>
                             )}
+                          {canVoid && inv.fbrCancelledAt && !inv.isCancelled && (
+                            <Button
+                              size="sm"
+                              style={TONE.reverse}
+                              onClick={() => handleReopenFbrCancelled(inv)}
+                              title="Reopen for filing — for a bill cancelled on the FBR portal only to be corrected. It goes back to Not filed with its challan(s) and stock, so it can be adjusted and submitted again under the same number."
+                            >
+                              <MdRestore size={14} /> Reopen for filing
+                            </Button>
+                          )}
                           {/* Reverse: an FBR-SUBMITTED sale invoice (not itself a
                         note) can be reversed → generates a Credit Note as a new
                         unsubmitted bill to Validate + Submit. Replaces Void once

@@ -135,6 +135,12 @@ export const getInvoicePrintTaxInvoice = (invoiceId) =>
 export const markInvoiceFbrCancelled = (invoiceId, reason) =>
   httpClient.post(`/invoices/${invoiceId}/fbr-cancelled`, { reason: reason || null });
 
+// Undo of the above when the sale still stands: the bill goes back to "not
+// filed" with its challans and stock, to be corrected and submitted again
+// under the same number.
+export const reopenFbrCancelledInvoice = (invoiceId) =>
+  httpClient.post(`/invoices/${invoiceId}/fbr-reopen`);
+
 export const getInvoicePrintTaxInvoiceBatch = (invoiceIds) =>
   httpClient.post(`/invoices/print/tax-invoice/batch`, { invoiceIds });
 

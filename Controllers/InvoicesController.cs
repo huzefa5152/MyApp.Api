@@ -563,6 +563,32 @@ namespace MyApp.Api.Controllers
         }
 
         /// <summary>
+        /// Undo of <c>fbr-cancelled</c> for a bill whose sale still stands: the
+        /// filing was withdrawn at FBR inside their 72 hours only to be corrected.
+        /// The bill goes back to "not filed" with its challans, stock and ledger
+        /// entry restored, so the consultant can adjust it and submit it again
+        /// under the same number. Same gate as recording the cancellation.
+        /// </summary>
+        [HttpPost("{id}/fbr-reopen")]
+        [HasPermission("bills.manage.void")]
+        public async Task<ActionResult<InvoiceDto>> ReopenFbrCancelled(int id)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound(new { error = "Bill not found." });
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            try
+            {
+                var updated = await _service.ReopenFbrCancelledAsync(id, User.Identity?.Name);
+                if (updated == null) return NotFound(new { error = "Bill not found." });
+                return Ok(updated);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        /// <summary>
         /// Reverse an FBR-SUBMITTED invoice by auto-generating the correct
         /// adjustment note (Credit Note for a return/reversal — the default —
         /// or Debit Note for an upward correction). The note is created
