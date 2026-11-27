@@ -455,6 +455,112 @@ if not err:
               and freight_bill.get("grandTotal") == 118.01
               and freight_bill.get("gstAmount") == 18, freight_bill)
 
+
+# ── sites and PO on documents ────────────────────────────────────────
+print("\n== site and PO ==")
+s, perms = http("GET", "/api/permissions/me", W)
+EDITS_CLIENTS = "clients.manage.update" in (perms if isinstance(perms, list) else (perms or {}).get("permissions", []))
+
+
+def client_sites(cid=A["client"]):
+    raw = sql(f"SELECT ISNULL(Site,'') FROM Clients WHERE Id = {cid}", scalar=True) or ""
+    return [x.strip() for x in raw.split(";") if x.strip()]
+
+
+site_before = client_sites()
+new_site = f"MCP Site {RUN}"
+err, sp2 = tool(TW, "prepare_bill", {**SB, "site": new_site, "poNumber": f"PO-{RUN}-s", "poDate": today})
+check("a standalone bill plan carries a site", not err and sp2["details"]["site"] == new_site, sp2)
+err, m = tool(TW, "prepare_bill", {**SB, "site": "a;b"})
+check("a site with \";\" is refused", err, m)
+if made_bills and BL.get("challanIds"):
+    err, m = tool(TW, "prepare_bill", {**BL, "site": "x"})
+    check("a site on a bill from challans is refused", err and "challan" in m.lower(), m)
+err, sc2 = tool(TW, "commit_action", {"planId": sp2["planId"]})
+check("commit saves the bill with its site", not err, sc2)
+sb2 = int(sc2["resultRef"].split(":")[1]) if not err else 0
+if sb2:
+    made_bills.append(sb2)
+    s, b2 = http("GET", f"/api/invoices/{sb2}", admin)
+    check("…the bill holds the site and PO", b2.get("site") == new_site and b2.get("poNumber") == f"PO-{RUN}-s", {k: b2.get(k) for k in ("site", "poNumber")})
+check("the new site joins the client's sites only when the user may edit clients",
+      (new_site in client_sites()) == EDITS_CLIENTS and all(x in client_sites() for x in site_before), (EDITS_CLIENTS, client_sites()))
+
+print("\n== prepare_bill_details ==")
+check("a bills token sees prepare_bill_details", "prepare_bill_details" in names(TW), names(TW))
+check("a challans-only token does not", "prepare_bill_details" not in names(TC), names(TC))
+if sb2:
+    err, dp = tool(TW, "prepare_bill_details", {"companyId": A["id"], "billId": sb2, "site": f"Moved {RUN}", "poNumber": f"PO-{RUN}-t", "poDate": today})
+    check("a details plan shows the before and after", not err and dp["details"]["before"]["site"] == new_site and dp["details"]["site"] == f"Moved {RUN}", dp)
+    s, still = http("GET", f"/api/invoices/{sb2}", admin)
+    check("…and saves nothing", still.get("site") == new_site, still.get("site"))
+    err, dc_ = tool(TW, "commit_action", {"planId": dp["planId"]})
+    s, b3 = http("GET", f"/api/invoices/{sb2}", admin)
+    check("commit changes the site and PO", not err and b3.get("site") == f"Moved {RUN}" and b3.get("poNumber") == f"PO-{RUN}-t", (dc_, b3.get("site"), b3.get("poNumber")))
+    check("…and leaves the amounts alone", b3.get("grandTotal") == b2.get("grandTotal"), (b2.get("grandTotal"), b3.get("grandTotal")))
+    err, dp2 = tool(TW, "prepare_bill_details", {"companyId": A["id"], "billId": sb2, "poNumber": ""})
+    if not err:
+        tool(TW, "commit_action", {"planId": dp2["planId"]})
+    s, b4 = http("GET", f"/api/invoices/{sb2}", admin)
+    check("an empty poNumber clears the PO and its date", not b4.get("poNumber") and not b4.get("poDate"), (b4.get("poNumber"), b4.get("poDate")))
+    err, m = tool(TW, "prepare_bill_details", {"companyId": A["id"], "billId": sb2})
+    check("a details plan with nothing to change is refused", err, m)
+    err, m = tool(TW, "prepare_bill_details", {"companyId": B["id"], "billId": sb2, "site": "x"})
+    check("another company's id is refused", err, m)
+B_BILL = sql(f"SELECT TOP 1 Id FROM Invoices WHERE CompanyId = {B['id']}", scalar=True)
+if B_BILL:
+    err, m = tool(TW, "prepare_bill_details", {"companyId": A["id"], "billId": int(B_BILL), "site": "x"})
+    check("a bill of another company is refused", err, m)
+if made_bills and BL.get("challanIds"):
+    err, m = tool(TW, "prepare_bill_details", {"companyId": A["id"], "billId": made_bills[0], "site": "x"})
+    check("a bill from challans is sent to the challan", err and "challan" in m.lower(), m)
+
+print("\n== prepare_challan_details ==")
+err, pc = tool(TW, "prepare_challan", {**CH, "poNumber": f"PO-{RUN}-d", "site": f"Challan {RUN}"})
+err2, cc = tool(TW, "commit_action", {"planId": pc["planId"]}) if not err else (True, pc)
+dch = int(cc["resultRef"].split(":")[1]) if not err2 else 0
+check("a challan with a site is created", dch > 0, (pc, cc))
+if dch:
+    made_challans.append(dch)
+    check("…and its new site joins the client's sites when the user may edit clients", (f"Challan {RUN}" in client_sites()) == EDITS_CLIENTS, client_sites())
+    err, cp_ = tool(TW, "prepare_challan_details", {"companyId": A["id"], "challanId": dch, "site": f"Challan Moved {RUN}", "poNumber": f"PO-{RUN}-e", "poDate": today})
+    check("a challan details plan is produced", not err and cp_["details"]["site"] == f"Challan Moved {RUN}", cp_)
+    err, cc_ = tool(TW, "commit_action", {"planId": cp_["planId"]})
+    s, dcx = http("GET", f"/api/deliverychallans/{dch}", admin)
+    check("commit changes the challan's site and PO", not err and dcx.get("site") == f"Challan Moved {RUN}" and dcx.get("poNumber") == f"PO-{RUN}-e", (cc_, dcx.get("site"), dcx.get("poNumber")))
+    check("…and keeps its lines", len(dcx.get("items") or []) == len(CH["items"]), dcx.get("items"))
+    err, m = tool(TW, "prepare_challan_details", {"companyId": B["id"], "challanId": dch, "site": "x"})
+    check("another company's id is refused for a challan", err, m)
+B_CH = sql(f"SELECT TOP 1 Id FROM DeliveryChallans WHERE CompanyId = {B['id']}", scalar=True)
+if B_CH:
+    err, m = tool(TW, "prepare_challan_details", {"companyId": A["id"], "challanId": int(B_CH), "site": "x"})
+    check("a challan of another company is refused", err, m)
+
+print("\n== prepare_client addSite ==")
+TCL, _ = mk(W, [A["id"]], ["read", "clients.write"], "clients-A")
+# A clean client of its own: the shared fixture client may carry stored details that fail
+# today's validation, which would refuse any update for a reason unrelated to sites.
+s, sc_client = http("POST", "/api/clients", admin, {"name": f"MCP Sites {RUN}", "companyId": A["id"], "site": "One;Two",
+                                                    "registrationType": "Unregistered"})
+SITE_CLIENT = sc_client["id"] if s in (200, 201) else A["client"]
+if EDITS_CLIENTS:
+    before = client_sites(SITE_CLIENT)
+    add = f"Added {RUN}"
+    err, ap_ = tool(TCL, "prepare_client", {"companyId": A["id"], "clientId": SITE_CLIENT, "addSite": add})
+    check("addSite plans the client's sites plus the new one", not err and [x.strip() for x in ap_["details"]["site"].split(";")] == before + [add], ap_)
+    err, ac_ = tool(TCL, "commit_action", {"planId": ap_["planId"]}) if not err else (True, ap_)
+    check("…and commit keeps every other site", not err and client_sites(SITE_CLIENT) == before + [add], client_sites(SITE_CLIENT))
+    err, m = tool(TCL, "prepare_client", {"companyId": A["id"], "clientId": SITE_CLIENT, "addSite": add.upper()})
+    check("a site the client already has is refused", err and "already" in m, m)
+    err, m = tool(TCL, "prepare_client", {"companyId": A["id"], "clientId": SITE_CLIENT, "addSite": "x", "site": "y"})
+    check("addSite with site is refused", err, m)
+    err, m = tool(TCL, "prepare_client", {"companyId": A["id"], "name": f"New {RUN}", "addSite": "x"})
+    check("addSite on a new client is refused", err, m)
+    err, m = tool(TCL, "prepare_client", {"companyId": A["id"], "clientId": B["client"], "addSite": "x"})
+    check("addSite on another company's client is refused", err, m)
+else:
+    print("  (the test writer may not edit clients here: addSite cases skipped)")
+
 # ── ceilings and gates ───────────────────────────────────────────────
 print("\n== hourly ceiling and gates at commit ==")
 for i in range(10):
@@ -473,7 +579,8 @@ http("PUT", f"/api/users/{uids['mcpd_w']}/roles", admin, {"roleIds": [SALES, MCP
 err, m = tool(TW, "commit_action", {"planId": pw["planId"]})
 check("MCP Write withdrawn after prepare -> the challan commit is refused", err, m)
 http("PUT", f"/api/users/{uids['mcpd_w']}/roles", admin, {"roleIds": [SALES, MCPA, MCPW]})
-check("…and no extra challan appeared", challan_count() == n0 + 3, (n0, challan_count()))
+# n0 + 4: three challans from the earlier sections and one from "prepare_challan_details".
+check("…and no extra challan appeared", challan_count() == n0 + 4, (n0, challan_count()))
 
 # ── activity ─────────────────────────────────────────────────────────
 print("\n== activity log ==")
@@ -500,6 +607,8 @@ for b in sorted(made_bills, reverse=True):
     http("DELETE", f"/api/invoices/{b}", admin)
 for c in sorted(set(made_challans + [int(x) for x in sql(f"SELECT Id FROM DeliveryChallans WHERE CompanyId = {A['id']} AND PoNumber LIKE 'PO-{RUN}%'", scalar=True).split() if x.isdigit()]), reverse=True):
     http("DELETE", f"/api/deliverychallans/{c}", admin)
+if SITE_CLIENT != A["client"]:
+    http("DELETE", f"/api/clients/{SITE_CLIENT}", admin)
 for n in ("mcpd_c", "mcpd_w", "mcpd_ta"):
     http("DELETE", f"/api/users/{uids[n]}", admin)
 s, roles = http("GET", "/api/roles", admin)

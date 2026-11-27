@@ -27,7 +27,7 @@ namespace MyApp.Api.Controllers
         // activity row is filed under that company like every companyId call.
         private int? _activityCompanyId;
 
-        private static readonly string[] WriteToolNameList = { "prepare_client", "prepare_quote", "prepare_challan", "prepare_bill", "prepare_email_decision", "prepare_email_quotation", "prepare_print_template_update", "prepare_company_stamp", "prepare_starter_template", "prepare_supplier", "prepare_item_type", "prepare_bill_tax_filing", "prepare_fbr_exclusion", "commit_action", "cancel_action" };
+        private static readonly string[] WriteToolNameList = { "prepare_client", "prepare_quote", "prepare_challan", "prepare_bill", "prepare_email_decision", "prepare_email_quotation", "prepare_print_template_update", "prepare_company_stamp", "prepare_starter_template", "prepare_supplier", "prepare_item_type", "prepare_bill_tax_filing", "prepare_fbr_exclusion", "prepare_bill_details", "prepare_challan_details", "commit_action", "cancel_action" };
         private static bool IsWriteTool(string name) => WriteToolNameList.Contains(name, StringComparer.Ordinal);
 
         private static string PrepareToolFor(string kind) => kind switch
@@ -45,6 +45,8 @@ namespace MyApp.Api.Controllers
             "itemtype.create" or "itemtype.update" => "prepare_item_type",
             "taxfiling.save" => "prepare_bill_tax_filing",
             "fbrexclusion.set" => "prepare_fbr_exclusion",
+            "bill.details" => "prepare_bill_details",
+            "challan.details" => "prepare_challan_details",
             _ => throw new ToolError("Unknown action kind.")
         };
 
@@ -73,7 +75,8 @@ namespace MyApp.Api.Controllers
                 ntn = new { type = "string", maxLength = 50 },
                 strn = new { type = "string", maxLength = 50 },
                 cnic = new { type = "string", maxLength = 50 },
-                site = new { type = "string", maxLength = 200 },
+                site = new { type = "string", maxLength = 200, description = "The client's WHOLE site list, \";\"-separated: it replaces the current list. To add one site, use addSite." },
+                addSite = new { type = "string", maxLength = 200, description = "Update only: add this one site to the client's sites, keeping the others. Not with site." },
                 contactPerson = new { type = "string", maxLength = 300 },
                 registrationType = new { type = "string", @enum = new[] { "Registered", "Unregistered" } },
                 fbrProvinceCode = new { type = "integer", minimum = 1 },
@@ -337,6 +340,18 @@ namespace MyApp.Api.Controllers
             if (OptText(args, "strn", 50) is { } st) dto.STRN = st.Length == 0 ? null : st;
             if (OptText(args, "cnic", 50) is { } cn) dto.CNIC = cn.Length == 0 ? null : cn;
             if (OptText(args, "site", 200) is { } si) dto.Site = si.Length == 0 ? null : si;
+            if (Has(args, "addSite"))
+            {
+                if (!clientId.HasValue) throw new ToolError("addSite adds to an existing client: give clientId. A new client takes site.");
+                if (Has(args, "site")) throw new ToolError("Give site (the whole list) or addSite (one more), not both.");
+                var add = OptText(args, "addSite", 200) ?? "";
+                if (add.Length == 0 || add.Contains(';')) throw new ToolError("addSite must be one site name, without \";\".");
+                var sites = (dto.Site ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+                if (sites.Any(s => string.Equals(s, add, StringComparison.OrdinalIgnoreCase)))
+                    throw new ToolError($"The client already has the site \"{add}\".");
+                sites.Add(add);
+                dto.Site = string.Join(";", sites);
+            }
             if (OptText(args, "contactPerson", 300) is { } cp) dto.ContactPerson = cp.Length == 0 ? null : cp;
             if (OptText(args, "registrationType", 20) is { } rt)
             {
@@ -448,8 +463,8 @@ namespace MyApp.Api.Controllers
             "stamp.add" or "stamp.replace" or "stamp.rename" or "stamp.default" or "stamp.delete" or "stamp.assign" => McpScopes.TemplatesWrite,
             "starter.create" or "starter.update" or "starter.activate" or "starter.deactivate" or "starter.delete" => McpScopes.TemplatesWrite,
             "client.create" or "client.update" => McpScopes.Clients,
-            "challan.create" => McpScopes.Challans,
-            "bill.create" or "bill.standalone" => McpScopes.Bills,
+            "challan.create" or "challan.details" => McpScopes.Challans,
+            "bill.create" or "bill.standalone" or "bill.details" => McpScopes.Bills,
             "quote.create" => McpScopes.Quotes,
             "email.quote" => McpScopes.Quotes,
             "email.decision" => McpScopes.Email,
@@ -464,6 +479,8 @@ namespace MyApp.Api.Controllers
         private static string? ReadPermissionFor(string kind) => kind switch
         {
             "client.update" => "clients.manage.view",
+            "bill.details" => "bills.list.view",
+            "challan.details" => "challans.list.view",
             "supplier.update" => "suppliers.manage.view",
             "itemtype.update" => "itemtypes.manage.view",
             "taxfiling.save" => "invoices.list.view",
@@ -484,6 +501,8 @@ namespace MyApp.Api.Controllers
             "challan.create" => new[] { "challans.manage.create" },
             "bill.create" => new[] { "bills.manage.create" },
             "bill.standalone" => new[] { "bills.manage.create.standalone" },
+            "bill.details" => new[] { "bills.manage.update" },
+            "challan.details" => new[] { "challans.manage.update" },
             "quote.create" => new[] { "salesquotes.manage.create" },
             "email.quote" => new[] { "salesquotes.manage.create" },
             "email.decision" => new[] { "email.inbox.manage" },
@@ -600,6 +619,7 @@ namespace MyApp.Api.Controllers
                     case "challan.create":
                         {
                             var created = await _challans.CreateDeliveryChallanAsync(plan.CompanyId, ChallanFromPlan(p, plan.CompanyId));
+                            await OperationService<ICustomerSiteMemory>().RememberAsync(CurrentUserId, created.ClientId, plan.CompanyId, created.Site);
                             (resultRef, resultSummary) = ($"DeliveryChallan:{created.Id}",
                                 $"Created challan #{created.ChallanNumber} (id {created.Id}) for \"{created.ClientName}\", status {created.Status}");
                             break;
@@ -614,6 +634,7 @@ namespace MyApp.Api.Controllers
                     case "bill.standalone":
                         {
                             var created = await _invoices.CreateStandaloneAsync(StandaloneBillFromPlan(p, plan.CompanyId));
+                            await OperationService<ICustomerSiteMemory>().RememberAsync(CurrentUserId, created.ClientId, plan.CompanyId, created.Site);
                             (resultRef, resultSummary) = ($"Invoice:{created.Id}",
                                 $"Created bill #{created.InvoiceNumber} (id {created.Id}) for \"{created.ClientName}\", total {CommercialTotalCalculator.Total(created.GrandTotal, created.FreightCharges):0.00} PKR. Not submitted to FBR");
                             break;
@@ -652,6 +673,16 @@ namespace MyApp.Api.Controllers
                     case "fbrexclusion.set":
                         {
                             (resultRef, resultSummary) = await CommitFbrExclusionAsync(plan.CompanyId, p);
+                            break;
+                        }
+                    case "bill.details":
+                        {
+                            (resultRef, resultSummary) = await CommitBillDetailsAsync(plan.CompanyId, p);
+                            break;
+                        }
+                    case "challan.details":
+                        {
+                            (resultRef, resultSummary) = await CommitChallanDetailsAsync(plan.CompanyId, p);
                             break;
                         }
                     default: throw new ToolError("Unknown plan type.");

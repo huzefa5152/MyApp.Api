@@ -40,6 +40,7 @@ public static class McpToolAccessCatalog
         new("search_invoices", "Sales", "Find bills and invoices", new[] { "bills.list.view", "invoices.list.view" }),
         new("get_invoice", "Sales", "Read a bill or invoice", new[] { "bills.list.view", "invoices.list.view" }),
         new("prepare_bill", "Sales", "Prepare a bill", new[] { "bills.manage.create", "bills.manage.create.standalone" }, McpScopes.Bills, Write: true),
+        new("prepare_bill_details", "Sales", "Prepare a standalone bill's site and PO change", new[] { "bills.manage.update" }, McpScopes.Bills, Write: true),
         new("get_bill_tax_filing", "FBR filing", "Read a bill's FBR filing rows", new[] { "invoices.list.view" }),
         new("prepare_bill_tax_filing", "FBR filing", "Prepare a bill's FBR classification", new[] { "invoices.manage.update.itemtype", "invoices.manage.update.itemtype.qty" }, McpScopes.TaxFiling, Write: true),
         new("prepare_fbr_exclusion", "FBR filing", "Prepare excluding bills from FBR, or including them again", new[] { "invoices.fbr.exclude" }, McpScopes.FbrExclusion, Write: true),
@@ -48,6 +49,7 @@ public static class McpToolAccessCatalog
         new("search_challans", "Deliveries", "Find delivery challans", new[] { "challans.list.view" }),
         new("get_challan", "Deliveries", "Read a delivery challan", new[] { "challans.list.view" }),
         new("prepare_challan", "Deliveries", "Prepare a delivery challan", new[] { "challans.manage.create" }, McpScopes.Challans, Write: true),
+        new("prepare_challan_details", "Deliveries", "Prepare a challan's site and PO change", new[] { "challans.manage.update" }, McpScopes.Challans, Write: true),
         new("get_daily_work_queue", "Daily work", "Show delivery and collection work", new[] { "challans.list.view", "salesorders.list.view", "reports.outstanding.view" }),
 
         new("get_stock", "Inventory", "Read stock balances", new[] { "stock.dashboard.view" }),

@@ -41,6 +41,7 @@ public partial class McpController
         AddMasterTools(tools);
         AddTaxFilingTools(tools);
         AddFbrExclusionTools(tools);
+        AddDocumentDetailTools(tools);
         return tools.ToArray();
     }
 
@@ -114,6 +115,8 @@ public partial class McpController
             "prepare_supplier" or "prepare_item_type" => await CallMasterToolAsync(name, args),
             "get_bill_tax_filing" or "prepare_bill_tax_filing" or "validate_bill_fbr" => await CallTaxFilingToolAsync(name, args),
             "prepare_fbr_exclusion" => await PrepareFbrExclusionAsync(args),
+            "prepare_bill_details" => await PrepareBillDetailsAsync(args),
+            "prepare_challan_details" => await PrepareChallanDetailsAsync(args),
             _ => await CallOperationsToolAsync(name, args)
         };
     }

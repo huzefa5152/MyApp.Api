@@ -39,6 +39,8 @@ namespace MyApp.Api.Services.Interfaces
         /// </summary>
         Task<NextInvoiceNumberDto> GetNextInvoiceNumberAsync(int companyId, int? check);
         Task<InvoiceDto?> UpdateAsync(int id, UpdateInvoiceDto dto);
+        /// <summary>Site, PO number and PO date of a standalone bill only, under Edit Bill's locks. Null leaves a field as it is.</summary>
+        Task<InvoiceDto?> UpdateStandaloneDetailsAsync(int id, string? site, string? poNumber, DateTime? poDate);
         Task AssertCommercialBillMutationAsync(int id, string? expectedVersion = null);
         Task ReconcileChallanBillAsync(int id, string previousFilingSource, bool hadConsultantWork);
         Task RemoveBilledChallanAsync(int challanId, bool delete);

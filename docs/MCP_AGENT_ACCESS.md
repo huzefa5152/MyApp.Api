@@ -35,12 +35,14 @@ copies (PDF via Edge, printed by SumatraPDF); its token lives in the gitignored
 
 | Scope | Tools | Needs |
 |---|---|---|
-| `clients.write` | `prepare_client` (create or update) | `clients.manage.create` / `.update` |
+| `clients.write` | `prepare_client` (create or update; `site` replaces the whole site list, `addSite` adds one) | `clients.manage.create` / `.update` |
 | `quotes.write` | `prepare_quote` | `salesquotes.manage.create` |
 | `quotes.write` | `prepare_email_quotation` | Email Workspace, inbox view, enquiry management and quotation creation |
 | `email.enquiries.write` | `prepare_email_decision` | Email Workspace, inbox view and inbox management |
-| `challans.write` | `prepare_challan` | `challans.manage.create`, `challans.list.view` |
-| `bills.write` | `prepare_bill` (from challans, or standalone) | `bills.manage.create` and/or `bills.manage.create.standalone`, `challans.list.view` |
+| `challans.write` | `prepare_challan`; `prepare_challan_details` (site, PO number and date of a challan not yet billed, through Edit Challan's own save) | `challans.manage.create`, `challans.list.view`; `challans.manage.update` |
+| `bills.write` | `prepare_bill` (from challans, or standalone; `site` on a standalone bill only); `prepare_bill_details` (site, PO number and date of a standalone bill, under Edit Bill's locks) | `bills.manage.create` and/or `bills.manage.create.standalone`, `challans.list.view`; `bills.manage.update` |
+
+A site an agent types on a challan or a standalone bill joins the customer's sites (`CustomerSiteMemory`), exactly as on the screens, only when the agent's user holds `clients.manage.update`.
 | `templates.write` | `prepare_print_template_update` | Both `printtemplates.manage.view` and `printtemplates.manage.update` |
 | `templates.write` | `prepare_company_stamp` (add, replace, rename, set default, delete, assign to a template) | `printtemplates.stamps.manage` for stamp changes; `printtemplates.manage.update` to assign. The scope itself needs `printtemplates.manage.view` and `.update`, and each action needs its read right (`printtemplates.stamps.view`, or `printtemplates.manage.view` to assign) |
 | `suppliers.write` | `prepare_supplier` (create or update) | `suppliers.manage.create` and `.update` |

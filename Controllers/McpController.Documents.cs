@@ -112,6 +112,7 @@ namespace MyApp.Api.Controllers
                 paymentMode = new { type = "string", @enum = PaymentModes },
                 poNumber = new { type = "string", maxLength = 100 },
                 poDate = new { type = "string", format = "date" },
+                site = new { type = "string", maxLength = 200, description = "Standalone bill only: site / department. A site the customer does not have yet is added to their sites. A bill from challans takes the challans' site." },
                 notes = new { type = "string", maxLength = 2000 },
                 challanIds = new { type = "array", minItems = 1, maxItems = 20, items = new { type = "integer", minimum = 1 }, description = "Bill these challans. Omit for a standalone bill." },
                 prices = new
@@ -342,6 +343,7 @@ namespace MyApp.Api.Controllers
             if (fromChallans)
             {
                 if (Has(args, "items")) throw new ToolError("Give prices for the challan lines, not items. A standalone bill omits challanIds.");
+                if (Has(args, "site")) throw new ToolError("A bill from challans takes its site from the challans. Set the site on the challan.");
                 if (args.GetProperty("challanIds").ValueKind != JsonValueKind.Array) throw new ToolError("challanIds must be a list.");
                 challanIds = args.GetProperty("challanIds").EnumerateArray()
                     .Select(e => e.ValueKind == JsonValueKind.Number && e.TryGetInt32(out var n) && n > 0 ? n : throw new ToolError("challanIds must be positive integers."))
@@ -411,6 +413,8 @@ namespace MyApp.Api.Controllers
                 paymentMode = string.IsNullOrEmpty(mode) ? null : mode,
                 poNumber = OptText(args, "poNumber", 100),
                 poDate = OptDate(args, "poDate")?.ToString("yyyy-MM-dd"),
+                site = fromChallans ? null : OptText(args, "site", 200) is { Length: > 0 } bs
+                    ? (bs.Contains(';') ? throw new ToolError("A site cannot contain \";\".") : bs) : null,
                 notes = OptText(args, "notes", 2000),
                 challanIds,
                 standalone = !fromChallans,
@@ -446,8 +450,9 @@ namespace MyApp.Api.Controllers
         private async Task EnforceHourlyCapAsync(McpAgentToken agent, string kind)
         {
             var (prefixes, cap, noun) =
-                kind.StartsWith("bill.", StringComparison.Ordinal) ? (new[] { "bill." }, BillsPerHour, "bills")
-                : kind == "challan.create" ? (new[] { "challan." }, ChallansPerHour, "challans")
+                kind.EndsWith(".details", StringComparison.Ordinal) ? (new[] { "bill.details", "challan.details" }, DetailChangesPerHour, "site and PO changes")
+                : kind.StartsWith("bill.", StringComparison.Ordinal) ? (new[] { "bill.create", "bill.standalone" }, BillsPerHour, "bills")
+                : kind == "challan.create" ? (new[] { "challan.create" }, ChallansPerHour, "challans")
                 : kind is "quote.create" or "email.quote" ? (new[] { "quote.", "email.quote" }, QuotesPerHour, "quotations")
                 : kind.StartsWith("client.", StringComparison.Ordinal) ? (new[] { "client." }, ClientChangesPerHour, "client changes")
                 : kind.StartsWith("supplier.", StringComparison.Ordinal) ? (new[] { "supplier." }, SupplierChangesPerHour, "supplier changes")
@@ -542,6 +547,7 @@ namespace MyApp.Api.Controllers
                 PoNumber = h.Po,
                 PoDate = h.PoDate,
                 Notes = h.Notes,
+                Site = p.TryGetProperty("site", out var site) && site.ValueKind == JsonValueKind.String ? site.GetString() : null,
                 FreightCharges = p.TryGetProperty("freightCharges", out var freight) ? CommercialTotalCalculator.Validate(freight.GetDecimal()) : 0m,
                 Items = p.GetProperty("items").EnumerateArray().Select(i => new CreateStandaloneInvoiceItemDto
                 {
